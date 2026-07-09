@@ -2,13 +2,17 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff, LockKeyhole, LogIn, User } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/form";
 
 export function LoginForm() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -33,36 +37,48 @@ export function LoginForm() {
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="mt-6 flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="username" className="text-sm font-medium text-zinc-700">
-          Tên đăng nhập
-        </label>
-        <input
-          id="username"
-          name="username"
-          autoComplete="username"
-          required
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
-        />
-      </div>
+      <Field label="Tên đăng nhập">
+        <div className="relative">
+          <User className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={2} />
+          <Input
+            id="username"
+            name="username"
+            autoComplete="username"
+            required
+            autoFocus
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </Field>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium text-zinc-700">
-          Mật khẩu
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
-        />
-      </div>
+      <Field label="Mật khẩu">
+        <div className="relative">
+          <LockKeyhole
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400"
+            strokeWidth={2}
+          />
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="pr-9 pl-9"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" strokeWidth={2} /> : <Eye className="h-4 w-4" strokeWidth={2} />}
+          </button>
+        </div>
+      </Field>
 
       {error && (
         <p role="alert" className="text-sm text-red-600">
@@ -70,13 +86,10 @@ export function LoginForm() {
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="mt-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={isSubmitting} className="mt-2 w-full" size="md">
+        <LogIn className="h-4 w-4" strokeWidth={2} />
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -2,8 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, Plus, Users } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account, Team } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Banner } from "@/components/ui/banner";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field, Input, Select } from "@/components/ui/form";
+import { Modal } from "@/components/ui/modal";
+import { PageHeader } from "@/components/ui/page-header";
 
 type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; team: Team };
 
@@ -21,65 +30,54 @@ export function TeamsClient({ initialTeams, leaders }: { initialTeams: Team[]; l
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-zinc-900">Quản lý nhóm</h1>
-        <button
-          type="button"
-          onClick={() => setModal({ mode: "create" })}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          + Thêm nhóm mới
-        </button>
-      </div>
+      <PageHeader
+        title="Quản lý nhóm"
+        description="Tổ chức nhóm và phân công Leader phụ trách."
+        actions={
+          <Button type="button" onClick={() => setModal({ mode: "create" })}>
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+            Thêm nhóm mới
+          </Button>
+        }
+      />
 
-      {banner && (
-        <div
-          role="status"
-          className={`mb-4 rounded-md px-4 py-2 text-sm ${
-            banner.type === "error" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
-          }`}
-        >
-          {banner.text}
-        </div>
-      )}
+      {banner && <Banner type={banner.type} text={banner.text} />}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-zinc-50 text-zinc-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Tên nhóm</th>
-              <th className="px-4 py-3 font-medium">Leader phụ trách</th>
-              <th className="px-4 py-3 font-medium">Số thành viên</th>
-              <th className="px-4 py-3 font-medium">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teams.map((team) => (
-              <tr key={team.id} className="border-t border-zinc-100">
-                <td className="px-4 py-3">{team.name}</td>
-                <td className="px-4 py-3 text-zinc-600">{team.leader_name ?? "Chưa gán"}</td>
-                <td className="px-4 py-3 text-zinc-600">{team.member_count}</td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setModal({ mode: "edit", team })}
-                    className="text-xs font-medium text-zinc-700 hover:underline"
-                  >
-                    Sửa
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {teams.length === 0 && (
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-zinc-400">
-                  Chưa có nhóm nào.
-                </td>
+                <th className="px-4 py-3">Tên nhóm</th>
+                <th className="px-4 py-3">Leader phụ trách</th>
+                <th className="px-4 py-3">Số thành viên</th>
+                <th className="px-4 py-3">Hành động</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {teams.map((team) => (
+                <tr key={team.id} className="transition-colors hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-800">{team.name}</td>
+                  <td className="px-4 py-3 text-slate-500">{team.leader_name ?? "Chưa gán"}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant="info">
+                      <Users className="h-3 w-3" strokeWidth={2.5} />
+                      {team.member_count}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setModal({ mode: "edit", team })}>
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                      Sửa
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {teams.length === 0 && <EmptyState title="Chưa có nhóm nào" />}
+      </Card>
 
       {modal.mode === "create" && (
         <TeamModal
@@ -149,64 +147,41 @@ function TeamModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
-
-        <div className="mt-4 flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-zinc-700">Tên nhóm</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-zinc-700">Leader phụ trách</span>
-            <select
-              value={leaderId}
-              onChange={(event) => setLeaderId(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            >
-              <option value="">— Chưa gán —</option>
-              {leaders.map((leader) => (
-                <option key={leader.id} value={leader.id}>
-                  {leader.full_name} ({leader.username})
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-zinc-400">
-              Chỉ hiển thị tài khoản có vai trò Leader (Mục 3, docs/13-api-design.md).
-            </span>
-          </label>
-
-          {error && (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-          >
+    <Modal
+      title={title}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
             Hủy
-          </button>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => void handleSubmit()}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-          >
+          </Button>
+          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
             {isSubmitting ? "Đang lưu..." : "Lưu"}
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Tên nhóm">
+          <Input value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+
+        <Field label="Leader phụ trách" hint="Chỉ hiển thị tài khoản có vai trò Leader (Mục 3, docs/13-api-design.md).">
+          <Select value={leaderId} onChange={(event) => setLeaderId(event.target.value)}>
+            <option value="">— Chưa gán —</option>
+            {leaders.map((leader) => (
+              <option key={leader.id} value={leader.id}>
+                {leader.full_name} ({leader.username})
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

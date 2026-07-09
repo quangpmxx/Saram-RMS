@@ -2,8 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { KeyRound, Pencil, Plus, Power, PowerOff } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type Account, type AccountRole, type Team } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Banner } from "@/components/ui/banner";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field, Input, Select } from "@/components/ui/form";
+import { Modal } from "@/components/ui/modal";
+import { PageHeader } from "@/components/ui/page-header";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
 
@@ -74,101 +83,87 @@ export function AccountsClient({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-zinc-900">Quản lý tài khoản</h1>
-        <button
-          type="button"
-          onClick={() => setModal({ mode: "create" })}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          + Thêm tài khoản mới
-        </button>
-      </div>
+      <PageHeader
+        title="Quản lý tài khoản"
+        description="Tạo và phân quyền tài khoản nhân viên trong hệ thống."
+        actions={
+          <Button type="button" onClick={() => setModal({ mode: "create" })}>
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+            Thêm tài khoản mới
+          </Button>
+        }
+      />
 
-      {banner && (
-        <div
-          role="status"
-          className={`mb-4 rounded-md px-4 py-2 text-sm ${
-            banner.type === "error" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
-          }`}
-        >
-          {banner.text}
-        </div>
-      )}
+      {banner && <Banner type={banner.type} text={banner.text} />}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-zinc-50 text-zinc-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Họ tên</th>
-              <th className="px-4 py-3 font-medium">Tên đăng nhập</th>
-              <th className="px-4 py-3 font-medium">Vai trò</th>
-              <th className="px-4 py-3 font-medium">Nhóm</th>
-              <th className="px-4 py-3 font-medium">Trạng thái</th>
-              <th className="px-4 py-3 font-medium">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.map((account) => (
-              <tr key={account.id} className="border-t border-zinc-100">
-                <td className="px-4 py-3">{account.full_name}</td>
-                <td className="px-4 py-3 text-zinc-600">{account.username}</td>
-                <td className="px-4 py-3">{ACCOUNT_ROLE_LABEL[account.role]}</td>
-                <td className="px-4 py-3 text-zinc-600">{account.team_name ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      account.status === "active"
-                        ? "bg-green-50 text-green-700"
-                        : "bg-zinc-100 text-zinc-500"
-                    }`}
-                  >
-                    {account.status === "active" ? "Đang hoạt động" : "Đã vô hiệu hóa"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setModal({ mode: "edit", account })}
-                      className="text-xs font-medium text-zinc-700 hover:underline"
-                    >
-                      Sửa
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pendingId === account.id}
-                      onClick={() =>
-                        void (account.status === "active"
-                          ? handleDeactivate(account)
-                          : handleReactivate(account))
-                      }
-                      className="text-xs font-medium text-zinc-700 hover:underline disabled:opacity-50"
-                    >
-                      {account.status === "active" ? "Vô hiệu hóa" : "Kích hoạt lại"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pendingId === account.id}
-                      onClick={() => void handleResetPassword(account)}
-                      className="text-xs font-medium text-zinc-700 hover:underline disabled:opacity-50"
-                    >
-                      Reset mật khẩu
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {accounts.length === 0 && (
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-zinc-400">
-                  Chưa có tài khoản nào.
-                </td>
+                <th className="px-4 py-3">Họ tên</th>
+                <th className="px-4 py-3">Tên đăng nhập</th>
+                <th className="px-4 py-3">Vai trò</th>
+                <th className="px-4 py-3">Nhóm</th>
+                <th className="px-4 py-3">Trạng thái</th>
+                <th className="px-4 py-3">Hành động</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {accounts.map((account) => (
+                <tr key={account.id} className="transition-colors hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-800">{account.full_name}</td>
+                  <td className="px-4 py-3 text-slate-500">{account.username}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant="info">{ACCOUNT_ROLE_LABEL[account.role]}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">{account.team_name ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant={account.status === "active" ? "success" : "neutral"}>
+                      {account.status === "active" ? "Đang hoạt động" : "Đã vô hiệu hóa"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setModal({ mode: "edit", account })}>
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                        Sửa
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={pendingId === account.id}
+                        onClick={() =>
+                          void (account.status === "active" ? handleDeactivate(account) : handleReactivate(account))
+                        }
+                      >
+                        {account.status === "active" ? (
+                          <PowerOff className="h-3.5 w-3.5" strokeWidth={2} />
+                        ) : (
+                          <Power className="h-3.5 w-3.5" strokeWidth={2} />
+                        )}
+                        {account.status === "active" ? "Vô hiệu hóa" : "Kích hoạt lại"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={pendingId === account.id}
+                        onClick={() => void handleResetPassword(account)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" strokeWidth={2} />
+                        Reset mật khẩu
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {accounts.length === 0 && <EmptyState title="Chưa có tài khoản nào" />}
+      </Card>
 
       {modal.mode === "create" && (
         <AccountModal
@@ -259,92 +254,59 @@ function AccountModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
-
-        <div className="mt-4 flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-zinc-700">Họ tên</span>
-            <input
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-zinc-700">Tên đăng nhập</span>
-            <input
-              value={username}
-              disabled={isEdit}
-              onChange={(event) => setUsername(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm disabled:bg-zinc-100 disabled:text-zinc-400"
-            />
-          </label>
-
-          {!isEdit && (
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-zinc-700">Vai trò</span>
-              <select
-                value={role}
-                onChange={(event) => setRole(event.target.value as AccountRole)}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              >
-                {Object.entries(ACCOUNT_ROLE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {(isEdit || requiresTeam) && (
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-zinc-700">
-                Nhóm {requiresTeam && !isEdit ? "(bắt buộc)" : "(không bắt buộc)"}
-              </span>
-              <select
-                value={teamId}
-                onChange={(event) => setTeamId(event.target.value)}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              >
-                <option value="">— Không thuộc nhóm nào —</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {error && (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-          >
+    <Modal
+      title={title}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
             Hủy
-          </button>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => void handleSubmit()}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-          >
+          </Button>
+          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
             {isSubmitting ? "Đang lưu..." : "Lưu"}
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Họ tên">
+          <Input value={fullName} onChange={(event) => setFullName(event.target.value)} />
+        </Field>
+
+        <Field label="Tên đăng nhập">
+          <Input value={username} disabled={isEdit} onChange={(event) => setUsername(event.target.value)} />
+        </Field>
+
+        {!isEdit && (
+          <Field label="Vai trò">
+            <Select value={role} onChange={(event) => setRole(event.target.value as AccountRole)}>
+              {Object.entries(ACCOUNT_ROLE_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+
+        {(isEdit || requiresTeam) && (
+          <Field label={`Nhóm ${requiresTeam && !isEdit ? "(bắt buộc)" : "(không bắt buộc)"}`}>
+            <Select value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+              <option value="">— Không thuộc nhóm nào —</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

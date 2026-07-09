@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -19,13 +21,9 @@ export function LogoutButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void handleLogout()}
-      disabled={isLoading}
-      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
-    >
+    <Button type="button" variant="outline" size="sm" onClick={() => void handleLogout()} disabled={isLoading}>
+      <LogOut className="h-3.5 w-3.5" strokeWidth={2} />
       {isLoading ? "Đang đăng xuất..." : "Đăng xuất"}
-    </button>
+    </Button>
   );
 }
