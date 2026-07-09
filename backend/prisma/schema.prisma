@@ -1,0 +1,126 @@
+// Prisma schema — Phase 0 (Nền tảng hệ thống & Tài khoản)
+//
+// CHỈ chứa các bảng thuộc phạm vi Phase 0 theo docs/14-roadmap.md:
+//   teams, accounts, sessions, audit_logs
+//
+// Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze) —
+// không thêm/bớt cột ngoài những gì đã chốt trong tài liệu đó cho 4 bảng này.
+// Các bảng còn lại (leads, permissions, notifications, ...) sẽ được thêm dần
+// vào file này ở các Phase sau, không được tạo trước ở Phase 0.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Khớp cột "role" của bảng accounts (Mục 2.2, tài liệu 11)
+enum AccountRole {
+  admin
+  manager
+  leader
+  mkt
+  sale
+
+  @@map("account_role")
+}
+
+// Khớp cột "status" của bảng accounts (Mục 2.2, tài liệu 11)
+enum AccountStatus {
+  active
+  inactive
+
+  @@map("account_status")
+}
+
+// Khớp cột "action_type" của bảng audit_logs (Mục 2.16, tài liệu 11)
+// Đầy đủ toàn bộ giá trị đã liệt kê, kể cả những giá trị chưa dùng ở Phase 0
+// (assign/transfer/hold/lock/unlock sẽ dùng ở Phase 2/5) — vì đây là cấu trúc
+// bảng đã Design Freeze, không được rút gọn enum theo phạm vi từng Phase.
+enum AuditActionType {
+  view
+  create
+  update
+  delete
+  assign
+  transfer
+  hold
+  lock
+  unlock
+  login
+  logout
+  reset_password
+
+  @@map("audit_action_type")
+}
+
+/// Mục 2.1, tài liệu 11 — Nhóm/đội sale, gắn với 1 leader
+model Team {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(100)
+  leaderId  String?  @unique @map("leader_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  leader  Account?  @relation("TeamLeader", fields: [leaderId], references: [id])
+  members Account[] @relation("TeamMembers")
+
+  @@map("teams")
+}
+
+/// Mục 2.2, tài liệu 11 — Tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale)
+model Account {
+  id           String        @id @default(uuid()) @db.Uuid
+  fullName     String        @map("full_name") @db.VarChar(150)
+  username     String        @unique @db.VarChar(50)
+  passwordHash String        @map("password_hash") @db.VarChar(255)
+  role         AccountRole
+  teamId       String?       @map("team_id") @db.Uuid
+  status       AccountStatus @default(active)
+  createdById  String?       @map("created_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  team            Team?      @relation("TeamMembers", fields: [teamId], references: [id])
+  leaderOfTeam    Team?      @relation("TeamLeader")
+  createdBy       Account?   @relation("AccountCreatedBy", fields: [createdById], references: [id])
+  createdAccounts Account[]  @relation("AccountCreatedBy")
+  sessions        Session[]
+  auditLogs       AuditLog[]
+
+  @@map("accounts")
+}
+
+/// Mục 2.3, tài liệu 11 — Phiên đăng nhập (phục vụ đăng nhập nhiều thiết bị)
+model Session {
+  id           String    @id @default(uuid()) @db.Uuid
+  accountId    String    @map("account_id") @db.Uuid
+  deviceInfo   String?   @map("device_info") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastActiveAt DateTime  @default(now()) @map("last_active_at")
+  revokedAt    DateTime? @map("revoked_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@map("sessions")
+}
+
+/// Mục 2.16, tài liệu 11 — Nhật ký truy cập/thao tác toàn hệ thống
+model AuditLog {
+  id           String          @id @default(uuid()) @db.Uuid
+  accountId    String          @map("account_id") @db.Uuid
+  actionType   AuditActionType @map("action_type")
+  entityType   String          @map("entity_type") @db.VarChar(50)
+  entityId     String?         @map("entity_id") @db.Uuid
+  fieldChanged String?         @map("field_changed") @db.VarChar(100)
+  oldValue     String?         @map("old_value")
+  newValue     String?         @map("new_value")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@map("audit_logs")
+}

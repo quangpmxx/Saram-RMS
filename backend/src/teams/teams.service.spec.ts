@@ -1,0 +1,174 @@
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { TeamsService } from './teams.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { Prisma } from '../../generated/prisma/client';
+
+describe('TeamsService', () => {
+  let service: TeamsService;
+  let prisma: {
+    team: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      count: jest.Mock;
+      findMany: jest.Mock;
+    };
+    account: { findUnique: jest.Mock; findMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let auditLog: { log: jest.Mock };
+
+  const team = {
+    id: 'team-1',
+    name: 'Nhóm A',
+    leaderId: 'leader-1',
+    createdAt: new Date('2026-01-01'),
+    leader: { id: 'leader-1', fullName: 'Leader A' },
+    _count: { members: 2 },
+  };
+
+  beforeEach(async () => {
+    prisma = {
+      team: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
+      account: { findUnique: jest.fn(), findMany: jest.fn() },
+      $transaction: jest.fn(),
+    };
+    auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        TeamsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AuditLogService, useValue: auditLog },
+      ],
+    }).compile();
+
+    service = moduleRef.get(TeamsService);
+  });
+
+  describe('list', () => {
+    it('Admin/Quản lý thấy tất cả nhóm (không lọc theo team)', async () => {
+      prisma.$transaction.mockResolvedValue([1, [team]]);
+
+      await service.list(
+        { page: 1, page_size: 20 },
+        { id: 'admin-1', role: 'admin', sessionId: 's' },
+      );
+
+      // Admin/Quản lý không bị lọc theo team — where rỗng, không có điều kiện id.
+      expect(prisma.team.count).toHaveBeenCalledWith({ where: {} });
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('Leader chỉ thấy đúng nhóm của mình', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.$transaction.mockResolvedValue([1, [team]]);
+
+      await service.list(
+        { page: 1, page_size: 20 },
+        { id: 'leader-1', role: 'leader', sessionId: 's' },
+      );
+
+      expect(prisma.account.findUnique).toHaveBeenCalledWith({
+        where: { id: 'leader-1' },
+      });
+    });
+  });
+
+  describe('create', () => {
+    it('từ chối nếu leader_id không phải tài khoản vai trò leader', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        id: 'acc-x',
+        role: 'sale',
+      });
+
+      await expect(
+        service.create({ name: 'Nhóm B', leader_id: 'acc-x' }, 'admin-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('báo lỗi nếu tài khoản đã là leader của nhóm khác (leader_id trùng)', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        id: 'leader-1',
+        role: 'leader',
+      });
+      const prismaError = new Prisma.PrismaClientKnownRequestError(
+        'duplicate',
+        {
+          code: 'P2002',
+          clientVersion: 'test',
+        },
+      );
+      prisma.team.create.mockRejectedValue(prismaError);
+
+      await expect(
+        service.create({ name: 'Nhóm B', leader_id: 'leader-1' }, 'admin-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('tạo nhóm thành công và ghi audit log', async () => {
+      prisma.team.create.mockResolvedValue(team);
+
+      const result = await service.create({ name: 'Nhóm A' }, 'admin-1');
+
+      expect(result.name).toBe('Nhóm A');
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({ actionType: 'create', entityType: 'team' }),
+      );
+    });
+  });
+
+  describe('getMembers', () => {
+    it('ném NotFoundException nếu nhóm không tồn tại', async () => {
+      prisma.team.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getMembers('ghost', {
+          id: 'admin-1',
+          role: 'admin',
+          sessionId: 's',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('chặn Leader xem nhóm khác nhóm của mình', async () => {
+      prisma.team.findUnique.mockResolvedValue(team);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-other' });
+
+      await expect(
+        service.getMembers('team-1', {
+          id: 'leader-1',
+          role: 'leader',
+          sessionId: 's',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('cho phép Leader xem đúng nhóm của mình', async () => {
+      prisma.team.findUnique.mockResolvedValue(team);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.account.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.getMembers('team-1', {
+          id: 'leader-1',
+          role: 'leader',
+          sessionId: 's',
+        }),
+      ).resolves.toEqual([]);
+    });
+  });
+});

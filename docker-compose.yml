@@ -1,0 +1,24 @@
+# Lựa chọn thay thế cho "npx prisma dev" khi anh đã cài Docker Desktop và
+# muốn dùng PostgreSQL thật (giống môi trường triển khai sau này) thay vì
+# Postgres cục bộ do Prisma tự quản lý. Xem README.md để biết cách chọn.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: saram-rms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: saram
+      POSTGRES_PASSWORD: saram
+      POSTGRES_DB: saram_rms
+    ports:
+      - "5432:5432"
+    volumes:
+      - saram-rms-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saram -d saram_rms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  saram-rms-postgres-data:
