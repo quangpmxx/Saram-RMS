@@ -1,4 +1,4 @@
-// Prisma schema — Phase 0 + Phase 1 + Phase 2 (docs/14-roadmap.md)
+// Prisma schema — Phase 0 + Phase 1 + Phase 2 + Phase 3 (docs/14-roadmap.md)
 //
 // Phase 0: teams, accounts, sessions, audit_logs
 // Phase 1: lead_sources, status_catalog, leads, import_jobs
@@ -6,6 +6,9 @@
 // assigned_at/assignment_method (đã tồn tại rỗng từ Phase 1) + 2 index phục
 // vụ truy vấn "Lead của tôi" (Sale) và lọc theo nhóm (Leader/Quản lý/Admin),
 // đúng theo đề xuất index tại Mục 6, tài liệu 11.
+// Phase 3: bảng mới `lead_notes` (Mục 2.9, tài liệu 11) + kích hoạt logic
+// đọc/ghi cho leads.call_status_id/call_result_id/last_activity_at (đã tồn
+// tại rỗng từ Phase 1) — Pipeline cuộc gọi & Lịch sử ghi chú.
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -115,6 +118,10 @@ model Account {
   deletedLeads             Lead[]      @relation("LeadDeletedBy")
   importJobs               ImportJob[]
 
+  // Phase 3 — quan hệ ngược từ LeadNote
+  createdLeadNotes LeadNote[] @relation("LeadNoteCreatedBy")
+  deletedLeadNotes LeadNote[] @relation("LeadNoteDeletedBy")
+
   @@map("accounts")
 }
 
@@ -204,6 +211,8 @@ model StatusCatalog {
   leadsByCallResult              Lead[] @relation("LeadCallResult")
   leadsByCurrentInterviewStatus  Lead[] @relation("LeadCurrentInterviewStatus")
   leadsByCurrentEmploymentStatus Lead[] @relation("LeadCurrentEmploymentStatus")
+  notesByCallStatus              LeadNote[] @relation("LeadNoteCallStatus")
+  notesByCallResult              LeadNote[] @relation("LeadNoteCallResult")
 
   @@unique([category, code])
   @@map("status_catalog")
@@ -268,6 +277,7 @@ model Lead {
   callResult              StatusCatalog? @relation("LeadCallResult", fields: [callResultId], references: [id])
   currentInterviewStatus  StatusCatalog? @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
   currentEmploymentStatus StatusCatalog? @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
+  notes                   LeadNote[]
 
   @@index([phoneNumber])
   @@index([uploadedAt])
@@ -294,4 +304,31 @@ model ImportJob {
   uploadedBy Account @relation(fields: [uploadedById], references: [id])
 
   @@map("import_jobs")
+}
+
+// ── Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú ────────────────────────
+
+/// Mục 2.9, tài liệu 11 — Lịch sử ghi chú/cuộc gọi của từng lead. Xóa mềm
+/// (is_deleted) để giữ lịch sử đầy đủ kể cả note đã xóa (Mục 10, tài liệu 09).
+model LeadNote {
+  id            String   @id @default(uuid()) @db.Uuid
+  leadId        String   @map("lead_id") @db.Uuid
+  createdById   String   @map("created_by") @db.Uuid
+  content       String
+  callStatusId  String?  @map("call_status_id") @db.Uuid
+  callResultId  String?  @map("call_result_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  isDeleted     Boolean  @default(false) @map("is_deleted")
+  deletedById   String?  @map("deleted_by") @db.Uuid
+  deletedAt     DateTime? @map("deleted_at")
+
+  lead        Lead           @relation(fields: [leadId], references: [id])
+  createdBy   Account        @relation("LeadNoteCreatedBy", fields: [createdById], references: [id])
+  deletedBy   Account?       @relation("LeadNoteDeletedBy", fields: [deletedById], references: [id])
+  callStatus  StatusCatalog? @relation("LeadNoteCallStatus", fields: [callStatusId], references: [id])
+  callResult  StatusCatalog? @relation("LeadNoteCallResult", fields: [callResultId], references: [id])
+
+  @@index([leadId])
+  @@index([leadId, createdAt])
+  @@map("lead_notes")
 }

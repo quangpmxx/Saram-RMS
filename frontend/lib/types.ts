@@ -145,3 +145,28 @@ export interface TeamMember extends Account {
 export interface AssignBulkResult {
   assigned_count: number;
 }
+
+// ── Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú ────────────────────────
+
+export type StatusCategory = "call_status" | "call_result" | "interview_status" | "employment_status";
+
+/** GET /status — Mục 9, docs/13-api-design.md. */
+export interface StatusCatalogItem {
+  id: string;
+  category: StatusCategory;
+  code: string;
+  name: string;
+  sort_order: number;
+}
+
+/** Đối tượng "Note" — Mục 0.1, docs/13-api-design.md. */
+export interface Note {
+  id: string;
+  lead_id: string;
+  created_by: NamedRef;
+  content: string;
+  call_status: NamedRef | null;
+  call_result: NamedRef | null;
+  created_at: string;
+  is_deleted: boolean;
+}

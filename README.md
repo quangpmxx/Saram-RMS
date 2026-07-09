@@ -1,13 +1,14 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên) và **Phase 2** (Phân chia thủ công & Không gian Sale/Leader) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader) và **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú) đã hoàn thành (xem `docs/14-roadmap.md`).
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
 - Màn hình **Ứng viên**: MKT nhập ứng viên thủ công hoặc nhập hàng loạt từ file Excel, cảnh báo trùng số điện thoại tự động, tìm kiếm/lọc danh sách (Phase 1).
 - **Chờ phân chia**, phân chia thủ công (từng lead hoặc hàng loạt), chuyển lead giữa các Sale trong nhóm, không gian "Lead của tôi" cho Sale, workload từng Sale cho Leader (Phase 2).
+- Màn hình **Chi tiết ứng viên**: Sale cập nhật tình trạng/kết quả cuộc gọi, ghi lịch sử ghi chú theo thời gian (không ghi đè), xóa mềm ghi chú (vẫn giữ lịch sử) — MKT xem được nhưng không sửa (Phase 3).
 
-Các nghiệp vụ tuyển dụng tiếp theo (pipeline cuộc gọi/ghi chú, lịch phỏng vấn, cột chăm sóc, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
+Các nghiệp vụ tuyển dụng tiếp theo (lịch phỏng vấn, cột chăm sóc, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
 
 ---
 
@@ -107,8 +108,9 @@ Nếu thành công, terminal in ra dòng dạng:
 Đã phân chia 2 ứng viên mẫu cho Sale Demo A/B — số còn lại vẫn ở trạng thái "Chờ phân chia".
 Đã tạo nhóm "Nhóm Sale Demo 2" với Leader (leader_demo_2/123456) và Sale (sale_demo_c/123456).
 Đã tạo 3 ứng viên trùng SĐT 0901000005 ở 2 nhóm khác nhau + 1 chưa phân chia để thử tooltip "Trùng SĐT".
+Đã cập nhật tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) cho ứng viên "Nguyễn Văn An".
 ```
-**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm — xem mục 5.
+**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) để thử ngay màn Chi tiết ứng viên — xem mục 5.
 
 ---
 
@@ -173,6 +175,15 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 3. Đăng nhập `leader_demo_2` / `123456` → tìm "Võ Thị Em (Nhóm 2)" → rê chuột vào badge → tương tự, chỉ thấy dòng chung (bản ghi trùng còn lại thuộc nhóm khác).
 4. Đăng nhập `sale_demo_a` / `123456` → nếu có ứng viên trùng SĐT trong đúng nhóm mình (ví dụ tạo thêm 1 lead cùng SĐT rồi phân chia cho `sale_demo_b` cùng nhóm), Sale vẫn xem được chi tiết bản ghi trùng **trong nhóm mình**, nhưng không thấy chi tiết của nhóm khác.
 
+### 5.5. Chi tiết ứng viên — cuộc gọi & ghi chú (Phase 3)
+
+1. Đăng nhập `sale_demo_a` / `123456` → vào **Ứng viên** → bấm vào tên "Nguyễn Văn An" để mở màn **Chi tiết ứng viên**. Đã thấy sẵn: tình trạng cuộc gọi "Đã gọi", kết quả "Hẹn gọi lại", 2 ghi chú lịch sử (ghi chú thứ 3 đã bị xóa nên không hiện trong danh sách chính).
+2. Bấm **Gọi ngay** → chọn lại tình trạng/kết quả cuộc gọi → **Cập nhật** → thấy phản ánh ngay trên khối "Tiến trình cuộc gọi" và cả badge trên danh sách chính.
+3. Bấm **Thêm ghi chú** → nhập nội dung → **Lưu**, lặp lại 2-3 lần liên tiếp → xác nhận cả 3 ghi chú đều xuất hiện, không cái nào bị ghi đè.
+4. Bấm **Xóa** trên 1 ghi chú do chính `sale_demo_a` ghi → ghi chú biến mất khỏi danh sách ngay (dữ liệu vẫn còn trong hệ thống, đánh dấu `is_deleted`, chưa có màn hình tra cứu riêng — sẽ có ở Phase 9).
+5. Đăng xuất, đăng nhập `sale_demo_b` / `123456` → mở lại ứng viên "Nguyễn Văn An" → không có nút **Gọi ngay**/**Thêm ghi chú**/**Xóa** vì ứng viên này không phải của mình; đăng nhập `mkt_demo` / `123456` → mở lại → xem được toàn bộ ghi chú nhưng cũng không có các nút thao tác (chỉ xem, đúng Mục 2.6 `docs/09`).
+6. Đăng nhập `leader_demo` / `123456` (Leader của nhóm `sale_demo_a`) → mở ứng viên → vẫn cập nhật/ghi chú được (trong phạm vi nhóm mình) nhưng không xóa được ghi chú do Sale ghi (chỉ chính Sale đó xóa được — theo giả định tạm ghi trong `docs/13`, xem mục "Lưu ý" trong `docs/09` Mục 11.7).
+
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -188,7 +199,7 @@ npm run lint
 npm run build       # build thử để chắc chắn không lỗi
 ```
 
-> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, Leader/Sale demo) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
+> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
 
 ---
 
@@ -207,4 +218,4 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0, 1 và 2 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader). Các nghiệp vụ tiếp theo (pipeline cuộc gọi/ghi chú, lịch phỏng vấn, cột chăm sóc, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo `docs/14-roadmap.md`, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+Phase 0, 1, 2 và 3 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú). Các nghiệp vụ tiếp theo (lịch phỏng vấn/lịch gọi lại, cột chăm sóc, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo `docs/14-roadmap.md`, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.

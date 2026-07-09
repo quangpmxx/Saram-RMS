@@ -57,7 +57,11 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     prisma = app.get(PrismaService);
 
     // Dọn dữ liệu Phase 1 trước khi chạy, để bộ test tự chứa và lặp lại được.
+    // Xóa lead_notes trước leads (từ Phase 3) — không dựa vào TRUNCATE CASCADE
+    // vì PGlite (npx prisma dev) không cascade tin cậy qua 2 cấp quan hệ
+    // (accounts → leads → lead_notes).
     await prisma.importJob.deleteMany({});
+    await prisma.leadNote.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.account.deleteMany({
       where: { username: { in: ['phase1_mkt_a', 'phase1_mkt_b'] } },

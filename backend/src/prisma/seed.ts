@@ -509,6 +509,94 @@ async function seedCrossTeamDuplicateSample(
   );
 }
 
+/**
+ * Dữ liệu mẫu Phase 3 để trải nghiệm ngay màn hình Chi tiết ứng viên:
+ *  - Cập nhật tình trạng/kết quả cuộc gọi cho ứng viên đã seed sẵn ở Phase 2
+ *    (Nguyễn Văn An — do sale_demo_a phụ trách).
+ *  - Thêm 3 ghi chú liên tiếp (đúng tiêu chí "không ghi đè nhau"), trong đó
+ *    1 ghi chú bị đánh dấu xóa mềm để minh họa "vẫn lưu lịch sử".
+ * Idempotent: bỏ qua nếu ứng viên này đã có ghi chú.
+ */
+async function seedPhase3Sample(prisma: PrismaClient): Promise<void> {
+  const lead = await prisma.lead.findFirst({
+    where: { phoneNumber: '0901000001' }, // Nguyễn Văn An, đã gán cho sale_demo_a ở seedPhase2Sample
+  });
+  const saleA = await prisma.account.findUnique({
+    where: { username: 'sale_demo_a' },
+  });
+  if (!lead || !saleA) {
+    console.log(
+      'Chưa có ứng viên mẫu Phase 2 cho sale_demo_a — bỏ qua seed dữ liệu Phase 3 (chạy lại sau khi seedPhase2Sample xong).',
+    );
+    return;
+  }
+
+  const existingNote = await prisma.leadNote.findFirst({
+    where: { leadId: lead.id },
+  });
+  if (existingNote) {
+    console.log('Dữ liệu mẫu Phase 3 (cuộc gọi/ghi chú) đã tồn tại — bỏ qua.');
+    return;
+  }
+
+  const calledStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: { category_code: { category: 'call_status', code: 'CALLED' } },
+  });
+  const potentialResult = await prisma.statusCatalog.findUniqueOrThrow({
+    where: { category_code: { category: 'call_result', code: 'POTENTIAL' } },
+  });
+  const callbackResult = await prisma.statusCatalog.findUniqueOrThrow({
+    where: {
+      category_code: { category: 'call_result', code: 'CALLBACK_REQUESTED' },
+    },
+  });
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: {
+      callStatusId: calledStatus.id,
+      callResultId: callbackResult.id,
+      lastActivityAt: new Date(),
+    },
+  });
+
+  await prisma.leadNote.create({
+    data: {
+      leadId: lead.id,
+      createdById: saleA.id,
+      content: 'Gọi lần 1: bắt máy, đang tìm hiểu thêm về công việc.',
+      callStatusId: calledStatus.id,
+      callResultId: potentialResult.id,
+    },
+  });
+  await prisma.leadNote.create({
+    data: {
+      leadId: lead.id,
+      createdById: saleA.id,
+      content: 'Gọi lần 2: ứng viên xin hẹn gọi lại vào tuần sau.',
+      callStatusId: calledStatus.id,
+      callResultId: callbackResult.id,
+    },
+  });
+  const noteToDelete = await prisma.leadNote.create({
+    data: {
+      leadId: lead.id,
+      createdById: saleA.id,
+      content: 'Ghi nhầm số điện thoại liên hệ — đã xóa.',
+      callStatusId: calledStatus.id,
+      callResultId: callbackResult.id,
+    },
+  });
+  await prisma.leadNote.update({
+    where: { id: noteToDelete.id },
+    data: { isDeleted: true, deletedById: saleA.id, deletedAt: new Date() },
+  });
+
+  console.log(
+    'Đã cập nhật tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) cho ứng viên "Nguyễn Văn An".',
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -524,6 +612,7 @@ async function main() {
   await seedSampleCandidates(prisma);
   await seedPhase2Sample(prisma);
   await seedCrossTeamDuplicateSample(prisma);
+  await seedPhase3Sample(prisma);
 
   await prisma.$disconnect();
 }

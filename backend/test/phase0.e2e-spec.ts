@@ -28,8 +28,11 @@ describe('Phase 0 — Nền tảng hệ thống & Tài khoản (e2e)', () => {
     prisma = app.get(PrismaService);
 
     // Dọn sạch dữ liệu Phase 0 trước khi chạy, để bộ test tự chứa và lặp lại được.
+    // Liệt kê rõ toàn bộ bảng phụ thuộc (lead_notes, leads, import_jobs) thay
+    // vì chỉ dựa vào CASCADE — PGlite (npx prisma dev) không cascade tin cậy
+    // qua nhiều cấp quan hệ (accounts → leads → lead_notes).
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE audit_logs, sessions, accounts, teams RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE lead_notes, import_jobs, leads, audit_logs, sessions, accounts, teams RESTART IDENTITY CASCADE',
     );
 
     const passwordHash = await hashPassword(adminCreds.password);

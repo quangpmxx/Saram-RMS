@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { CandidatesService } from './candidates.service';
+import { LeadPipelineService } from './lead-pipeline.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { ListCandidatesQueryDto } from './dto/list-candidates-query.dto';
@@ -19,15 +20,19 @@ import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
+import { UpdateCallStatusDto } from './dto/update-call-status.dto';
+import { UpdateCallResultDto } from './dto/update-call-result.dto';
+import { CreateNoteDto } from './dto/create-note.dto';
+import { ListNotesQueryDto } from './dto/list-notes-query.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
 /**
- * Mục 4-5, docs/13-api-design.md. Chỉ POST / gắn @Roles('mkt') cố định (quy
+ * Mục 4-6, docs/13-api-design.md. Chỉ POST / gắn @Roles('mkt') cố định (quy
  * tắc cứng theo vai trò, không phụ thuộc dữ liệu). Các endpoint còn lại
  * không gắn @Roles() vì quyền phụ thuộc dữ liệu (chủ sở hữu/nhóm) — toàn bộ
- * kiểm tra chi tiết nằm trong CandidatesService.
+ * kiểm tra chi tiết nằm trong CandidatesService/LeadPipelineService.
  *
  * LƯU Ý THỨ TỰ ROUTE: "pending" và "assign-bulk" phải khai báo TRƯỚC ":id"
  * — Nest/Express khớp route theo thứ tự khai báo, nếu ":id" đứng trước thì
@@ -36,7 +41,10 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
  */
 @Controller('candidate')
 export class CandidatesController {
-  constructor(private readonly candidatesService: CandidatesService) {}
+  constructor(
+    private readonly candidatesService: CandidatesService,
+    private readonly pipelineService: LeadPipelineService,
+  ) {}
 
   @Get()
   list(
@@ -125,5 +133,52 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.candidatesService.getDuplicateDetail(id, user);
+  }
+
+  @Put(':id/call-status')
+  updateCallStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCallStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateCallStatus(id, dto, user);
+  }
+
+  @Put(':id/call-result')
+  updateCallResult(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCallResultDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateCallResult(id, dto, user);
+  }
+
+  @Get(':id/note')
+  listNotes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ListNotesQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.listNotes(id, query, user);
+  }
+
+  @Post(':id/note')
+  createNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.createNote(id, dto, user);
+  }
+
+  @Delete(':id/note/:noteId')
+  @HttpCode(HttpStatus.OK)
+  async deleteNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('noteId', ParseUUIDPipe) noteId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.pipelineService.deleteNote(id, noteId, user);
+    return { message: 'Đã xóa ghi chú' };
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
@@ -304,7 +305,11 @@ export function CandidatesClient({
                       <Checkbox checked={selectedIds.has(candidate.id)} onChange={() => toggleSelected(candidate.id)} />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-medium text-slate-800">{candidate.full_name}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">
+                    <Link href={`/candidates/${candidate.id}`} className="hover:text-brand-700 hover:underline">
+                      {candidate.full_name}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-slate-500">
                     <div className="flex items-center gap-2">
                       <Phone className="h-3.5 w-3.5 text-slate-300" strokeWidth={2} />

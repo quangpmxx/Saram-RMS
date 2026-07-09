@@ -71,7 +71,10 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
     // Dọn dữ liệu Phase 2 trước khi chạy, để bộ test tự chứa và lặp lại được.
     // Xóa session + audit_logs trước accounts — nếu chạy lại bộ test này
     // nhiều lần, các tài khoản từ lần chạy trước vẫn còn bản ghi tham chiếu
-    // tới, xóa accounts trước sẽ vi phạm khóa ngoại.
+    // tới, xóa accounts trước sẽ vi phạm khóa ngoại. Xóa lead_notes trước
+    // leads (từ Phase 3) — không dựa vào TRUNCATE CASCADE vì PGlite không
+    // cascade tin cậy qua 2 cấp quan hệ (accounts → leads → lead_notes).
+    await prisma.leadNote.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
