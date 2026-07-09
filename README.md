@@ -77,8 +77,8 @@ cd backend
 cp .env.example .env
 ```
 Mở file `backend/.env` vừa tạo:
-- Nếu dùng **Cách A**: dán đè giá trị `DATABASE_URL` bằng dòng đã copy ở Bước 2.
-- Nếu dùng **Cách B**: giữ nguyên giá trị mặc định.
+- Nếu dùng **Cách A**: dán đè giá trị `DATABASE_URL` bằng dòng đã copy ở Bước 2. Giữ nguyên `DATABASE_POOL_MAX=1` (bắt buộc với Cách A — xem giải thích ngay trong file).
+- Nếu dùng **Cách B**: giữ nguyên `DATABASE_URL` mặc định, và có thể xóa dòng `DATABASE_POOL_MAX` (Postgres thật không cần giới hạn này).
 
 ```bash
 cd ../frontend
@@ -180,6 +180,7 @@ npm run build       # build thử để chắc chắn không lỗi
 | Trang web báo lỗi không gọi được API | Kiểm tra Tab 2 (backend) còn chạy ở cổng 3001 không; kiểm tra `frontend/.env.local`. |
 | `next dev` báo "Port 3000 is in use" | Có tiến trình cũ chưa tắt hẳn — đóng hết các tab Terminal cũ đang chạy `next` rồi mở lại, hoặc tắt tiến trình đang chiếm cổng. |
 | Quên mật khẩu tài khoản Admin duy nhất | Chạy lại `npm run seed` sẽ báo "đã tồn tại — bỏ qua"; cần tạo Admin khác bằng cách sửa trực tiếp database, hoặc liên hệ để được hướng dẫn thêm (chưa có màn hình "quên mật khẩu" ở Phase 0, đúng theo thiết kế — chỉ Admin reset được mật khẩu người khác). |
+| Trang web thỉnh thoảng báo lỗi 401/500 ngẫu nhiên (vd. màn Quản lý nhóm) dù đã đăng nhập đúng | Chỉ xảy ra khi dùng Cách A (`npx prisma dev`) — kiểm tra `backend/.env` có dòng `DATABASE_POOL_MAX=1` chưa; nếu thiếu, thêm vào rồi khởi động lại backend. |
 
 ---
 
