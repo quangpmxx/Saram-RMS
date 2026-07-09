@@ -18,16 +18,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/" className="font-semibold text-zinc-900">
             Saram RMS
           </Link>
-          {user.role === "admin" && (
-            <nav className="flex items-center gap-4 text-sm text-zinc-600">
-              <Link href="/accounts" className="hover:text-zinc-900">
-                Quản lý tài khoản
+          <nav className="flex items-center gap-4 text-sm text-zinc-600">
+            {["admin", "manager", "mkt"].includes(user.role) && (
+              <Link href="/candidates" className="hover:text-zinc-900">
+                Ứng viên
               </Link>
-              <Link href="/teams" className="hover:text-zinc-900">
-                Quản lý nhóm
-              </Link>
-            </nav>
-          )}
+            )}
+            {user.role === "admin" && (
+              <>
+                <Link href="/accounts" className="hover:text-zinc-900">
+                  Quản lý tài khoản
+                </Link>
+                <Link href="/teams" className="hover:text-zinc-900">
+                  Quản lý nhóm
+                </Link>
+              </>
+            )}
+          </nav>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-zinc-600">

@@ -43,3 +43,77 @@ export interface ApiErrorBody {
   error_code: string;
   message: string;
 }
+
+// ── Phase 1 — Thu thập dữ liệu ứng viên ─────────────────────────────────
+
+export interface LeadSource {
+  id: string;
+  name: string;
+}
+
+interface NamedRef {
+  id: string;
+  name: string;
+}
+
+/** Đối tượng "Candidate" — Mục 0.1, docs/13-api-design.md. */
+export interface Candidate {
+  id: string;
+  full_name: string;
+  phone_number: string;
+  birth_year: number | null;
+  address: string | null;
+  source: NamedRef;
+  mkt_note: string | null;
+  data_quality_score: number | null;
+  uploaded_by: NamedRef;
+  uploaded_at: string;
+  assigned_to: NamedRef | null;
+  assigned_team_id: string | null;
+  assigned_at: string | null;
+  assignment_method: string | null;
+  call_status: NamedRef | null;
+  call_result: NamedRef | null;
+  is_held: boolean;
+  held_by: NamedRef | null;
+  held_at: string | null;
+  last_activity_at: string | null;
+  entered_care_pool_at: string | null;
+  care_pool_locked_by: NamedRef | null;
+  is_duplicate_flagged: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DuplicateWarningEntry {
+  lead_id: string;
+  uploaded_at: string;
+  uploaded_by: string;
+}
+
+export interface DuplicateWarning {
+  phone_number: string;
+  matches: DuplicateWarningEntry[];
+}
+
+export interface CreateCandidateResult {
+  candidate: Candidate;
+  duplicate_warning: DuplicateWarning | null;
+}
+
+export interface ImportRowError {
+  row: number;
+  message: string;
+}
+
+export interface ImportJobStatus {
+  id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  total_rows: number | null;
+  success_count: number;
+  error_count: number;
+  duplicate_count: number;
+  errors: ImportRowError[];
+  created_at: string;
+  updated_at: string;
+}

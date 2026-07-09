@@ -30,4 +30,17 @@ export async function clientApi<T>(path: string, init?: RequestInit): Promise<T>
   return parseResponse<T>(res);
 }
 
+/**
+ * Gọi API kèm file (multipart/form-data) — KHÔNG tự đặt Content-Type để
+ * trình duyệt tự sinh boundary đúng, khác với clientApi() ở trên.
+ */
+export async function clientApiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${PUBLIC_API_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  return parseResponse<T>(res);
+}
+
 export { ApiError };

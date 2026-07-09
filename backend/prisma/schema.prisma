@@ -1,12 +1,23 @@
-// Prisma schema — Phase 0 (Nền tảng hệ thống & Tài khoản)
+// Prisma schema — Phase 0 + Phase 1 (docs/14-roadmap.md)
 //
-// CHỈ chứa các bảng thuộc phạm vi Phase 0 theo docs/14-roadmap.md:
-//   teams, accounts, sessions, audit_logs
+// Phase 0: teams, accounts, sessions, audit_logs
+// Phase 1: lead_sources, status_catalog, leads, import_jobs
 //
-// Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze) —
-// không thêm/bớt cột ngoài những gì đã chốt trong tài liệu đó cho 4 bảng này.
-// Các bảng còn lại (leads, permissions, notifications, ...) sẽ được thêm dần
-// vào file này ở các Phase sau, không được tạo trước ở Phase 0.
+// Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
+// Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
+// — không phải "code trước" các Phase sau, mà vì đối tượng "Candidate" trong
+// docs/13 Mục 0.1 (API đã chốt) đã cam kết trả về đầy đủ các trường này trong
+// mọi response GET /candidate. Các cột thuộc nghiệp vụ Phase 2+ (assigned_at,
+// call_status_id, is_held, care_pool_*...) chỉ tồn tại như cột rỗng — KHÔNG có
+// bất kỳ API/logic nào của Phase 1 ghi hay đọc có ý nghĩa vào các cột đó; toàn
+// bộ hành vi liên quan sẽ do đúng Phase tương ứng bổ sung sau, không migration
+// lại bảng `leads` nữa. `status_catalog` được tạo kèm để đáp ứng ràng buộc
+// khóa ngoại của các cột đó (Mục 2.7, tài liệu 11) — bảng khác (leads_notes,
+// interview_appointments, callback_schedules, permissions, notifications...)
+// KHÔNG được tạo vì không thuộc đối tượng Candidate và thuộc hẳn Phase sau.
+// `import_jobs` là bảng tự bổ sung (giống cách Phase 0 đã làm với `sessions`)
+// — cần thiết để hiện thực đúng API đã chốt `GET /candidate/import/:jobId`
+// (Mục 4, tài liệu 13) vì tài liệu 11 không có bảng nào phục vụ việc này.
 
 generator client {
   provider     = "prisma-client"
@@ -91,6 +102,15 @@ model Account {
   sessions        Session[]
   auditLogs       AuditLog[]
 
+  // Phase 1 — quan hệ ngược từ Lead/ImportJob
+  uploadedLeads            Lead[]      @relation("LeadUploadedBy")
+  assignedLeads            Lead[]      @relation("LeadAssignedTo")
+  heldLeads                Lead[]      @relation("LeadHeldBy")
+  carePoolLockedLeads      Lead[]      @relation("LeadCarePoolLockedBy")
+  removedFromCarePoolLeads Lead[]      @relation("LeadRemovedFromCarePoolBy")
+  deletedLeads             Lead[]      @relation("LeadDeletedBy")
+  importJobs               ImportJob[]
+
   @@map("accounts")
 }
 
@@ -123,4 +143,149 @@ model AuditLog {
   account Account @relation(fields: [accountId], references: [id])
 
   @@map("audit_logs")
+}
+
+// ── Phase 1 — Thu thập dữ liệu ứng viên ─────────────────────────────────
+
+/// Khớp cột "category" của bảng status_catalog (Mục 2.7, tài liệu 11).
+/// Chưa dùng đến ở Phase 1 (chỉ tồn tại để leads.*_status_id có FK hợp lệ),
+/// nghiệp vụ đọc/ghi các trạng thái này sẽ do Phase 3/4 bổ sung.
+enum StatusCategory {
+  call_status
+  call_result
+  interview_status
+  employment_status
+
+  @@map("status_category")
+}
+
+/// Khớp cột "assignment_method" của bảng leads (Mục 2.8, tài liệu 11).
+/// Chưa dùng đến ở Phase 1 — do Phase 2 (thủ công) / Phase 6 (auto) ghi.
+enum AssignmentMethod {
+  manual
+  auto
+
+  @@map("assignment_method")
+}
+
+/// Trạng thái 1 lượt import Excel — bảng tự bổ sung, xem ghi chú đầu file.
+enum ImportJobStatus {
+  pending
+  processing
+  completed
+  failed
+
+  @@map("import_job_status")
+}
+
+/// Mục 2.6, tài liệu 11 — Danh mục nguồn kênh (Facebook/TikTok/Zalo/Khác)
+model LeadSource {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique @db.VarChar(50)
+
+  leads Lead[]
+
+  @@map("lead_sources")
+}
+
+/// Mục 2.7, tài liệu 11 — Danh mục trạng thái chuẩn hóa (chưa dùng ở Phase 1)
+model StatusCatalog {
+  id        String         @id @default(uuid()) @db.Uuid
+  category  StatusCategory
+  code      String         @db.VarChar(50)
+  name      String         @db.VarChar(100)
+  sortOrder Int            @default(0) @map("sort_order") @db.SmallInt
+
+  leadsByCallStatus              Lead[] @relation("LeadCallStatus")
+  leadsByCallResult              Lead[] @relation("LeadCallResult")
+  leadsByCurrentInterviewStatus  Lead[] @relation("LeadCurrentInterviewStatus")
+  leadsByCurrentEmploymentStatus Lead[] @relation("LeadCurrentEmploymentStatus")
+
+  @@unique([category, code])
+  @@map("status_catalog")
+}
+
+/// Mục 2.8, tài liệu 11 — Bảng trung tâm: thông tin & trạng thái ứng viên.
+/// Xem ghi chú đầu file: đầy đủ cột theo tài liệu 11, nhưng Phase 1 chỉ có
+/// API/logic cho phần tạo/sửa/xóa/tìm kiếm cơ bản — các cột còn lại luôn rỗng.
+model Lead {
+  id               String   @id @default(uuid()) @db.Uuid
+  fullName         String   @map("full_name") @db.VarChar(150)
+  phoneNumber      String   @map("phone_number") @db.VarChar(20)
+  birthYear        Int?     @map("birth_year") @db.SmallInt
+  address          String?  @db.VarChar(255)
+  sourceId         String   @map("source_id") @db.Uuid
+  mktNote          String?  @map("mkt_note")
+  dataQualityScore Int?     @map("data_quality_score") @db.SmallInt
+  uploadedById     String   @map("uploaded_by") @db.Uuid
+  uploadedAt       DateTime @default(now()) @map("uploaded_at")
+
+  // Phase 2 — chưa có logic ghi ở Phase 1, luôn NULL
+  assignedToId     String?           @map("assigned_to") @db.Uuid
+  assignedTeamId   String?           @map("assigned_team_id") @db.Uuid
+  assignedAt       DateTime?         @map("assigned_at")
+  assignmentMethod AssignmentMethod? @map("assignment_method")
+
+  // Phase 3 — chưa có logic ghi ở Phase 1, luôn NULL
+  callStatusId String? @map("call_status_id") @db.Uuid
+  callResultId String? @map("call_result_id") @db.Uuid
+
+  // Phase 4 — chưa có logic ghi ở Phase 1, luôn NULL
+  currentInterviewStatusId  String? @map("current_interview_status_id") @db.Uuid
+  currentEmploymentStatusId String? @map("current_employment_status_id") @db.Uuid
+  currentPartnerCompanyName String? @map("current_partner_company_name") @db.VarChar(150)
+
+  // Phase 5 — chưa có logic ghi ở Phase 1, luôn giá trị mặc định/NULL
+  isHeld                  Boolean   @default(false) @map("is_held")
+  heldById                String?   @map("held_by") @db.Uuid
+  heldAt                  DateTime? @map("held_at")
+  lastActivityAt          DateTime? @map("last_activity_at")
+  enteredCarePoolAt       DateTime? @map("entered_care_pool_at")
+  carePoolLockedById      String?   @map("care_pool_locked_by") @db.Uuid
+  carePoolLockedAt        DateTime? @map("care_pool_locked_at")
+  removedFromCarePoolById String?   @map("removed_from_care_pool_by") @db.Uuid
+  removedFromCarePoolAt   DateTime? @map("removed_from_care_pool_at")
+
+  // Phase 1
+  isDuplicateFlagged Boolean   @default(false) @map("is_duplicate_flagged")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  deletedById        String?   @map("deleted_by") @db.Uuid
+
+  source                  LeadSource     @relation(fields: [sourceId], references: [id])
+  uploadedBy              Account        @relation("LeadUploadedBy", fields: [uploadedById], references: [id])
+  assignedTo              Account?       @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  heldBy                  Account?       @relation("LeadHeldBy", fields: [heldById], references: [id])
+  carePoolLockedBy        Account?       @relation("LeadCarePoolLockedBy", fields: [carePoolLockedById], references: [id])
+  removedFromCarePoolBy   Account?       @relation("LeadRemovedFromCarePoolBy", fields: [removedFromCarePoolById], references: [id])
+  deletedBy               Account?       @relation("LeadDeletedBy", fields: [deletedById], references: [id])
+  callStatus              StatusCatalog? @relation("LeadCallStatus", fields: [callStatusId], references: [id])
+  callResult              StatusCatalog? @relation("LeadCallResult", fields: [callResultId], references: [id])
+  currentInterviewStatus  StatusCatalog? @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
+  currentEmploymentStatus StatusCatalog? @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
+
+  @@index([phoneNumber])
+  @@index([uploadedAt])
+  @@index([deletedAt])
+  @@map("leads")
+}
+
+/// Bảng tự bổ sung — theo dõi tiến độ 1 lượt import Excel (xem ghi chú đầu file)
+model ImportJob {
+  id             String          @id @default(uuid()) @db.Uuid
+  uploadedById   String          @map("uploaded_by") @db.Uuid
+  fileName       String?         @map("file_name") @db.VarChar(255)
+  status         ImportJobStatus @default(pending)
+  totalRows      Int?            @map("total_rows")
+  successCount   Int             @default(0) @map("success_count")
+  errorCount     Int             @default(0) @map("error_count")
+  duplicateCount Int             @default(0) @map("duplicate_count")
+  errors         String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  uploadedBy Account @relation(fields: [uploadedById], references: [id])
+
+  @@map("import_jobs")
 }

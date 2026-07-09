@@ -8,6 +8,9 @@ import { AuditLogModule } from './audit-log/audit-log.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { TeamsModule } from './teams/teams.module';
+import { CandidatesModule } from './candidates/candidates.module';
+import { ImportsModule } from './imports/imports.module';
+import { CatalogModule } from './catalog/catalog.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -19,6 +22,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     AuthModule,
     AccountsModule,
     TeamsModule,
+    CandidatesModule,
+    ImportsModule,
+    CatalogModule,
   ],
   controllers: [AppController],
   providers: [
