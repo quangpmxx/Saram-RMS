@@ -101,6 +101,22 @@ export interface CreateCandidateResult {
   duplicate_warning: DuplicateWarning | null;
 }
 
+/** GET /candidate/:id/duplicates — tooltip chi tiết badge "Trùng SĐT". */
+export interface DuplicateDetailMatch {
+  lead_id: string;
+  full_name: string;
+  uploaded_at: string;
+  assigned_to: NamedRef | null;
+  team_name: string | null;
+  status_label: string;
+}
+
+export interface DuplicateDetail {
+  phone_number: string;
+  visible: boolean;
+  matches: DuplicateDetailMatch[];
+}
+
 export interface ImportRowError {
   row: number;
   message: string;

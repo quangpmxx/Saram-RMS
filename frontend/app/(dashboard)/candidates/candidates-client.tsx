@@ -37,6 +37,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { DuplicateDetailBadge } from "./duplicate-detail-badge";
 
 const PAGE_SIZE = 50;
 /** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia/chuyển lead. */
@@ -308,11 +309,7 @@ export function CandidatesClient({
                     <div className="flex items-center gap-2">
                       <Phone className="h-3.5 w-3.5 text-slate-300" strokeWidth={2} />
                       {candidate.phone_number}
-                      {candidate.is_duplicate_flagged && (
-                        <Badge variant="warning" title="Số điện thoại này đang trùng với ứng viên khác">
-                          Trùng SĐT
-                        </Badge>
-                      )}
+                      {candidate.is_duplicate_flagged && <DuplicateDetailBadge candidateId={candidate.id} />}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-500">{candidate.source.name}</td>

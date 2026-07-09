@@ -413,4 +413,109 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
     await leader2Agent.get(`/team/${team1Id}/member`).expect(403);
     await adminAgent.get(`/team/${team1Id}/member`).expect(200);
   });
+
+  describe('GET /candidate/:id/duplicates — tooltip chi tiết trùng SĐT trên nhiều nhóm', () => {
+    const DUP_PHONE = '0930099999';
+    let leadTeam1AId: string; // nhóm 1, Sale 1A
+    let leadTeam1BId: string; // nhóm 1, Sale 1B — cùng nhóm với leadTeam1AId
+    let leadTeam2Id: string; // nhóm 2, Sale 2A
+    let leadPendingId: string; // chưa phân chia
+
+    beforeAll(async () => {
+      // 2 lead cùng nhóm 1 (khác sale), 1 lead nhóm 2, 1 lead chưa phân chia
+      // — đủ tình huống "trùng cùng nhóm" lẫn "trùng khác nhóm" cho cùng 1 SĐT.
+      leadTeam1AId = await createLead(mktAgent, DUP_PHONE);
+      await leader1Agent
+        .post(`/candidate/${leadTeam1AId}/assign`)
+        .send({ account_id: sale1aId })
+        .expect(200);
+
+      leadTeam1BId = await createLead(mktAgent, DUP_PHONE);
+      await leader1Agent
+        .post(`/candidate/${leadTeam1BId}/assign`)
+        .send({ account_id: sale1bId })
+        .expect(200);
+
+      leadTeam2Id = await createLead(mktAgent, DUP_PHONE);
+      await leader2Agent
+        .post(`/candidate/${leadTeam2Id}/assign`)
+        .send({ account_id: sale2aId })
+        .expect(200);
+
+      leadPendingId = await createLead(mktAgent, DUP_PHONE);
+    });
+
+    it('Admin xem được toàn bộ các lần trùng, không giới hạn nhóm', async () => {
+      const res = await adminAgent
+        .get(`/candidate/${leadPendingId}/duplicates`)
+        .expect(200);
+
+      expect(res.body.visible).toBe(true);
+      const ids = res.body.matches.map((m: { lead_id: string }) => m.lead_id);
+      expect(ids).toEqual(
+        expect.arrayContaining([leadTeam1AId, leadTeam1BId, leadTeam2Id]),
+      );
+      const team1Match = res.body.matches.find(
+        (m: { lead_id: string }) => m.lead_id === leadTeam1AId,
+      );
+      expect(team1Match.team_name).toBe('Phase2 Nhóm 1');
+      expect(team1Match.status_label).toContain('Sale 1A');
+    });
+
+    it('MKT xem được toàn bộ các lần trùng, không giới hạn nhóm (Mục 10.4, docs/09)', async () => {
+      const res = await mktAgent
+        .get(`/candidate/${leadPendingId}/duplicates`)
+        .expect(200);
+
+      expect(res.body.visible).toBe(true);
+      expect(res.body.matches).toHaveLength(3);
+    });
+
+    it('Leader 1 chỉ xem được chi tiết bản ghi trùng thuộc đúng nhóm mình', async () => {
+      const res = await leader1Agent
+        .get(`/candidate/${leadTeam1AId}/duplicates`)
+        .expect(200);
+
+      expect(res.body.visible).toBe(true);
+      expect(res.body.matches).toHaveLength(1);
+      expect(res.body.matches[0].lead_id).toBe(leadTeam1BId);
+      expect(
+        res.body.matches.some(
+          (m: { lead_id: string }) => m.lead_id === leadTeam2Id,
+        ),
+      ).toBe(false);
+    });
+
+    it('Sale 1A xem được chi tiết bản ghi trùng cùng nhóm (Sale 1B), không thấy nhóm khác', async () => {
+      const res = await sale1aAgent
+        .get(`/candidate/${leadTeam1AId}/duplicates`)
+        .expect(200);
+
+      expect(res.body.visible).toBe(true);
+      expect(res.body.matches).toHaveLength(1);
+      expect(res.body.matches[0].lead_id).toBe(leadTeam1BId);
+      expect(res.body.matches[0].status_label).toContain('Sale 1B');
+    });
+
+    it('Sale 2A xem lead của mình nhưng không có bản ghi trùng cùng nhóm → visible=false', async () => {
+      const res = await sale2aAgent
+        .get(`/candidate/${leadTeam2Id}/duplicates`)
+        .expect(200);
+
+      expect(res.body.visible).toBe(false);
+      expect(res.body.matches).toHaveLength(0);
+    });
+
+    it('Sale 2A không xem được chi tiết trùng của lead ngoài phạm vi mình (403)', async () => {
+      await sale2aAgent
+        .get(`/candidate/${leadTeam1AId}/duplicates`)
+        .expect(403);
+    });
+
+    it('Sale không có quyền xem lead chưa phân chia (403)', async () => {
+      await sale1aAgent
+        .get(`/candidate/${leadPendingId}/duplicates`)
+        .expect(403);
+    });
+  });
 });

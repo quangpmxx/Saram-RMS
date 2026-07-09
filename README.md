@@ -105,8 +105,10 @@ Nếu thành công, terminal in ra dòng dạng:
 Đã tạo 5 ứng viên mẫu cho tài khoản "mkt_demo".
 Đã tạo nhóm "Nhóm Sale Demo" với Leader (leader_demo/123456) và 2 Sale (sale_demo_a, sale_demo_b/123456).
 Đã phân chia 2 ứng viên mẫu cho Sale Demo A/B — số còn lại vẫn ở trạng thái "Chờ phân chia".
+Đã tạo nhóm "Nhóm Sale Demo 2" với Leader (leader_demo_2/123456) và Sale (sale_demo_c/123456).
+Đã tạo 3 ứng viên trùng SĐT 0901000005 ở 2 nhóm khác nhau + 1 chưa phân chia để thử tooltip "Trùng SĐT".
 ```
-**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 1 nhóm mẫu "Nhóm Sale Demo" với Leader (`leader_demo`/`123456`) và 2 Sale (`sale_demo_a`, `sale_demo_b`/`123456`), trong đó 2/5 ứng viên mẫu đã được phân chia sẵn — xem mục 5.
+**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm — xem mục 5.
 
 ---
 
@@ -163,6 +165,13 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 4. Chuyển sang tab **Tất cả** → với ứng viên đã có người phụ trách, bấm **Chuyển** → chọn Sale khác trong nhóm (có thể ghi lý do) → xác nhận. Sale cũ không còn thấy ứng viên đó nữa.
 5. Đăng xuất, đăng nhập bằng `sale_demo_a` / `123456` → vào **Ứng viên**, chỉ thấy đúng các ứng viên đang được giao cho mình (không có tab Chờ phân chia, không thấy dữ liệu của `sale_demo_b`).
 6. Thử đăng nhập bằng tài khoản Leader của 1 nhóm khác (tự tạo qua **Quản lý tài khoản**) và thử phân chia/chuyển ứng viên của "Nhóm Sale Demo" → hệ thống từ chối (chỉ thao tác được trong nhóm mình, theo Mục 3 `docs/09`).
+
+### 5.4. Xem chi tiết trùng SĐT (tooltip)
+
+1. Đăng nhập `admin` / `123456` (hoặc `mkt_demo`) → vào **Ứng viên**, tìm ứng viên "Võ Thị Em" (có 3 dòng cùng SĐT `0901000005`). Rê chuột (hoặc bấm) vào badge **Trùng SĐT** cạnh số điện thoại → hiện popup đầy đủ: tên các ứng viên trùng, ngày up, Sale phụ trách, nhóm của Sale, trạng thái hiện tại. Admin/MKT/Quản lý luôn thấy toàn bộ (Mục 10.4, `docs/09`).
+2. Đăng xuất, đăng nhập `leader_demo` / `123456` (thuộc "Nhóm Sale Demo") → vào **Ứng viên**, tìm ứng viên "Võ Thị Em (Nhóm 1)" → rê chuột vào badge **Trùng SĐT** → vì 2 bản ghi trùng còn lại thuộc "Nhóm Sale Demo 2" và chưa phân chia (không phải nhóm mình), popup chỉ hiện dòng chung: **"Số điện thoại này đã tồn tại trong hệ thống."**
+3. Đăng nhập `leader_demo_2` / `123456` → tìm "Võ Thị Em (Nhóm 2)" → rê chuột vào badge → tương tự, chỉ thấy dòng chung (bản ghi trùng còn lại thuộc nhóm khác).
+4. Đăng nhập `sale_demo_a` / `123456` → nếu có ứng viên trùng SĐT trong đúng nhóm mình (ví dụ tạo thêm 1 lead cùng SĐT rồi phân chia cho `sale_demo_b` cùng nhóm), Sale vẫn xem được chi tiết bản ghi trùng **trong nhóm mình**, nhưng không thấy chi tiết của nhóm khác.
 
 ---
 

@@ -23,6 +23,7 @@ import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { DuplicateWarning } from './dto/duplicate-warning.dto';
+import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
 
 /** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia/chuyển lead. */
@@ -112,6 +113,80 @@ export class CandidatesService {
     await this.assertInScope(lead, currentUser);
 
     return toCandidateResponse(lead);
+  }
+
+  /**
+   * Mục 2.1, docs/12 (tooltip/popup khi hover badge "Trùng SĐT") + Mục 10.4,
+   * docs/09: Admin/Quản lý/MKT xem toàn bộ các lần trùng không giới hạn
+   * nhóm; Leader/Sale chỉ xem chi tiết các bản ghi trùng thuộc đúng nhóm
+   * mình, các bản ghi trùng ở nhóm khác không được hiện chi tiết (xác nhận
+   * bổ sung của chủ doanh nghiệp — Leader áp dụng cùng quy tắc "cùng nhóm"
+   * như Sale, vì tài liệu 09 gốc chỉ nói tới Sale/MKT/Quản lý/Admin).
+   */
+  async getDuplicateDetail(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<DuplicateDetailDto> {
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Không tìm thấy ứng viên');
+    }
+    await this.assertInScope(lead, currentUser);
+
+    const others = await this.prisma.lead.findMany({
+      where: {
+        phoneNumber: lead.phoneNumber,
+        deletedAt: null,
+        id: { not: lead.id },
+      },
+      include: {
+        assignedTo: {
+          include: { team: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: { uploadedAt: 'asc' },
+    });
+
+    const visibleMatches = FULL_ACCESS_ROLES.has(currentUser.role)
+      ? others
+      : await this.filterMatchesByOwnTeam(others, currentUser);
+
+    return {
+      phone_number: lead.phoneNumber,
+      visible: visibleMatches.length > 0,
+      matches: visibleMatches.map((match) => ({
+        lead_id: match.id,
+        full_name: match.fullName,
+        uploaded_at: match.uploadedAt.toISOString(),
+        assigned_to: match.assignedTo
+          ? { id: match.assignedTo.id, name: match.assignedTo.fullName }
+          : null,
+        team_name: match.assignedTo?.team?.name ?? null,
+        status_label: match.assignedTo
+          ? `Đã giao: ${match.assignedTo.fullName}`
+          : 'Chờ phân chia',
+      })),
+    };
+  }
+
+  /** Leader/Sale: chỉ giữ lại các bản ghi trùng thuộc đúng nhóm mình. */
+  private async filterMatchesByOwnTeam(
+    matches: Array<
+      Lead & {
+        assignedTo:
+          (Account & { team: { id: string; name: string } | null }) | null;
+      }
+    >,
+    currentUser: AuthenticatedUser,
+  ) {
+    if (currentUser.role !== 'leader' && currentUser.role !== 'sale') {
+      return [];
+    }
+    const ownTeamId = await this.getOwnTeamId(currentUser.id);
+    if (!ownTeamId) {
+      return [];
+    }
+    return matches.filter((match) => match.assignedTeamId === ownTeamId);
   }
 
   async create(

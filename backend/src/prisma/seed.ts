@@ -385,6 +385,130 @@ async function seedPhase2Sample(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dữ liệu mẫu để trải nghiệm tooltip "Trùng SĐT" với trường hợp trùng ở
+ * NHIỀU NHÓM khác nhau (fix bổ sung sau Phase 2 — xem yêu cầu "Improve
+ * duplicate phone visibility"):
+ *  - Thêm 1 nhóm mẫu thứ 2 "Nhóm Sale Demo 2" với Leader (leader_demo_2) và
+ *    1 Sale (sale_demo_c).
+ *  - 3 ứng viên cùng SĐT: 1 thuộc "Nhóm Sale Demo" (Sale Demo A), 1 thuộc
+ *    "Nhóm Sale Demo 2" (Sale Demo C), 1 chưa phân chia — đủ để tự kiểm tra
+ *    cả 3 trường hợp phân quyền xem chi tiết trùng (cùng nhóm/khác nhóm/
+ *    Admin-MKT xem toàn bộ).
+ * Idempotent: bỏ qua nếu nhóm mẫu thứ 2 đã tồn tại.
+ */
+async function seedCrossTeamDuplicateSample(
+  prisma: PrismaClient,
+): Promise<void> {
+  const existingTeam2 = await prisma.team.findFirst({
+    where: { name: 'Nhóm Sale Demo 2' },
+  });
+  if (existingTeam2) {
+    console.log('Dữ liệu mẫu trùng SĐT đa nhóm đã tồn tại — bỏ qua.');
+    return;
+  }
+
+  const team1 = await prisma.team.findFirst({
+    where: { name: 'Nhóm Sale Demo' },
+  });
+  const saleA = await prisma.account.findUnique({
+    where: { username: 'sale_demo_a' },
+  });
+  if (!team1 || !saleA) {
+    console.log(
+      'Chưa có "Nhóm Sale Demo" — bỏ qua seed dữ liệu trùng SĐT đa nhóm (chạy lại sau khi seedPhase2Sample xong).',
+    );
+    return;
+  }
+
+  const defaultPassword = process.env.DEFAULT_PASSWORD ?? '123456';
+  const passwordHash = await bcrypt.hash(defaultPassword, SALT_ROUNDS);
+
+  const team2 = await prisma.team.create({
+    data: { name: 'Nhóm Sale Demo 2' },
+  });
+  const leader2 = await prisma.account.create({
+    data: {
+      fullName: 'Leader Demo 2',
+      username: 'leader_demo_2',
+      passwordHash,
+      role: 'leader',
+      status: 'active',
+      teamId: team2.id,
+    },
+  });
+  await prisma.team.update({
+    where: { id: team2.id },
+    data: { leaderId: leader2.id },
+  });
+  const saleC = await prisma.account.create({
+    data: {
+      fullName: 'Sale Demo C',
+      username: 'sale_demo_c',
+      passwordHash,
+      role: 'sale',
+      status: 'active',
+      teamId: team2.id,
+    },
+  });
+
+  console.log(
+    `Đã tạo nhóm "Nhóm Sale Demo 2" với Leader (leader_demo_2/${defaultPassword}) và Sale (sale_demo_c/${defaultPassword}).`,
+  );
+
+  const source = await prisma.leadSource.findFirst({
+    where: { name: 'Facebook' },
+  });
+  if (!source) return;
+
+  const mktDemo = await prisma.account.findUnique({
+    where: { username: 'mkt_demo' },
+  });
+  if (!mktDemo) return;
+
+  const dupPhone = '0901000005';
+
+  await prisma.lead.create({
+    data: {
+      fullName: 'Võ Thị Em (Nhóm 1)',
+      phoneNumber: dupPhone,
+      sourceId: source.id,
+      uploadedById: mktDemo.id,
+      isDuplicateFlagged: true,
+      assignedToId: saleA.id,
+      assignedTeamId: team1.id,
+      assignedAt: new Date(),
+      assignmentMethod: 'manual',
+    },
+  });
+  await prisma.lead.create({
+    data: {
+      fullName: 'Võ Thị Em (Nhóm 2)',
+      phoneNumber: dupPhone,
+      sourceId: source.id,
+      uploadedById: mktDemo.id,
+      isDuplicateFlagged: true,
+      assignedToId: saleC.id,
+      assignedTeamId: team2.id,
+      assignedAt: new Date(),
+      assignmentMethod: 'manual',
+    },
+  });
+  await prisma.lead.create({
+    data: {
+      fullName: 'Võ Thị Em (Chờ phân chia)',
+      phoneNumber: dupPhone,
+      sourceId: source.id,
+      uploadedById: mktDemo.id,
+      isDuplicateFlagged: true,
+    },
+  });
+
+  console.log(
+    `Đã tạo 3 ứng viên trùng SĐT ${dupPhone} ở 2 nhóm khác nhau + 1 chưa phân chia để thử tooltip "Trùng SĐT".`,
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -399,6 +523,7 @@ async function main() {
   await seedStatusCatalog(prisma);
   await seedSampleCandidates(prisma);
   await seedPhase2Sample(prisma);
+  await seedCrossTeamDuplicateSample(prisma);
 
   await prisma.$disconnect();
 }

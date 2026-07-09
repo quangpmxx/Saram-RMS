@@ -637,4 +637,130 @@ describe('CandidatesService', () => {
       );
     });
   });
+
+  describe('getDuplicateDetail', () => {
+    const matchOwnTeam = {
+      ...baseLead,
+      id: 'lead-2',
+      fullName: 'Trùng cùng nhóm',
+      assignedToId: 'sale-1',
+      assignedTeamId: 'team-1',
+      assignedTo: {
+        id: 'sale-1',
+        fullName: 'Sale Cùng Nhóm',
+        team: { id: 'team-1', name: 'Nhóm 1' },
+      },
+    };
+    const matchOtherTeam = {
+      ...baseLead,
+      id: 'lead-3',
+      fullName: 'Trùng khác nhóm',
+      assignedToId: 'sale-9',
+      assignedTeamId: 'team-9',
+      assignedTo: {
+        id: 'sale-9',
+        fullName: 'Sale Khác Nhóm',
+        team: { id: 'team-9', name: 'Nhóm 9' },
+      },
+    };
+    const matchPending = {
+      ...baseLead,
+      id: 'lead-4',
+      fullName: 'Trùng chưa phân chia',
+      assignedToId: null,
+      assignedTeamId: null,
+      assignedTo: null,
+    };
+
+    it('ném NotFoundException nếu ứng viên không tồn tại/đã xóa mềm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(null);
+      await expect(
+        service.getDuplicateDetail('ghost', adminUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('Sale không xem được chi tiết trùng của ứng viên ngoài phạm vi mình', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead); // assignedToId khác sale-1
+
+      await expect(
+        service.getDuplicateDetail('lead-1', saleUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Admin/MKT xem toàn bộ các lần trùng, không giới hạn nhóm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.lead.findMany.mockResolvedValue([
+        matchOwnTeam,
+        matchOtherTeam,
+        matchPending,
+      ]);
+
+      const result = await service.getDuplicateDetail('lead-1', adminUser);
+
+      expect(result.visible).toBe(true);
+      expect(result.matches).toHaveLength(3);
+      expect(result.matches.map((m) => m.lead_id)).toEqual(
+        expect.arrayContaining(['lead-2', 'lead-3', 'lead-4']),
+      );
+      expect(result.matches.find((m) => m.lead_id === 'lead-2')).toEqual(
+        expect.objectContaining({
+          full_name: 'Trùng cùng nhóm',
+          team_name: 'Nhóm 1',
+          status_label: 'Đã giao: Sale Cùng Nhóm',
+        }),
+      );
+      expect(result.matches.find((m) => m.lead_id === 'lead-4')).toEqual(
+        expect.objectContaining({
+          status_label: 'Chờ phân chia',
+          team_name: null,
+        }),
+      );
+    });
+
+    it('Leader chỉ xem được các bản ghi trùng thuộc đúng nhóm mình', async () => {
+      const leadInLeaderTeam = { ...baseLead, assignedTeamId: 'team-1' };
+      prisma.lead.findUnique.mockResolvedValue(leadInLeaderTeam);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.findMany.mockResolvedValue([
+        matchOwnTeam,
+        matchOtherTeam,
+        matchPending,
+      ]);
+
+      const result = await service.getDuplicateDetail('lead-1', leaderUser);
+
+      expect(result.visible).toBe(true);
+      expect(result.matches).toHaveLength(1);
+      expect(result.matches[0].lead_id).toBe('lead-2');
+    });
+
+    it('Leader không thấy gì (visible=false) nếu mọi bản ghi trùng đều ở nhóm khác', async () => {
+      const leadInLeaderTeam = { ...baseLead, assignedTeamId: 'team-1' };
+      prisma.lead.findUnique.mockResolvedValue(leadInLeaderTeam);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.findMany.mockResolvedValue([matchOtherTeam, matchPending]);
+
+      const result = await service.getDuplicateDetail('lead-1', leaderUser);
+
+      expect(result.visible).toBe(false);
+      expect(result.matches).toHaveLength(0);
+    });
+
+    it('Sale chỉ xem được các bản ghi trùng thuộc đúng nhóm mình', async () => {
+      const ownLead = {
+        ...baseLead,
+        assignedToId: 'sale-1',
+        assignedTeamId: 'team-1',
+      };
+      prisma.lead.findUnique.mockResolvedValue(ownLead);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.findMany.mockResolvedValue([matchOwnTeam, matchOtherTeam]);
+
+      const result = await service.getDuplicateDetail('lead-1', saleUser);
+
+      expect(result.visible).toBe(true);
+      expect(result.matches).toHaveLength(1);
+      expect(result.matches[0].lead_id).toBe('lead-2');
+    });
+  });
 });

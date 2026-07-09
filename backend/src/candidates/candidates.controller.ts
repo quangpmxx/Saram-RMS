@@ -118,4 +118,12 @@ export class CandidatesController {
   ) {
     return this.candidatesService.transfer(id, dto, user);
   }
+
+  @Get(':id/duplicates')
+  getDuplicateDetail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.getDuplicateDetail(id, user);
+  }
 }
