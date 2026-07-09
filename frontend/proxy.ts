@@ -25,5 +25,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Loại trừ mọi đường dẫn có phần mở rộng file (vd. /saram-logo.jpg, các
+  // *.svg trong public/) — nếu không, proxy sẽ redirect luôn cả request tải
+  // ảnh tĩnh về /login khi chưa đăng nhập, khiến ảnh hiển thị "broken".
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
