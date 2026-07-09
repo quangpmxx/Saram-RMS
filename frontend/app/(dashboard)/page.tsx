@@ -12,7 +12,7 @@ const QUICK_LINKS = [
     label: "Ứng viên",
     description: "Nhập, tìm kiếm và quản lý dữ liệu ứng viên.",
     icon: Users,
-    roles: ["admin", "manager", "mkt"] as AccountRole[],
+    roles: ["admin", "manager", "mkt", "leader", "sale"] as AccountRole[],
   },
   {
     href: "/accounts",
@@ -44,9 +44,8 @@ const ACCENT_CLASSES: Record<StatCard["accent"], string> = {
 };
 
 /**
- * Phase 0 chỉ có nghiệp vụ Tài khoản & Nhóm (Admin), Phase 1 có Ứng viên
- * (Admin/Quản lý/MKT). Các vai trò khác đăng nhập được nhưng chưa có màn
- * hình nghiệp vụ riêng — sẽ có ở các Phase sau theo docs/14-roadmap.md.
+ * Phase 0: Tài khoản & Nhóm (Admin). Phase 1: Ứng viên (Admin/Quản lý/MKT).
+ * Phase 2: mở thêm Ứng viên cho Leader/Sale (docs/14-roadmap.md).
  * Số liệu bên dưới lấy từ các API GET đã có sẵn (candidate/account/team),
  * không tạo API/nghiệp vụ mới — chỉ hiển thị lại tổng số cho đẹp mắt.
  */

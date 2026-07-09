@@ -21,6 +21,7 @@ describe('TeamsService', () => {
       findMany: jest.Mock;
     };
     account: { findUnique: jest.Mock; findMany: jest.Mock };
+    lead: { groupBy: jest.Mock };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
@@ -44,6 +45,7 @@ describe('TeamsService', () => {
         findMany: jest.fn(),
       },
       account: { findUnique: jest.fn(), findMany: jest.fn() },
+      lead: { groupBy: jest.fn() },
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
@@ -161,6 +163,7 @@ describe('TeamsService', () => {
       prisma.team.findUnique.mockResolvedValue(team);
       prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
       prisma.account.findMany.mockResolvedValue([]);
+      prisma.lead.groupBy.mockResolvedValue([]);
 
       await expect(
         service.getMembers('team-1', {
@@ -169,6 +172,59 @@ describe('TeamsService', () => {
           sessionId: 's',
         }),
       ).resolves.toEqual([]);
+    });
+
+    it('chỉ lấy thành viên vai trò Sale, kèm assigned_count tính từ leads.assigned_to', async () => {
+      prisma.team.findUnique.mockResolvedValue(team);
+      prisma.account.findMany.mockResolvedValue([
+        {
+          id: 'sale-1',
+          fullName: 'Sale A',
+          username: 'sale_a',
+          role: 'sale',
+          teamId: 'team-1',
+          status: 'active',
+          createdAt: new Date('2026-01-01'),
+          updatedAt: new Date('2026-01-01'),
+          team: { id: 'team-1', name: 'Nhóm A' },
+        },
+        {
+          id: 'sale-2',
+          fullName: 'Sale B',
+          username: 'sale_b',
+          role: 'sale',
+          teamId: 'team-1',
+          status: 'active',
+          createdAt: new Date('2026-01-01'),
+          updatedAt: new Date('2026-01-01'),
+          team: { id: 'team-1', name: 'Nhóm A' },
+        },
+      ]);
+      prisma.lead.groupBy.mockResolvedValue([
+        { assignedToId: 'sale-1', _count: { _all: 5 } },
+      ]);
+
+      const result = await service.getMembers('team-1', {
+        id: 'admin-1',
+        role: 'admin',
+        sessionId: 's',
+      });
+
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { teamId: 'team-1', role: 'sale' } }),
+      );
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: 'sale-1',
+          assigned_count: 5,
+          care_pool_count: 0,
+        }),
+        expect.objectContaining({
+          id: 'sale-2',
+          assigned_count: 0,
+          care_pool_count: 0,
+        }),
+      ]);
     });
   });
 });

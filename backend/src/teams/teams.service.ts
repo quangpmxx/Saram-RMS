@@ -10,11 +10,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
-import {
-  AccountResponseDto,
-  toAccountResponse,
-} from '../accounts/dto/account-response.dto';
+import { toAccountResponse } from '../accounts/dto/account-response.dto';
 import { TeamResponseDto, toTeamResponse } from './dto/team-response.dto';
+import { TeamMemberResponseDto } from './dto/team-member-response.dto';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
@@ -131,15 +129,15 @@ export class TeamsService {
   }
 
   /**
-   * Mục 3, docs/13: danh sách nhân viên trong nhóm.
-   * Phase 0 CHƯA có bảng leads — không trả `assigned_count`/`care_pool_count`
-   * theo đúng đặc tả API vì dữ liệu nguồn chưa tồn tại ở giai đoạn này
-   * (xem docs/14-roadmap.md, Phase 2 và Phase 5).
+   * Mục 3, docs/13: danh sách nhân viên (Sale) trong nhóm kèm khối lượng lead
+   * đang phụ trách. `assigned_count` có dữ liệu thật từ Phase 2 (đếm số
+   * `leads.assigned_to` chưa xóa mềm); `care_pool_count` luôn 0 tới khi
+   * Phase 5 dựng cột chăm sóc.
    */
   async getMembers(
     teamId: string,
     currentUser: AuthenticatedUser,
-  ): Promise<AccountResponseDto[]> {
+  ): Promise<TeamMemberResponseDto[]> {
     const team = await this.prisma.team.findUnique({ where: { id: teamId } });
     if (!team) {
       throw new NotFoundException('Không tìm thấy nhóm');
@@ -153,12 +151,28 @@ export class TeamsService {
     }
 
     const members = await this.prisma.account.findMany({
-      where: { teamId },
+      where: { teamId, role: 'sale' },
       include: { team: { select: { id: true, name: true } } },
       orderBy: { fullName: 'asc' },
     });
 
-    return members.map(toAccountResponse);
+    const workload = await this.prisma.lead.groupBy({
+      by: ['assignedToId'],
+      where: {
+        assignedToId: { in: members.map((member) => member.id) },
+        deletedAt: null,
+      },
+      _count: { _all: true },
+    });
+    const assignedCountByAccountId = new Map(
+      workload.map((row) => [row.assignedToId, row._count._all]),
+    );
+
+    return members.map((member) => ({
+      ...toAccountResponse(member),
+      assigned_count: assignedCountByAccountId.get(member.id) ?? 0,
+      care_pool_count: 0,
+    }));
   }
 
   private async getOwnTeamId(accountId: string): Promise<string | null> {

@@ -117,3 +117,15 @@ export interface ImportJobStatus {
   created_at: string;
   updated_at: string;
 }
+
+// ── Phase 2 — Phân chia thủ công & Không gian Sale/Leader ───────────────
+
+/** Mục 3, docs/13-api-design.md — GET /team/:id/member. */
+export interface TeamMember extends Account {
+  assigned_count: number;
+  care_pool_count: number;
+}
+
+export interface AssignBulkResult {
+  assigned_count: number;
+}

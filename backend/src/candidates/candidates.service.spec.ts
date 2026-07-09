@@ -1,4 +1,9 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CandidatesService } from './candidates.service';
 import { LeadDuplicateService } from './lead-duplicate.service';
@@ -375,6 +380,261 @@ describe('CandidatesService', () => {
       expect(prisma.account.findUnique).toHaveBeenCalledWith({
         where: { id: leaderUser.id },
       });
+    });
+
+    it('assigned_to=me quy đổi thành id người gọi', async () => {
+      prisma.$transaction.mockResolvedValue([0, []]);
+
+      await service.list(
+        { page: 1, page_size: 20, assigned_to: 'me' },
+        adminUser,
+      );
+
+      expect(prisma.lead.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ assignedToId: adminUser.id }),
+        }),
+      );
+    });
+  });
+
+  describe('getPending', () => {
+    it('Sale không có quyền xem danh sách chờ phân chia', async () => {
+      await expect(
+        service.getPending({ page: 1, page_size: 20 }, saleUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Leader/MKT/Admin xem được, luôn lọc assignedToId=null, không lọc theo nhóm', async () => {
+      prisma.$transaction.mockResolvedValue([0, []]);
+
+      await service.getPending({ page: 1, page_size: 20 }, leaderUser);
+
+      expect(prisma.lead.count).toHaveBeenCalledWith({
+        where: { deletedAt: null, assignedToId: null },
+      });
+    });
+  });
+
+  const saleAccount = {
+    id: 'sale-1',
+    role: 'sale',
+    status: 'active',
+    teamId: 'team-1',
+  };
+
+  describe('assign', () => {
+    it('ném NotFoundException nếu ứng viên không tồn tại/đã xóa mềm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(null);
+      await expect(
+        service.assign('ghost', { account_id: 'sale-1' }, leaderUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('từ chối nếu ứng viên đã được phân chia — gợi ý dùng transfer', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedToId: 'sale-2',
+      });
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, leaderUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('MKT/Sale không có quyền phân chia', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, mktUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('từ chối nếu account_id không phải vai trò Sale', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique.mockResolvedValue({
+        ...saleAccount,
+        role: 'mkt',
+      });
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, adminUser),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('Leader chỉ được phân chia cho Sale trong nhóm mình', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique
+        .mockResolvedValueOnce(saleAccount) // account đích (team-1)
+        .mockResolvedValueOnce({ teamId: 'team-2' }); // getOwnTeamId(leader) → khác nhóm
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Leader phân chia thành công cho Sale đúng nhóm mình', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique
+        .mockResolvedValueOnce(saleAccount) // account đích (team-1)
+        .mockResolvedValueOnce({ teamId: 'team-1' }); // getOwnTeamId(leader) → cùng nhóm
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        assignedToId: 'sale-1',
+      });
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, leaderUser),
+      ).resolves.toBeDefined();
+
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: {
+          assignedToId: 'sale-1',
+          assignedTeamId: 'team-1',
+          assignedAt: expect.any(Date),
+          assignmentMethod: 'manual',
+        },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({ actionType: 'assign', entityType: 'lead' }),
+      );
+    });
+
+    it('Quản lý/Admin phân chia không giới hạn theo nhóm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, adminUser),
+      ).resolves.toBeDefined();
+    });
+  });
+
+  describe('assignBulk', () => {
+    it('bỏ qua các lead không hợp lệ (đã xóa/đã phân chia/không tồn tại), chỉ gán lead hợp lệ', async () => {
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      prisma.lead.findMany.mockResolvedValue([
+        { id: 'lead-1' },
+        { id: 'lead-2' },
+      ]);
+      prisma.lead.updateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.assignBulk(
+        { candidate_ids: ['lead-1', 'lead-2', 'lead-3'], account_id: 'sale-1' },
+        adminUser,
+      );
+
+      expect(result).toEqual({ assigned_count: 2 });
+      expect(prisma.lead.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['lead-1', 'lead-2', 'lead-3'] },
+          deletedAt: null,
+          assignedToId: null,
+        },
+        select: { id: true },
+      });
+      expect(auditLog.log).toHaveBeenCalledTimes(2);
+    });
+
+    it('trả về assigned_count=0 nếu không có lead nào hợp lệ, không gọi updateMany', async () => {
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      prisma.lead.findMany.mockResolvedValue([]);
+
+      const result = await service.assignBulk(
+        { candidate_ids: ['lead-1'], account_id: 'sale-1' },
+        adminUser,
+      );
+
+      expect(result).toEqual({ assigned_count: 0 });
+      expect(prisma.lead.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('transfer', () => {
+    const assignedLead = {
+      ...baseLead,
+      assignedToId: 'sale-1',
+      assignedTeamId: 'team-1',
+    };
+
+    it('từ chối nếu ứng viên chưa được phân chia', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+
+      await expect(
+        service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('MKT/Sale không có quyền chuyển lead', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+
+      await expect(
+        service.transfer('lead-1', { new_account_id: 'sale-2' }, saleUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Leader không chuyển được lead ngoài nhóm mình', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-other' });
+
+      await expect(
+        service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('từ chối nếu Sale đích không thuộc đúng nhóm đang sở hữu lead', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.account.findUnique
+        .mockResolvedValueOnce({ teamId: 'team-1' }) // getOwnTeamId(leader)
+        .mockResolvedValueOnce({
+          ...saleAccount,
+          id: 'sale-2',
+          teamId: 'team-2',
+        }); // sale đích khác nhóm
+
+      await expect(
+        service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('chuyển thành công, ghi audit log kèm lý do', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.account.findUnique
+        .mockResolvedValueOnce({ teamId: 'team-1' }) // getOwnTeamId(leader)
+        .mockResolvedValueOnce({
+          ...saleAccount,
+          id: 'sale-2',
+          teamId: 'team-1',
+        }); // sale đích cùng nhóm
+      prisma.lead.update.mockResolvedValue(assignedLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...assignedLead,
+        assignedToId: 'sale-2',
+      });
+
+      await expect(
+        service.transfer(
+          'lead-1',
+          { new_account_id: 'sale-2', reason: 'Sale A nghỉ phép' },
+          leaderUser,
+        ),
+      ).resolves.toBeDefined();
+
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { assignedToId: 'sale-2', assignedAt: expect.any(Date) },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'transfer',
+          oldValue: 'sale-1',
+          newValue: 'sale-2 | reason: Sale A nghỉ phép',
+        }),
+      );
     });
   });
 });

@@ -11,10 +11,11 @@ import {
 
 /**
  * Mục 4, docs/13-api-design.md — GET /candidate (query).
- * Phase 1 chỉ hiện thực bộ lọc "cơ bản" theo đúng M9 (cơ bản) tại
- * docs/14-roadmap.md: từ khóa, nguồn, khoảng ngày, cờ trùng lặp — các
- * filter theo trạng thái cuộc gọi/PV/nhóm/sale thuộc Phase 2-4, chưa có
- * dữ liệu để lọc nên chưa hiện thực ở đây.
+ * Phase 1: từ khóa, nguồn, khoảng ngày, cờ trùng lặp.
+ * Phase 2: bổ sung assigned_to, team_id, is_pending (M9 — filter theo đúng
+ * trường dữ liệu Phase 2 tạo ra: assigned_to/assigned_team_id). Các filter
+ * theo trạng thái cuộc gọi/PV thuộc Phase 3-4, chưa có dữ liệu nên chưa
+ * hiện thực ở đây.
  */
 export class ListCandidatesQueryDto {
   @IsOptional()
@@ -48,4 +49,17 @@ export class ListCandidatesQueryDto {
   @IsOptional()
   @IsBooleanString()
   is_duplicate_flagged?: string;
+
+  /** UUID của 1 account, hoặc chuỗi đặc biệt "me" (Mục 4, docs/13). */
+  @IsOptional()
+  @IsString()
+  assigned_to?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  team_id?: string;
+
+  @IsOptional()
+  @IsBooleanString()
+  is_pending?: string;
 }

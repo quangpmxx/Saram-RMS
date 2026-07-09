@@ -1,12 +1,13 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản) và **Phase 1** (Thu thập dữ liệu ứng viên) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên) và **Phase 2** (Phân chia thủ công & Không gian Sale/Leader) đã hoàn thành (xem `docs/14-roadmap.md`).
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
 - Màn hình **Ứng viên**: MKT nhập ứng viên thủ công hoặc nhập hàng loạt từ file Excel, cảnh báo trùng số điện thoại tự động, tìm kiếm/lọc danh sách (Phase 1).
+- **Chờ phân chia**, phân chia thủ công (từng lead hoặc hàng loạt), chuyển lead giữa các Sale trong nhóm, không gian "Lead của tôi" cho Sale, workload từng Sale cho Leader (Phase 2).
 
-Các nghiệp vụ tuyển dụng tiếp theo (phân chia, cột chăm sóc, phỏng vấn, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
+Các nghiệp vụ tuyển dụng tiếp theo (pipeline cuộc gọi/ghi chú, lịch phỏng vấn, cột chăm sóc, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
 
 ---
 
@@ -102,8 +103,10 @@ Nếu thành công, terminal in ra dòng dạng:
 ...
 Đã tạo tài khoản MKT mẫu: username="mkt_demo", mật khẩu mặc định="123456"
 Đã tạo 5 ứng viên mẫu cho tài khoản "mkt_demo".
+Đã tạo nhóm "Nhóm Sale Demo" với Leader (leader_demo/123456) và 2 Sale (sale_demo_a, sale_demo_b/123456).
+Đã phân chia 2 ứng viên mẫu cho Sale Demo A/B — số còn lại vẫn ở trạng thái "Chờ phân chia".
 ```
-**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại) để trải nghiệm ngay màn hình Ứng viên — xem mục 5.
+**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 1 nhóm mẫu "Nhóm Sale Demo" với Leader (`leader_demo`/`123456`) và 2 Sale (`sale_demo_a`, `sale_demo_b`/`123456`), trong đó 2/5 ứng viên mẫu đã được phân chia sẵn — xem mục 5.
 
 ---
 
@@ -150,7 +153,16 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 3. Bấm **Thêm ứng viên** → nhập thủ công 1 ứng viên mới. Nếu nhập số điện thoại trùng với ứng viên đã có, hệ thống hiện cảnh báo ngay.
 4. Bấm **Nhập từ Excel** → chọn file mẫu `sample-data/mau-import-ung-vien.xlsx` (đi kèm sẵn trong dự án). File này có chủ đích 3 loại dòng: 3 dòng hợp lệ, 1 dòng lỗi (thiếu số điện thoại), 1 dòng trùng SĐT với ứng viên mẫu "Nguyễn Văn An" — nhập xong sẽ thấy kết quả đếm theo 3 loại (thành công/lỗi/trùng) và chi tiết lỗi theo từng dòng.
 5. Thử sửa/xoá 1 ứng viên do tài khoản `mkt_demo` tạo — thành công. Nếu đăng nhập bằng tài khoản MKT khác và thử sửa/xoá ứng viên của `mkt_demo`, hệ thống sẽ từ chối (chỉ người nhập được sửa/xoá dữ liệu của mình, theo Mục 2.6 `docs/09`).
-6. Vai trò Quản lý xem được toàn bộ danh sách nhưng không sửa/xoá được; vai trò Sale/Leader chưa thấy gì ở màn hình này (bình thường — cơ chế phân chia cho Sale/Leader sẽ có ở Phase 2).
+6. Vai trò Quản lý xem được toàn bộ danh sách nhưng không sửa/xoá được.
+
+### 5.3. Phân chia & không gian Sale/Leader (Phase 2)
+
+1. Đăng nhập bằng tài khoản Leader mẫu: `leader_demo` / `123456`.
+2. Vào **Ứng viên** → thấy khối **"Khối lượng công việc nhóm"** (số lead mỗi Sale đang phụ trách) và nút chuyển tab **Tất cả / Chờ phân chia**.
+3. Bấm tab **Chờ phân chia** → thấy các ứng viên chưa ai phụ trách (3 ứng viên mẫu còn lại). Tick chọn 1-2 dòng → bấm **Phân chia đã chọn** → chọn Sale (`sale_demo_a` hoặc `sale_demo_b`) → xác nhận. Ứng viên biến mất khỏi "Chờ phân chia", khối workload cập nhật ngay.
+4. Chuyển sang tab **Tất cả** → với ứng viên đã có người phụ trách, bấm **Chuyển** → chọn Sale khác trong nhóm (có thể ghi lý do) → xác nhận. Sale cũ không còn thấy ứng viên đó nữa.
+5. Đăng xuất, đăng nhập bằng `sale_demo_a` / `123456` → vào **Ứng viên**, chỉ thấy đúng các ứng viên đang được giao cho mình (không có tab Chờ phân chia, không thấy dữ liệu của `sale_demo_b`).
+6. Thử đăng nhập bằng tài khoản Leader của 1 nhóm khác (tự tạo qua **Quản lý tài khoản**) và thử phân chia/chuyển ứng viên của "Nhóm Sale Demo" → hệ thống từ chối (chỉ thao tác được trong nhóm mình, theo Mục 3 `docs/09`).
 
 ---
 
@@ -167,7 +179,7 @@ npm run lint
 npm run build       # build thử để chắc chắn không lỗi
 ```
 
-> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và dữ liệu ứng viên mẫu đã seed — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại tài khoản Admin, tài khoản MKT mẫu và dữ liệu ứng viên mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
+> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, Leader/Sale demo) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
 
 ---
 
@@ -186,4 +198,4 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0 và Phase 1 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên). Các nghiệp vụ tiếp theo (phân chia ứng viên, cột chăm sóc, phỏng vấn, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo `docs/14-roadmap.md`, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+Phase 0, 1 và 2 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader). Các nghiệp vụ tiếp theo (pipeline cuộc gọi/ghi chú, lịch phỏng vấn, cột chăm sóc, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo `docs/14-roadmap.md`, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.

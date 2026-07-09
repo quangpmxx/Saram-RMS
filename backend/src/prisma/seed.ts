@@ -285,6 +285,106 @@ async function seedSampleCandidates(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dữ liệu mẫu Phase 2 để trải nghiệm phân chia/chuyển lead + không gian
+ * Sale/Leader ngay sau khi cài đặt:
+ *  - 1 nhóm mẫu "Nhóm Sale Demo" với 1 Leader (leader_demo/123456) và 2 Sale
+ *    (sale_demo_a, sale_demo_b — cùng mật khẩu mặc định).
+ *  - Gán 2/5 ứng viên mẫu đã tạo ở Phase 1 cho 2 Sale (minh họa "Đã giao"),
+ *    giữ nguyên số còn lại ở trạng thái "Chờ phân chia" để trải nghiệm màn
+ *    hình phân chia thủ công/hàng loạt ngay.
+ * Idempotent: bỏ qua nếu nhóm mẫu đã tồn tại.
+ */
+async function seedPhase2Sample(prisma: PrismaClient): Promise<void> {
+  const existingTeam = await prisma.team.findFirst({
+    where: { name: 'Nhóm Sale Demo' },
+  });
+  if (existingTeam) {
+    console.log('Dữ liệu nhóm/phân chia mẫu Phase 2 đã tồn tại — bỏ qua.');
+    return;
+  }
+
+  const defaultPassword = process.env.DEFAULT_PASSWORD ?? '123456';
+  const passwordHash = await bcrypt.hash(defaultPassword, SALT_ROUNDS);
+
+  const team = await prisma.team.create({ data: { name: 'Nhóm Sale Demo' } });
+
+  const leader = await prisma.account.create({
+    data: {
+      fullName: 'Leader Demo',
+      username: 'leader_demo',
+      passwordHash,
+      role: 'leader',
+      status: 'active',
+      teamId: team.id,
+    },
+  });
+  await prisma.team.update({
+    where: { id: team.id },
+    data: { leaderId: leader.id },
+  });
+
+  const saleA = await prisma.account.create({
+    data: {
+      fullName: 'Sale Demo A',
+      username: 'sale_demo_a',
+      passwordHash,
+      role: 'sale',
+      status: 'active',
+      teamId: team.id,
+    },
+  });
+  const saleB = await prisma.account.create({
+    data: {
+      fullName: 'Sale Demo B',
+      username: 'sale_demo_b',
+      passwordHash,
+      role: 'sale',
+      status: 'active',
+      teamId: team.id,
+    },
+  });
+
+  console.log(
+    `Đã tạo nhóm "Nhóm Sale Demo" với Leader (leader_demo/${defaultPassword}) và 2 Sale (sale_demo_a, sale_demo_b/${defaultPassword}).`,
+  );
+
+  const [leadForA, leadForB] = await prisma.lead.findMany({
+    where: {
+      assignedToId: null,
+      phoneNumber: { in: ['0901000001', '0901000002'] },
+    },
+    orderBy: { phoneNumber: 'asc' },
+  });
+
+  if (leadForA) {
+    await prisma.lead.update({
+      where: { id: leadForA.id },
+      data: {
+        assignedToId: saleA.id,
+        assignedTeamId: team.id,
+        assignedAt: new Date(),
+        assignmentMethod: 'manual',
+      },
+    });
+  }
+  if (leadForB) {
+    await prisma.lead.update({
+      where: { id: leadForB.id },
+      data: {
+        assignedToId: saleB.id,
+        assignedTeamId: team.id,
+        assignedAt: new Date(),
+        assignmentMethod: 'manual',
+      },
+    });
+  }
+
+  console.log(
+    'Đã phân chia 2 ứng viên mẫu cho Sale Demo A/B — số còn lại vẫn ở trạng thái "Chờ phân chia".',
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -298,6 +398,7 @@ async function main() {
   await seedLeadSources(prisma);
   await seedStatusCatalog(prisma);
   await seedSampleCandidates(prisma);
+  await seedPhase2Sample(prisma);
 
   await prisma.$disconnect();
 }

@@ -1,7 +1,11 @@
-// Prisma schema — Phase 0 + Phase 1 (docs/14-roadmap.md)
+// Prisma schema — Phase 0 + Phase 1 + Phase 2 (docs/14-roadmap.md)
 //
 // Phase 0: teams, accounts, sessions, audit_logs
 // Phase 1: lead_sources, status_catalog, leads, import_jobs
+// Phase 2: kích hoạt logic đọc/ghi cho các cột assigned_to/assigned_team_id/
+// assigned_at/assignment_method (đã tồn tại rỗng từ Phase 1) + 2 index phục
+// vụ truy vấn "Lead của tôi" (Sale) và lọc theo nhóm (Leader/Quản lý/Admin),
+// đúng theo đề xuất index tại Mục 6, tài liệu 11.
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -268,6 +272,8 @@ model Lead {
   @@index([phoneNumber])
   @@index([uploadedAt])
   @@index([deletedAt])
+  @@index([assignedToId])
+  @@index([assignedTeamId])
   @@map("leads")
 }
 
