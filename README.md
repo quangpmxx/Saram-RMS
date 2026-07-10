@@ -1,6 +1,6 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar), **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành), **Phase 6** (Tự động phân chia lead — Round-robin), **Phase 7** (Dashboard & Báo cáo) và **Phase 8** (Thông báo Zalo) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar), **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành), **Phase 6** (Tự động phân chia lead — Round-robin), **Phase 7** (Dashboard & Báo cáo), **Phase 8** (Thông báo Zalo) và **Phase 9** (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết) đã hoàn thành — **toàn bộ 10 Phase của `docs/14-roadmap.md` đã xong**.
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
@@ -12,8 +12,9 @@ Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1
 - **Tự động phân chia lead (Round-robin)**: Leader cấu hình danh sách + thứ tự Sale tham gia vòng quay ngay trên màn hình Ứng viên, kích hoạt/tạm dừng bất kỳ lúc nào; khi bật, lead mới (nhập tay hoặc import Excel) tự động gán lần lượt theo thứ tự, quay vòng lại từ đầu khi hết danh sách — tự động bỏ qua Sale đã nghỉ việc/rời nhóm; tạm dừng thì quay về phân chia thủ công (Phase 6).
 - **Dashboard & Báo cáo**: trang chủ hiển thị 5 chỉ số đã chốt (lead mới theo nguồn, lead chờ phân chia, phễu chuyển đổi Lead→Hẹn PV→Đến PV→Đỗ PV→Đi làm, hiệu suất từng Sale, số lead ở cột chăm sóc theo nhóm) — phạm vi dữ liệu tự động theo đúng quyền từng vai trò, lọc theo khoảng thời gian/nhóm. Trang **Báo cáo** riêng (Leader/Quản lý/Admin) mở rộng lọc sâu hơn theo nhóm/Sale/nguồn, xem breakdown dạng bảng, bấm vào 1 dòng để mở đúng danh sách ứng viên đã lọc sẵn (Phase 7).
 - **Thông báo Zalo**: worker nền tự động quét lịch gọi lại/lịch hẹn phỏng vấn sắp tới hạn, xếp vào hàng đợi và gửi nhắc cho đúng nhân viên phụ trách trước giờ hẹn N phút (chỉnh được ở màn hình Cấu hình vận hành, mặc định 15 phút); mỗi tài khoản xem lại lịch sử thông báo của chính mình qua `GET /notification`. Kênh gửi Zalo thực tế được mô phỏng (ghi log) do thiết kế chưa có nơi lưu định danh Zalo của nhân viên — xem "Ghi chú giả định của Phase 8" (Phase 8).
+- **Nhật ký & Trùng lặp nâng cao**: màn hình **Nhật ký** (Admin/Quản lý) tra cứu toàn bộ lịch sử thao tác đã ghi từ Phase 0, lọc theo tài khoản/loại hành động/đối tượng/khoảng thời gian. Màn hình **Trùng lặp** (mọi vai trò, phạm vi tự động theo quyền) liệt kê toàn hệ thống các nhóm ứng viên trùng số điện thoại, mở rộng từ cảnh báo cơ bản đã có ở Phase 1. **Khung Phân quyền chi tiết** (Cấu hình quyền trên màn Quản lý tài khoản, áp dụng cho Quản lý/Leader) đã dựng đầy đủ database + API nhưng cố tình chưa có danh mục quyền cụ thể — theo đúng cảnh báo tường minh của roadmap, chờ xác nhận từ chủ doanh nghiệp (Phase 9).
 
-Các nghiệp vụ tuyển dụng tiếp theo sẽ có ở các Phase sau — Phase 8 khép lại toàn bộ 10 Phase đã hoạch định tại `docs/14-roadmap.md`, trừ Phase 9 (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết) còn lại.
+Phase 9 khép lại toàn bộ 10 Phase đã hoạch định tại `docs/14-roadmap.md`. Các hướng mở rộng tiếp theo (module đưa đón lao động, đa chi nhánh, tìm kiếm nâng cao...) chỉ mới được ghi nhận ở mục "Các điểm có thể mở rộng trong tương lai" của `docs/10-system-design.md`, chưa có kế hoạch Phase cụ thể.
 
 ---
 
@@ -247,6 +248,15 @@ Không có màn hình riêng trong app (đúng Mục 10, `docs/09`: "hệ thốn
 4. Dời lịch hẹn đó lại gần hơn hoặc chuyển lead sang Sale khác trước khi tới giờ gửi → thông báo `pending` tự cập nhật đúng giờ/đúng người mới, không tạo thêm dòng trùng.
 5. Đánh dấu lịch gọi lại "đã hoàn tất" trước giờ nhắc → không có thông báo nào được tạo cho lịch đó.
 
+### 5.11. Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết (Phase 9)
+
+1. Đăng nhập `admin`/`123456` → menu bên trái có 2 mục mới: **Trùng lặp** (mọi vai trò) và **Nhật ký** (chỉ Admin/Quản lý).
+2. Vào **Trùng lặp** → thấy nhóm trùng SĐT `0901000004` (3 bản ghi mẫu từ Phase 1: "Phạm Thị Duyên" x2 khác nhóm + 1 chưa phân chia) → bấm vào dòng để mở rộng xem chi tiết từng bản ghi, bấm "Xem chi tiết →" để sang đúng trang Chi tiết ứng viên.
+3. Đăng nhập `sale_demo_a`/`123456` → vào **Trùng lặp** → không thấy nhóm trùng SĐT `0901000004` (không có bản ghi nào thuộc "Nhóm Sale Demo" của Sale này) — đúng quy tắc "Sale không thấy cảnh báo trùng khác nhóm".
+4. Quay lại `admin` → vào **Nhật ký** → thấy toàn bộ lịch sử thao tác đã tích lũy từ các Phase trước (đăng nhập, tạo/sửa tài khoản, phân chia lead, cập nhật cấu hình...). Thử lọc theo tài khoản, theo loại hành động (vd "Đăng nhập"), theo khoảng ngày → danh sách và số "Tổng số hành động" cập nhật đúng theo bộ lọc. Bấm vào 1 dòng để xem popup chi tiết đầy đủ.
+5. Đăng nhập `manager_demo` (nếu có) hoặc bất kỳ tài khoản `sale`/`leader`/`mkt` nào → không thấy mục **Nhật ký** trên menu; gọi thẳng `GET /audit-log` cũng bị từ chối (403) — chỉ Admin/Quản lý xem được.
+6. Vào **Quản lý tài khoản** (Admin) → với 1 tài khoản vai trò **Quản lý** hoặc **Leader**, thấy nút **Cấu hình quyền** → bấm vào mở popup, hiển thị đúng trạng thái khung: "Chưa có quyền nào được định nghĩa" (danh mục quyền cụ thể cho Quản lý/Leader chưa được chốt với chủ doanh nghiệp — xem "Ghi chú giả định của Phase 9" bên dưới). Với tài khoản vai trò **Sale**/**MKT**, không thấy nút này.
+
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -262,7 +272,7 @@ npm run lint
 npm run build       # build thử để chắc chắn không lỗi
 ```
 
-> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `system_configs`, `auto_distribution_members`, `auto_distribution_rules`, `import_jobs`, `notifications` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo, tham số cấu hình, cấu hình vòng quay tự động phân chia) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
+> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `system_configs`, `auto_distribution_members`, `auto_distribution_rules`, `import_jobs`, `notifications`, `permissions`, `account_permissions` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo, tham số cấu hình, cấu hình vòng quay tự động phân chia) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
 
 ---
 
@@ -281,7 +291,9 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0, 1, 2, 3, 4, 5, 6, 7 và 8 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành; Tự động phân chia lead - Round-robin; Dashboard & Báo cáo; Thông báo Zalo). Phase 0–6 là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn; Phase 7 bổ sung lớp báo cáo/ra quyết định, Phase 8 bổ sung nhắc lịch tự động qua Zalo trên nền dữ liệu đó. Chỉ còn lại **Phase 9** (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết) theo roadmap.
+Toàn bộ **10 Phase (0–9)** của `docs/14-roadmap.md` đã hoàn thành: Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành; Tự động phân chia lead - Round-robin; Dashboard & Báo cáo; Thông báo Zalo; Nhật ký/Trùng lặp nâng cao/Khung Phân quyền chi tiết. Phase 0–6 là mốc **MVP nghiệp vụ đầy đủ**; Phase 7–9 bổ sung lớp báo cáo, nhắc lịch tự động và giám sát/kiểm soát nội bộ trên nền dữ liệu đó.
+
+Lưu ý duy nhất còn để ngỏ: **danh sách quyền cụ thể** cho khung Phân quyền chi tiết (Phase 9) chưa được xác nhận với chủ doanh nghiệp — xem "Ghi chú giả định của Phase 9" bên dưới. Đây là điểm dừng tường minh đã ghi trong `docs/14-roadmap.md`, không phải thiếu sót.
 
 ### Ghi chú giả định của Phase 6 (Round-robin) — nghiệp vụ tài liệu chưa mô tả
 
@@ -306,6 +318,18 @@ Khoảng thời gian mặc định khi vào Dashboard/Báo cáo là **Tháng nà
 `docs/11` (Mục 2.2, bảng `accounts`) **không có cột lưu định danh Zalo** của nhân viên (số điện thoại/Zalo OA follower id...) — đây là khoảng trống thật sự của thiết kế đã Design Freeze, không phải điều tự suy diễn thêm, và không được tự ý thêm cột mới để giữ đúng "Toàn bộ database". Vì vậy kênh gửi Zalo thực tế (`ZaloClientService`) chỉ **mô phỏng** lời gọi gửi tin (ghi log nội dung sẽ gửi, luôn coi là thành công) — toàn bộ phần còn lại của hệ thống (hàng đợi `notifications`, worker quét định kỳ, vòng đời `pending`→`sent`/`failed`) đã hoàn chỉnh và đúng thiết kế; khi công ty cung cấp thông tin tích hợp Zalo thật, chỉ cần thay nội dung 1 method duy nhất, không cần đổi gì khác.
 
 `docs/12-ui-design.md` không có màn hình "Thông báo" nào trong danh sách 9 màn hình đã thiết kế, khớp đúng với `docs/09` Mục 10 ("hệ thống hiện tại chưa cần thêm thông báo trong app — chuông thông báo"). Vì vậy Phase 8 **không tạo thêm màn hình/route giao diện mới nào** — chỉ có API `GET /notification` (Mục 7, `docs/13`) và 1 dòng cấu hình tái dùng đúng màn hình Cấu hình vận hành đã có.
+
+### Ghi chú giả định của Phase 9 (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết)
+
+**Khung Phân quyền chi tiết cố tình dừng lại đúng như cảnh báo tường minh của `docs/14-roadmap.md`:** "danh sách quyền cụ thể (checklist) cho vai trò Quản lý/Leader hiện chưa được chốt với chủ doanh nghiệp (Mục 11.1, tài liệu 09)... Phase này chỉ dựng phần khung (bảng `permissions` rỗng, giao diện checklist) và **phải dừng lại xin xác nhận danh sách quyền cụ thể trước khi hoàn thiện** — không tự suy đoán quyền nào nên có." Đã triển khai đầy đủ:
+- Database: bảng `permissions` (danh mục quyền, RỖNG) + `account_permissions` (quyền đã cấp cho từng tài khoản) — đúng Mục 2.4-2.5, `docs/11`.
+- API: `GET /permission` (Admin, trả về `[]`) và `PUT /account/:id/permission` (Admin, chỉ áp dụng cho tài khoản Quản lý/Leader) — hoạt động đúng logic ngay cả khi danh mục rỗng.
+- Giao diện: nút **Cấu hình quyền** trên màn Quản lý tài khoản (chỉ hiện với tài khoản Quản lý/Leader), popup hiển thị đúng trạng thái "chưa có quyền nào được định nghĩa" thay vì giả lập 1 danh sách quyền tùy tiện.
+- **Việc còn lại duy nhất** để hoàn thiện tính năng này: chủ doanh nghiệp xác nhận danh sách quyền cụ thể (mã quyền, tên, mô tả) → chỉ cần seed vào bảng `permissions`, toàn bộ phần còn lại (API, giao diện checklist, upsert, audit log) đã sẵn sàng hoạt động ngay, không cần sửa code.
+
+**Trùng lặp toàn hệ thống (S15):** `docs/13` (Mục 2) chỉ cho `GET /candidate/duplicate` nhận `page`, `page_size`, `team_id` — không có `date_from`/`date_to`/`sale_id` như mô tả ở `docs/12` Mục 4 ("lọc theo khoảng ngày trùng, theo nhóm/sale liên quan"). Vì Design Freeze không cho tự thêm tham số ngoài API đã chốt, màn hình **Trùng lặp** chỉ lọc theo nhóm (Admin/Quản lý) và không có bộ lọc ngày/sale — tương tự, thống kê chỉ hiện "Tổng số nhóm trùng lặp" (từ `total` của API), không tách theo "ngày/tuần" như mô tả UI gốc (không có dữ liệu hỗ trợ). Với Sale/Leader, 1 nhóm trùng chỉ hiển thị nếu còn **≥2 bản ghi** thuộc đúng nhóm họ sau khi lọc — nếu chỉ còn 1 (bản ghi trùng còn lại ở nhóm khác), nhóm đó ẩn hoàn toàn, giữ đúng tinh thần "Trùng khác nhóm: Sale không thấy cảnh báo" (Mục 10, `docs/09`) thay vì để lộ việc tồn tại trùng lặp ở nơi khác.
+
+**Nhật ký (S14):** bộ lọc "theo tài khoản" trên giao diện chỉ hiện với Admin — nguồn dữ liệu để dựng dropdown chọn tài khoản (`GET /account`) chỉ Admin gọi được (Mục 2, `docs/13`), Quản lý không có API nào khác để lấy toàn bộ danh sách tài khoản nên không hiện bộ lọc này (vẫn lọc được theo loại hành động/đối tượng/khoảng thời gian). Thống kê "Số phiên đăng nhập đang hoạt động" mô tả ở `docs/12` Mục 9.3 không có API hỗ trợ (không có trong danh sách 59 endpoint đã chốt của `docs/13`) nên không hiển thị — chỉ giữ lại "Tổng số hành động trong bộ lọc hiện tại" (lấy từ `total` của chính `GET /audit-log`, không cần API mới).
 
 ### Ghi chú khác biệt so với `docs/12-ui-design.md` Mục 7 (Interview/Calendar)
 

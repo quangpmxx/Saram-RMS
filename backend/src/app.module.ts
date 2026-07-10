@@ -18,6 +18,7 @@ import { SystemConfigModule } from './system-config/system-config.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
+import { PermissionModule } from './permission/permission.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -41,6 +42,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     DistributionModule,
     DashboardModule,
     NotificationModule,
+    PermissionModule,
   ],
   controllers: [AppController],
   providers: [

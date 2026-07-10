@@ -18,6 +18,7 @@ import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { QuickEditCandidateDto } from './dto/quick-edit-candidate.dto';
 import { ListCandidatesQueryDto } from './dto/list-candidates-query.dto';
 import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
+import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
@@ -38,10 +39,10 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
  * không gắn @Roles() vì quyền phụ thuộc dữ liệu (chủ sở hữu/nhóm) — toàn bộ
  * kiểm tra chi tiết nằm trong CandidatesService/LeadPipelineService.
  *
- * LƯU Ý THỨ TỰ ROUTE: "pending" và "assign-bulk" phải khai báo TRƯỚC ":id"
- * — Nest/Express khớp route theo thứ tự khai báo, nếu ":id" đứng trước thì
- * "GET /candidate/pending" sẽ bị hiểu nhầm thành "GET /candidate/:id" với
- * id="pending".
+ * LƯU Ý THỨ TỰ ROUTE: "pending", "duplicate" và "assign-bulk" phải khai báo
+ * TRƯỚC ":id" — Nest/Express khớp route theo thứ tự khai báo, nếu ":id" đứng
+ * trước thì "GET /candidate/pending" sẽ bị hiểu nhầm thành "GET /candidate/:id"
+ * với id="pending".
  */
 @Controller('candidate')
 export class CandidatesController {
@@ -64,6 +65,14 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.candidatesService.getPending(query, user);
+  }
+
+  @Get('duplicate')
+  listDuplicates(
+    @Query() query: ListDuplicatesQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.listDuplicates(query, user);
   }
 
   @Post()

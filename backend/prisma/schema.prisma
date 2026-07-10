@@ -27,6 +27,11 @@
 // dùng tới), Phase 6 là nơi đầu tiên thực sự ghi giá trị này.
 // Phase 8: bảng mới `notifications` (Mục 2.14, tài liệu 11) — hàng đợi
 // thông báo nhắc lịch qua Zalo (Thông báo Zalo).
+// Phase 9: bảng mới `permissions`, `account_permissions` (Mục 2.4-2.5, tài
+// liệu 11) — khung Phân quyền chi tiết. Theo đúng cảnh báo tường minh của
+// docs/14-roadmap.md (Phase 9): danh sách quyền cụ thể CHƯA được chốt với
+// chủ doanh nghiệp (Mục 11.1, tài liệu 09) nên bảng `permissions` cố tình để
+// RỖNG (không seed dữ liệu), chỉ dựng đúng phần khung DB + API.
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -156,6 +161,10 @@ model Account {
 
   // Phase 8 — quan hệ ngược từ Notification
   notifications Notification[]
+
+  // Phase 9 — quan hệ ngược từ AccountPermission
+  permissionGrants        AccountPermission[] @relation("AccountPermissionAccount")
+  updatedPermissionGrants AccountPermission[] @relation("AccountPermissionUpdatedBy")
 
   @@map("accounts")
 }
@@ -518,4 +527,38 @@ model Notification {
   @@index([status, scheduledAt])
   @@index([leadId, type])
   @@map("notifications")
+}
+
+// ── Phase 9 — Phân quyền chi tiết (khung, chưa seed danh sách quyền) ────
+
+/// Mục 2.4, tài liệu 11 — Danh mục quyền có thể cấu hình. RỖNG theo đúng
+/// cảnh báo của docs/14-roadmap.md (Phase 9) — chờ xác nhận danh sách quyền
+/// cụ thể từ chủ doanh nghiệp trước khi seed.
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(50)
+  name        String  @db.VarChar(150)
+  description String? @db.VarChar(255)
+
+  accountGrants AccountPermission[]
+
+  @@map("permissions")
+}
+
+/// Mục 2.5, tài liệu 11 — Quyền cụ thể đã cấu hình cho 1 tài khoản
+/// (Quản lý/Leader). `is_granted` mặc định false — chỉ bật khi Admin tick.
+model AccountPermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  accountId    String   @map("account_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  isGranted    Boolean  @default(false) @map("is_granted")
+  updatedById  String   @map("updated_by") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  account    Account    @relation("AccountPermissionAccount", fields: [accountId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  updatedBy  Account    @relation("AccountPermissionUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([accountId, permissionId])
+  @@map("account_permissions")
 }

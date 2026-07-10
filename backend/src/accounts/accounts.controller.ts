@@ -15,6 +15,7 @@ import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
+import { UpdateAccountPermissionDto } from './dto/update-account-permission.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -70,5 +71,14 @@ export class AccountsController {
   ) {
     await this.accountsService.resetPassword(id, user.id);
     return { message: 'Đã đặt lại mật khẩu về mặc định' };
+  }
+
+  @Put(':id/permission')
+  updatePermissions(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAccountPermissionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.accountsService.updatePermissions(id, dto, user.id);
   }
 }

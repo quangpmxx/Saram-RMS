@@ -25,6 +25,8 @@ import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { DuplicateWarning } from './dto/duplicate-warning.dto';
 import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
+import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
+import { DuplicateGroupDto } from './dto/duplicate-group.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
 import { isVisibleInCarePool } from './care-pool.util';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
@@ -222,6 +224,87 @@ export class CandidatesService {
       return [];
     }
     return matches.filter((match) => match.assignedTeamId === ownTeamId);
+  }
+
+  /**
+   * Mục 2, docs/13-api-design.md — GET /candidate/duplicate: danh sách trùng
+   * lặp toàn hệ thống (S15, docs/14-roadmap.md Phase 9), gộp theo SĐT.
+   * Quyền: MKT/Quản lý/Admin xem toàn hệ thống (có thể thu hẹp theo team_id);
+   * Sale/Leader chỉ xem trong phạm vi nhóm mình — 1 nhóm trùng chỉ hiển thị
+   * với Sale/Leader nếu còn ÍT NHẤT 2 bản ghi thuộc đúng nhóm họ sau khi lọc
+   * (giữ đúng tinh thần "Trùng khác nhóm: Sale không thấy cảnh báo", Mục 10,
+   * tài liệu 09 — không để lộ việc tồn tại trùng lặp ở nhóm khác).
+   */
+  async listDuplicates(
+    query: ListDuplicatesQueryDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<PaginatedResult<DuplicateGroupDto>> {
+    const grouped = await this.prisma.lead.groupBy({
+      by: ['phoneNumber'],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    });
+    const duplicatePhones = grouped
+      .filter((row) => row._count._all > 1)
+      .map((row) => row.phoneNumber);
+
+    if (duplicatePhones.length === 0) {
+      return {
+        total: 0,
+        page: query.page,
+        page_size: query.page_size,
+        items: [],
+      };
+    }
+
+    const members = await this.prisma.lead.findMany({
+      where: { phoneNumber: { in: duplicatePhones }, deletedAt: null },
+      include: CANDIDATE_INCLUDE,
+      orderBy: { uploadedAt: 'asc' },
+    });
+
+    const byPhone = new Map<string, typeof members>();
+    for (const member of members) {
+      const list = byPhone.get(member.phoneNumber) ?? [];
+      list.push(member);
+      byPhone.set(member.phoneNumber, list);
+    }
+
+    const isFullAccess = FULL_ACCESS_ROLES.has(currentUser.role);
+    const ownTeamId = isFullAccess
+      ? null
+      : await this.getOwnTeamId(currentUser.id);
+
+    const groups: DuplicateGroupDto[] = [];
+    for (const [phoneNumber, groupMembers] of byPhone) {
+      let visibleMembers = groupMembers;
+      if (!isFullAccess) {
+        if (!ownTeamId) continue;
+        visibleMembers = groupMembers.filter(
+          (member) => member.assignedTeamId === ownTeamId,
+        );
+        if (visibleMembers.length < 2) continue;
+      } else if (query.team_id) {
+        if (
+          !groupMembers.some(
+            (member) => member.assignedTeamId === query.team_id,
+          )
+        ) {
+          continue;
+        }
+      }
+      groups.push({
+        phone_number: phoneNumber,
+        matches: visibleMembers.map(toCandidateResponse),
+      });
+    }
+    groups.sort((a, b) => a.phone_number.localeCompare(b.phone_number));
+
+    const total = groups.length;
+    const start = (query.page - 1) * query.page_size;
+    const items = groups.slice(start, start + query.page_size);
+
+    return { total, page: query.page, page_size: query.page_size, items };
   }
 
   async create(

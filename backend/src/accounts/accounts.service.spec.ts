@@ -21,6 +21,12 @@ describe('AccountsService', () => {
       findMany: jest.Mock;
     };
     team: { findUnique: jest.Mock };
+    permission: { findMany: jest.Mock };
+    accountPermission: {
+      findUnique: jest.Mock;
+      upsert: jest.Mock;
+      findMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
@@ -49,6 +55,12 @@ describe('AccountsService', () => {
         findMany: jest.fn(),
       },
       team: { findUnique: jest.fn() },
+      permission: { findMany: jest.fn().mockResolvedValue([]) },
+      accountPermission: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
@@ -239,6 +251,97 @@ describe('AccountsService', () => {
       expect(result.total).toBe(1);
       expect(result.items).toHaveLength(1);
       expect(result.items[0]).not.toHaveProperty('passwordHash');
+    });
+  });
+
+  describe('updatePermissions — Mục 2, docs/13-api-design.md (Phase 9, khung Phân quyền chi tiết)', () => {
+    const managerAccount = { ...baseAccount, id: 'mgr-1', role: 'manager' };
+    const saleAccount = { ...baseAccount, id: 'sale-1', role: 'sale' };
+    const permission = {
+      id: 'perm-1',
+      code: 'ADD_EMPLOYEE',
+      name: 'Thêm nhân viên',
+      description: null,
+    };
+
+    it('ném NotFoundException nếu tài khoản không tồn tại', async () => {
+      prisma.account.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updatePermissions('ghost', { permissions: [] }, 'admin-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('chỉ áp dụng được cho tài khoản Quản lý/Leader — Sale bị từ chối', async () => {
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      await expect(
+        service.updatePermissions('sale-1', { permissions: [] }, 'admin-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('danh mục permissions rỗng (khung Phase 9) → không có gì để cấu hình, trả về mảng rỗng', async () => {
+      prisma.account.findUnique.mockResolvedValue(managerAccount);
+      prisma.permission.findMany.mockResolvedValue([]);
+
+      const result = await service.updatePermissions(
+        'mgr-1',
+        { permissions: [] },
+        'admin-1',
+      );
+
+      expect(result).toEqual([]);
+    });
+
+    it('ném NotFoundException nếu permission_id không tồn tại trong danh mục', async () => {
+      prisma.account.findUnique.mockResolvedValue(managerAccount);
+      prisma.permission.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.updatePermissions(
+          'mgr-1',
+          { permissions: [{ permission_id: 'ghost-perm', is_granted: true }] },
+          'admin-1',
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('bật 1 quyền hợp lệ → upsert đúng account_permissions, ghi audit log, trả về đúng trạng thái đã cập nhật', async () => {
+      prisma.account.findUnique.mockResolvedValue(managerAccount);
+      prisma.permission.findMany
+        .mockResolvedValueOnce([permission]) // lookup để validate permission_id
+        .mockResolvedValueOnce([permission]); // getPermissionGrants() sau khi cập nhật
+      prisma.accountPermission.findMany.mockResolvedValue([
+        { permissionId: 'perm-1', isGranted: true },
+      ]);
+
+      const result = await service.updatePermissions(
+        'mgr-1',
+        { permissions: [{ permission_id: 'perm-1', is_granted: true }] },
+        'admin-1',
+      );
+
+      expect(prisma.accountPermission.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            accountId_permissionId: { accountId: 'mgr-1', permissionId: 'perm-1' },
+          },
+          create: expect.objectContaining({
+            accountId: 'mgr-1',
+            permissionId: 'perm-1',
+            isGranted: true,
+            updatedById: 'admin-1',
+          }),
+          update: { isGranted: true, updatedById: 'admin-1' },
+        }),
+      );
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'update',
+          entityType: 'account_permission',
+          entityId: 'mgr-1',
+          fieldChanged: 'ADD_EMPLOYEE',
+        }),
+      );
+      expect(result).toEqual([{ ...permission, is_granted: true }]);
     });
   });
 });

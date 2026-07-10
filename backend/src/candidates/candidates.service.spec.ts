@@ -22,6 +22,7 @@ describe('CandidatesService', () => {
       update: jest.Mock;
       updateMany: jest.Mock;
       count: jest.Mock;
+      groupBy: jest.Mock;
     };
     leadSource: { findUnique: jest.Mock };
     account: { findUnique: jest.Mock; findMany: jest.Mock };
@@ -89,6 +90,7 @@ describe('CandidatesService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
         count: jest.fn(),
+        groupBy: jest.fn(),
       },
       leadSource: { findUnique: jest.fn() },
       account: { findUnique: jest.fn(), findMany: jest.fn() },
@@ -769,6 +771,134 @@ describe('CandidatesService', () => {
       expect(result.visible).toBe(true);
       expect(result.matches).toHaveLength(1);
       expect(result.matches[0].lead_id).toBe('lead-2');
+    });
+  });
+
+  describe('listDuplicates — Mục 2, docs/13-api-design.md (GET /candidate/duplicate, Phase 9)', () => {
+    const dupTeam1 = {
+      ...baseLead,
+      id: 'lead-10',
+      phoneNumber: '0900000010',
+      assignedTeamId: 'team-1',
+    };
+    const dupTeam9 = {
+      ...baseLead,
+      id: 'lead-11',
+      phoneNumber: '0900000010',
+      assignedTeamId: 'team-9',
+    };
+
+    it('Admin/MKT xem toàn hệ thống, gộp đúng theo SĐT', async () => {
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000010', _count: { _all: 2 } },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([dupTeam1, dupTeam9]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 20 },
+        adminUser,
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.items[0].phone_number).toBe('0900000010');
+      expect(result.items[0].matches).toHaveLength(2);
+    });
+
+    it('không có SĐT nào trùng (count<=1) → danh sách rỗng, không truy vấn thêm', async () => {
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000099', _count: { _all: 1 } },
+      ]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 20 },
+        adminUser,
+      );
+
+      expect(result.total).toBe(0);
+      expect(prisma.lead.findMany).not.toHaveBeenCalled();
+    });
+
+    it('Admin thu hẹp theo team_id: giữ nhóm có ≥1 thành viên thuộc team đó, vẫn hiện ĐỦ mọi thành viên', async () => {
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000010', _count: { _all: 2 } },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([dupTeam1, dupTeam9]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 20, team_id: 'team-1' },
+        adminUser,
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].matches).toHaveLength(2);
+    });
+
+    it('Admin thu hẹp theo team_id không khớp nhóm nào → rỗng', async () => {
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000010', _count: { _all: 2 } },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([dupTeam1, dupTeam9]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 20, team_id: 'team-OTHER' },
+        adminUser,
+      );
+
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('Sale/Leader: nhóm trùng chỉ còn 1 bản ghi thuộc nhóm mình (còn lại ở nhóm khác) → ẩn hoàn toàn, không lộ việc tồn tại trùng', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000010', _count: { _all: 2 } },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([dupTeam1, dupTeam9]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 20 },
+        saleUser,
+      );
+
+      expect(result.total).toBe(0);
+    });
+
+    it('Sale/Leader: thấy đúng nhóm trùng khi cả 2 bản ghi cùng thuộc nhóm mình', async () => {
+      const a = { ...dupTeam1, assignedTeamId: 'team-1' };
+      const b = { ...dupTeam9, id: 'lead-12', assignedTeamId: 'team-1' };
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000010', _count: { _all: 2 } },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([a, b]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 20 },
+        saleUser,
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.items[0].matches).toHaveLength(2);
+    });
+
+    it('phân trang theo NHÓM (không phải theo từng bản ghi)', async () => {
+      prisma.lead.groupBy.mockResolvedValue([
+        { phoneNumber: '0900000010', _count: { _all: 2 } },
+        { phoneNumber: '0900000020', _count: { _all: 2 } },
+      ]);
+      prisma.lead.findMany.mockResolvedValue([
+        dupTeam1,
+        dupTeam9,
+        { ...dupTeam1, id: 'lead-20', phoneNumber: '0900000020' },
+        { ...dupTeam9, id: 'lead-21', phoneNumber: '0900000020' },
+      ]);
+
+      const result = await service.listDuplicates(
+        { page: 1, page_size: 1 },
+        adminUser,
+      );
+
+      expect(result.total).toBe(2);
+      expect(result.items).toHaveLength(1);
     });
   });
 });

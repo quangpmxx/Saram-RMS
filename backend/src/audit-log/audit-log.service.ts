@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditActionType } from '../../generated/prisma/enums';
+import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
+import { ListAuditLogQueryDto } from './dto/list-audit-log-query.dto';
+import {
+  AUDIT_LOG_INCLUDE,
+  AuditLogResponseDto,
+  toAuditLogResponse,
+} from './dto/audit-log-response.dto';
 
 export interface AuditLogEntry {
   accountId: string;
@@ -46,5 +54,45 @@ export class AuditLogService {
         error as Error,
       );
     }
+  }
+
+  /**
+   * Mục 9, docs/13-api-design.md — GET /audit-log. Đọc lại nhật ký đã ghi từ
+   * Phase 0 trở đi (Mục 0 "Ghi chú xuyên suốt", docs/14-roadmap.md) — không
+   * ghi thêm gì mới, chỉ tra cứu.
+   */
+  async list(
+    query: ListAuditLogQueryDto,
+  ): Promise<PaginatedResult<AuditLogResponseDto>> {
+    const where: Prisma.AuditLogWhereInput = {
+      accountId: query.account_id,
+      actionType: query.action_type,
+      entityType: query.entity_type,
+      entityId: query.entity_id,
+    };
+    if (query.date_from || query.date_to) {
+      where.createdAt = {
+        gte: query.date_from ? new Date(query.date_from) : undefined,
+        lte: query.date_to ? new Date(query.date_to) : undefined,
+      };
+    }
+
+    const [total, logs] = await this.prisma.$transaction([
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.findMany({
+        where,
+        include: AUDIT_LOG_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.page_size,
+        take: query.page_size,
+      }),
+    ]);
+
+    return {
+      total,
+      page: query.page,
+      page_size: query.page_size,
+      items: logs.map(toAuditLogResponse),
+    };
   }
 }

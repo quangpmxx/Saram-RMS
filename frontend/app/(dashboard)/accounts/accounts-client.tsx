@@ -1,22 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Pencil, Plus, Power, PowerOff } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, PowerOff, ShieldCheck } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import { ACCOUNT_ROLE_LABEL, type Account, type AccountRole, type Team } from "@/lib/types";
+import {
+  ACCOUNT_ROLE_LABEL,
+  type Account,
+  type AccountPermissionGrant,
+  type AccountRole,
+  type Team,
+} from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
+import { Checkbox, Field, Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
+/** Mục 9.1, docs/12-ui-design.md: "Cấu hình quyền chi tiết" chỉ áp dụng cho Quản lý/Leader. */
+const PERMISSION_CONFIGURABLE_ROLES: AccountRole[] = ["manager", "leader"];
 
-type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; account: Account };
+type ModalState =
+  | { mode: "none" }
+  | { mode: "create" }
+  | { mode: "edit"; account: Account }
+  | { mode: "permissions"; account: Account };
 
 export function AccountsClient({
   initialAccounts,
@@ -155,6 +167,17 @@ export function AccountsClient({
                         <KeyRound className="h-3.5 w-3.5" strokeWidth={2} />
                         Reset mật khẩu
                       </Button>
+                      {PERMISSION_CONFIGURABLE_ROLES.includes(account.role) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setModal({ mode: "permissions", account })}
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} />
+                          Cấu hình quyền
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -196,7 +219,139 @@ export function AccountsClient({
           }}
         />
       )}
+
+      {modal.mode === "permissions" && (
+        <PermissionModal
+          account={modal.account}
+          onClose={() => setModal({ mode: "none" })}
+          onSaved={() => setBanner({ type: "success", text: "Đã lưu cấu hình quyền" })}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Mục 9.1, docs/12-ui-design.md ("Popup cấu hình quyền chi tiết") + Mục 2,
+ * docs/13-api-design.md (GET /permission, PUT /account/:id/permission).
+ *
+ * KHUNG PHÂN QUYỀN CHI TIẾT (Phase 9, docs/14-roadmap.md): danh mục quyền
+ * cụ thể chưa được chốt với chủ doanh nghiệp (Mục 11.1, docs/09) nên bảng
+ * `permissions` cố tình để RỖNG — popup này hiển thị đúng trạng thái đó
+ * (empty state) thay vì suy đoán ra 1 danh sách quyền. Khi có danh sách
+ * quyền thật, chỉ cần seed bảng `permissions` — code checklist bên dưới đã
+ * sẵn sàng hoạt động đầy đủ, không cần sửa lại.
+ */
+function PermissionModal({
+  account,
+  onClose,
+  onSaved,
+}: {
+  account: Account;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [grants, setGrants] = useState<AccountPermissionGrant[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const catalog = await clientApi<Array<{ id: string; code: string; name: string; description: string | null }>>(
+          "/permission",
+        );
+        if (!cancelled) {
+          setGrants(catalog.map((permission) => ({ ...permission, is_granted: false })));
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    if (!grants) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await clientApi(`/account/${account.id}/permission`, {
+        method: "PUT",
+        body: JSON.stringify({
+          permissions: grants.map((g) => ({ permission_id: g.id, is_granted: g.is_granted })),
+        }),
+      });
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Cấu hình quyền — ${account.full_name}`}
+      description={`Vai trò: ${ACCOUNT_ROLE_LABEL[account.role]}`}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Đóng
+          </Button>
+          {grants && grants.length > 0 && (
+            <Button type="button" disabled={isSubmitting} onClick={() => void handleSave()}>
+              {isSubmitting ? "Đang lưu..." : "Lưu cấu hình"}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
+
+      {!isLoading && grants && grants.length === 0 && (
+        <EmptyState
+          title="Chưa có quyền nào được định nghĩa"
+          description='Danh sách quyền chi tiết cho vai trò Quản lý/Leader chưa được xác nhận với chủ doanh nghiệp (Mục 11.1, tài liệu 09). Khung dữ liệu/API đã sẵn sàng — chỉ cần bổ sung danh mục quyền khi có xác nhận.'
+        />
+      )}
+
+      {!isLoading && grants && grants.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {grants.map((grant) => (
+            <label key={grant.id} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2.5">
+              <Checkbox
+                checked={grant.is_granted}
+                onChange={(event) =>
+                  setGrants((prev) =>
+                    prev
+                      ? prev.map((g) => (g.id === grant.id ? { ...g, is_granted: event.target.checked } : g))
+                      : prev,
+                  )
+                }
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-800">{grant.name}</span>
+                {grant.description && <span className="block text-xs text-slate-500">{grant.description}</span>}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-3 text-sm text-red-600">
+          {error}
+        </p>
+      )}
+    </Modal>
   );
 }
 

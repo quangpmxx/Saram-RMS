@@ -17,6 +17,8 @@ import {
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
+import { UpdateAccountPermissionDto } from './dto/update-account-permission.dto';
+import { AccountPermissionGrantDto } from '../permission/dto/permission-response.dto';
 
 const TEAM_SELECT = { id: true, name: true } as const;
 
@@ -196,6 +198,96 @@ export class AccountsService {
       entityType: 'account',
       entityId: id,
     });
+  }
+
+  /**
+   * Mục 2, docs/13-api-design.md — PUT /account/:id/permission. Chỉ áp dụng
+   * cho tài khoản Quản lý/Leader (Mục 9.1, docs/12). Danh mục `permissions`
+   * cố tình RỖNG ở Phase 9 (chờ xác nhận danh sách quyền cụ thể — xem
+   * docs/14-roadmap.md) nên method này hoạt động đúng logic ngay cả khi
+   * chưa có quyền nào để cấu hình (trả về mảng rỗng).
+   */
+  async updatePermissions(
+    id: string,
+    dto: UpdateAccountPermissionDto,
+    actorId: string,
+  ): Promise<AccountPermissionGrantDto[]> {
+    const account = await this.prisma.account.findUnique({ where: { id } });
+    if (!account) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+    if (account.role !== 'manager' && account.role !== 'leader') {
+      throw new UnprocessableEntityException(
+        'Chỉ cấu hình được quyền chi tiết cho tài khoản vai trò Quản lý/Leader',
+      );
+    }
+
+    const allPermissions = await this.prisma.permission.findMany();
+    const permissionById = new Map(allPermissions.map((p) => [p.id, p]));
+
+    for (const item of dto.permissions) {
+      const permission = permissionById.get(item.permission_id);
+      if (!permission) {
+        throw new NotFoundException(
+          `Không tìm thấy quyền có id "${item.permission_id}"`,
+        );
+      }
+      const existing = await this.prisma.accountPermission.findUnique({
+        where: {
+          accountId_permissionId: {
+            accountId: id,
+            permissionId: item.permission_id,
+          },
+        },
+      });
+
+      await this.prisma.accountPermission.upsert({
+        where: {
+          accountId_permissionId: {
+            accountId: id,
+            permissionId: item.permission_id,
+          },
+        },
+        create: {
+          accountId: id,
+          permissionId: item.permission_id,
+          isGranted: item.is_granted,
+          updatedById: actorId,
+        },
+        update: { isGranted: item.is_granted, updatedById: actorId },
+      });
+
+      await this.auditLog.log({
+        accountId: actorId,
+        actionType: 'update',
+        entityType: 'account_permission',
+        entityId: id,
+        fieldChanged: permission.code,
+        oldValue: String(existing?.isGranted ?? false),
+        newValue: String(item.is_granted),
+      });
+    }
+
+    return this.getPermissionGrants(id);
+  }
+
+  private async getPermissionGrants(
+    accountId: string,
+  ): Promise<AccountPermissionGrantDto[]> {
+    const [allPermissions, grants] = await Promise.all([
+      this.prisma.permission.findMany({ orderBy: { code: 'asc' } }),
+      this.prisma.accountPermission.findMany({ where: { accountId } }),
+    ]);
+    const grantedByPermissionId = new Map(
+      grants.map((g) => [g.permissionId, g.isGranted]),
+    );
+    return allPermissions.map((p) => ({
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      description: p.description,
+      is_granted: grantedByPermissionId.get(p.id) ?? false,
+    }));
   }
 
   private async assertTeamExists(teamId: string): Promise<void> {

@@ -276,3 +276,37 @@ export interface BySourceReport {
   potential_rate: number;
   employed_rate: number;
 }
+
+// ── Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết ──────────
+
+/** GET /candidate/duplicate — Mục 2, docs/13-api-design.md. */
+export interface DuplicateGroup {
+  phone_number: string;
+  matches: Candidate[];
+}
+
+/** Đối tượng "AuditLog" — Mục 0.1, docs/13-api-design.md. */
+export interface AuditLogEntry {
+  id: string;
+  account: NamedRef;
+  action_type: string;
+  entity_type: string;
+  entity_id: string | null;
+  field_changed: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+}
+
+/** Đối tượng "Permission" — Mục 0.1, docs/13-api-design.md. */
+export interface Permission {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+}
+
+/** PUT /account/:id/permission response — Mục 2, docs/13-api-design.md. */
+export interface AccountPermissionGrant extends Permission {
+  is_granted: boolean;
+}
