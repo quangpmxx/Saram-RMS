@@ -281,6 +281,18 @@ export class CandidatesService {
       await this.assertSourceExists(dto.source_id);
     }
 
+    // Sửa SĐT trên trang Chi tiết ứng viên (yêu cầu bổ sung) — chuẩn hóa
+    // khoảng trắng và từ chối giá trị rỗng sau khi trim, dù DTO cho phép
+    // optional (không gửi lên thì giữ nguyên, khác với gửi lên chuỗi rỗng).
+    if (dto.phone_number !== undefined) {
+      dto.phone_number = dto.phone_number.trim();
+      if (!dto.phone_number) {
+        throw new UnprocessableEntityException(
+          'Số điện thoại không được để trống',
+        );
+      }
+    }
+
     const oldPhoneNumber = existing.phoneNumber;
 
     await this.prisma.lead.update({
@@ -414,24 +426,33 @@ export class CandidatesService {
     return this.setHold(id, false, currentUser);
   }
 
+  /**
+   * Admin/Quản lý kế thừa toàn bộ quyền nghiệp vụ của Sale (yêu cầu bổ
+   * sung "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp
+   * dưới") — không giới hạn theo người phụ trách, khác Sale (chỉ lead
+   * của mình).
+   */
   private async setHold(
     id: string,
     isHeld: boolean,
     currentUser: AuthenticatedUser,
   ): Promise<CandidateResponseDto> {
-    if (currentUser.role !== 'sale') {
-      throw new ForbiddenException(
-        'Chỉ Sale mới được đánh dấu/bỏ đánh dấu giữ số',
-      );
-    }
-
     const lead = await this.prisma.lead.findUnique({ where: { id } });
     if (!lead || lead.deletedAt) {
       throw new NotFoundException('Không tìm thấy ứng viên');
     }
-    if (lead.assignedToId !== currentUser.id) {
+
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+      // không giới hạn.
+    } else if (currentUser.role === 'sale') {
+      if (lead.assignedToId !== currentUser.id) {
+        throw new ForbiddenException(
+          'Bạn chỉ được giữ số ứng viên đang phụ trách',
+        );
+      }
+    } else {
       throw new ForbiddenException(
-        'Bạn chỉ được giữ số ứng viên đang phụ trách',
+        'Chỉ Sale, Quản lý hoặc Admin mới được đánh dấu/bỏ đánh dấu giữ số',
       );
     }
 

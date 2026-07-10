@@ -25,6 +25,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
 import { InlineEditField } from "./inline-edit-field";
+import { InlineNoteComposer } from "./inline-note-composer";
 
 /** Mục 8, docs/09 + Mục 6, docs/13: ai được cập nhật cuộc gọi/thêm ghi chú (KHÔNG gồm MKT). */
 function canUpdatePipeline(
@@ -34,6 +35,26 @@ function canUpdatePipeline(
   currentUserTeamId: string | null,
 ): boolean {
   if (currentUserRole === "admin" || currentUserRole === "manager") return true;
+  if (currentUserRole === "sale") return candidate.assigned_to?.id === currentUserId;
+  if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
+  return false;
+}
+
+/**
+ * Mục 4, docs/13 (PUT /candidate/:id) — dùng để hiện/ẩn khả năng sửa Số
+ * điện thoại trên trang Chi tiết ứng viên, khớp đúng phạm vi quyền của
+ * assertCanModify() ở backend (candidates.service.ts): Admin/Quản lý
+ * không giới hạn; MKT chỉ data do mình upload (giữ nguyên, không mở rộng);
+ * Sale chỉ lead đang phụ trách; Leader chỉ nhóm mình.
+ */
+function canEditCandidate(
+  candidate: Candidate,
+  currentUserId: string,
+  currentUserRole: AccountRole,
+  currentUserTeamId: string | null,
+): boolean {
+  if (currentUserRole === "admin" || currentUserRole === "manager") return true;
+  if (currentUserRole === "mkt") return candidate.uploaded_by.id === currentUserId;
   if (currentUserRole === "sale") return candidate.assigned_to?.id === currentUserId;
   if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
   return false;
@@ -70,9 +91,8 @@ export function CandidateDetailClient({
   const [candidate, setCandidate] = useState(initialCandidate);
   const [notes, setNotes] = useState(initialNotes);
   const [interviews, setInterviews] = useState(initialInterviews);
-  const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [banner, setBanner] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
-  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
   const [updatingInterview, setUpdatingInterview] = useState<Interview | null>(null);
@@ -80,10 +100,20 @@ export function CandidateDetailClient({
   const [isHoldSubmitting, setIsHoldSubmitting] = useState(false);
 
   const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
-  // Mục 2.2, docs/12: "Đánh dấu/Bỏ đánh dấu giữ số" — hiện với Sale, trên lead thuộc quyền mình.
-  const canToggleHold = currentUserRole === "sale" && candidate.assigned_to?.id === currentUserId;
+  const canEditPhone = canEditCandidate(candidate, currentUserId, currentUserRole, currentUserTeamId);
+  // Mục 2.2, docs/12: "Đánh dấu/Bỏ đánh dấu giữ số" — hiện với Sale (lead của
+  // mình); Admin/Quản lý kế thừa quyền này không giới hạn (yêu cầu bổ sung
+  // "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp dưới").
+  const canToggleHold =
+    currentUserRole === "admin" ||
+    currentUserRole === "manager" ||
+    (currentUserRole === "sale" && candidate.assigned_to?.id === currentUserId);
   const visibleNotes = notes.filter((note) => !note.is_deleted);
-  const canDeleteNote = (note: Note) => currentUserRole === "sale" && note.created_by.id === currentUserId;
+  // Sale: chỉ ghi chú của chính mình; Admin/Quản lý kế thừa quyền này, xóa được ghi chú bất kỳ.
+  const canDeleteNote = (note: Note) =>
+    currentUserRole === "admin" ||
+    currentUserRole === "manager" ||
+    (currentUserRole === "sale" && note.created_by.id === currentUserId);
   const sortedInterviews = [...interviews].sort((a, b) => b.attempt_no - a.attempt_no);
 
   async function refreshNotes() {
@@ -148,6 +178,14 @@ export function CandidateDetailClient({
     }
   }
 
+  async function handleAddNote(content: string) {
+    await clientApi(`/candidate/${candidate.id}/note`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+    await refreshNotes();
+  }
+
   async function handleDeleteNote(note: Note) {
     if (!window.confirm("Xóa ghi chú này? Vẫn được lưu trong lịch sử hệ thống.")) return;
     setPendingNoteId(note.id);
@@ -204,6 +242,37 @@ export function CandidateDetailClient({
         <Card className="p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Thông tin ứng viên</p>
           <dl className="mt-3 flex flex-col gap-2 text-sm">
+            {canEditPhone ? (
+              <InlineEditField
+                label="Số điện thoại"
+                displayValue={candidate.phone_number}
+                editValue={candidate.phone_number}
+                onSave={async (value) => {
+                  const trimmed = value.trim();
+                  if (!trimmed) {
+                    throw new Error("Số điện thoại không được để trống");
+                  }
+                  const updated = await clientApi<Candidate>(`/candidate/${candidate.id}`, {
+                    method: "PUT",
+                    body: JSON.stringify({ phone_number: trimmed }),
+                  });
+                  setCandidate(updated);
+                  setBanner(
+                    updated.is_duplicate_flagged
+                      ? {
+                          type: "warning",
+                          text: "Đã cập nhật số điện thoại — số này đang trùng với (các) ứng viên khác trong hệ thống",
+                        }
+                      : { type: "success", text: "Đã cập nhật số điện thoại" },
+                  );
+                }}
+              />
+            ) : (
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Số điện thoại</dt>
+                <dd className="text-slate-800">{candidate.phone_number}</dd>
+              </div>
+            )}
             <InlineEditField
               label="Năm sinh"
               displayValue={candidate.birth_year?.toString() ?? "—"}
@@ -395,15 +464,11 @@ export function CandidateDetailClient({
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 p-4">
+        <div className="border-b border-slate-100 p-4">
           <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
-          {canUpdate && (
-            <Button type="button" size="sm" onClick={() => setIsNoteModalOpen(true)}>
-              <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={2} />
-              Thêm ghi chú
-            </Button>
-          )}
         </div>
+
+        {canUpdate && <InlineNoteComposer onSubmit={handleAddNote} />}
 
         {visibleNotes.length === 0 ? (
           <EmptyState title="Chưa có ghi chú nào" icon={<Phone className="h-5 w-5" strokeWidth={1.75} />} />
@@ -450,18 +515,6 @@ export function CandidateDetailClient({
             setIsCallModalOpen(false);
             router.refresh();
             setBanner({ type: "success", text: "Đã cập nhật tiến trình cuộc gọi" });
-          }}
-        />
-      )}
-
-      {isNoteModalOpen && (
-        <AddNoteModal
-          candidateId={candidate.id}
-          onClose={() => setIsNoteModalOpen(false)}
-          onCreated={async () => {
-            setIsNoteModalOpen(false);
-            await refreshNotes();
-            setBanner({ type: "success", text: "Đã thêm ghi chú" });
           }}
         />
       )}
@@ -586,74 +639,6 @@ function CallUpdateModal({
               </option>
             ))}
           </Select>
-        </Field>
-
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function AddNoteModal({
-  candidateId,
-  onClose,
-  onCreated,
-}: {
-  candidateId: string;
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [content, setContent] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  async function handleSubmit() {
-    if (!content.trim()) {
-      setError("Vui lòng nhập nội dung ghi chú");
-      return;
-    }
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await clientApi(`/candidate/${candidateId}/note`, {
-        method: "POST",
-        body: JSON.stringify({ content }),
-      });
-      await onCreated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      title="Thêm ghi chú"
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-            {isSubmitting ? "Đang lưu..." : "Lưu"}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="Nội dung">
-          <Textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            rows={4}
-            placeholder="Kết quả cuộc gọi, thông tin trao đổi với ứng viên..."
-            autoFocus
-          />
         </Field>
 
         {error && (

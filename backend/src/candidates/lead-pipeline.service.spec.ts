@@ -46,6 +46,11 @@ describe('LeadPipelineService', () => {
     sessionId: 's',
   };
   const adminUser = { id: 'admin-1', role: 'admin' as const, sessionId: 's' };
+  const managerUser = {
+    id: 'manager-1',
+    role: 'manager' as const,
+    sessionId: 's',
+  };
   const mktUser = { id: 'mkt-1', role: 'mkt' as const, sessionId: 's' };
 
   beforeEach(async () => {
@@ -307,7 +312,7 @@ describe('LeadPipelineService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('chỉ Sale là tác giả note mới xóa được — Sale khác/Leader/Admin/MKT đều bị chặn', async () => {
+    it('Sale khác (không phải tác giả)/Leader/MKT đều bị chặn xóa note', async () => {
       prisma.leadNote.findUnique.mockResolvedValue(note);
 
       await expect(
@@ -317,11 +322,33 @@ describe('LeadPipelineService', () => {
         service.deleteNote('lead-1', 'note-1', leaderUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
       await expect(
-        service.deleteNote('lead-1', 'note-1', adminUser),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(
         service.deleteNote('lead-1', 'note-1', mktUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Admin/Quản lý kế thừa quyền của Sale — xóa được ghi chú bất kỳ, không giới hạn "của chính mình"', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      prisma.leadNote.update.mockResolvedValue({ ...note, isDeleted: true });
+
+      await service.deleteNote('lead-1', 'note-1', adminUser);
+      expect(prisma.leadNote.update).toHaveBeenCalledWith({
+        where: { id: 'note-1' },
+        data: {
+          isDeleted: true,
+          deletedById: 'admin-1',
+          deletedAt: expect.any(Date),
+        },
+      });
+
+      await service.deleteNote('lead-1', 'note-1', managerUser);
+      expect(prisma.leadNote.update).toHaveBeenCalledWith({
+        where: { id: 'note-1' },
+        data: {
+          isDeleted: true,
+          deletedById: 'manager-1',
+          deletedAt: expect.any(Date),
+        },
+      });
     });
 
     it('Sale xóa note của chính mình → xóa mềm, giữ lại trong lịch sử', async () => {

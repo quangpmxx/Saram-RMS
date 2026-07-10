@@ -171,7 +171,10 @@ export class LeadPipelineService {
    * Mục 6, docs/13: "Sale (ghi chú của mình)" — điểm còn chưa xác nhận
    * (Mục 11.7, docs/09) về việc Sale có được xóa note của sale khác cùng
    * lead hay không; tạm hiện thực đúng theo giả định đã ghi trong tài liệu
-   * 13 (chỉ note của chính mình), không tự suy rộng thêm.
+   * 13 (chỉ note của chính mình), không tự suy rộng thêm cho Sale.
+   * Admin/Quản lý kế thừa toàn bộ quyền nghiệp vụ của Sale (yêu cầu bổ
+   * sung "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp
+   * dưới") nên xóa được ghi chú bất kỳ, không giới hạn "của chính mình".
    */
   async deleteNote(
     id: string,
@@ -184,7 +187,11 @@ export class LeadPipelineService {
     if (!note || note.leadId !== id || note.isDeleted) {
       throw new NotFoundException('Không tìm thấy ghi chú');
     }
-    if (currentUser.role !== 'sale' || note.createdById !== currentUser.id) {
+    const isFullAccess =
+      currentUser.role === 'admin' || currentUser.role === 'manager';
+    const isOwnNote =
+      currentUser.role === 'sale' && note.createdById === currentUser.id;
+    if (!isFullAccess && !isOwnNote) {
       throw new ForbiddenException(
         'Bạn chỉ được xóa ghi chú do chính mình ghi',
       );
