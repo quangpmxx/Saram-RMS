@@ -57,7 +57,7 @@ export function NoteTimeline({
   const hasMore = sorted.length > previewCount;
   const visible = isExpanded ? sorted : sorted.slice(0, previewCount);
 
-  const gapClass = compact ? "gap-2" : "gap-3";
+  const gapClass = compact ? "gap-1" : "gap-3";
   const itemPaddingClass = compact ? "pl-6" : "pl-8";
   const lineOffsetClass = compact ? "left-3" : "left-[15px]";
   const dotClass = compact
@@ -86,16 +86,18 @@ export function NoteTimeline({
         <button
           type="button"
           onClick={toggle}
-          className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+          className={`flex items-center gap-1 font-medium text-brand-600 hover:text-brand-700 ${
+            compact ? "mt-1 text-[10px]" : "mt-2 text-xs"
+          }`}
         >
           {isExpanded ? (
             <>
-              <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+              <ChevronUp className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} strokeWidth={2} />
               Thu gọn
             </>
           ) : (
             <>
-              <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+              <ChevronDown className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} strokeWidth={2} />
               Xem thêm (còn {sorted.length - previewCount} ghi chú)
             </>
           )}
