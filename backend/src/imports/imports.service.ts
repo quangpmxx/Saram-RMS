@@ -8,6 +8,7 @@ import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { LeadDuplicateService } from '../candidates/lead-duplicate.service';
+import { DistributionRuleService } from '../distribution/distribution-rule.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import {
   ImportJobResponseDto,
@@ -41,6 +42,7 @@ export class ImportsService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly duplicateService: LeadDuplicateService,
+    private readonly distributionRuleService: DistributionRuleService,
   ) {}
 
   /**
@@ -186,6 +188,10 @@ export class ImportsService {
           uploadedById,
         },
       });
+
+      // Phase 6 — mỗi lead từ import cũng là "lead mới về", áp dụng tự động
+      // phân chia (nếu có nhóm đang bật) giống hệt lead nhập tay.
+      await this.distributionRuleService.tryAutoAssign(created);
 
       const matches = await this.duplicateService.syncDuplicateFlags(
         created.phoneNumber,

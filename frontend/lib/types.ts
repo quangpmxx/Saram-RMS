@@ -218,3 +218,14 @@ export interface SystemConfig {
   updated_by: NamedRef;
   updated_at: string;
 }
+
+// ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────
+
+/** GET/PUT /distribution-rule/:teamId — Mục 0.1, docs/13-api-design.md. */
+export interface DistributionRule {
+  id: string | null;
+  team_id: string;
+  is_active: boolean;
+  last_assigned_position: number;
+  members: Array<{ account_id: string; name: string; order_index: number }>;
+}

@@ -5,6 +5,7 @@ import { ImportsService } from './imports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { LeadDuplicateService } from '../candidates/lead-duplicate.service';
+import { DistributionRuleService } from '../distribution/distribution-rule.service';
 
 async function buildSampleWorkbookBuffer(
   rows: Array<[string, string, string, string?, string?, string?]>,
@@ -32,6 +33,7 @@ describe('ImportsService', () => {
   };
   let duplicateService: { syncDuplicateFlags: jest.Mock };
   let auditLog: { log: jest.Mock };
+  let distributionRuleService: { tryAutoAssign: jest.Mock };
 
   const mktUser = { id: 'mkt-1', role: 'mkt' as const, sessionId: 's' };
   const sources = [
@@ -53,6 +55,11 @@ describe('ImportsService', () => {
       syncDuplicateFlags: jest.fn().mockResolvedValue([{ id: 'lead-x' }]),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    distributionRuleService = {
+      tryAutoAssign: jest
+        .fn()
+        .mockImplementation((lead: unknown) => Promise.resolve(lead)),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -60,6 +67,7 @@ describe('ImportsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
         { provide: LeadDuplicateService, useValue: duplicateService },
+        { provide: DistributionRuleService, useValue: distributionRuleService },
       ],
     }).compile();
 

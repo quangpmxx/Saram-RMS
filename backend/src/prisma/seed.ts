@@ -849,6 +849,67 @@ async function seedPhase5Sample(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dữ liệu mẫu Phase 6 để trải nghiệm ngay popup "Cấu hình tự động phân
+ * chia" trên trang Ứng viên (Leader). Seed sẵn danh sách vòng quay
+ * [Sale Demo A, Sale Demo B] cho "Nhóm Sale Demo" nhưng CỐ Ý để
+ * `is_active = false` (chưa kích hoạt) — nếu bật sẵn sẽ âm thầm đổi hành
+ * vi "Chờ phân chia" mà các bước kiểm thử thủ công của Phase 2 trong
+ * README đang dựa vào (tự động gán ngay lead mới, không còn ở trạng thái
+ * chờ để demo phân chia thủ công) — vi phạm yêu cầu "giữ nguyên chức năng
+ * các Phase trước". Leader tự bấm Kích hoạt khi muốn thử nghiệm Phase 6.
+ * Idempotent: bỏ qua nếu đã tồn tại.
+ */
+async function seedPhase6Sample(prisma: PrismaClient): Promise<void> {
+  const team = await prisma.team.findFirst({
+    where: { name: 'Nhóm Sale Demo' },
+  });
+  const leader = await prisma.account.findUnique({
+    where: { username: 'leader_demo' },
+  });
+  const saleA = await prisma.account.findUnique({
+    where: { username: 'sale_demo_a' },
+  });
+  const saleB = await prisma.account.findUnique({
+    where: { username: 'sale_demo_b' },
+  });
+  if (!team || !leader || !saleA || !saleB) {
+    console.log(
+      'Chưa có nhóm/Sale mẫu Phase 2 — bỏ qua seed dữ liệu Phase 6 (chạy lại sau khi seedPhase2Sample xong).',
+    );
+    return;
+  }
+
+  const existingRule = await prisma.distributionRule.findUnique({
+    where: { teamId: team.id },
+  });
+  if (existingRule) {
+    console.log(
+      'Dữ liệu mẫu Phase 6 (cấu hình tự động phân chia) đã tồn tại — bỏ qua.',
+    );
+    return;
+  }
+
+  const rule = await prisma.distributionRule.create({
+    data: {
+      teamId: team.id,
+      createdById: leader.id,
+      isActive: false,
+      lastAssignedPosition: 0,
+    },
+  });
+  await prisma.distributionMember.createMany({
+    data: [
+      { ruleId: rule.id, accountId: saleA.id, orderIndex: 0 },
+      { ruleId: rule.id, accountId: saleB.id, orderIndex: 1 },
+    ],
+  });
+
+  console.log(
+    'Đã tạo cấu hình vòng quay mẫu [Sale Demo A → Sale Demo B] cho "Nhóm Sale Demo" (đang TẮT — Leader tự kích hoạt khi muốn thử).',
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -867,6 +928,7 @@ async function main() {
   await seedPhase3Sample(prisma);
   await seedPhase4Sample(prisma);
   await seedPhase5Sample(prisma);
+  await seedPhase6Sample(prisma);
 
   await prisma.$disconnect();
 }

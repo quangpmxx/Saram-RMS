@@ -12,6 +12,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RefreshCw,
   Search,
   Trash2,
   Upload,
@@ -49,6 +50,7 @@ import { SourceBadge } from "./source-badge";
 import { CareNoteCell } from "./care-note-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
 import { CarePoolTable } from "./care-pool-table";
+import { DistributionRuleModal } from "./distribution-rule-modal";
 
 const PAGE_SIZE = 50;
 /** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia/chuyển lead. */
@@ -182,6 +184,7 @@ export function CandidatesClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
   const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
+  const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
 
   useSetPageTitle("Ứng viên", "Thu thập, tìm kiếm và quản lý dữ liệu ứng viên.");
 
@@ -339,9 +342,22 @@ export function CandidatesClient({
 
       {currentUserRole === "leader" && teamMembers.length > 0 && (
         <Card className="mb-2 p-2.5">
-          <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-800">
-            <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
-            Khối lượng công việc nhóm
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+              <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
+              Khối lượng công việc nhóm
+            </div>
+            {currentUserTeamId && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setIsDistributionModalOpen(true)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
+                Cấu hình phân chia tự động
+              </Button>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {teamMembers.map((member) => (
@@ -784,6 +800,15 @@ export function CandidatesClient({
             if (currentUserTeamId) await refreshTeamMembers(currentUserTeamId);
             setBanner({ type: "success", text: "Đã chuyển ứng viên sang Sale khác" });
           }}
+        />
+      )}
+
+      {isDistributionModalOpen && currentUserTeamId && (
+        <DistributionRuleModal
+          teamId={currentUserTeamId}
+          teamMembers={teamMembers}
+          onClose={() => setIsDistributionModalOpen(false)}
+          onChanged={() => setBanner({ type: "success", text: "Đã cập nhật cấu hình tự động phân chia" })}
         />
       )}
     </div>

@@ -21,6 +21,10 @@
 // removed_from_care_pool_at (đã tồn tại rỗng từ Phase 1) + 2 composite index
 // phục vụ truy vấn Cột chăm sóc theo nhóm và worker quét định kỳ, đúng theo
 // đề xuất index tại Mục 6, tài liệu 11 — Cột chăm sóc tự động (Care Pool).
+// Phase 6: bảng mới `auto_distribution_rules`, `auto_distribution_members`
+// (Mục 2.12-2.13, tài liệu 11) — Tự động phân chia lead (Round-robin). Cột
+// leads.assignment_method đã có sẵn giá trị enum "auto" từ Phase 1 (chưa
+// dùng tới), Phase 6 là nơi đầu tiên thực sự ghi giá trị này.
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -98,6 +102,9 @@ model Team {
   leader  Account?  @relation("TeamLeader", fields: [leaderId], references: [id])
   members Account[] @relation("TeamMembers")
 
+  // Phase 6 — quan hệ ngược tới cấu hình tự động phân chia
+  distributionRule DistributionRule?
+
   @@map("teams")
 }
 
@@ -140,6 +147,10 @@ model Account {
 
   // Phase 5 — quan hệ ngược từ SystemConfig
   updatedConfigs SystemConfig[]
+
+  // Phase 6 — quan hệ ngược từ DistributionRule/DistributionMember
+  createdDistributionRules DistributionRule[]
+  distributionMemberships  DistributionMember[]
 
   @@map("accounts")
 }
@@ -418,4 +429,39 @@ model SystemConfig {
   updatedBy Account @relation(fields: [updatedById], references: [id])
 
   @@map("system_configs")
+}
+
+// ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────
+
+/// Mục 2.12, tài liệu 11 — Cấu hình tự động phân chia của 1 nhóm (tối đa 1
+/// cấu hình/nhóm). `lastAssignedPosition` là con trỏ vị trí kế tiếp trong
+/// vòng quay round-robin (chỉ số trong danh sách `members`, sắp theo order_index).
+model DistributionRule {
+  id                   String   @id @default(uuid()) @db.Uuid
+  teamId               String   @unique @map("team_id") @db.Uuid
+  isActive             Boolean  @default(false) @map("is_active")
+  lastAssignedPosition Int      @default(0) @map("last_assigned_position") @db.SmallInt
+  createdById          String   @map("created_by") @db.Uuid
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  team      Team                 @relation(fields: [teamId], references: [id])
+  createdBy Account              @relation(fields: [createdById], references: [id])
+  members   DistributionMember[]
+
+  @@map("auto_distribution_rules")
+}
+
+/// Mục 2.13, tài liệu 11 — Danh sách + thứ tự Sale tham gia vòng quay của 1 cấu hình.
+model DistributionMember {
+  id         String @id @default(uuid()) @db.Uuid
+  ruleId     String @map("rule_id") @db.Uuid
+  accountId  String @map("account_id") @db.Uuid
+  orderIndex Int    @map("order_index") @db.SmallInt
+
+  rule    DistributionRule @relation(fields: [ruleId], references: [id])
+  account Account          @relation(fields: [accountId], references: [id])
+
+  @@unique([ruleId, orderIndex])
+  @@unique([ruleId, accountId])
+  @@map("auto_distribution_members")
 }

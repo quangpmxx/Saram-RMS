@@ -27,6 +27,7 @@ import { DuplicateWarning } from './dto/duplicate-warning.dto';
 import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
 import { isVisibleInCarePool } from './care-pool.util';
+import { DistributionRuleService } from '../distribution/distribution-rule.service';
 
 /** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia/chuyển lead. */
 const ASSIGNMENT_ROLES = new Set(['admin', 'manager', 'leader']);
@@ -47,6 +48,7 @@ export class CandidatesService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly duplicateService: LeadDuplicateService,
+    private readonly distributionRuleService: DistributionRuleService,
   ) {}
 
   async list(
@@ -237,6 +239,11 @@ export class CandidatesService {
         uploadedById: currentUser.id,
       },
     });
+
+    // Phase 6 — Mục 3, docs/09: lead mới "Chờ phân chia" tự động gán ngay
+    // nếu có nhóm đang bật tự động phân chia (round-robin); nếu không, giữ
+    // nguyên "Chờ phân chia" như hành vi Phase 1-2 cũ (không đổi).
+    await this.distributionRuleService.tryAutoAssign(created);
 
     const matches = await this.duplicateService.syncDuplicateFlags(
       created.phoneNumber,

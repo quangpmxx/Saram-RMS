@@ -402,12 +402,7 @@ describe('LeadPipelineService', () => {
     it('Sale chỉ sửa được ghi chú do chính mình ghi', async () => {
       prisma.leadNote.findUnique.mockResolvedValue(note);
       await expect(
-        service.updateNote(
-          'lead-1',
-          'note-1',
-          { content: 'X' },
-          otherSaleUser,
-        ),
+        service.updateNote('lead-1', 'note-1', { content: 'X' }, otherSaleUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       prisma.leadNote.update.mockResolvedValue({

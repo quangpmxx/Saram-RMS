@@ -9,6 +9,7 @@ import { CandidatesService } from './candidates.service';
 import { LeadDuplicateService } from './lead-duplicate.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { DistributionRuleService } from '../distribution/distribution-rule.service';
 
 describe('CandidatesService', () => {
   let service: CandidatesService;
@@ -27,6 +28,7 @@ describe('CandidatesService', () => {
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
+  let distributionRuleService: { tryAutoAssign: jest.Mock };
 
   const source = { id: 'source-1', name: 'Facebook' };
 
@@ -93,6 +95,11 @@ describe('CandidatesService', () => {
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    distributionRuleService = {
+      tryAutoAssign: jest
+        .fn()
+        .mockImplementation((lead: unknown) => Promise.resolve(lead)),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -100,6 +107,7 @@ describe('CandidatesService', () => {
         LeadDuplicateService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: DistributionRuleService, useValue: distributionRuleService },
       ],
     }).compile();
 

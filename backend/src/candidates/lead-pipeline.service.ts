@@ -202,11 +202,7 @@ export class LeadPipelineService {
         this.prisma.lead.findUnique({ where: { id } }),
         this.prisma.account.findUnique({ where: { id: currentUser.id } }),
       ]);
-      if (
-        !lead ||
-        !account?.teamId ||
-        lead.assignedTeamId !== account.teamId
-      ) {
+      if (!lead || !account?.teamId || lead.assignedTeamId !== account.teamId) {
         throw new ForbiddenException(
           'Bạn chỉ được sửa ghi chú của ứng viên trong nhóm mình',
         );
