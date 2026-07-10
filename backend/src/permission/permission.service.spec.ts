@@ -19,12 +19,12 @@ describe('PermissionService', () => {
     service = moduleRef.get(PermissionService);
   });
 
-  it('Mục 2, docs/13: danh mục quyền cố tình rỗng ở Phase 9 (chưa chốt với chủ doanh nghiệp)', async () => {
+  it('Mục 2, docs/13: danh mục rỗng vẫn hoạt động đúng (vd môi trường chưa chạy seed)', async () => {
     const result = await service.list();
     expect(result).toEqual([]);
   });
 
-  it('ánh xạ đúng đối tượng Permission khi danh mục có dữ liệu (khung sẵn sàng cho tương lai)', async () => {
+  it('ánh xạ đúng đối tượng Permission theo danh mục đã seed (Phase 9 — xem seedPhase9Permissions())', async () => {
     prisma.permission.findMany.mockResolvedValue([
       { id: 'perm-1', code: 'ADD_EMPLOYEE', name: 'Thêm nhân viên', description: null },
     ]);

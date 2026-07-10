@@ -1005,6 +1005,60 @@ async function seedPhase8Sample(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Danh mục quyền chi tiết (Phase 9, khung Phân quyền chi tiết). Tài liệu 09
+ * (Mục 11.1) tự xác nhận danh sách quyền cụ thể "chưa được chốt với chủ
+ * doanh nghiệp" — 5 quyền dưới đây do người dùng trực tiếp DUYỆT trong
+ * phiên làm việc xây dựng Phase 9 (không phải danh sách chính thức cuối
+ * cùng từ chủ doanh nghiệp thật, có thể điều chỉnh sau), dựa trên đúng 3
+ * hành động đã xác nhận là "chỉ Admin làm được" tại Mục 8, tài liệu 09
+ * (thêm/xóa nhân viên, xóa data, reset mật khẩu nhân viên) + 2 ví dụ mã
+ * quyền chính tài liệu 11 (Mục 2.4) đã gợi ý sẵn (DELETE_LEAD,
+ * EDIT_SYSTEM_CONFIG). Idempotent theo `code` (UNIQUE).
+ */
+async function seedPhase9Permissions(prisma: PrismaClient): Promise<void> {
+  const permissions = [
+    {
+      code: 'ADD_EMPLOYEE',
+      name: 'Thêm nhân viên',
+      description: 'Tạo tài khoản nhân viên mới',
+    },
+    {
+      code: 'DEACTIVATE_EMPLOYEE',
+      name: 'Vô hiệu hóa/kích hoạt lại nhân viên',
+      description: 'Vô hiệu hóa hoặc kích hoạt lại tài khoản nhân viên',
+    },
+    {
+      code: 'RESET_PASSWORD',
+      name: 'Reset mật khẩu nhân viên',
+      description: 'Đặt lại mật khẩu về mặc định cho tài khoản khác',
+    },
+    {
+      code: 'DELETE_LEAD',
+      name: 'Xóa ứng viên',
+      description: 'Xóa (mềm) 1 ứng viên khỏi hệ thống',
+    },
+    {
+      code: 'EDIT_SYSTEM_CONFIG',
+      name: 'Sửa cấu hình vận hành',
+      description:
+        'Sửa tham số hệ thống (ngưỡng Cột chăm sóc, số phút nhắc Zalo...)',
+    },
+  ];
+
+  for (const permission of permissions) {
+    await prisma.permission.upsert({
+      where: { code: permission.code },
+      update: {},
+      create: permission,
+    });
+  }
+
+  console.log(
+    `Đã seed ${permissions.length} quyền chi tiết (khung Phân quyền, Phase 9) — chờ chủ doanh nghiệp xác nhận chính thức.`,
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -1025,6 +1079,7 @@ async function main() {
   await seedPhase5Sample(prisma);
   await seedPhase6Sample(prisma);
   await seedPhase8Sample(prisma);
+  await seedPhase9Permissions(prisma);
 
   await prisma.$disconnect();
 }

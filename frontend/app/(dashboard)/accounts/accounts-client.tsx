@@ -236,11 +236,12 @@ export function AccountsClient({
  * docs/13-api-design.md (GET /permission, PUT /account/:id/permission).
  *
  * KHUNG PHÂN QUYỀN CHI TIẾT (Phase 9, docs/14-roadmap.md): danh mục quyền
- * cụ thể chưa được chốt với chủ doanh nghiệp (Mục 11.1, docs/09) nên bảng
- * `permissions` cố tình để RỖNG — popup này hiển thị đúng trạng thái đó
- * (empty state) thay vì suy đoán ra 1 danh sách quyền. Khi có danh sách
- * quyền thật, chỉ cần seed bảng `permissions` — code checklist bên dưới đã
- * sẵn sàng hoạt động đầy đủ, không cần sửa lại.
+ * cụ thể chưa được chốt với chủ doanh nghiệp thật (Mục 11.1, docs/09) —
+ * bảng `permissions` đã seed 5 quyền tạm (xem seedPhase9Permissions() ở
+ * backend/src/prisma/seed.ts) để có ngay dữ liệu dùng thử; không phải danh
+ * sách chính thức cuối cùng, có thể điều chỉnh sau. Nếu danh mục trống
+ * (môi trường chưa chạy seed), popup vẫn hiển thị đúng empty state thay vì
+ * lỗi — không cần sửa code khi danh sách quyền thay đổi.
  */
 function PermissionModal({
   account,
@@ -260,12 +261,18 @@ function PermissionModal({
     let cancelled = false;
     (async () => {
       try {
-        const catalog = await clientApi<Array<{ id: string; code: string; name: string; description: string | null }>>(
-          "/permission",
-        );
-        if (!cancelled) {
-          setGrants(catalog.map((permission) => ({ ...permission, is_granted: false })));
-        }
+        // PUT /account/:id/permission với danh sách rỗng không ghi/đổi gì
+        // (vòng lặp cập nhật trong AccountsService.updatePermissions() rỗng
+        // theo đúng "permissions" truyền vào) nhưng vẫn trả về đúng "danh
+        // sách Permission hiện tại của tài khoản kèm trạng thái bật/tắt"
+        // (Mục 2, docs/13) — tái dùng đúng 1 API đã có để lấy trạng thái
+        // hiện tại lúc mở popup, không cần thêm GET /account/:id/permission
+        // ngoài phạm vi đã chốt.
+        const current = await clientApi<AccountPermissionGrant[]>(`/account/${account.id}/permission`, {
+          method: "PUT",
+          body: JSON.stringify({ permissions: [] }),
+        });
+        if (!cancelled) setGrants(current);
       } catch (err) {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
       } finally {
@@ -275,7 +282,7 @@ function PermissionModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [account.id]);
 
   async function handleSave() {
     if (!grants) return;

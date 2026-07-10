@@ -203,9 +203,10 @@ export class AccountsService {
   /**
    * Mục 2, docs/13-api-design.md — PUT /account/:id/permission. Chỉ áp dụng
    * cho tài khoản Quản lý/Leader (Mục 9.1, docs/12). Danh mục `permissions`
-   * cố tình RỖNG ở Phase 9 (chờ xác nhận danh sách quyền cụ thể — xem
-   * docs/14-roadmap.md) nên method này hoạt động đúng logic ngay cả khi
-   * chưa có quyền nào để cấu hình (trả về mảng rỗng).
+   * đã seed 5 quyền tạm ở Phase 9 (xem seedPhase9Permissions() trong
+   * seed.ts) — chưa phải danh sách chính thức từ chủ doanh nghiệp thật, có
+   * thể điều chỉnh sau; method này hoạt động đúng logic dù danh mục thay
+   * đổi hay tạm thời rỗng.
    */
   async updatePermissions(
     id: string,

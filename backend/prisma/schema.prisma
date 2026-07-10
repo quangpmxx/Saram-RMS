@@ -30,8 +30,10 @@
 // Phase 9: bảng mới `permissions`, `account_permissions` (Mục 2.4-2.5, tài
 // liệu 11) — khung Phân quyền chi tiết. Theo đúng cảnh báo tường minh của
 // docs/14-roadmap.md (Phase 9): danh sách quyền cụ thể CHƯA được chốt với
-// chủ doanh nghiệp (Mục 11.1, tài liệu 09) nên bảng `permissions` cố tình để
-// RỖNG (không seed dữ liệu), chỉ dựng đúng phần khung DB + API.
+// chủ doanh nghiệp thật (Mục 11.1, tài liệu 09) — bảng `permissions` được
+// seed 5 quyền tạm (xem seedPhase9Permissions() trong seed.ts) do người
+// dùng trực tiếp duyệt trong phiên làm việc, không phải danh sách chính
+// thức cuối cùng, có thể điều chỉnh sau.
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
