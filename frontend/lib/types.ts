@@ -229,3 +229,50 @@ export interface DistributionRule {
   last_assigned_position: number;
   members: Array<{ account_id: string; name: string; order_index: number }>;
 }
+
+// ── Phase 7 — Dashboard & Báo cáo ────────────────────────────────────────
+
+/** Mục 9, docs/09 — 1 bước trong phễu chuyển đổi Lead → ... → Đi làm. */
+export interface FunnelStep {
+  code: "LEAD" | "INTERVIEW_SCHEDULED" | "ATTENDED" | "PASSED" | "EMPLOYED";
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+/** GET /dashboard/summary — Mục 8, docs/13-api-design.md. */
+export interface DashboardSummary {
+  new_leads_total: number;
+  new_leads_by_source: Array<{ source_id: string; source_name: string; count: number }>;
+  pending_count: number;
+  funnel: FunnelStep[];
+  care_pool_count: number;
+}
+
+/** GET /dashboard/performance — Mục 8, docs/13-api-design.md. */
+export interface SalePerformance {
+  account_id: string;
+  full_name: string;
+  calls: number;
+  potential_leads: number;
+  interview_count: number;
+  employed_count: number;
+}
+
+/** GET /dashboard/by-team — Mục 8, docs/13-api-design.md. */
+export interface TeamSummary {
+  team_id: string;
+  team_name: string;
+  lead_count: number;
+  conversion_rate: number;
+  care_pool_count: number;
+}
+
+/** GET /report/by-source — Mục 8, docs/13-api-design.md. */
+export interface BySourceReport {
+  source_id: string;
+  source_name: string;
+  lead_count: number;
+  potential_rate: number;
+  employed_rate: number;
+}

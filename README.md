@@ -1,6 +1,6 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar), **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành) và **Phase 6** (Tự động phân chia lead — Round-robin) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar), **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành), **Phase 6** (Tự động phân chia lead — Round-robin) và **Phase 7** (Dashboard & Báo cáo) đã hoàn thành (xem `docs/14-roadmap.md`).
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
@@ -10,8 +10,9 @@ Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1
 - Đặt lịch hẹn phỏng vấn (kèm hẹn lại khi bùng PV, giữ nguyên lịch sử các lần hẹn), cập nhật kết quả PV/đi làm (đỗ/trượt, đi làm/không đi làm kèm lý do bắt buộc), đặt lịch gọi lại, màn hình **Lịch hẹn** dạng agenda tổng hợp cả 2 loại lịch (Phase 4).
 - **Cột chăm sóc**: lead bị bỏ quên quá ngưỡng thời gian (mặc định 30 phút, chỉnh được) tự động chuyển vào cột chăm sóc dùng chung của nhóm; Sale mở lead để xử lý sẽ tự chiếm khóa (khóa hết hạn sau 15 phút nếu quên giải phóng), Admin gỡ khỏi cột chăm sóc khi cần. Sale đánh dấu/bỏ đánh dấu **giữ số** ngay trên trang Chi tiết ứng viên để tạm dừng cơ chế tự động này. Màn hình **Cấu hình vận hành** (Admin) để chỉnh ngưỡng thời gian trên (Phase 5).
 - **Tự động phân chia lead (Round-robin)**: Leader cấu hình danh sách + thứ tự Sale tham gia vòng quay ngay trên màn hình Ứng viên, kích hoạt/tạm dừng bất kỳ lúc nào; khi bật, lead mới (nhập tay hoặc import Excel) tự động gán lần lượt theo thứ tự, quay vòng lại từ đầu khi hết danh sách — tự động bỏ qua Sale đã nghỉ việc/rời nhóm; tạm dừng thì quay về phân chia thủ công (Phase 6).
+- **Dashboard & Báo cáo**: trang chủ hiển thị 5 chỉ số đã chốt (lead mới theo nguồn, lead chờ phân chia, phễu chuyển đổi Lead→Hẹn PV→Đến PV→Đỗ PV→Đi làm, hiệu suất từng Sale, số lead ở cột chăm sóc theo nhóm) — phạm vi dữ liệu tự động theo đúng quyền từng vai trò, lọc theo khoảng thời gian/nhóm. Trang **Báo cáo** riêng (Leader/Quản lý/Admin) mở rộng lọc sâu hơn theo nhóm/Sale/nguồn, xem breakdown dạng bảng, bấm vào 1 dòng để mở đúng danh sách ứng viên đã lọc sẵn (Phase 7).
 
-Các nghiệp vụ tuyển dụng tiếp theo (dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
+Các nghiệp vụ tuyển dụng tiếp theo (thông báo Zalo...) sẽ có ở các Phase sau.
 
 ---
 
@@ -226,6 +227,15 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 8. Vô hiệu hóa 1 Sale đang nằm giữa vòng quay (Admin → **Quản lý tài khoản** → **Vô hiệu hóa**) trong lúc vòng quay đang bật → lead mới tiếp theo tự động bỏ qua Sale đó, gán cho người kế tiếp còn hoạt động — không báo lỗi, không cần Leader cấu hình lại.
 9. **Nhắc nhở:** vòng quay mẫu ở bước 1 mặc định TẮT — nếu bạn từng bật lên để thử rồi tắt lại, dữ liệu "Chờ phân chia" của các Phase khác (vd Phase 2 demo) không bị ảnh hưởng; nhưng nếu quên tắt trước khi test các mục 5.1-5.6, ứng viên mới tạo sẽ tự động có người phụ trách thay vì ở "Chờ phân chia" như mô tả — nhớ **Tạm dừng** lại nếu muốn tái hiện đúng kịch bản demo ban đầu.
 
+### 5.9. Dashboard & Báo cáo (Phase 7)
+
+1. Đăng nhập bất kỳ tài khoản nào (vd `admin`/`123456`) → trang **Trang chủ** giờ là Dashboard thật: 4 thẻ số liệu (Lead mới theo nguồn, Lead chờ phân chia, Cột chăm sóc, Tỷ lệ đi làm), bảng Phễu chuyển đổi, bảng **Hiệu suất Sale** (Leader/Quản lý/Admin) và bảng **Tổng hợp theo nhóm** (chỉ Quản lý/Admin) — mặc định xem theo khoảng "Tháng này".
+2. Đổi bộ lọc khoảng thời gian (Hôm nay/Tuần này/Tháng này/Tùy chọn) và nhóm (Quản lý/Admin) → bấm **Làm mới dữ liệu** → số liệu cập nhật đúng theo bộ lọc.
+3. Bấm vào 1 dòng trong bảng Hiệu suất Sale → popup tóm tắt nhanh 4 chỉ số của Sale đó, có nút **Xem chi tiết trong Báo cáo** dẫn sang trang Báo cáo đã lọc sẵn đúng Sale + khoảng thời gian đang xem.
+4. Bấm **Xem chi tiết** ở thẻ "Lead chờ phân chia"/"Cột chăm sóc" → mở đúng màn Ứng viên đã lọc sẵn theo đúng chế độ xem tương ứng.
+5. Đăng nhập `leader_demo`/`123456` → menu bên trái có mục **Báo cáo** (Leader/Quản lý/Admin mới có, Sale/MKT không thấy) → tự động chỉ xem đúng nhóm mình (không có bộ lọc "Nhóm" như Admin/Quản lý).
+6. Trong trang Báo cáo, lọc theo nhóm/Sale/nguồn kênh → bấm **Xem danh sách** ở dòng "Lead" (bảng Phễu) hoặc bất kỳ dòng nào trong bảng "Theo nguồn kênh" → mở đúng danh sách Ứng viên đã lọc sẵn khớp chính xác con số vừa xem.
+
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -260,13 +270,21 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0, 1, 2, 3, 4, 5 và 6 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành; Tự động phân chia lead - Round-robin). Đây là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn, kèm cơ chế tự động thu hồi lead bị bỏ quên và tự động phân chia lead mới. Các nghiệp vụ tiếp theo (dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo roadmap, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+Phase 0, 1, 2, 3, 4, 5, 6 và 7 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành; Tự động phân chia lead - Round-robin; Dashboard & Báo cáo). Phase 0–6 là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn; Phase 7 bổ sung lớp báo cáo/ra quyết định trên nền dữ liệu đó. Các nghiệp vụ tiếp theo (thông báo Zalo...) sẽ được xây dựng lần lượt theo roadmap, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
 
 ### Ghi chú giả định của Phase 6 (Round-robin) — nghiệp vụ tài liệu chưa mô tả
 
 `docs/09` Mục 11.9 tự xác nhận: "khi 1 sale trong danh sách tham gia vòng quay bị nghỉ việc/vô hiệu hóa, hệ thống có tự động bỏ qua người đó hay Leader phải tự cấu hình lại — chưa được đề cập". Đã chọn hành vi **tự động bỏ qua** (không gán việc cho tài khoản không thể xử lý được) vì đây là lựa chọn an toàn duy nhất hợp lý, không phát sinh thêm nghiệp vụ mới.
 
 Tài liệu cũng chỉ mô tả kịch bản **1 nhóm** bật vòng quay tại 1 thời điểm; trường hợp nhiều nhóm cùng bật đồng thời và cùng "tranh nhau" lead mới từ pool "Chờ phân chia" chung chưa được đặc tả. Đã xử lý theo quy tắc xác định (không ngẫu nhiên): nhóm nào **kích hoạt sớm hơn** được ưu tiên nhận lead mới trước. Nếu công ty thực tế cần chạy song song nhiều nhóm tự động và chia đều lead giữa các nhóm, đây là nghiệp vụ cần xác nhận thêm và có thể cần điều chỉnh logic này.
+
+### Ghi chú giả định của Phase 7 (Dashboard & Báo cáo) — nghiệp vụ tài liệu chưa mô tả
+
+Phễu chuyển đổi (`GET /dashboard/summary`, `/report/funnel`) đếm số lead **đã từng** đạt tới mỗi mốc (Hẹn PV/Đến PV/Đỗ PV/Đi làm) ở bất kỳ lần hẹn phỏng vấn nào trong lịch sử, còn danh sách Ứng viên (`GET /candidate`) chỉ lọc được theo trạng thái phỏng vấn/đi làm **hiện tại** (lần hẹn gần nhất — cột denormalize `current_interview_status`/`current_employment_status`, bị ghi đè mỗi khi có lịch hẹn mới). Với lead từng đỗ/đi làm rồi sau đó có thêm 1 lịch hẹn PV mới (hẹn lại), 2 con số này sẽ lệch nhau. Vì tài liệu không mô tả rõ 2 mốc "Đỗ PV"/"Đi làm" trên trang Báo cáo có bắt buộc bấm mở được danh sách tương ứng hay không, và không thể thêm tham số lọc mới vào `GET /candidate` (vi phạm Design Freeze — giữ nguyên API), đã chọn: chỉ bước "Lead" (không phụ thuộc trạng thái) và bảng "Theo nguồn kênh" có nút **Xem danh sách** (khớp 1:1 đảm bảo); 3 bước Hẹn PV/Đến PV/Đỗ PV/Đi làm trong bảng Phễu **không** có nút này để tránh mở nhầm danh sách thiếu/sai số.
+
+Chỉ số "số cuộc gọi" trong Hiệu suất Sale (`GET /dashboard/performance`) được tính bằng số ghi chú (`LeadNote`) Sale đó tạo trong khoảng thời gian lọc — tài liệu Mục 9, `docs/09` không định nghĩa cụ thể cách đếm "cuộc gọi"; chọn ghi chú vì đây là nhật ký hoạt động duy nhất gắn với mỗi lần gọi (Mục 4.7, `docs/09`: "mỗi lần gọi ghi note"), thay vì đếm theo trường `call_status` (không có mốc thời gian riêng nên không lọc được theo khoảng ngày).
+
+Khoảng thời gian mặc định khi vào Dashboard/Báo cáo là **Tháng này** — tài liệu liệt kê 4 lựa chọn (Hôm nay/Tuần này/Tháng này/Tùy chọn) nhưng không chỉ định mặc định là lựa chọn nào.
 
 ### Ghi chú khác biệt so với `docs/12-ui-design.md` Mục 7 (Interview/Calendar)
 

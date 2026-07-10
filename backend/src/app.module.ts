@@ -16,6 +16,7 @@ import { CalendarModule } from './calendar/calendar.module';
 import { CarePoolModule } from './care-pool/care-pool.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { DistributionModule } from './distribution/distribution.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -37,6 +38,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CarePoolModule,
     SystemConfigModule,
     DistributionModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

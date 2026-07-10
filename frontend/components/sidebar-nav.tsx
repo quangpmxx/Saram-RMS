@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CalendarDays, LayoutDashboard, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, LayoutDashboard, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ICONS = {
@@ -11,6 +11,7 @@ const ICONS = {
   accounts: UserCog,
   teams: Building2,
   calendar: CalendarDays,
+  reports: BarChart3,
   settings: Settings2,
 } satisfies Record<string, LucideIcon>;
 

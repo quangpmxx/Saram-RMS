@@ -149,6 +149,8 @@ export function CandidatesClient({
   employmentStatuses,
   teams,
   allSaleMembers,
+  initialViewMode,
+  initialFilters,
 }: {
   initialCandidates: Candidate[];
   initialTotal: number;
@@ -161,23 +163,32 @@ export function CandidatesClient({
   employmentStatuses: StatusCatalogItem[];
   teams: Team[];
   allSaleMembers: TeamMember[];
+  /**
+   * Phase 7 — mở sẵn đúng danh sách đã lọc khi bấm vào 1 con số breakdown
+   * từ Dashboard/Reports (Mục 1/8, docs/12). Không truyền (trang Ứng viên
+   * vào bình thường) → giữ nguyên hành vi mặc định như trước.
+   */
+  initialViewMode?: ViewMode;
+  initialFilters?: Filters;
 }) {
   const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
   const router = useRouter();
   const [candidates, setCandidates] = useState(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
-  const [viewMode, setViewMode] = useState<ViewMode>("all");
-  const [filters, setFilters] = useState<Filters>({
-    keyword: "",
-    source_id: "",
-    team_sale: null,
-    interview_status_id: "",
-    employment_status_id: "",
-    date_preset: "",
-    date_from: "",
-    date_to: "",
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? "all");
+  const [filters, setFilters] = useState<Filters>(
+    initialFilters ?? {
+      keyword: "",
+      source_id: "",
+      team_sale: null,
+      interview_status_id: "",
+      employment_status_id: "",
+      date_preset: "",
+      date_from: "",
+      date_to: "",
+    },
+  );
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
   const [banner, setBanner] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
 import type { Candidate, LeadSource, PaginatedResult, StatusCatalogItem, Team, TeamMember } from "@/lib/types";
 import { CandidatesClient } from "./candidates-client";
+import type { TeamSaleValue } from "./team-sale-filter";
 
 /**
  * Phase 1 (S3 rút gọn, tài liệu 10/12): Admin, Quản lý, MKT.
@@ -19,20 +20,97 @@ import { CandidatesClient } from "./candidates-client";
  * thêm route mới); Leader tái dùng đúng danh sách Sale nhóm mình đã có sẵn
  * (initialTeamMembers). Sale/MKT không gọi được GET /team nên KHÔNG hiện bộ
  * lọc này (giữ nguyên phân quyền hiện có, không mở rộng quyền truy cập API).
+ * Phase 7: đọc query param trên URL (view/source_id/date_from/date_to/
+ * team_id/assigned_to/interview_status_id/employment_status_id/keyword) để
+ * mở sẵn đúng danh sách đã lọc khi bấm vào 1 con số breakdown từ Dashboard/
+ * Reports (Mục 1/8, docs/12; tiêu chí hoàn thành Phase 7, docs/14-roadmap.md)
+ * — không có param nào thì hành vi giữ nguyên y hệt trước (mặc định rỗng).
  */
-export default async function CandidatesPage() {
+export default async function CandidatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
 
   if (!user || !["admin", "manager", "mkt", "leader", "sale"].includes(user.role)) {
     redirect("/");
   }
 
+  const params = await searchParams;
+  const getParam = (key: string): string | undefined => {
+    const value = params[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+
   const canListTeams = ["admin", "manager", "leader"].includes(user.role);
   const canBrowseAllSales = ["admin", "manager"].includes(user.role);
+  const canViewPending = ["admin", "manager", "leader", "mkt"].includes(user.role);
+  const canViewCarePool = ["admin", "manager", "leader", "sale"].includes(user.role);
+
+  const requestedView = getParam("view");
+  const initialViewMode =
+    requestedView === "pending" && canViewPending
+      ? ("pending" as const)
+      : requestedView === "care_pool" && canViewCarePool
+        ? ("care_pool" as const)
+        : ("all" as const);
+
+  const sourceId = getParam("source_id");
+  const dateFrom = getParam("date_from");
+  const dateTo = getParam("date_to");
+  const teamIdParam = getParam("team_id");
+  const assignedTo = getParam("assigned_to");
+  const interviewStatusId = getParam("interview_status_id");
+  const employmentStatusId = getParam("employment_status_id");
+  const keyword = getParam("keyword");
+
+  const initialFilters: {
+    keyword: string;
+    source_id: string;
+    team_sale: TeamSaleValue | null;
+    interview_status_id: string;
+    employment_status_id: string;
+    date_preset: "" | "custom";
+    date_from: string;
+    date_to: string;
+  } = {
+    keyword: keyword ?? "",
+    source_id: sourceId ?? "",
+    team_sale: teamIdParam ? { type: "team", id: teamIdParam } : assignedTo ? { type: "sale", id: assignedTo } : null,
+    interview_status_id: interviewStatusId ?? "",
+    employment_status_id: employmentStatusId ?? "",
+    date_preset: dateFrom || dateTo ? "custom" : "",
+    date_from: dateFrom ?? "",
+    date_to: dateTo ?? "",
+  };
+
+  const candidateQuery = new URLSearchParams({ page: "1", page_size: "50" });
+  if (initialViewMode === "all") {
+    if (keyword) candidateQuery.set("keyword", keyword);
+    if (sourceId) candidateQuery.set("source_id", sourceId);
+    if (teamIdParam) candidateQuery.set("team_id", teamIdParam);
+    if (assignedTo) candidateQuery.set("assigned_to", assignedTo);
+    if (interviewStatusId) candidateQuery.set("interview_status_id", interviewStatusId);
+    if (employmentStatusId) candidateQuery.set("employment_status_id", employmentStatusId);
+    if (dateFrom) candidateQuery.set("date_from", new Date(dateFrom).toISOString());
+    if (dateTo) candidateQuery.set("date_to", new Date(`${dateTo}T23:59:59.999`).toISOString());
+  } else if (initialViewMode === "pending") {
+    // Đúng theo refresh() trong candidates-client.tsx: "Chờ phân chia" chỉ
+    // nhận page/page_size/source_id, không nhận khoảng ngày.
+    if (sourceId) candidateQuery.set("source_id", sourceId);
+  }
+
+  const candidateEndpoint =
+    initialViewMode === "pending"
+      ? `/candidate/pending?${candidateQuery.toString()}`
+      : initialViewMode === "care_pool"
+        ? `/care-pool?${new URLSearchParams({ page: "1", page_size: "50" }).toString()}`
+        : `/candidate?${candidateQuery.toString()}`;
 
   const [candidatesResult, sources, teamMembers, interviewStatuses, employmentStatuses, teamsResult] =
     await Promise.all([
-      serverApi<PaginatedResult<Candidate>>("/candidate?page=1&page_size=50"),
+      serverApi<PaginatedResult<Candidate>>(candidateEndpoint),
       serverApi<LeadSource[]>("/lead-source"),
       user.role === "leader" && user.team_id
         ? serverApi<TeamMember[]>(`/team/${user.team_id}/member`)
@@ -65,6 +143,8 @@ export default async function CandidatesPage() {
       employmentStatuses={employmentStatuses}
       teams={teamsResult.items}
       allSaleMembers={allSaleMembers}
+      initialViewMode={initialViewMode}
+      initialFilters={initialFilters}
     />
   );
 }
