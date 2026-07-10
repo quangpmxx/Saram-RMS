@@ -49,6 +49,7 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
+    await prisma.notification.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.importJob.deleteMany({
       where: { uploadedBy: { username: { in: USERNAMES } } },

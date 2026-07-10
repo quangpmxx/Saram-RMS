@@ -910,6 +910,101 @@ async function seedPhase6Sample(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dữ liệu mẫu Phase 8 để trải nghiệm ngay Thông báo Zalo:
+ *  - Tham số NOTIFICATION_LEAD_MINUTES (mặc định 15 phút) — seed sẵn để
+ *    Admin có dòng sửa được trên màn hình Cấu hình (tái dùng đúng màn hình
+ *    đã có từ Phase 5, không có màn hình riêng cho Phase 8).
+ *  - 1 ứng viên "Đặng Văn Phúc" (0901000007) thuộc Sale Demo A, có lịch gọi
+ *    lại đặt CHỈ 5 PHÚT sau thời điểm seed (dưới ngưỡng nhắc 15 phút) — để
+ *    NotificationScannerService tạo thông báo "pending" rồi gửi ngay ở lượt
+ *    quét đầu tiên (chu kỳ 2 phút) sau khi backend khởi động, không cần đợi
+ *    nhiều ngày như lịch hẹn PV mẫu của Phase 4.
+ * Idempotent: bỏ qua nếu ứng viên/tham số đã tồn tại.
+ */
+async function seedPhase8Sample(prisma: PrismaClient): Promise<void> {
+  const admin = await prisma.account.findUnique({
+    where: { username: 'admin' },
+  });
+  if (admin) {
+    const existingConfig = await prisma.systemConfig.findUnique({
+      where: { configKey: 'NOTIFICATION_LEAD_MINUTES' },
+    });
+    if (existingConfig && existingConfig.updatedById !== admin.id) {
+      await prisma.systemConfig.update({
+        where: { configKey: 'NOTIFICATION_LEAD_MINUTES' },
+        data: { updatedById: admin.id },
+      });
+    }
+    if (!existingConfig) {
+      await prisma.systemConfig.create({
+        data: {
+          configKey: 'NOTIFICATION_LEAD_MINUTES',
+          configValue: '15',
+          description:
+            'Số phút nhắc trước giờ hẹn (gọi lại/phỏng vấn) qua Zalo',
+          updatedById: admin.id,
+        },
+      });
+      console.log('Đã seed tham số cấu hình NOTIFICATION_LEAD_MINUTES = 15.');
+    }
+  }
+
+  const existingLead = await prisma.lead.findFirst({
+    where: { phoneNumber: '0901000007' },
+  });
+  if (existingLead) {
+    console.log('Dữ liệu mẫu Phase 8 (thông báo Zalo) đã tồn tại — bỏ qua.');
+    return;
+  }
+
+  const team = await prisma.team.findFirst({
+    where: { name: 'Nhóm Sale Demo' },
+  });
+  const saleA = await prisma.account.findUnique({
+    where: { username: 'sale_demo_a' },
+  });
+  const mktDemo = await prisma.account.findUnique({
+    where: { username: 'mkt_demo' },
+  });
+  const zaloSource = await prisma.leadSource.findUnique({
+    where: { name: 'Zalo' },
+  });
+  if (!team || !saleA || !mktDemo || !zaloSource) {
+    console.log(
+      'Chưa có nhóm/Sale/nguồn mẫu — bỏ qua seed dữ liệu Phase 8 (chạy lại sau khi các bước seed trước hoàn tất).',
+    );
+    return;
+  }
+
+  const lead = await prisma.lead.create({
+    data: {
+      fullName: 'Đặng Văn Phúc',
+      phoneNumber: '0901000007',
+      birthYear: 1999,
+      address: 'Cần Thơ',
+      sourceId: zaloSource.id,
+      uploadedById: mktDemo.id,
+      assignedToId: saleA.id,
+      assignedTeamId: team.id,
+      assignedAt: new Date(),
+      assignmentMethod: 'manual',
+    },
+  });
+
+  await prisma.callbackSchedule.create({
+    data: {
+      leadId: lead.id,
+      scheduledAt: new Date(Date.now() + 5 * 60 * 1000),
+      createdById: saleA.id,
+    },
+  });
+
+  console.log(
+    'Đã tạo ứng viên mẫu "Đặng Văn Phúc" (Sale Demo A) với lịch gọi lại 5 phút sau khi seed — sẽ có thông báo Zalo mô phỏng ở lượt quét đầu tiên.',
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -929,6 +1024,7 @@ async function main() {
   await seedPhase4Sample(prisma);
   await seedPhase5Sample(prisma);
   await seedPhase6Sample(prisma);
+  await seedPhase8Sample(prisma);
 
   await prisma.$disconnect();
 }

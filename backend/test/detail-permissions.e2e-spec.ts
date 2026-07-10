@@ -51,6 +51,7 @@ describe('Fix inline notes and role permissions (e2e)', () => {
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
+    await prisma.notification.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },

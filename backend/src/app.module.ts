@@ -17,6 +17,7 @@ import { CarePoolModule } from './care-pool/care-pool.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { NotificationModule } from './notification/notification.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -39,6 +40,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     SystemConfigModule,
     DistributionModule,
     DashboardModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

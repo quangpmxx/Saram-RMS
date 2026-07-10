@@ -25,6 +25,8 @@
 // (Mục 2.12-2.13, tài liệu 11) — Tự động phân chia lead (Round-robin). Cột
 // leads.assignment_method đã có sẵn giá trị enum "auto" từ Phase 1 (chưa
 // dùng tới), Phase 6 là nơi đầu tiên thực sự ghi giá trị này.
+// Phase 8: bảng mới `notifications` (Mục 2.14, tài liệu 11) — hàng đợi
+// thông báo nhắc lịch qua Zalo (Thông báo Zalo).
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -151,6 +153,9 @@ model Account {
   // Phase 6 — quan hệ ngược từ DistributionRule/DistributionMember
   createdDistributionRules DistributionRule[]
   distributionMemberships  DistributionMember[]
+
+  // Phase 8 — quan hệ ngược từ Notification
+  notifications Notification[]
 
   @@map("accounts")
 }
@@ -312,6 +317,7 @@ model Lead {
   notes                   LeadNote[]
   interviews              InterviewAppointment[]
   callbacks               CallbackSchedule[]
+  notifications           Notification[]
 
   @@index([phoneNumber])
   @@index([uploadedAt])
@@ -464,4 +470,52 @@ model DistributionMember {
   @@unique([ruleId, orderIndex])
   @@unique([ruleId, accountId])
   @@map("auto_distribution_members")
+}
+
+// ── Phase 8 — Thông báo Zalo ──────────────────────────────────────────────
+
+// Khớp cột "type" của bảng notifications (Mục 2.14, tài liệu 11)
+enum NotificationType {
+  callback_reminder
+  interview_reminder
+
+  @@map("notification_type")
+}
+
+// Khớp cột "channel" của bảng notifications (Mục 2.14, tài liệu 11) — hiện
+// chỉ có 1 giá trị (kênh gửi duy nhất đã xác nhận, Mục 10.10 tài liệu 09).
+enum NotificationChannel {
+  zalo
+
+  @@map("notification_channel")
+}
+
+// Khớp cột "status" của bảng notifications (Mục 2.14, tài liệu 11)
+enum NotificationStatus {
+  pending
+  sent
+  failed
+
+  @@map("notification_status")
+}
+
+/// Mục 2.14, tài liệu 11 — Hàng đợi thông báo nhắc lịch qua Zalo, worker nền
+/// quét theo (status, scheduled_at) để gửi đúng lúc, tránh gửi trùng/thất lạc.
+model Notification {
+  id          String              @id @default(uuid()) @db.Uuid
+  accountId   String              @map("account_id") @db.Uuid
+  leadId      String?             @map("lead_id") @db.Uuid
+  type        NotificationType
+  channel     NotificationChannel @default(zalo)
+  scheduledAt DateTime            @map("scheduled_at")
+  sentAt      DateTime?           @map("sent_at")
+  status      NotificationStatus  @default(pending)
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+  lead    Lead?   @relation(fields: [leadId], references: [id])
+
+  @@index([status, scheduledAt])
+  @@index([leadId, type])
+  @@map("notifications")
 }

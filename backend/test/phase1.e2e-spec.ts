@@ -64,6 +64,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     await prisma.leadNote.deleteMany({});
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
+    await prisma.notification.deleteMany({});
     await prisma.lead.deleteMany({});
     // Xóa sessions + audit_logs trước accounts — nếu chạy lại bộ test này
     // nhiều lần, các bản ghi từ lần chạy trước vẫn còn tham chiếu tới

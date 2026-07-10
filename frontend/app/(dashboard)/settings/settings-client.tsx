@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/ui/page-header";
 /** Tên hiển thị thân thiện cho từng tham số đã biết — Mục 9.2, docs/12-ui-design.md. */
 const CONFIG_LABEL: Record<string, string> = {
   CARE_POOL_THRESHOLD_MINUTES: "Ngưỡng thời gian vào Cột chăm sóc (phút)",
+  NOTIFICATION_LEAD_MINUTES: "Số phút nhắc trước giờ hẹn qua Zalo (phút)",
 };
 
 function formatDateTime(value: string): string {

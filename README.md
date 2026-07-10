@@ -1,6 +1,6 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar), **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành), **Phase 6** (Tự động phân chia lead — Round-robin) và **Phase 7** (Dashboard & Báo cáo) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar), **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành), **Phase 6** (Tự động phân chia lead — Round-robin), **Phase 7** (Dashboard & Báo cáo) và **Phase 8** (Thông báo Zalo) đã hoàn thành (xem `docs/14-roadmap.md`).
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
@@ -11,8 +11,9 @@ Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1
 - **Cột chăm sóc**: lead bị bỏ quên quá ngưỡng thời gian (mặc định 30 phút, chỉnh được) tự động chuyển vào cột chăm sóc dùng chung của nhóm; Sale mở lead để xử lý sẽ tự chiếm khóa (khóa hết hạn sau 15 phút nếu quên giải phóng), Admin gỡ khỏi cột chăm sóc khi cần. Sale đánh dấu/bỏ đánh dấu **giữ số** ngay trên trang Chi tiết ứng viên để tạm dừng cơ chế tự động này. Màn hình **Cấu hình vận hành** (Admin) để chỉnh ngưỡng thời gian trên (Phase 5).
 - **Tự động phân chia lead (Round-robin)**: Leader cấu hình danh sách + thứ tự Sale tham gia vòng quay ngay trên màn hình Ứng viên, kích hoạt/tạm dừng bất kỳ lúc nào; khi bật, lead mới (nhập tay hoặc import Excel) tự động gán lần lượt theo thứ tự, quay vòng lại từ đầu khi hết danh sách — tự động bỏ qua Sale đã nghỉ việc/rời nhóm; tạm dừng thì quay về phân chia thủ công (Phase 6).
 - **Dashboard & Báo cáo**: trang chủ hiển thị 5 chỉ số đã chốt (lead mới theo nguồn, lead chờ phân chia, phễu chuyển đổi Lead→Hẹn PV→Đến PV→Đỗ PV→Đi làm, hiệu suất từng Sale, số lead ở cột chăm sóc theo nhóm) — phạm vi dữ liệu tự động theo đúng quyền từng vai trò, lọc theo khoảng thời gian/nhóm. Trang **Báo cáo** riêng (Leader/Quản lý/Admin) mở rộng lọc sâu hơn theo nhóm/Sale/nguồn, xem breakdown dạng bảng, bấm vào 1 dòng để mở đúng danh sách ứng viên đã lọc sẵn (Phase 7).
+- **Thông báo Zalo**: worker nền tự động quét lịch gọi lại/lịch hẹn phỏng vấn sắp tới hạn, xếp vào hàng đợi và gửi nhắc cho đúng nhân viên phụ trách trước giờ hẹn N phút (chỉnh được ở màn hình Cấu hình vận hành, mặc định 15 phút); mỗi tài khoản xem lại lịch sử thông báo của chính mình qua `GET /notification`. Kênh gửi Zalo thực tế được mô phỏng (ghi log) do thiết kế chưa có nơi lưu định danh Zalo của nhân viên — xem "Ghi chú giả định của Phase 8" (Phase 8).
 
-Các nghiệp vụ tuyển dụng tiếp theo (thông báo Zalo...) sẽ có ở các Phase sau.
+Các nghiệp vụ tuyển dụng tiếp theo sẽ có ở các Phase sau — Phase 8 khép lại toàn bộ 10 Phase đã hoạch định tại `docs/14-roadmap.md`, trừ Phase 9 (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết) còn lại.
 
 ---
 
@@ -236,6 +237,16 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 5. Đăng nhập `leader_demo`/`123456` → menu bên trái có mục **Báo cáo** (Leader/Quản lý/Admin mới có, Sale/MKT không thấy) → tự động chỉ xem đúng nhóm mình (không có bộ lọc "Nhóm" như Admin/Quản lý).
 6. Trong trang Báo cáo, lọc theo nhóm/Sale/nguồn kênh → bấm **Xem danh sách** ở dòng "Lead" (bảng Phễu) hoặc bất kỳ dòng nào trong bảng "Theo nguồn kênh" → mở đúng danh sách Ứng viên đã lọc sẵn khớp chính xác con số vừa xem.
 
+### 5.10. Thông báo Zalo (Phase 8)
+
+Không có màn hình riêng trong app (đúng Mục 10, `docs/09`: "hệ thống hiện tại chưa cần thêm thông báo trong app") — chỉ có API `GET /notification` (mỗi tài khoản xem lịch sử thông báo của chính mình) và tham số cấu hình `NOTIFICATION_LEAD_MINUTES` trên màn hình **Cấu hình vận hành** đã có từ Phase 5. Cách kiểm thử nhanh nhất là qua API/database, không qua giao diện:
+
+1. Đăng nhập `admin`/`123456` → **Cấu hình vận hành** → thấy dòng **"Số phút nhắc trước giờ hẹn qua Zalo (phút)"** = 15 (seed sẵn) → sửa được giống hệt cách sửa ngưỡng Cột chăm sóc (Phase 5).
+2. Dữ liệu mẫu đã seed sẵn 1 ứng viên **"Đặng Văn Phúc"** (Sale Demo A) với 1 lịch gọi lại đặt 5 phút sau thời điểm seed — khởi động backend (`npm run start:dev`), đợi tối đa 2 phút (chu kỳ quét của worker), gọi `GET /notification` bằng tài khoản `sale_demo_a` → thấy 1 thông báo `type=callback_reminder`, `status=sent`.
+3. Đặt 1 lịch hẹn PV/gọi lại mới cho 1 ứng viên (qua trang Chi tiết ứng viên) với giờ hẹn CÒN XA (vd 5 ngày sau) → sau lượt quét kế tiếp, `GET /notification` (Sale phụ trách) thấy dòng `status=pending`, `sent_at=null` — đúng nghĩa "đã lên lịch, chưa tới giờ gửi".
+4. Dời lịch hẹn đó lại gần hơn hoặc chuyển lead sang Sale khác trước khi tới giờ gửi → thông báo `pending` tự cập nhật đúng giờ/đúng người mới, không tạo thêm dòng trùng.
+5. Đánh dấu lịch gọi lại "đã hoàn tất" trước giờ nhắc → không có thông báo nào được tạo cho lịch đó.
+
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -251,7 +262,7 @@ npm run lint
 npm run build       # build thử để chắc chắn không lỗi
 ```
 
-> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `system_configs`, `auto_distribution_members`, `auto_distribution_rules`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo, tham số cấu hình, cấu hình vòng quay tự động phân chia) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
+> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `system_configs`, `auto_distribution_members`, `auto_distribution_rules`, `import_jobs`, `notifications` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo, tham số cấu hình, cấu hình vòng quay tự động phân chia) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
 
 ---
 
@@ -270,7 +281,7 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0, 1, 2, 3, 4, 5, 6 và 7 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành; Tự động phân chia lead - Round-robin; Dashboard & Báo cáo). Phase 0–6 là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn; Phase 7 bổ sung lớp báo cáo/ra quyết định trên nền dữ liệu đó. Các nghiệp vụ tiếp theo (thông báo Zalo...) sẽ được xây dựng lần lượt theo roadmap, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+Phase 0, 1, 2, 3, 4, 5, 6, 7 và 8 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành; Tự động phân chia lead - Round-robin; Dashboard & Báo cáo; Thông báo Zalo). Phase 0–6 là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn; Phase 7 bổ sung lớp báo cáo/ra quyết định, Phase 8 bổ sung nhắc lịch tự động qua Zalo trên nền dữ liệu đó. Chỉ còn lại **Phase 9** (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết) theo roadmap.
 
 ### Ghi chú giả định của Phase 6 (Round-robin) — nghiệp vụ tài liệu chưa mô tả
 
@@ -285,6 +296,16 @@ Phễu chuyển đổi (`GET /dashboard/summary`, `/report/funnel`) đếm số 
 Chỉ số "số cuộc gọi" trong Hiệu suất Sale (`GET /dashboard/performance`) được tính bằng số ghi chú (`LeadNote`) Sale đó tạo trong khoảng thời gian lọc — tài liệu Mục 9, `docs/09` không định nghĩa cụ thể cách đếm "cuộc gọi"; chọn ghi chú vì đây là nhật ký hoạt động duy nhất gắn với mỗi lần gọi (Mục 4.7, `docs/09`: "mỗi lần gọi ghi note"), thay vì đếm theo trường `call_status` (không có mốc thời gian riêng nên không lọc được theo khoảng ngày).
 
 Khoảng thời gian mặc định khi vào Dashboard/Báo cáo là **Tháng này** — tài liệu liệt kê 4 lựa chọn (Hôm nay/Tuần này/Tháng này/Tùy chọn) nhưng không chỉ định mặc định là lựa chọn nào.
+
+### Ghi chú giả định của Phase 8 (Thông báo Zalo) — nghiệp vụ tài liệu chưa mô tả
+
+`docs/09` Mục 11.5 tự xác nhận: "mới xác nhận kênh gửi là Zalo, chưa xác định rõ những sự kiện cụ thể nào sẽ kích hoạt gửi thông báo" — nhưng `docs/11` (Mục 2.14, bảng `notifications`) đã chốt cột `type` chỉ có đúng 2 giá trị `callback_reminder`/`interview_reminder`, nên 2 sự kiện kích hoạt (lịch gọi lại, lịch hẹn PV) coi như đã được xác định qua thiết kế database — chỉ còn "tần suất" (bao nhiêu phút trước giờ hẹn) và "nội dung" tin nhắn là thật sự bỏ ngỏ:
+- **Tần suất:** dùng đúng 1 tham số cấu hình duy nhất `NOTIFICATION_LEAD_MINUTES` (mặc định 15 phút, sửa được ở màn hình Cấu hình vận hành có sẵn từ Phase 5) — khớp cách diễn đạt số ít "gửi đúng thời điểm **cấu hình**" tại tiêu chí hoàn thành Phase 8, `docs/14-roadmap.md`. Không tự thêm nhiều mốc nhắc (vd 1 ngày + 1 giờ trước) vì không có căn cứ trong tài liệu.
+- **Nội dung tin nhắn:** bảng `notifications` (Design Freeze) không có cột lưu nội dung — nội dung chỉ được dựng tạm thời ngay lúc gửi (tên ứng viên + loại nhắc), không lưu lại, không có gì để hiển thị lại sau này ngoài chính hàng đợi trạng thái.
+
+`docs/11` (Mục 2.2, bảng `accounts`) **không có cột lưu định danh Zalo** của nhân viên (số điện thoại/Zalo OA follower id...) — đây là khoảng trống thật sự của thiết kế đã Design Freeze, không phải điều tự suy diễn thêm, và không được tự ý thêm cột mới để giữ đúng "Toàn bộ database". Vì vậy kênh gửi Zalo thực tế (`ZaloClientService`) chỉ **mô phỏng** lời gọi gửi tin (ghi log nội dung sẽ gửi, luôn coi là thành công) — toàn bộ phần còn lại của hệ thống (hàng đợi `notifications`, worker quét định kỳ, vòng đời `pending`→`sent`/`failed`) đã hoàn chỉnh và đúng thiết kế; khi công ty cung cấp thông tin tích hợp Zalo thật, chỉ cần thay nội dung 1 method duy nhất, không cần đổi gì khác.
+
+`docs/12-ui-design.md` không có màn hình "Thông báo" nào trong danh sách 9 màn hình đã thiết kế, khớp đúng với `docs/09` Mục 10 ("hệ thống hiện tại chưa cần thêm thông báo trong app — chuông thông báo"). Vì vậy Phase 8 **không tạo thêm màn hình/route giao diện mới nào** — chỉ có API `GET /notification` (Mục 7, `docs/13`) và 1 dòng cấu hình tái dùng đúng màn hình Cấu hình vận hành đã có.
 
 ### Ghi chú khác biệt so với `docs/12-ui-design.md` Mục 7 (Interview/Calendar)
 

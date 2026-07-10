@@ -78,6 +78,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
     await prisma.leadNote.deleteMany({});
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
+    await prisma.notification.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },

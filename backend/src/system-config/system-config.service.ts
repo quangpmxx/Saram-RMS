@@ -18,6 +18,18 @@ export const CARE_POOL_THRESHOLD_KEY = 'CARE_POOL_THRESHOLD_MINUTES';
 const CARE_POOL_THRESHOLD_DEFAULT = 30;
 
 /**
+ * Phase 8 — Thông báo Zalo (docs/14-roadmap.md). "Tần suất" nhắc lịch chưa
+ * được chốt cụ thể tại Mục 11.5, docs/09 ("chưa xác định rõ những sự kiện cụ
+ * thể nào sẽ kích hoạt gửi thông báo") — tiêu chí hoàn thành Phase 8 chỉ yêu
+ * cầu "gửi đúng thời điểm CẤU HÌNH", nên chọn 1 tham số duy nhất: số phút
+ * nhắc trước giờ hẹn (gọi lại/phỏng vấn), mặc định 15 phút, sửa được qua
+ * màn hình Cấu hình vận hành (PUT /config/:key) — tái dùng đúng cơ chế đã có
+ * từ Phase 5, không thêm API mới.
+ */
+export const NOTIFICATION_LEAD_MINUTES_KEY = 'NOTIFICATION_LEAD_MINUTES';
+const NOTIFICATION_LEAD_MINUTES_DEFAULT = 15;
+
+/**
  * Mục 9, docs/13-api-design.md — GET /config, PUT /config/:key. Quyền sử
  * dụng: Admin (duy nhất) — theo đúng bảng đã chốt tại Mục 9, docs/13, giải
  * quyết điểm còn để ngỏ ở Mục 11.2, docs/09 (Quản lý "chưa xác định rõ").
@@ -49,7 +61,10 @@ export class SystemConfigService {
       throw new NotFoundException('Không tìm thấy tham số cấu hình');
     }
 
-    if (key === CARE_POOL_THRESHOLD_KEY) {
+    if (
+      key === CARE_POOL_THRESHOLD_KEY ||
+      key === NOTIFICATION_LEAD_MINUTES_KEY
+    ) {
       const parsed = Number(dto.value);
       if (!Number.isInteger(parsed) || parsed <= 0) {
         throw new UnprocessableEntityException(
@@ -97,6 +112,14 @@ export class SystemConfigService {
     return this.getIntValue(
       CARE_POOL_THRESHOLD_KEY,
       CARE_POOL_THRESHOLD_DEFAULT,
+    );
+  }
+
+  /** Dùng nội bộ cho NotificationScannerService (Phase 8) — số phút nhắc trước giờ hẹn. */
+  async getNotificationLeadMinutes(): Promise<number> {
+    return this.getIntValue(
+      NOTIFICATION_LEAD_MINUTES_KEY,
+      NOTIFICATION_LEAD_MINUTES_DEFAULT,
     );
   }
 }
