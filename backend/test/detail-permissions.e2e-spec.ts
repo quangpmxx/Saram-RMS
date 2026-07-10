@@ -572,4 +572,119 @@ describe('Fix inline notes and role permissions (e2e)', () => {
       expect(logs[0].newValue).toBe('Nội dung ghi chú audit test');
     });
   });
+
+  describe('5. Sửa ghi chú inline (module Lịch sử ghi chú/cuộc gọi)', () => {
+    it('Sale sửa được ghi chú của chính mình; không sửa được ghi chú của Sale khác', async () => {
+      const leadId = await createAssignedLead('Edit Note A', '0980000401', mkt1Agent, leader1Agent, sale1Id);
+      const noteRes = await sale1Agent
+        .post(`/candidate/${leadId}/note`)
+        .send({ content: 'Bản gốc' })
+        .expect(201);
+      const noteId = noteRes.body.id as string;
+
+      await sale2Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: 'Sale 2 sửa trộm' }).expect(403);
+
+      const updated = await sale1Agent
+        .put(`/candidate/${leadId}/note/${noteId}`)
+        .send({ content: 'Sale 1 tự sửa' })
+        .expect(200);
+      expect(updated.body.content).toBe('Sale 1 tự sửa');
+    });
+
+    it('Leader sửa được ghi chú của lead trong nhóm mình; không sửa được nhóm khác', async () => {
+      const leadId = await createAssignedLead('Edit Note B', '0980000402', mkt1Agent, leader1Agent, sale1Id);
+      const noteRes = await sale1Agent
+        .post(`/candidate/${leadId}/note`)
+        .send({ content: 'Bản gốc B' })
+        .expect(201);
+      const noteId = noteRes.body.id as string;
+
+      await leader2Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: 'Leader 2 sửa trộm' }).expect(403);
+
+      const updated = await leader1Agent
+        .put(`/candidate/${leadId}/note/${noteId}`)
+        .send({ content: 'Leader 1 sửa' })
+        .expect(200);
+      expect(updated.body.content).toBe('Leader 1 sửa');
+    });
+
+    it('Quản lý và Admin sửa được ghi chú bất kỳ; MKT không có quyền sửa', async () => {
+      const leadId = await createAssignedLead('Edit Note C', '0980000403', mkt1Agent, leader1Agent, sale1Id);
+      const noteRes = await sale1Agent
+        .post(`/candidate/${leadId}/note`)
+        .send({ content: 'Bản gốc C' })
+        .expect(201);
+      const noteId = noteRes.body.id as string;
+
+      await mkt1Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: 'MKT sửa trộm' }).expect(403);
+
+      const byManager = await managerAgent
+        .put(`/candidate/${leadId}/note/${noteId}`)
+        .send({ content: 'Quản lý sửa' })
+        .expect(200);
+      expect(byManager.body.content).toBe('Quản lý sửa');
+
+      const byAdmin = await adminAgent
+        .put(`/candidate/${leadId}/note/${noteId}`)
+        .send({ content: 'Admin sửa' })
+        .expect(200);
+      expect(byAdmin.body.content).toBe('Admin sửa');
+    });
+
+    it('Không cho sửa nội dung rỗng; cập nhật không cần reload vẫn thấy ngay qua GET', async () => {
+      const leadId = await createAssignedLead('Edit Note D', '0980000404', mkt1Agent, leader1Agent, sale1Id);
+      const noteRes = await sale1Agent
+        .post(`/candidate/${leadId}/note`)
+        .send({ content: 'Bản gốc D' })
+        .expect(201);
+      const noteId = noteRes.body.id as string;
+
+      await sale1Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: '' }).expect(400);
+
+      await sale1Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: 'Nội dung đã sửa' }).expect(200);
+      const list = await sale1Agent.get(`/candidate/${leadId}/note`).expect(200);
+      const found = list.body.find((n: { id: string }) => n.id === noteId);
+      expect(found.content).toBe('Nội dung đã sửa');
+    });
+
+    it('Audit log ghi đúng: người sửa, thời gian, nội dung cũ, nội dung mới', async () => {
+      const leadId = await createAssignedLead('Edit Note E', '0980000405', mkt1Agent, leader1Agent, sale1Id);
+      const noteRes = await sale1Agent
+        .post(`/candidate/${leadId}/note`)
+        .send({ content: 'Nội dung cũ E' })
+        .expect(201);
+      const noteId = noteRes.body.id as string;
+
+      await sale1Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: 'Nội dung mới E' }).expect(200);
+
+      const sale1Account = await prisma.account.findUniqueOrThrow({
+        where: { username: 'perm_sale_1' },
+      });
+      const logs = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'lead_note',
+          entityId: noteId,
+          accountId: sale1Account.id,
+          actionType: 'update',
+          fieldChanged: 'content',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(logs.length).toBeGreaterThan(0);
+      expect(logs[0].oldValue).toBe('Nội dung cũ E');
+      expect(logs[0].newValue).toBe('Nội dung mới E');
+    });
+
+    it('Không sửa được ghi chú đã bị xóa mềm', async () => {
+      const leadId = await createAssignedLead('Edit Note F', '0980000406', mkt1Agent, leader1Agent, sale1Id);
+      const noteRes = await sale1Agent
+        .post(`/candidate/${leadId}/note`)
+        .send({ content: 'Sẽ bị xóa' })
+        .expect(201);
+      const noteId = noteRes.body.id as string;
+
+      await sale1Agent.delete(`/candidate/${leadId}/note/${noteId}`).expect(200);
+      await sale1Agent.put(`/candidate/${leadId}/note/${noteId}`).send({ content: 'Sửa sau khi xóa' }).expect(404);
+    });
+  });
 });

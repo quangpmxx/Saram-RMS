@@ -24,6 +24,7 @@ import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
+import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { CreateCallbackDto } from './dto/create-callback.dto';
@@ -205,6 +206,16 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pipelineService.createNote(id, dto, user);
+  }
+
+  @Put(':id/note/:noteId')
+  updateNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('noteId', ParseUUIDPipe) noteId: string,
+    @Body() dto: UpdateNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateNote(id, noteId, dto, user);
   }
 
   @Delete(':id/note/:noteId')

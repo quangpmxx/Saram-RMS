@@ -181,7 +181,7 @@ export function CandidatesClient({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
-  const [latestNoteById, setLatestNoteById] = useState<Map<string, Note | null>>(new Map());
+  const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
 
   useSetPageTitle("Ứng viên", "Thu thập, tìm kiếm và quản lý dữ liệu ứng viên.");
 
@@ -190,11 +190,11 @@ export function CandidatesClient({
   const canViewCarePool = CARE_POOL_VIEW_ROLES.includes(currentUserRole);
 
   /**
-   * UI Polish — "Tình trạng cuộc gọi" cần hiện nội dung ghi chú chăm sóc gần
-   * nhất, nhưng GET /candidate (danh sách) không trả về nội dung ghi chú
-   * (Mục 0.1, docs/13 — đối tượng Candidate không có trường note). Tái dùng
-   * đúng API đã có GET /candidate/:id/note cho từng dòng đang hiển thị,
-   * không thêm API mới.
+   * UI Polish (bổ sung) — "Tình trạng cuộc gọi" cần hiện TOÀN BỘ lịch sử
+   * chăm sóc (không chỉ ghi chú gần nhất như trước), nhưng GET /candidate
+   * (danh sách) không trả về nội dung ghi chú (Mục 0.1, docs/13 — đối tượng
+   * Candidate không có trường note). Tái dùng đúng API đã có
+   * GET /candidate/:id/note cho từng dòng đang hiển thị, không thêm API mới.
    */
   useEffect(() => {
     let cancelled = false;
@@ -204,15 +204,14 @@ export function CandidatesClient({
         try {
           const notes = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
           const visible = notes.filter((note) => !note.is_deleted);
-          const latest = visible.length > 0 ? visible[visible.length - 1] : null;
-          return [candidate.id, latest] as const;
+          return [candidate.id, visible] as const;
         } catch {
-          return [candidate.id, null] as const;
+          return [candidate.id, [] as Note[]] as const;
         }
       }),
     ).then((entries) => {
       if (!cancelled) {
-        setLatestNoteById(new Map(entries));
+        setNotesByLeadId(new Map(entries));
       }
     });
 
@@ -552,7 +551,7 @@ export function CandidatesClient({
               {candidates.map((candidate, index) => {
                 const uploadedAt = formatUploadedAt(candidate.uploaded_at);
                 const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
-                const latestNote = latestNoteById.has(candidate.id) ? (latestNoteById.get(candidate.id) ?? null) : undefined;
+                const candidateNotes = notesByLeadId.get(candidate.id);
 
                 return (
                   <tr
@@ -623,7 +622,7 @@ export function CandidatesClient({
                           <Badge variant={callResultVariant(candidate.call_result.name)}>{candidate.call_result.name}</Badge>
                         )}
                       </div>
-                      <CareNoteCell note={latestNote} />
+                      <CareNoteCell notes={candidateNotes} />
                     </td>
 
                     <td className="border-r border-slate-100 px-3 py-3">

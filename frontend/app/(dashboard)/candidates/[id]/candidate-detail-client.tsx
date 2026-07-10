@@ -10,12 +10,14 @@ import {
   Clock,
   Lock,
   MessageSquarePlus,
+  Pencil,
   Phone,
   PhoneCall,
   Trash2,
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { AccountRole, Candidate, Interview, Note, StatusCatalogItem } from "@/lib/types";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
@@ -26,6 +28,7 @@ import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
 import { InlineEditField } from "./inline-edit-field";
 import { InlineNoteComposer } from "./inline-note-composer";
+import { NoteTimeline } from "../note-timeline";
 
 /** Mục 8, docs/09 + Mục 6, docs/13: ai được cập nhật cuộc gọi/thêm ghi chú (KHÔNG gồm MKT). */
 function canUpdatePipeline(
@@ -98,6 +101,10 @@ export function CandidateDetailClient({
   const [updatingInterview, setUpdatingInterview] = useState<Interview | null>(null);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
   const [isHoldSubmitting, setIsHoldSubmitting] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
   const canEditPhone = canEditCandidate(candidate, currentUserId, currentUserRole, currentUserTeamId);
@@ -114,6 +121,14 @@ export function CandidateDetailClient({
     currentUserRole === "admin" ||
     currentUserRole === "manager" ||
     (currentUserRole === "sale" && note.created_by.id === currentUserId);
+  // Sửa ghi chú — khớp đúng phạm vi quyền của updateNote() ở backend
+  // (lead-pipeline.service.ts): Sale (ghi chú của mình), Leader (ghi chú
+  // trên lead thuộc nhóm mình), Quản lý/Admin (không giới hạn), MKT không có quyền.
+  const canEditNote = (note: Note) =>
+    currentUserRole === "admin" ||
+    currentUserRole === "manager" ||
+    (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
+    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId);
   const sortedInterviews = [...interviews].sort((a, b) => b.attempt_no - a.attempt_no);
 
   async function refreshNotes() {
@@ -184,6 +199,41 @@ export function CandidateDetailClient({
       body: JSON.stringify({ content }),
     });
     await refreshNotes();
+  }
+
+  function handleStartEdit(note: Note) {
+    setEditingNoteId(note.id);
+    setEditDraft(note.content);
+    setEditError(null);
+  }
+
+  function handleCancelEdit() {
+    setEditingNoteId(null);
+    setEditDraft("");
+    setEditError(null);
+  }
+
+  async function handleSaveEdit(note: Note) {
+    const trimmed = editDraft.trim();
+    if (!trimmed) {
+      setEditError("Nội dung ghi chú không được để trống");
+      return;
+    }
+    setIsSavingEdit(true);
+    setEditError(null);
+    try {
+      await clientApi(`/candidate/${candidate.id}/note/${note.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ content: trimmed }),
+      });
+      await refreshNotes();
+      setEditingNoteId(null);
+      setEditDraft("");
+    } catch (error) {
+      setEditError(error instanceof ApiError ? error.message : "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setIsSavingEdit(false);
+    }
   }
 
   async function handleDeleteNote(note: Note) {
@@ -473,34 +523,72 @@ export function CandidateDetailClient({
         {visibleNotes.length === 0 ? (
           <EmptyState title="Chưa có ghi chú nào" icon={<Phone className="h-5 w-5" strokeWidth={1.75} />} />
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {[...visibleNotes].reverse().map((note) => (
-              <li key={note.id} className="flex flex-col gap-1.5 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="font-medium text-slate-700">{note.created_by.name}</span>
-                    <span>·</span>
-                    <span>{formatDateTime(note.created_at)}</span>
-                    {note.call_status && <Badge variant="info">{note.call_status.name}</Badge>}
-                    {note.call_result && <Badge variant="accent">{note.call_result.name}</Badge>}
+          <div className="p-4">
+            <NoteTimeline
+              notes={visibleNotes}
+              renderNote={(note) => {
+                const isEditing = editingNoteId === note.id;
+                return (
+                  <div className="rounded-lg bg-slate-50 px-3 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Avatar fullName={note.created_by.name} className="h-6 w-6 text-[10px]" />
+                        <span className="text-xs font-medium text-slate-700">{note.created_by.name}</span>
+                        <span className="text-xs text-slate-400">{formatDateTime(note.created_at)}</span>
+                        {note.call_status && <Badge variant="info">{note.call_status.name}</Badge>}
+                        {note.call_result && <Badge variant="accent">{note.call_result.name}</Badge>}
+                      </div>
+                      {!isEditing && (canEditNote(note) || canDeleteNote(note)) && (
+                        <div className="flex items-center gap-1">
+                          {canEditNote(note) && (
+                            <Button type="button" variant="ghost" size="sm" onClick={() => handleStartEdit(note)}>
+                              <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                              Chỉnh sửa
+                            </Button>
+                          )}
+                          {canDeleteNote(note) && (
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              disabled={pendingNoteId === note.id}
+                              onClick={() => void handleDeleteNote(note)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                              Xóa
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        <Textarea
+                          value={editDraft}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          rows={3}
+                          autoFocus
+                          disabled={isSavingEdit}
+                        />
+                        {editError && <p className="text-xs text-red-600">{editError}</p>}
+                        <div className="flex items-center gap-2">
+                          <Button type="button" size="sm" disabled={isSavingEdit} onClick={() => void handleSaveEdit(note)}>
+                            {isSavingEdit ? "Đang lưu..." : "Lưu"}
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" disabled={isSavingEdit} onClick={handleCancelEdit}>
+                            Hủy
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 text-sm whitespace-pre-line text-slate-800">{note.content}</p>
+                    )}
                   </div>
-                  {canDeleteNote(note) && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      disabled={pendingNoteId === note.id}
-                      onClick={() => void handleDeleteNote(note)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                      Xóa
-                    </Button>
-                  )}
-                </div>
-                <p className="text-sm whitespace-pre-line text-slate-800">{note.content}</p>
-              </li>
-            ))}
-          </ul>
+                );
+              }}
+            />
+          </div>
         )}
       </Card>
 

@@ -373,4 +373,122 @@ describe('LeadPipelineService', () => {
       );
     });
   });
+
+  describe('updateNote', () => {
+    const note = {
+      id: 'note-1',
+      leadId: 'lead-1',
+      createdById: 'sale-1',
+      content: 'Nội dung cũ',
+      isDeleted: false,
+      createdAt: new Date('2026-07-10T10:00:00.000Z'),
+    };
+
+    it('ném NotFoundException nếu note không tồn tại/không thuộc lead/đã xóa', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateNote('lead-1', 'ghost', { content: 'X' }, saleUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      prisma.leadNote.findUnique.mockResolvedValue({
+        ...note,
+        isDeleted: true,
+      });
+      await expect(
+        service.updateNote('lead-1', 'note-1', { content: 'X' }, saleUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('Sale chỉ sửa được ghi chú do chính mình ghi', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      await expect(
+        service.updateNote(
+          'lead-1',
+          'note-1',
+          { content: 'X' },
+          otherSaleUser,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      prisma.leadNote.update.mockResolvedValue({
+        ...note,
+        content: 'X',
+        createdBy: { id: 'sale-1', fullName: 'Sale 1' },
+      });
+      await service.updateNote('lead-1', 'note-1', { content: 'X' }, saleUser);
+      expect(prisma.leadNote.update).toHaveBeenCalledWith({
+        where: { id: 'note-1' },
+        data: { content: 'X' },
+        include: expect.anything(),
+      });
+    });
+
+    it('MKT không có quyền sửa ghi chú', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      await expect(
+        service.updateNote('lead-1', 'note-1', { content: 'X' }, mktUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Leader chỉ sửa được ghi chú của lead trong nhóm mình', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      prisma.lead.findUnique.mockResolvedValue(baseLead); // assignedTeamId: 'team-1'
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-2' });
+
+      await expect(
+        service.updateNote('lead-1', 'note-1', { content: 'X' }, leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.leadNote.update.mockResolvedValue({
+        ...note,
+        content: 'X',
+        createdBy: { id: 'sale-1', fullName: 'Sale 1' },
+      });
+      await service.updateNote(
+        'lead-1',
+        'note-1',
+        { content: 'X' },
+        leaderUser,
+      );
+      expect(prisma.leadNote.update).toHaveBeenCalled();
+    });
+
+    it('Admin/Quản lý sửa được ghi chú bất kỳ, ghi đúng audit log (nội dung cũ/mới)', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      prisma.leadNote.update.mockResolvedValue({
+        ...note,
+        content: 'Nội dung mới',
+        createdBy: { id: 'sale-1', fullName: 'Sale 1' },
+      });
+
+      await service.updateNote(
+        'lead-1',
+        'note-1',
+        { content: 'Nội dung mới' },
+        adminUser,
+      );
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'admin-1',
+          actionType: 'update',
+          entityType: 'lead_note',
+          entityId: 'note-1',
+          fieldChanged: 'content',
+          oldValue: 'Nội dung cũ',
+          newValue: 'Nội dung mới',
+        }),
+      );
+
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      await service.updateNote(
+        'lead-1',
+        'note-1',
+        { content: 'Nội dung mới 2' },
+        managerUser,
+      );
+      expect(prisma.leadNote.update).toHaveBeenCalled();
+    });
+  });
 });

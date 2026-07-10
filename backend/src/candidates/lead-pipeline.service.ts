@@ -18,6 +18,7 @@ import {
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
+import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
 import {
   NOTE_INCLUDE,
@@ -165,6 +166,74 @@ export class LeadPipelineService {
     });
 
     return toNoteResponse(created);
+  }
+
+  /**
+   * Bổ sung "Chỉnh sửa ghi chú" — sửa inline ngay trên trang Chi tiết ứng
+   * viên, không mở popup. Phân quyền theo yêu cầu bổ sung: Sale (ghi chú
+   * của chính mình), Leader (ghi chú trên lead thuộc nhóm mình — khớp đúng
+   * phạm vi "nhóm mình" đã dùng cho mọi thao tác cập nhật khác của Leader,
+   * xem loadLeadForUpdate), Quản lý/Admin (không giới hạn). MKT không có
+   * quyền này (giữ nguyên — Mục 6, docs/13: KHÔNG gồm MKT).
+   */
+  async updateNote(
+    id: string,
+    noteId: string,
+    dto: UpdateNoteDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<NoteResponseDto> {
+    const note = await this.prisma.leadNote.findUnique({
+      where: { id: noteId },
+    });
+    if (!note || note.leadId !== id || note.isDeleted) {
+      throw new NotFoundException('Không tìm thấy ghi chú');
+    }
+
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+      // không giới hạn.
+    } else if (currentUser.role === 'sale') {
+      if (note.createdById !== currentUser.id) {
+        throw new ForbiddenException(
+          'Bạn chỉ được sửa ghi chú do chính mình ghi',
+        );
+      }
+    } else if (currentUser.role === 'leader') {
+      const [lead, account] = await Promise.all([
+        this.prisma.lead.findUnique({ where: { id } }),
+        this.prisma.account.findUnique({ where: { id: currentUser.id } }),
+      ]);
+      if (
+        !lead ||
+        !account?.teamId ||
+        lead.assignedTeamId !== account.teamId
+      ) {
+        throw new ForbiddenException(
+          'Bạn chỉ được sửa ghi chú của ứng viên trong nhóm mình',
+        );
+      }
+    } else {
+      throw new ForbiddenException('Bạn không có quyền sửa ghi chú này');
+    }
+
+    const oldContent = note.content;
+
+    const updated = await this.prisma.leadNote.update({
+      where: { id: noteId },
+      data: { content: dto.content },
+      include: NOTE_INCLUDE,
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'lead_note',
+      entityId: noteId,
+      fieldChanged: 'content',
+      oldValue: oldContent,
+      newValue: dto.content,
+    });
+
+    return toNoteResponse(updated);
   }
 
   /**
