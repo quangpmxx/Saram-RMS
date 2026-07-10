@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LayoutDashboard, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Building2, CalendarDays, LayoutDashboard, UserCog, Users, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ICONS = {
@@ -10,6 +10,7 @@ const ICONS = {
   candidates: Users,
   accounts: UserCog,
   teams: Building2,
+  calendar: CalendarDays,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

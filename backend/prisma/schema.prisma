@@ -1,4 +1,4 @@
-// Prisma schema — Phase 0 + Phase 1 + Phase 2 + Phase 3 (docs/14-roadmap.md)
+// Prisma schema — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 (docs/14-roadmap.md)
 //
 // Phase 0: teams, accounts, sessions, audit_logs
 // Phase 1: lead_sources, status_catalog, leads, import_jobs
@@ -9,6 +9,12 @@
 // Phase 3: bảng mới `lead_notes` (Mục 2.9, tài liệu 11) + kích hoạt logic
 // đọc/ghi cho leads.call_status_id/call_result_id/last_activity_at (đã tồn
 // tại rỗng từ Phase 1) — Pipeline cuộc gọi & Lịch sử ghi chú.
+// Phase 4: bảng mới `interview_appointments`, `callback_schedules` (Mục
+// 2.10-2.11, tài liệu 11) + kích hoạt logic đọc/ghi cho
+// leads.current_interview_status_id/current_employment_status_id/
+// current_partner_company_name (đã tồn tại rỗng từ Phase 1, đồng bộ lại mỗi
+// khi có dòng interview_appointments mới/cập nhật, đúng lý do denormalize
+// đã ghi tại Mục 7.2, tài liệu 11).
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -122,6 +128,10 @@ model Account {
   createdLeadNotes LeadNote[] @relation("LeadNoteCreatedBy")
   deletedLeadNotes LeadNote[] @relation("LeadNoteDeletedBy")
 
+  // Phase 4 — quan hệ ngược từ InterviewAppointment/CallbackSchedule
+  createdInterviews InterviewAppointment[] @relation("InterviewAppointmentCreatedBy")
+  createdCallbacks  CallbackSchedule[]     @relation("CallbackScheduleCreatedBy")
+
   @@map("accounts")
 }
 
@@ -207,12 +217,14 @@ model StatusCatalog {
   name      String         @db.VarChar(100)
   sortOrder Int            @default(0) @map("sort_order") @db.SmallInt
 
-  leadsByCallStatus              Lead[] @relation("LeadCallStatus")
-  leadsByCallResult              Lead[] @relation("LeadCallResult")
-  leadsByCurrentInterviewStatus  Lead[] @relation("LeadCurrentInterviewStatus")
-  leadsByCurrentEmploymentStatus Lead[] @relation("LeadCurrentEmploymentStatus")
-  notesByCallStatus              LeadNote[] @relation("LeadNoteCallStatus")
-  notesByCallResult              LeadNote[] @relation("LeadNoteCallResult")
+  leadsByCallStatus              Lead[]                 @relation("LeadCallStatus")
+  leadsByCallResult              Lead[]                 @relation("LeadCallResult")
+  leadsByCurrentInterviewStatus  Lead[]                 @relation("LeadCurrentInterviewStatus")
+  leadsByCurrentEmploymentStatus Lead[]                 @relation("LeadCurrentEmploymentStatus")
+  notesByCallStatus              LeadNote[]             @relation("LeadNoteCallStatus")
+  notesByCallResult              LeadNote[]             @relation("LeadNoteCallResult")
+  interviewsByStatus             InterviewAppointment[] @relation("InterviewAppointmentStatus")
+  interviewsByEmploymentStatus   InterviewAppointment[] @relation("InterviewAppointmentEmploymentStatus")
 
   @@unique([category, code])
   @@map("status_catalog")
@@ -266,18 +278,20 @@ model Lead {
   deletedAt          DateTime? @map("deleted_at")
   deletedById        String?   @map("deleted_by") @db.Uuid
 
-  source                  LeadSource     @relation(fields: [sourceId], references: [id])
-  uploadedBy              Account        @relation("LeadUploadedBy", fields: [uploadedById], references: [id])
-  assignedTo              Account?       @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
-  heldBy                  Account?       @relation("LeadHeldBy", fields: [heldById], references: [id])
-  carePoolLockedBy        Account?       @relation("LeadCarePoolLockedBy", fields: [carePoolLockedById], references: [id])
-  removedFromCarePoolBy   Account?       @relation("LeadRemovedFromCarePoolBy", fields: [removedFromCarePoolById], references: [id])
-  deletedBy               Account?       @relation("LeadDeletedBy", fields: [deletedById], references: [id])
-  callStatus              StatusCatalog? @relation("LeadCallStatus", fields: [callStatusId], references: [id])
-  callResult              StatusCatalog? @relation("LeadCallResult", fields: [callResultId], references: [id])
-  currentInterviewStatus  StatusCatalog? @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
-  currentEmploymentStatus StatusCatalog? @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
+  source                  LeadSource             @relation(fields: [sourceId], references: [id])
+  uploadedBy              Account                @relation("LeadUploadedBy", fields: [uploadedById], references: [id])
+  assignedTo              Account?               @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
+  heldBy                  Account?               @relation("LeadHeldBy", fields: [heldById], references: [id])
+  carePoolLockedBy        Account?               @relation("LeadCarePoolLockedBy", fields: [carePoolLockedById], references: [id])
+  removedFromCarePoolBy   Account?               @relation("LeadRemovedFromCarePoolBy", fields: [removedFromCarePoolById], references: [id])
+  deletedBy               Account?               @relation("LeadDeletedBy", fields: [deletedById], references: [id])
+  callStatus              StatusCatalog?         @relation("LeadCallStatus", fields: [callStatusId], references: [id])
+  callResult              StatusCatalog?         @relation("LeadCallResult", fields: [callResultId], references: [id])
+  currentInterviewStatus  StatusCatalog?         @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
+  currentEmploymentStatus StatusCatalog?         @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
   notes                   LeadNote[]
+  interviews              InterviewAppointment[]
+  callbacks               CallbackSchedule[]
 
   @@index([phoneNumber])
   @@index([uploadedAt])
@@ -311,24 +325,69 @@ model ImportJob {
 /// Mục 2.9, tài liệu 11 — Lịch sử ghi chú/cuộc gọi của từng lead. Xóa mềm
 /// (is_deleted) để giữ lịch sử đầy đủ kể cả note đã xóa (Mục 10, tài liệu 09).
 model LeadNote {
-  id            String   @id @default(uuid()) @db.Uuid
-  leadId        String   @map("lead_id") @db.Uuid
-  createdById   String   @map("created_by") @db.Uuid
-  content       String
-  callStatusId  String?  @map("call_status_id") @db.Uuid
-  callResultId  String?  @map("call_result_id") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at")
-  isDeleted     Boolean  @default(false) @map("is_deleted")
-  deletedById   String?  @map("deleted_by") @db.Uuid
-  deletedAt     DateTime? @map("deleted_at")
+  id           String    @id @default(uuid()) @db.Uuid
+  leadId       String    @map("lead_id") @db.Uuid
+  createdById  String    @map("created_by") @db.Uuid
+  content      String
+  callStatusId String?   @map("call_status_id") @db.Uuid
+  callResultId String?   @map("call_result_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  isDeleted    Boolean   @default(false) @map("is_deleted")
+  deletedById  String?   @map("deleted_by") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at")
 
-  lead        Lead           @relation(fields: [leadId], references: [id])
-  createdBy   Account        @relation("LeadNoteCreatedBy", fields: [createdById], references: [id])
-  deletedBy   Account?       @relation("LeadNoteDeletedBy", fields: [deletedById], references: [id])
-  callStatus  StatusCatalog? @relation("LeadNoteCallStatus", fields: [callStatusId], references: [id])
-  callResult  StatusCatalog? @relation("LeadNoteCallResult", fields: [callResultId], references: [id])
+  lead       Lead           @relation(fields: [leadId], references: [id])
+  createdBy  Account        @relation("LeadNoteCreatedBy", fields: [createdById], references: [id])
+  deletedBy  Account?       @relation("LeadNoteDeletedBy", fields: [deletedById], references: [id])
+  callStatus StatusCatalog? @relation("LeadNoteCallStatus", fields: [callStatusId], references: [id])
+  callResult StatusCatalog? @relation("LeadNoteCallResult", fields: [callResultId], references: [id])
 
   @@index([leadId])
   @@index([leadId, createdAt])
   @@map("lead_notes")
+}
+
+// ── Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar ────────────────────
+
+/// Mục 2.10, tài liệu 11 — Lịch sử các lần hẹn phỏng vấn của 1 lead. Mỗi lần
+/// bùng PV (no-show) và hẹn lại tạo 1 dòng mới với attempt_no tăng dần, giữ
+/// nguyên toàn bộ lịch sử các lần hẹn trước đó.
+model InterviewAppointment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  leadId             String   @map("lead_id") @db.Uuid
+  attemptNo          Int      @default(1) @map("attempt_no") @db.SmallInt
+  partnerCompanyName String   @map("partner_company_name") @db.VarChar(150)
+  scheduledAt        DateTime @map("scheduled_at")
+  statusId           String   @map("status_id") @db.Uuid
+  employmentStatusId String?  @map("employment_status_id") @db.Uuid
+  employmentReason   String?  @map("employment_reason")
+  createdById        String   @map("created_by") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  lead             Lead           @relation(fields: [leadId], references: [id])
+  status           StatusCatalog  @relation("InterviewAppointmentStatus", fields: [statusId], references: [id])
+  employmentStatus StatusCatalog? @relation("InterviewAppointmentEmploymentStatus", fields: [employmentStatusId], references: [id])
+  createdBy        Account        @relation("InterviewAppointmentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([leadId])
+  @@index([scheduledAt])
+  @@map("interview_appointments")
+}
+
+/// Mục 2.11, tài liệu 11 — Lịch hẹn gọi lại của 1 lead.
+model CallbackSchedule {
+  id          String   @id @default(uuid()) @db.Uuid
+  leadId      String   @map("lead_id") @db.Uuid
+  scheduledAt DateTime @map("scheduled_at")
+  isCompleted Boolean  @default(false) @map("is_completed")
+  createdById String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  lead      Lead    @relation(fields: [leadId], references: [id])
+  createdBy Account @relation("CallbackScheduleCreatedBy", fields: [createdById], references: [id])
+
+  @@index([leadId])
+  @@index([scheduledAt])
+  @@map("callback_schedules")
 }

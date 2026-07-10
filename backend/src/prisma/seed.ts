@@ -597,6 +597,153 @@ async function seedPhase3Sample(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dữ liệu mẫu Phase 4 để trải nghiệm ngay Lịch hẹn PV/gọi lại + màn hình
+ * Chi tiết ứng viên:
+ *  - Nguyễn Văn An (sale_demo_a): 1 lần hẹn PV đã đi qua trọn chuỗi đến PV →
+ *    đỗ PV → đi làm (minh họa tiêu chí "chuỗi đến→đỗ→đi làm phản ánh đúng
+ *    trên Candidate list" qua các cột snapshot).
+ *  - Trần Thị Bình (sale_demo_b): 3 lần hẹn PV liên tiếp — lần 1 bùng PV,
+ *    lần 2 đỗ PV nhưng không đi làm (kèm lý do bắt buộc), lần 3 hẹn lại sắp
+ *    tới (minh họa "bùng PV vẫn hẹn lại được" + xuất hiện trên Lịch hẹn) —
+ *    kèm 1 lịch gọi lại riêng để Lịch hẹn có cả 2 loại sự kiện.
+ * Idempotent: bỏ qua nếu ứng viên "Nguyễn Văn An" đã có lịch hẹn PV.
+ */
+async function seedPhase4Sample(prisma: PrismaClient): Promise<void> {
+  const leadAn = await prisma.lead.findFirst({
+    where: { phoneNumber: '0901000001' },
+  });
+  const leadBinh = await prisma.lead.findFirst({
+    where: { phoneNumber: '0901000002' },
+  });
+  const saleA = await prisma.account.findUnique({
+    where: { username: 'sale_demo_a' },
+  });
+  const saleB = await prisma.account.findUnique({
+    where: { username: 'sale_demo_b' },
+  });
+  if (!leadAn || !leadBinh || !saleA || !saleB) {
+    console.log(
+      'Chưa có ứng viên/Sale mẫu Phase 2 — bỏ qua seed dữ liệu Phase 4 (chạy lại sau khi seedPhase2Sample xong).',
+    );
+    return;
+  }
+
+  const existingInterview = await prisma.interviewAppointment.findFirst({
+    where: { leadId: leadAn.id },
+  });
+  if (existingInterview) {
+    console.log(
+      'Dữ liệu mẫu Phase 4 (lịch hẹn PV/gọi lại) đã tồn tại — bỏ qua.',
+    );
+    return;
+  }
+
+  const scheduledStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: {
+      category_code: { category: 'interview_status', code: 'SCHEDULED' },
+    },
+  });
+  const noShowStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: { category_code: { category: 'interview_status', code: 'NO_SHOW' } },
+  });
+  const passedStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: { category_code: { category: 'interview_status', code: 'PASSED' } },
+  });
+  const employedStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: {
+      category_code: { category: 'employment_status', code: 'EMPLOYED' },
+    },
+  });
+  const notEmployedStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: {
+      category_code: { category: 'employment_status', code: 'NOT_EMPLOYED' },
+    },
+  });
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  // Nguyễn Văn An: 1 lần hẹn, trọn chuỗi đến → đỗ → đi làm.
+  await prisma.interviewAppointment.create({
+    data: {
+      leadId: leadAn.id,
+      attemptNo: 1,
+      partnerCompanyName: 'Công ty TNHH Cơ Khí Sài Gòn',
+      scheduledAt: new Date(now - 3 * dayMs),
+      statusId: passedStatus.id,
+      employmentStatusId: employedStatus.id,
+      createdById: saleA.id,
+    },
+  });
+  await prisma.lead.update({
+    where: { id: leadAn.id },
+    data: {
+      currentInterviewStatusId: passedStatus.id,
+      currentEmploymentStatusId: employedStatus.id,
+      currentPartnerCompanyName: 'Công ty TNHH Cơ Khí Sài Gòn',
+      lastActivityAt: new Date(),
+    },
+  });
+
+  // Trần Thị Bình: bùng PV → hẹn lại (đỗ nhưng không đi làm) → hẹn lại lần nữa (sắp tới).
+  const partnerBinh = 'Công ty CP May Mặc Đồng Nai';
+  await prisma.interviewAppointment.create({
+    data: {
+      leadId: leadBinh.id,
+      attemptNo: 1,
+      partnerCompanyName: partnerBinh,
+      scheduledAt: new Date(now - 10 * dayMs),
+      statusId: noShowStatus.id,
+      createdById: saleB.id,
+    },
+  });
+  await prisma.interviewAppointment.create({
+    data: {
+      leadId: leadBinh.id,
+      attemptNo: 2,
+      partnerCompanyName: partnerBinh,
+      scheduledAt: new Date(now - 5 * dayMs),
+      statusId: passedStatus.id,
+      employmentStatusId: notEmployedStatus.id,
+      employmentReason:
+        'Ứng viên xin nghỉ vì lý do gia đình, không thể đi làm xa nhà.',
+      createdById: saleB.id,
+    },
+  });
+  const upcomingInterview = await prisma.interviewAppointment.create({
+    data: {
+      leadId: leadBinh.id,
+      attemptNo: 3,
+      partnerCompanyName: partnerBinh,
+      scheduledAt: new Date(now + 4 * dayMs),
+      statusId: scheduledStatus.id,
+      createdById: saleB.id,
+    },
+  });
+  await prisma.lead.update({
+    where: { id: leadBinh.id },
+    data: {
+      currentInterviewStatusId: upcomingInterview.statusId,
+      currentEmploymentStatusId: upcomingInterview.employmentStatusId,
+      currentPartnerCompanyName: upcomingInterview.partnerCompanyName,
+      lastActivityAt: new Date(),
+    },
+  });
+
+  await prisma.callbackSchedule.create({
+    data: {
+      leadId: leadBinh.id,
+      scheduledAt: new Date(now + 2 * dayMs),
+      createdById: saleB.id,
+    },
+  });
+
+  console.log(
+    'Đã tạo dữ liệu mẫu Phase 4: lịch hẹn PV cho "Nguyễn Văn An" (đã đi làm) và "Trần Thị Bình" (bùng PV → đỗ nhưng không đi làm → hẹn lại sắp tới) + 1 lịch gọi lại.',
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -613,6 +760,7 @@ async function main() {
   await seedPhase2Sample(prisma);
   await seedCrossTeamDuplicateSample(prisma);
   await seedPhase3Sample(prisma);
+  await seedPhase4Sample(prisma);
 
   await prisma.$disconnect();
 }

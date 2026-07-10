@@ -23,6 +23,9 @@ export interface CandidateResponseDto {
   assignment_method: string | null;
   call_status: { id: string; name: string } | null;
   call_result: { id: string; name: string } | null;
+  current_interview_status: { id: string; name: string } | null;
+  current_employment_status: { id: string; name: string } | null;
+  current_partner_company_name: string | null;
   is_held: boolean;
   held_by: { id: string; name: string } | null;
   held_at: string | null;
@@ -42,6 +45,8 @@ type LeadWithRelations = Lead & {
   carePoolLockedBy?: Pick<Account, 'id' | 'fullName'> | null;
   callStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
   callResult?: Pick<StatusCatalog, 'id' | 'name'> | null;
+  currentInterviewStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
+  currentEmploymentStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
 };
 
 export function toCandidateResponse(
@@ -70,6 +75,19 @@ export function toCandidateResponse(
     call_result: lead.callResult
       ? { id: lead.callResult.id, name: lead.callResult.name }
       : null,
+    current_interview_status: lead.currentInterviewStatus
+      ? {
+          id: lead.currentInterviewStatus.id,
+          name: lead.currentInterviewStatus.name,
+        }
+      : null,
+    current_employment_status: lead.currentEmploymentStatus
+      ? {
+          id: lead.currentEmploymentStatus.id,
+          name: lead.currentEmploymentStatus.name,
+        }
+      : null,
+    current_partner_company_name: lead.currentPartnerCompanyName,
     is_held: lead.isHeld,
     held_by: lead.heldBy
       ? { id: lead.heldBy.id, name: lead.heldBy.fullName }
@@ -95,4 +113,6 @@ export const CANDIDATE_INCLUDE = {
   carePoolLockedBy: { select: { id: true, fullName: true } },
   callStatus: { select: { id: true, name: true } },
   callResult: { select: { id: true, name: true } },
+  currentInterviewStatus: { select: { id: true, name: true } },
+  currentEmploymentStatus: { select: { id: true, name: true } },
 } as const;

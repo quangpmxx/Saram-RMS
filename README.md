@@ -1,14 +1,15 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader) và **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú) và **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar) đã hoàn thành (xem `docs/14-roadmap.md`).
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
 - Màn hình **Ứng viên**: MKT nhập ứng viên thủ công hoặc nhập hàng loạt từ file Excel, cảnh báo trùng số điện thoại tự động, tìm kiếm/lọc danh sách (Phase 1).
 - **Chờ phân chia**, phân chia thủ công (từng lead hoặc hàng loạt), chuyển lead giữa các Sale trong nhóm, không gian "Lead của tôi" cho Sale, workload từng Sale cho Leader (Phase 2).
 - Màn hình **Chi tiết ứng viên**: Sale cập nhật tình trạng/kết quả cuộc gọi, ghi lịch sử ghi chú theo thời gian (không ghi đè), xóa mềm ghi chú (vẫn giữ lịch sử) — MKT xem được nhưng không sửa (Phase 3).
+- Đặt lịch hẹn phỏng vấn (kèm hẹn lại khi bùng PV, giữ nguyên lịch sử các lần hẹn), cập nhật kết quả PV/đi làm (đỗ/trượt, đi làm/không đi làm kèm lý do bắt buộc), đặt lịch gọi lại, màn hình **Lịch hẹn** dạng agenda tổng hợp cả 2 loại lịch (Phase 4).
 
-Các nghiệp vụ tuyển dụng tiếp theo (lịch phỏng vấn, cột chăm sóc, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
+Các nghiệp vụ tuyển dụng tiếp theo (cột chăm sóc, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
 
 ---
 
@@ -109,8 +110,9 @@ Nếu thành công, terminal in ra dòng dạng:
 Đã tạo nhóm "Nhóm Sale Demo 2" với Leader (leader_demo_2/123456) và Sale (sale_demo_c/123456).
 Đã tạo 3 ứng viên trùng SĐT 0901000005 ở 2 nhóm khác nhau + 1 chưa phân chia để thử tooltip "Trùng SĐT".
 Đã cập nhật tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) cho ứng viên "Nguyễn Văn An".
+Đã tạo dữ liệu mẫu Phase 4: lịch hẹn PV cho "Nguyễn Văn An" (đã đi làm) và "Trần Thị Bình" (bùng PV → đỗ nhưng không đi làm → hẹn lại sắp tới) + 1 lịch gọi lại.
 ```
-**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) để thử ngay màn Chi tiết ứng viên — xem mục 5.
+**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) và 1 lịch hẹn PV đã "Đỗ PV" + "Đã đi làm"; ứng viên "Trần Thị Bình" có sẵn 3 lần hẹn PV (bùng PV → đỗ nhưng không đi làm kèm lý do → hẹn lại sắp tới) + 1 lịch gọi lại — để thử ngay màn Chi tiết ứng viên và Lịch hẹn, xem mục 5.
 
 ---
 
@@ -184,6 +186,17 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 5. Đăng xuất, đăng nhập `sale_demo_b` / `123456` → mở lại ứng viên "Nguyễn Văn An" → không có nút **Gọi ngay**/**Thêm ghi chú**/**Xóa** vì ứng viên này không phải của mình; đăng nhập `mkt_demo` / `123456` → mở lại → xem được toàn bộ ghi chú nhưng cũng không có các nút thao tác (chỉ xem, đúng Mục 2.6 `docs/09`).
 6. Đăng nhập `leader_demo` / `123456` (Leader của nhóm `sale_demo_a`) → mở ứng viên → vẫn cập nhật/ghi chú được (trong phạm vi nhóm mình) nhưng không xóa được ghi chú do Sale ghi (chỉ chính Sale đó xóa được — theo giả định tạm ghi trong `docs/13`, xem mục "Lưu ý" trong `docs/09` Mục 11.7).
 
+### 5.6. Lịch phỏng vấn, lịch gọi lại & Calendar (Phase 4)
+
+1. Đăng nhập `sale_demo_b` / `123456` → mở ứng viên "Trần Thị Bình" — khối **"Phỏng vấn & đi làm"** đã có sẵn 3 lần hẹn PV: **Lần 1** Bùng PV, **Lần 2** Đỗ PV + Không đi làm (kèm lý do), **Lần 3** Đã hẹn PV (sắp tới) — minh họa đúng tiêu chí "bùng PV vẫn hẹn lại được, giữ nguyên lịch sử cả 2 lần".
+2. Bấm **Đặt lịch PV** → nhập công ty đối tác + ngày giờ hẹn → **Đặt lịch** → lần hẹn mới xuất hiện ngay trong danh sách với số thứ tự tăng dần (attempt_no tự tăng).
+3. Bấm **Cập nhật kết quả** trên lần hẹn 3 (Đã hẹn PV) → đổi sang **Đỗ PV** → chọn kết quả đi làm là **Không đi làm** nhưng để trống lý do → **Cập nhật** → hệ thống báo lỗi bắt buộc nhập lý do. Nhập lý do → cập nhật lại → thành công.
+4. Vào **Ứng viên** → thấy 2 cột mới **Trạng thái PV** và **Trạng thái đi làm** phản ánh đúng lần hẹn mới nhất; thử lọc theo "Trạng thái PV"/"Trạng thái đi làm"/"Công ty đối tác" trong khối bộ lọc.
+5. Bấm **Đặt lịch gọi lại** trên ứng viên bất kỳ đang phụ trách → chọn thời điểm → xác nhận.
+6. Vào menu **Lịch hẹn** → thấy toàn bộ lịch hẹn PV + lịch gọi lại của "Trần Thị Bình" trong khoảng ngày mặc định (7 ngày trước → 30 ngày sau), nhóm theo từng ngày. Bấm vào 1 dòng → mở thẳng màn Chi tiết ứng viên tương ứng. Thử đổi khoảng ngày rồi bấm **Lọc**.
+7. Bấm **Đặt lịch hẹn PV mới** ngay trên trang **Lịch hẹn** (không cần vào Candidate trước) → tìm ứng viên theo tên/SĐT → chọn → nhập công ty đối tác + ngày giờ → xác nhận, không cần mở màn Chi tiết ứng viên trước.
+8. Đăng nhập `sale_demo_a` / `123456` → vào **Lịch hẹn** → chỉ thấy lịch hẹn của ứng viên mình phụ trách ("Nguyễn Văn An"), không thấy lịch của `sale_demo_b`. Đăng nhập `mkt_demo` / `123456` → menu không có mục **Lịch hẹn** (MKT chỉ xem dữ liệu ứng viên, không xử lý pipeline theo `docs/10` Mục 6).
+
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -199,7 +212,7 @@ npm run lint
 npm run build       # build thử để chắc chắn không lỗi
 ```
 
-> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
+> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
 
 ---
 
@@ -218,4 +231,8 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0, 1, 2 và 3 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú). Các nghiệp vụ tiếp theo (lịch phỏng vấn/lịch gọi lại, cột chăm sóc, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo `docs/14-roadmap.md`, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+Phase 0, 1, 2, 3 và 4 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar). Đây là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn. Các nghiệp vụ tiếp theo (cột chăm sóc tự động, tự động phân chia, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo roadmap, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+
+### Ghi chú khác biệt so với `docs/12-ui-design.md` Mục 7 (Interview/Calendar)
+
+Tài liệu UI mô tả màn Lịch hẹn có thêm chế độ xem "Lịch (ngày/tuần/tháng)" bên cạnh agenda, và bảng agenda có thêm cột "Sale phụ trách"/"Trạng thái PV". API `GET /calendar` đã chốt tại `docs/13-api-design.md` (Design Freeze) chỉ trả về loại sự kiện, thời gian và Candidate rút gọn (id, tên, SĐT) — không có 2 trường trên, và tài liệu UI đã tự xác nhận đây "không phải 1 tập dữ liệu riêng", chỉ là góc nhìn theo lịch. Bản hiện tại chỉ hiện thực chế độ xem **danh sách agenda** (được tài liệu UI cho phép là 1 trong 2 chế độ hợp lệ) và không hiện 2 cột nói trên, để không tự thêm trường dữ liệu ngoài API đã chốt. Cột `current_interview_status`/`current_employment_status`/`current_partner_company_name` trên đối tượng `Candidate` cũng là bổ sung hợp lý ngoài danh sách trường liệt kê tại Mục 0.1, `docs/13` — các trường này đã tồn tại trong `leads` từ Design Review (Mục 7.2, `docs/11`) và được chính tiêu chí hoàn thành của Phase 4 trong roadmap yêu cầu ("mỗi bước phản ánh đúng trạng thái hiện tại trên danh sách Candidate nhờ cột denormalize"), nên được xem là tài liệu 13 liệt kê thiếu chứ không phải chủ đích loại trừ.

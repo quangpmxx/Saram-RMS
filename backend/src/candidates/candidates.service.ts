@@ -78,6 +78,24 @@ export class CandidatesService {
         lte: query.date_to ? new Date(query.date_to) : undefined,
       };
     }
+    if (query.call_status_id) {
+      where.callStatusId = query.call_status_id;
+    }
+    if (query.call_result_id) {
+      where.callResultId = query.call_result_id;
+    }
+    if (query.interview_status_id) {
+      where.currentInterviewStatusId = query.interview_status_id;
+    }
+    if (query.employment_status_id) {
+      where.currentEmploymentStatusId = query.employment_status_id;
+    }
+    if (query.partner_company_name) {
+      where.currentPartnerCompanyName = {
+        contains: query.partner_company_name,
+        mode: 'insensitive',
+      };
+    }
 
     const [total, leads] = await this.prisma.$transaction([
       this.prisma.lead.count({ where }),

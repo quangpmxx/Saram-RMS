@@ -74,6 +74,9 @@ export interface Candidate {
   assignment_method: string | null;
   call_status: NamedRef | null;
   call_result: NamedRef | null;
+  current_interview_status: NamedRef | null;
+  current_employment_status: NamedRef | null;
+  current_partner_company_name: string | null;
   is_held: boolean;
   held_by: NamedRef | null;
   held_at: string | null;
@@ -169,4 +172,38 @@ export interface Note {
   call_result: NamedRef | null;
   created_at: string;
   is_deleted: boolean;
+}
+
+// ── Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar ────────────────────
+
+/** Đối tượng "Interview" — Mục 0.1, docs/13-api-design.md. */
+export interface Interview {
+  id: string;
+  lead_id: string;
+  attempt_no: number;
+  partner_company_name: string;
+  scheduled_at: string;
+  status: NamedRef;
+  employment_status: NamedRef | null;
+  employment_reason: string | null;
+  created_by: NamedRef;
+  created_at: string;
+}
+
+/** Đối tượng "Callback" — Mục 0.1, docs/13-api-design.md. */
+export interface Callback {
+  id: string;
+  lead_id: string;
+  scheduled_at: string;
+  is_completed: boolean;
+  created_by: NamedRef;
+  created_at: string;
+}
+
+/** GET /calendar — Mục 7, docs/13-api-design.md. */
+export interface CalendarEvent {
+  type: "interview" | "callback";
+  id: string;
+  scheduled_at: string;
+  candidate: { id: string; full_name: string; phone_number: string };
 }

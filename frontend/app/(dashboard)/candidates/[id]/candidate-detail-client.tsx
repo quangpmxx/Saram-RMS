@@ -3,15 +3,24 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Clock, MessageSquarePlus, Phone, PhoneCall, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  CalendarPlus,
+  Clock,
+  MessageSquarePlus,
+  Phone,
+  PhoneCall,
+  Trash2,
+} from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { AccountRole, Candidate, Note, StatusCatalogItem } from "@/lib/types";
+import type { AccountRole, Candidate, Interview, Note, StatusCatalogItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Select, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
 
@@ -35,16 +44,22 @@ function formatDateTime(value: string): string {
 export function CandidateDetailClient({
   initialCandidate,
   initialNotes,
+  initialInterviews,
   callStatuses,
   callResults,
+  interviewStatuses,
+  employmentStatuses,
   currentUserId,
   currentUserRole,
   currentUserTeamId,
 }: {
   initialCandidate: Candidate;
   initialNotes: Note[];
+  initialInterviews: Interview[];
   callStatuses: StatusCatalogItem[];
   callResults: StatusCatalogItem[];
+  interviewStatuses: StatusCatalogItem[];
+  employmentStatuses: StatusCatalogItem[];
   currentUserId: string;
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
@@ -52,18 +67,33 @@ export function CandidateDetailClient({
   const router = useRouter();
   const [candidate, setCandidate] = useState(initialCandidate);
   const [notes, setNotes] = useState(initialNotes);
+  const [interviews, setInterviews] = useState(initialInterviews);
   const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
+  const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
+  const [updatingInterview, setUpdatingInterview] = useState<Interview | null>(null);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
 
   const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   const canDeleteNote = (note: Note) => currentUserRole === "sale" && note.created_by.id === currentUserId;
+  const sortedInterviews = [...interviews].sort((a, b) => b.attempt_no - a.attempt_no);
 
   async function refreshNotes() {
     const result = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
     setNotes(result);
+  }
+
+  async function refreshInterviews() {
+    const result = await clientApi<Interview[]>(`/candidate/${candidate.id}/interview`);
+    setInterviews(result);
+  }
+
+  async function refreshCandidate() {
+    const result = await clientApi<Candidate>(`/candidate/${candidate.id}`);
+    setCandidate(result);
   }
 
   async function handleDeleteNote(note: Note) {
@@ -175,6 +205,79 @@ export function CandidateDetailClient({
         </Card>
       </div>
 
+      <Card className="mb-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Phỏng vấn & đi làm</p>
+          {canUpdate && (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setIsCallbackModalOpen(true)}>
+                <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+                Đặt lịch gọi lại
+              </Button>
+              <Button type="button" size="sm" onClick={() => setIsInterviewModalOpen(true)}>
+                <CalendarPlus className="h-3.5 w-3.5" strokeWidth={2} />
+                Đặt lịch PV
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Trạng thái PV hiện tại</span>
+            {candidate.current_interview_status ? (
+              <Badge variant="info">{candidate.current_interview_status.name}</Badge>
+            ) : (
+              <Badge variant="neutral">Chưa hẹn PV</Badge>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Trạng thái đi làm</span>
+            {candidate.current_employment_status ? (
+              <Badge variant="accent">{candidate.current_employment_status.name}</Badge>
+            ) : (
+              <Badge variant="neutral">Chưa có</Badge>
+            )}
+          </div>
+          {candidate.current_partner_company_name && (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Công ty đối tác gần nhất</span>
+              <span className="font-medium text-slate-800">{candidate.current_partner_company_name}</span>
+            </div>
+          )}
+        </div>
+
+        {sortedInterviews.length > 0 && (
+          <ul className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3">
+            {sortedInterviews.map((interview) => (
+              <li
+                key={interview.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-medium text-slate-700">Lần {interview.attempt_no}</span>
+                  <span className="text-slate-500">{interview.partner_company_name}</span>
+                  <span className="text-slate-400">·</span>
+                  <span className="text-slate-500">{formatDateTime(interview.scheduled_at)}</span>
+                  <Badge variant="info">{interview.status.name}</Badge>
+                  {interview.employment_status && (
+                    <Badge variant="accent">{interview.employment_status.name}</Badge>
+                  )}
+                  {interview.employment_reason && (
+                    <span className="text-slate-500 italic">— {interview.employment_reason}</span>
+                  )}
+                </div>
+                {canUpdate && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => setUpdatingInterview(interview)}>
+                    Cập nhật kết quả
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 p-4">
           <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
@@ -243,6 +346,45 @@ export function CandidateDetailClient({
             setIsNoteModalOpen(false);
             await refreshNotes();
             setBanner({ type: "success", text: "Đã thêm ghi chú" });
+          }}
+        />
+      )}
+
+      {isInterviewModalOpen && (
+        <ScheduleInterviewModal
+          candidateId={candidate.id}
+          onClose={() => setIsInterviewModalOpen(false)}
+          onCreated={async () => {
+            setIsInterviewModalOpen(false);
+            await Promise.all([refreshInterviews(), refreshCandidate()]);
+            router.refresh();
+            setBanner({ type: "success", text: "Đã đặt lịch hẹn phỏng vấn" });
+          }}
+        />
+      )}
+
+      {updatingInterview && (
+        <UpdateInterviewModal
+          interview={updatingInterview}
+          interviewStatuses={interviewStatuses}
+          employmentStatuses={employmentStatuses}
+          onClose={() => setUpdatingInterview(null)}
+          onUpdated={async () => {
+            setUpdatingInterview(null);
+            await Promise.all([refreshInterviews(), refreshCandidate()]);
+            router.refresh();
+            setBanner({ type: "success", text: "Đã cập nhật kết quả phỏng vấn" });
+          }}
+        />
+      )}
+
+      {isCallbackModalOpen && (
+        <ScheduleCallbackModal
+          candidateId={candidate.id}
+          onClose={() => setIsCallbackModalOpen(false)}
+          onCreated={() => {
+            setIsCallbackModalOpen(false);
+            setBanner({ type: "success", text: "Đã đặt lịch gọi lại" });
           }}
         />
       )}
@@ -394,6 +536,271 @@ function AddNoteModal({
             onChange={(event) => setContent(event.target.value)}
             rows={4}
             placeholder="Kết quả cuộc gọi, thông tin trao đổi với ứng viên..."
+            autoFocus
+          />
+        </Field>
+
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ScheduleInterviewModal({
+  candidateId,
+  onClose,
+  onCreated,
+}: {
+  candidateId: string;
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const [partnerCompanyName, setPartnerCompanyName] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (!partnerCompanyName.trim() || !scheduledAt) {
+      setError("Vui lòng nhập đầy đủ công ty đối tác và ngày giờ hẹn");
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await clientApi(`/candidate/${candidateId}/interview`, {
+        method: "POST",
+        body: JSON.stringify({
+          partner_company_name: partnerCompanyName,
+          scheduled_at: new Date(scheduledAt).toISOString(),
+        }),
+      });
+      await onCreated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Đặt lịch hẹn phỏng vấn"
+      description="Hẹn PV mới — kể cả trường hợp hẹn lại sau khi bùng PV, hệ thống tự lưu lại lịch sử các lần hẹn."
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+            {isSubmitting ? "Đang lưu..." : "Đặt lịch"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Công ty đối tác (nhà máy) hẹn PV">
+          <Input
+            value={partnerCompanyName}
+            onChange={(event) => setPartnerCompanyName(event.target.value)}
+            placeholder="Nhập tên công ty đối tác"
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Ngày giờ hẹn">
+          <Input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(event) => setScheduledAt(event.target.value)}
+          />
+        </Field>
+
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function UpdateInterviewModal({
+  interview,
+  interviewStatuses,
+  employmentStatuses,
+  onClose,
+  onUpdated,
+}: {
+  interview: Interview;
+  interviewStatuses: StatusCatalogItem[];
+  employmentStatuses: StatusCatalogItem[];
+  onClose: () => void;
+  onUpdated: () => Promise<void>;
+}) {
+  const [statusId, setStatusId] = useState(interview.status.id);
+  const [employmentStatusId, setEmploymentStatusId] = useState(interview.employment_status?.id ?? "");
+  const [employmentReason, setEmploymentReason] = useState(interview.employment_reason ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedStatus = interviewStatuses.find((status) => status.id === statusId);
+  const isPassed = selectedStatus?.code === "PASSED";
+  const selectedEmploymentStatus = employmentStatuses.find((status) => status.id === employmentStatusId);
+  const isNotEmployed = selectedEmploymentStatus?.code === "NOT_EMPLOYED";
+
+  async function handleSubmit() {
+    if (isNotEmployed && !employmentReason.trim()) {
+      setError('Bắt buộc nhập lý do khi ghi nhận "Không đi làm"');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await clientApi(`/interview/${interview.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status_id: statusId,
+          employment_status_id: isPassed && employmentStatusId ? employmentStatusId : undefined,
+          employment_reason: isPassed && employmentStatusId ? employmentReason || undefined : undefined,
+        }),
+      });
+      await onUpdated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Cập nhật kết quả PV — Lần ${interview.attempt_no}`}
+      description={`${interview.partner_company_name} · ${formatDateTime(interview.scheduled_at)}`}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+            {isSubmitting ? "Đang lưu..." : "Cập nhật"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Trạng thái phỏng vấn">
+          <Select
+            value={statusId}
+            onChange={(event) => {
+              setStatusId(event.target.value);
+              setEmploymentStatusId("");
+              setEmploymentReason("");
+            }}
+          >
+            {interviewStatuses.map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {isPassed && (
+          <>
+            <Field label="Kết quả đi làm" hint="Chỉ áp dụng khi trạng thái là Đỗ PV">
+              <Select value={employmentStatusId} onChange={(event) => setEmploymentStatusId(event.target.value)}>
+                <option value="">— Chưa cập nhật —</option>
+                {employmentStatuses.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            {isNotEmployed && (
+              <Field label="Lý do không đi làm">
+                <Textarea
+                  value={employmentReason}
+                  onChange={(event) => setEmploymentReason(event.target.value)}
+                  rows={3}
+                  placeholder="Nhập lý do ứng viên không đi làm dù đã đỗ phỏng vấn"
+                />
+              </Field>
+            )}
+          </>
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ScheduleCallbackModal({
+  candidateId,
+  onClose,
+  onCreated,
+}: {
+  candidateId: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (!scheduledAt) {
+      setError("Vui lòng chọn thời điểm cần gọi lại");
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await clientApi(`/candidate/${candidateId}/callback`, {
+        method: "POST",
+        body: JSON.stringify({ scheduled_at: new Date(scheduledAt).toISOString() }),
+      });
+      onCreated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Đặt lịch gọi lại"
+      description="Lịch gọi lại sẽ xuất hiện trên màn hình Lịch hẹn."
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
+            {isSubmitting ? "Đang lưu..." : "Đặt lịch"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Thời điểm cần gọi lại">
+          <Input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(event) => setScheduledAt(event.target.value)}
             autoFocus
           />
         </Field>

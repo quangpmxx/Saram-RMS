@@ -24,6 +24,8 @@ import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
+import { CreateInterviewDto } from './dto/create-interview.dto';
+import { CreateCallbackDto } from './dto/create-callback.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -180,5 +182,31 @@ export class CandidatesController {
   ) {
     await this.pipelineService.deleteNote(id, noteId, user);
     return { message: 'Đã xóa ghi chú' };
+  }
+
+  @Post(':id/interview')
+  createInterview(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateInterviewDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.createInterview(id, dto, user);
+  }
+
+  @Get(':id/interview')
+  listInterviews(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.listInterviews(id, user);
+  }
+
+  @Post(':id/callback')
+  createCallback(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateCallbackDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.createCallback(id, dto, user);
   }
 }

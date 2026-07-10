@@ -27,6 +27,7 @@ import type {
   ImportJobStatus,
   LeadSource,
   PaginatedResult,
+  StatusCatalogItem,
   Team,
   TeamMember,
 } from "@/lib/types";
@@ -60,6 +61,9 @@ interface Filters {
   keyword: string;
   source_id: string;
   is_duplicate_flagged: boolean;
+  interview_status_id: string;
+  employment_status_id: string;
+  partner_company_name: string;
 }
 
 export function CandidatesClient({
@@ -70,6 +74,8 @@ export function CandidatesClient({
   currentUserRole,
   currentUserTeamId,
   initialTeamMembers,
+  interviewStatuses,
+  employmentStatuses,
 }: {
   initialCandidates: Candidate[];
   initialTotal: number;
@@ -78,13 +84,22 @@ export function CandidatesClient({
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
   initialTeamMembers: TeamMember[];
+  interviewStatuses: StatusCatalogItem[];
+  employmentStatuses: StatusCatalogItem[];
 }) {
   const router = useRouter();
   const [candidates, setCandidates] = useState(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("all");
-  const [filters, setFilters] = useState<Filters>({ keyword: "", source_id: "", is_duplicate_flagged: false });
+  const [filters, setFilters] = useState<Filters>({
+    keyword: "",
+    source_id: "",
+    is_duplicate_flagged: false,
+    interview_status_id: "",
+    employment_status_id: "",
+    partner_company_name: "",
+  });
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
   const [banner, setBanner] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -118,6 +133,9 @@ export function CandidatesClient({
     } else {
       if (filters.keyword) query.set("keyword", filters.keyword);
       if (filters.is_duplicate_flagged) query.set("is_duplicate_flagged", "true");
+      if (filters.interview_status_id) query.set("interview_status_id", filters.interview_status_id);
+      if (filters.employment_status_id) query.set("employment_status_id", filters.employment_status_id);
+      if (filters.partner_company_name) query.set("partner_company_name", filters.partner_company_name);
       result = await clientApi<PaginatedResult<Candidate>>(`/candidate?${query.toString()}`);
     }
 
@@ -258,13 +276,49 @@ export function CandidatesClient({
           </Select>
         </Field>
         {viewMode === "all" && (
-          <label className="flex items-center gap-2 pb-2.5 text-sm">
-            <Checkbox
-              checked={filters.is_duplicate_flagged}
-              onChange={(event) => setFilters((prev) => ({ ...prev, is_duplicate_flagged: event.target.checked }))}
-            />
-            <span className="font-medium text-slate-700">Chỉ hiện trùng SĐT</span>
-          </label>
+          <>
+            <Field label="Trạng thái PV">
+              <Select
+                value={filters.interview_status_id}
+                onChange={(event) => setFilters((prev) => ({ ...prev, interview_status_id: event.target.value }))}
+              >
+                <option value="">Tất cả</option>
+                {interviewStatuses.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Trạng thái đi làm">
+              <Select
+                value={filters.employment_status_id}
+                onChange={(event) => setFilters((prev) => ({ ...prev, employment_status_id: event.target.value }))}
+              >
+                <option value="">Tất cả</option>
+                {employmentStatuses.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Công ty đối tác">
+              <Input
+                value={filters.partner_company_name}
+                onChange={(event) => setFilters((prev) => ({ ...prev, partner_company_name: event.target.value }))}
+                onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
+                placeholder="Tên công ty đối tác đã hẹn"
+              />
+            </Field>
+            <label className="flex items-center gap-2 pb-2.5 text-sm">
+              <Checkbox
+                checked={filters.is_duplicate_flagged}
+                onChange={(event) => setFilters((prev) => ({ ...prev, is_duplicate_flagged: event.target.checked }))}
+              />
+              <span className="font-medium text-slate-700">Chỉ hiện trùng SĐT</span>
+            </label>
+          </>
         )}
         <Button type="button" variant="secondary" onClick={() => void handleSearch()}>
           <Search className="h-4 w-4" strokeWidth={2} />
@@ -294,6 +348,8 @@ export function CandidatesClient({
                 <th className="px-4 py-3">Ngày up</th>
                 <th className="px-4 py-3">MKT phụ trách</th>
                 <th className="px-4 py-3">Trạng thái</th>
+                <th className="px-4 py-3">Trạng thái PV</th>
+                <th className="px-4 py-3">Trạng thái đi làm</th>
                 <th className="px-4 py-3">Hành động</th>
               </tr>
             </thead>
@@ -327,6 +383,20 @@ export function CandidatesClient({
                       <Badge variant="success">Đã giao: {candidate.assigned_to.name}</Badge>
                     ) : (
                       <Badge variant="neutral">Chờ phân chia</Badge>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {candidate.current_interview_status ? (
+                      <Badge variant="info">{candidate.current_interview_status.name}</Badge>
+                    ) : (
+                      <Badge variant="neutral">Chưa hẹn PV</Badge>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {candidate.current_employment_status ? (
+                      <Badge variant="accent">{candidate.current_employment_status.name}</Badge>
+                    ) : (
+                      <Badge variant="neutral">Chưa có</Badge>
                     )}
                   </td>
                   <td className="px-4 py-3">

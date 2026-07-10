@@ -42,7 +42,11 @@ describe('Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú (e2e)', () =>
     prisma = app.get(PrismaService);
 
     // Dọn dữ liệu Phase 3 trước khi chạy — xóa theo đúng thứ tự khóa ngoại.
+    // interview_appointments/callback_schedules (từ Phase 4) cũng phải xóa
+    // trước leads vì cùng lý do PGlite không cascade tin cậy qua 2 cấp.
     await prisma.leadNote.deleteMany({});
+    await prisma.interviewAppointment.deleteMany({});
+    await prisma.callbackSchedule.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },

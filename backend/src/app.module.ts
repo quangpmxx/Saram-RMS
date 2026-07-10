@@ -11,6 +11,7 @@ import { TeamsModule } from './teams/teams.module';
 import { CandidatesModule } from './candidates/candidates.module';
 import { ImportsModule } from './imports/imports.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { CalendarModule } from './calendar/calendar.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -25,6 +26,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CandidatesModule,
     ImportsModule,
     CatalogModule,
+    CalendarModule,
   ],
   controllers: [AppController],
   providers: [

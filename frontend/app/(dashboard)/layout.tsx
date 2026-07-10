@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
   { href: "/", label: "Trang chủ", icon: "home", roles: ["admin", "manager", "leader", "mkt", "sale"] },
   { href: "/candidates", label: "Ứng viên", icon: "candidates", roles: ["admin", "manager", "mkt", "leader", "sale"] },
+  { href: "/calendar", label: "Lịch hẹn", icon: "calendar", roles: ["admin", "manager", "leader", "sale"] },
   { href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", roles: ["admin"] },
   { href: "/teams", label: "Quản lý nhóm", icon: "teams", roles: ["admin"] },
 ];

@@ -13,9 +13,11 @@ import {
  * Mục 4, docs/13-api-design.md — GET /candidate (query).
  * Phase 1: từ khóa, nguồn, khoảng ngày, cờ trùng lặp.
  * Phase 2: bổ sung assigned_to, team_id, is_pending (M9 — filter theo đúng
- * trường dữ liệu Phase 2 tạo ra: assigned_to/assigned_team_id). Các filter
- * theo trạng thái cuộc gọi/PV thuộc Phase 3-4, chưa có dữ liệu nên chưa
- * hiện thực ở đây.
+ * trường dữ liệu Phase 2 tạo ra: assigned_to/assigned_team_id).
+ * Phase 4: bổ sung call_status_id, call_result_id (còn thiếu từ Phase 3 —
+ * dữ liệu đã có từ Phase 3 nhưng chưa từng lọc được), interview_status_id,
+ * employment_status_id, partner_company_name — đúng danh sách query đã chốt
+ * tại Mục 4, docs/13.
  */
 export class ListCandidatesQueryDto {
   @IsOptional()
@@ -62,4 +64,24 @@ export class ListCandidatesQueryDto {
   @IsOptional()
   @IsBooleanString()
   is_pending?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  call_status_id?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  call_result_id?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  interview_status_id?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  employment_status_id?: string;
+
+  @IsOptional()
+  @IsString()
+  partner_company_name?: string;
 }
