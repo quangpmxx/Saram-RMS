@@ -556,7 +556,7 @@ export function CandidatesClient({
                 return (
                   <tr
                     key={candidate.id}
-                    className={`align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
+                    className={`h-[200px] align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
                   >
                     {viewMode === "pending" && canAssign && (
                       <td className="border-r border-slate-100 px-4 py-3">

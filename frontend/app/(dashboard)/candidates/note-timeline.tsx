@@ -8,23 +8,45 @@ const DEFAULT_PREVIEW_COUNT = 4;
 
 /**
  * Khung timeline dùng chung cho lịch sử ghi chú/cuộc gọi — dùng ở cả Card
- * "Lịch sử ghi chú/cuộc gọi" (trang Chi tiết ứng viên, có sửa/xóa) và cột
- * "Tình trạng cuộc gọi" (danh sách Ứng viên, chỉ xem). Component chỉ lo sắp
- * xếp mới→cũ, khung timeline (đường nối mờ + khoảng cách rõ ràng giữa các
- * note) và nút Xem thêm/Thu gọn khi lịch sử dài — nội dung từng note do nơi
- * gọi tự quyết định qua renderNote (2 nơi khác nhau về việc có nút sửa/xóa
- * hay không, và về kích thước hiển thị).
+ * "Lịch sử ghi chú/cuộc gọi" (trang Chi tiết ứng viên, có sửa/xóa, cỡ thường)
+ * và cột "Tình trạng cuộc gọi" (danh sách Ứng viên, chỉ xem, cỡ gọn —
+ * `compact` + `collapsedMaxHeight` để giữ chiều cao hàng cố định, tối ưu
+ * "xem được nhiều Data" thay vì đọc toàn bộ lịch sử ngay trên danh sách).
+ * Component chỉ lo sắp xếp mới→cũ, khung timeline (đường nối mờ + khoảng
+ * cách giữa các note) và nút Xem thêm/Thu gọn khi lịch sử dài — nội dung
+ * từng note do nơi gọi tự quyết định qua renderNote.
  */
 export function NoteTimeline({
   notes,
   previewCount = DEFAULT_PREVIEW_COUNT,
   renderNote,
+  compact = false,
+  collapsedMaxHeight,
+  expanded: expandedProp,
+  onToggleExpanded,
 }: {
   notes: Note[];
   previewCount?: number;
   renderNote: (note: Note) => ReactNode;
+  /** Cỡ gọn hơn cho danh sách: đường/chấm timeline nhỏ hơn, khoảng cách hẹp hơn. */
+  compact?: boolean;
+  /** Chỉ áp dụng khi đang thu gọn — cắt chiều cao vùng danh sách (nút Xem thêm luôn hiện đầy đủ, không bị cắt). */
+  collapsedMaxHeight?: number;
+  /** Điều khiển trạng thái mở rộng từ bên ngoài (vd. để bọc thêm khung giới hạn chiều cao ở nơi gọi) — bỏ qua thì tự quản lý nội bộ. */
+  expanded?: boolean;
+  onToggleExpanded?: (next: boolean) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isExpanded = expandedProp ?? internalExpanded;
+
+  function toggle() {
+    const next = !isExpanded;
+    if (onToggleExpanded) {
+      onToggleExpanded(next);
+    } else {
+      setInternalExpanded(next);
+    }
+  }
 
   const sorted = [...notes].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -35,24 +57,36 @@ export function NoteTimeline({
   const hasMore = sorted.length > previewCount;
   const visible = isExpanded ? sorted : sorted.slice(0, previewCount);
 
+  const gapClass = compact ? "gap-2" : "gap-3";
+  const itemPaddingClass = compact ? "pl-6" : "pl-8";
+  const lineOffsetClass = compact ? "left-3" : "left-[15px]";
+  const dotClass = compact
+    ? "top-1.5 left-[9px] h-1.5 w-1.5"
+    : "top-2 left-[11px] h-2 w-2";
+
   return (
     <div>
-      <ul className="relative flex flex-col gap-3">
-        {visible.length > 1 && (
-          <div className="absolute top-2 bottom-2 left-[15px] w-px bg-slate-200" aria-hidden="true" />
-        )}
-        {visible.map((note) => (
-          <li key={note.id} className="relative pl-8">
-            <span className="absolute top-2 left-[11px] h-2 w-2 rounded-full bg-brand-400 ring-4 ring-white" />
-            {renderNote(note)}
-          </li>
-        ))}
-      </ul>
+      <div
+        className={!isExpanded && collapsedMaxHeight ? "overflow-hidden" : undefined}
+        style={!isExpanded && collapsedMaxHeight ? { maxHeight: collapsedMaxHeight } : undefined}
+      >
+        <ul className={`relative flex flex-col ${gapClass}`}>
+          {visible.length > 1 && (
+            <div className={`absolute top-2 bottom-2 w-px bg-slate-200 ${lineOffsetClass}`} aria-hidden="true" />
+          )}
+          {visible.map((note) => (
+            <li key={note.id} className={`relative ${itemPaddingClass}`}>
+              <span className={`absolute rounded-full bg-brand-400 ring-4 ring-white ${dotClass}`} />
+              {renderNote(note)}
+            </li>
+          ))}
+        </ul>
+      </div>
       {hasMore && (
         <button
           type="button"
-          onClick={() => setIsExpanded((prev) => !prev)}
-          className="mt-2.5 flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+          onClick={toggle}
+          className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
         >
           {isExpanded ? (
             <>
@@ -62,7 +96,7 @@ export function NoteTimeline({
           ) : (
             <>
               <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-              Xem thêm ({sorted.length - previewCount})
+              Xem thêm (còn {sorted.length - previewCount} ghi chú)
             </>
           )}
         </button>
