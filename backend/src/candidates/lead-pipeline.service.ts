@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -37,6 +38,7 @@ import {
   CallbackResponseDto,
   toCallbackResponse,
 } from './dto/callback-response.dto';
+import { isLockActive, isVisibleInCarePool } from './care-pool.util';
 
 /**
  * Mục 6, docs/13-api-design.md (Phase 3 — Pipeline cuộc gọi & Lịch sử ghi
@@ -438,6 +440,34 @@ export class LeadPipelineService {
     if (currentUser.role === 'sale') {
       if (lead.assignedToId === currentUser.id) {
         return lead;
+      }
+      // Phase 5 — Mục 8, docs/09: Sale cũng xử lý được lead trong cột chăm
+      // sóc của nhóm mình, nhưng BẮT BUỘC đã chiếm khóa trước (POST
+      // /care-pool/:id/lock) — đúng quy tắc "chỉ 1 người xử lý 1 lead tại 1
+      // thời điểm" (Mục 10.1, docs/09).
+      if (isVisibleInCarePool(lead)) {
+        const account = await this.prisma.account.findUnique({
+          where: { id: currentUser.id },
+        });
+        if (account?.teamId && lead.assignedTeamId === account.teamId) {
+          if (
+            lead.carePoolLockedById === currentUser.id &&
+            isLockActive(lead)
+          ) {
+            return lead;
+          }
+          if (lead.carePoolLockedById && isLockActive(lead)) {
+            const locker = await this.prisma.account.findUnique({
+              where: { id: lead.carePoolLockedById },
+            });
+            throw new ConflictException(
+              `Sale ${locker?.fullName ?? 'khác'} đang xử lý ứng viên này, vui lòng thử lại sau`,
+            );
+          }
+          throw new ForbiddenException(
+            'Bạn cần chiếm khóa xử lý (mở lead trong Cột chăm sóc) trước khi thao tác',
+          );
+        }
       }
       throw new ForbiddenException(
         'Bạn chỉ được cập nhật ứng viên đang phụ trách',

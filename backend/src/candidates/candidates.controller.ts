@@ -15,6 +15,7 @@ import { CandidatesService } from './candidates.service';
 import { LeadPipelineService } from './lead-pipeline.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
+import { QuickEditCandidateDto } from './dto/quick-edit-candidate.dto';
 import { ListCandidatesQueryDto } from './dto/list-candidates-query.dto';
 import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -99,6 +100,21 @@ export class CandidatesController {
     return this.candidatesService.update(id, dto, user);
   }
 
+  /**
+   * UI Polish — API MỚI, không thuộc danh sách đã chốt tại Mục 4, docs/13.
+   * Cố ý KHÔNG gắn @Roles() và không qua assertCanModify() của update() —
+   * cho phép TẤT CẢ vai trò đã đăng nhập sửa nhanh Năm sinh/Địa chỉ trên
+   * mọi ứng viên, theo đúng yêu cầu trực tiếp người dùng (xem candidates.service.ts).
+   */
+  @Put(':id/quick-edit')
+  quickEdit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: QuickEditCandidateDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.quickEdit(id, dto, user);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   async remove(
@@ -107,6 +123,24 @@ export class CandidatesController {
   ) {
     await this.candidatesService.remove(id, user);
     return { message: 'Đã xóa ứng viên' };
+  }
+
+  @Post(':id/hold')
+  @HttpCode(HttpStatus.OK)
+  hold(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.hold(id, user);
+  }
+
+  @Delete(':id/hold')
+  @HttpCode(HttpStatus.OK)
+  unhold(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.unhold(id, user);
   }
 
   @Post(':id/assign')

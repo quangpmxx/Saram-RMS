@@ -207,3 +207,14 @@ export interface CalendarEvent {
   scheduled_at: string;
   candidate: { id: string; full_name: string; phone_number: string };
 }
+
+// ── Phase 5 — Cột chăm sóc tự động (Care Pool) ───────────────────────────
+
+/** GET/PUT /config — Mục 9, docs/13-api-design.md. */
+export interface SystemConfig {
+  key: string;
+  value: string;
+  description: string | null;
+  updated_by: NamedRef;
+  updated_at: string;
+}

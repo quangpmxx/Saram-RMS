@@ -17,6 +17,7 @@ import {
 } from './dto/candidate-response.dto';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
+import { QuickEditCandidateDto } from './dto/quick-edit-candidate.dto';
 import { ListCandidatesQueryDto } from './dto/list-candidates-query.dto';
 import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -25,6 +26,7 @@ import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { DuplicateWarning } from './dto/duplicate-warning.dto';
 import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
+import { isVisibleInCarePool } from './care-pool.util';
 
 /** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia/chuyển lead. */
 const ASSIGNMENT_ROLES = new Set(['admin', 'manager', 'leader']);
@@ -57,9 +59,22 @@ export class CandidatesService {
     });
 
     if (query.keyword) {
+      // UI Polish — mở rộng tìm kiếm sang cả nội dung ghi chú chăm sóc của
+      // Sale (lead_notes.content), ngoài tên/SĐT như tài liệu 13 mô tả gốc —
+      // theo yêu cầu trực tiếp của người dùng trong phiên làm việc. Chỉ khớp
+      // ghi chú CHƯA xóa (is_deleted=false), tương ứng đúng nội dung đang
+      // hiển thị thật cho người dùng, không tính ghi chú đã xóa mềm.
       where.OR = [
         { fullName: { contains: query.keyword, mode: 'insensitive' } },
         { phoneNumber: { contains: query.keyword } },
+        {
+          notes: {
+            some: {
+              content: { contains: query.keyword, mode: 'insensitive' },
+              isDeleted: false,
+            },
+          },
+        },
       ];
     }
     if (query.source_id) {
@@ -286,6 +301,156 @@ export class CandidatesService {
     }
 
     await this.logFieldChanges(currentUser.id, id, existing, dto);
+
+    const final = await this.prisma.lead.findUniqueOrThrow({
+      where: { id },
+      include: CANDIDATE_INCLUDE,
+    });
+    return toCandidateResponse(final);
+  }
+
+  /**
+   * UI Polish — PUT /candidate/:id/quick-edit: sửa nhanh Năm sinh/Địa chỉ
+   * ngay tại trang Chi tiết ứng viên. API MỚI theo yêu cầu trực tiếp người
+   * dùng trong phiên làm việc: KHÔNG áp dụng assertCanModify() (giới hạn
+   * theo nhóm/người phụ trách) — cố ý cho phép TẤT CẢ 5 vai trò đã đăng
+   * nhập (Admin/Quản lý/Leader/MKT/Sale) sửa 2 trường này trên MỌI ứng
+   * viên, khác hẳn phạm vi quyền đã đóng góp tại Mục 4, docs/13 cho
+   * PUT /candidate/:id — chỉ áp dụng cho đúng 2 trường birth_year/address,
+   * không mở thêm quyền sửa trường nào khác.
+   */
+  async quickEdit(
+    id: string,
+    dto: QuickEditCandidateDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const existing = await this.prisma.lead.findUnique({ where: { id } });
+    if (!existing || existing.deletedAt) {
+      throw new NotFoundException('Không tìm thấy ứng viên');
+    }
+
+    if (dto.birth_year !== undefined && dto.birth_year !== null) {
+      const currentYear = new Date().getFullYear();
+      if (dto.birth_year > currentYear) {
+        throw new UnprocessableEntityException(
+          'Năm sinh không được lớn hơn năm hiện tại',
+        );
+      }
+    }
+
+    const address =
+      dto.address !== undefined && dto.address !== null
+        ? dto.address.trim()
+        : dto.address;
+
+    const changes: Array<{
+      field: string;
+      oldValue: string | null;
+      newValue: string | null;
+    }> = [];
+    if (dto.birth_year !== undefined && dto.birth_year !== existing.birthYear) {
+      changes.push({
+        field: 'birth_year',
+        oldValue: existing.birthYear?.toString() ?? null,
+        newValue: dto.birth_year?.toString() ?? null,
+      });
+    }
+    if (dto.address !== undefined && address !== existing.address) {
+      changes.push({
+        field: 'address',
+        oldValue: existing.address,
+        newValue: address ?? null,
+      });
+    }
+
+    if (changes.length === 0) {
+      const unchanged = await this.prisma.lead.findUniqueOrThrow({
+        where: { id },
+        include: CANDIDATE_INCLUDE,
+      });
+      return toCandidateResponse(unchanged);
+    }
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: {
+        birthYear: dto.birth_year !== undefined ? dto.birth_year : undefined,
+        address: dto.address !== undefined ? address : undefined,
+      },
+    });
+
+    for (const change of changes) {
+      await this.auditLog.log({
+        accountId: currentUser.id,
+        actionType: 'update',
+        entityType: 'lead',
+        entityId: id,
+        fieldChanged: change.field,
+        oldValue: change.oldValue ?? undefined,
+        newValue: change.newValue ?? undefined,
+      });
+    }
+
+    const final = await this.prisma.lead.findUniqueOrThrow({
+      where: { id },
+      include: CANDIDATE_INCLUDE,
+    });
+    return toCandidateResponse(final);
+  }
+
+  /** Mục 6, docs/13: POST /candidate/:id/hold — Sale (chỉ với lead của mình). */
+  async hold(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    return this.setHold(id, true, currentUser);
+  }
+
+  /** Mục 6, docs/13: DELETE /candidate/:id/hold — Sale (chỉ với lead của mình). */
+  async unhold(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    return this.setHold(id, false, currentUser);
+  }
+
+  private async setHold(
+    id: string,
+    isHeld: boolean,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    if (currentUser.role !== 'sale') {
+      throw new ForbiddenException(
+        'Chỉ Sale mới được đánh dấu/bỏ đánh dấu giữ số',
+      );
+    }
+
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Không tìm thấy ứng viên');
+    }
+    if (lead.assignedToId !== currentUser.id) {
+      throw new ForbiddenException(
+        'Bạn chỉ được giữ số ứng viên đang phụ trách',
+      );
+    }
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: isHeld
+        ? { isHeld: true, heldById: currentUser.id, heldAt: new Date() }
+        : { isHeld: false, heldById: null, heldAt: null },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'hold',
+      entityType: 'lead',
+      entityId: id,
+      fieldChanged: 'is_held',
+      oldValue: lead.isHeld.toString(),
+      newValue: isHeld.toString(),
+    });
 
     const final = await this.prisma.lead.findUniqueOrThrow({
       where: { id },
@@ -637,8 +802,19 @@ export class CandidatesService {
       throw new ForbiddenException('Bạn chỉ được xem ứng viên trong nhóm mình');
     }
 
-    if (currentUser.role === 'sale' && lead.assignedToId === currentUser.id) {
-      return;
+    if (currentUser.role === 'sale') {
+      if (lead.assignedToId === currentUser.id) {
+        return;
+      }
+      // Phase 5 — Mục 8, docs/09: "Sale: lead của mình + cột chăm sóc nhóm
+      // mình". Lead đang ở cột chăm sóc (chưa bị Admin gỡ) vẫn xem được nếu
+      // cùng nhóm, dù không phải người phụ trách gốc.
+      if (isVisibleInCarePool(lead)) {
+        const teamId = await this.getOwnTeamId(currentUser.id);
+        if (teamId && lead.assignedTeamId === teamId) {
+          return;
+        }
+      }
     }
 
     throw new ForbiddenException('Bạn không có quyền xem ứng viên này');

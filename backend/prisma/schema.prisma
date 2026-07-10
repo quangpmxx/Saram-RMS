@@ -1,4 +1,4 @@
-// Prisma schema — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 (docs/14-roadmap.md)
+// Prisma schema — Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 (docs/14-roadmap.md)
 //
 // Phase 0: teams, accounts, sessions, audit_logs
 // Phase 1: lead_sources, status_catalog, leads, import_jobs
@@ -15,6 +15,12 @@
 // current_partner_company_name (đã tồn tại rỗng từ Phase 1, đồng bộ lại mỗi
 // khi có dòng interview_appointments mới/cập nhật, đúng lý do denormalize
 // đã ghi tại Mục 7.2, tài liệu 11).
+// Phase 5: bảng mới `system_configs` (Mục 2.15, tài liệu 11) + kích hoạt
+// logic đọc/ghi cho leads.is_held/held_by/held_at/entered_care_pool_at/
+// care_pool_locked_by/care_pool_locked_at/removed_from_care_pool_by/
+// removed_from_care_pool_at (đã tồn tại rỗng từ Phase 1) + 2 composite index
+// phục vụ truy vấn Cột chăm sóc theo nhóm và worker quét định kỳ, đúng theo
+// đề xuất index tại Mục 6, tài liệu 11 — Cột chăm sóc tự động (Care Pool).
 //
 // Cấu trúc cột bám sát tuyệt đối docs/11-database-design.md (Design Freeze).
 // Bảng `leads` được tạo với ĐẦY ĐỦ cột theo tài liệu 11 Mục 2.8 ngay từ Phase 1
@@ -131,6 +137,9 @@ model Account {
   // Phase 4 — quan hệ ngược từ InterviewAppointment/CallbackSchedule
   createdInterviews InterviewAppointment[] @relation("InterviewAppointmentCreatedBy")
   createdCallbacks  CallbackSchedule[]     @relation("CallbackScheduleCreatedBy")
+
+  // Phase 5 — quan hệ ngược từ SystemConfig
+  updatedConfigs SystemConfig[]
 
   @@map("accounts")
 }
@@ -298,6 +307,8 @@ model Lead {
   @@index([deletedAt])
   @@index([assignedToId])
   @@index([assignedTeamId])
+  @@index([assignedTeamId, enteredCarePoolAt])
+  @@index([isHeld, enteredCarePoolAt, lastActivityAt])
   @@map("leads")
 }
 
@@ -390,4 +401,21 @@ model CallbackSchedule {
   @@index([leadId])
   @@index([scheduledAt])
   @@map("callback_schedules")
+}
+
+// ── Phase 5 — Cột chăm sóc tự động (Care Pool) ───────────────────────────
+
+/// Mục 2.15, tài liệu 11 — Tham số cấu hình hệ thống (vd ngưỡng thời gian
+/// vào cột chăm sóc). Seed sẵn CARE_POOL_THRESHOLD_MINUTES="30" khi cài đặt.
+model SystemConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  configKey   String   @unique @map("config_key") @db.VarChar(100)
+  configValue String   @map("config_value") @db.VarChar(255)
+  description String?  @db.VarChar(255)
+  updatedById String   @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  updatedBy Account @relation(fields: [updatedById], references: [id])
+
+  @@map("system_configs")
 }

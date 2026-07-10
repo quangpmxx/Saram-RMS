@@ -65,8 +65,28 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.lead.deleteMany({});
+    // Xóa sessions + audit_logs trước accounts — nếu chạy lại bộ test này
+    // nhiều lần, các bản ghi từ lần chạy trước vẫn còn tham chiếu tới
+    // account cũ, xóa account trước sẽ vi phạm khóa ngoại (giống pattern ở
+    // phase2/phase3).
+    await prisma.session.deleteMany({
+      where: {
+        account: {
+          username: { in: ['phase1_mkt_a', 'phase1_mkt_b', 'phase1_manager'] },
+        },
+      },
+    });
+    await prisma.auditLog.deleteMany({
+      where: {
+        account: {
+          username: { in: ['phase1_mkt_a', 'phase1_mkt_b', 'phase1_manager'] },
+        },
+      },
+    });
     await prisma.account.deleteMany({
-      where: { username: { in: ['phase1_mkt_a', 'phase1_mkt_b'] } },
+      where: {
+        username: { in: ['phase1_mkt_a', 'phase1_mkt_b', 'phase1_manager'] },
+      },
     });
 
     for (const name of ['Facebook', 'TikTok', 'Zalo', 'Khác']) {
@@ -82,8 +102,6 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     zaloSourceId = (
       await prisma.leadSource.findUniqueOrThrow({ where: { name: 'Zalo' } })
     ).id;
-
-    await prisma.account.deleteMany({ where: { username: 'phase1_manager' } });
 
     const passwordHash = await hashPassword('123456');
     await prisma.account.create({
@@ -155,6 +173,79 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
       .expect(200);
     expect(listRes.body.items).toHaveLength(1);
     expect(listRes.body.items[0].full_name).toBe('Nguyễn Văn A');
+  });
+
+  it('UI Polish: keyword tìm được cả theo nội dung ghi chú chăm sóc (không phân biệt hoa/thường)', async () => {
+    const listRes = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: '0900000001' })
+      .expect(200);
+    const leadId = listRes.body.items[0].id as string;
+
+    await managerAgent
+      .post(`/candidate/${leadId}/note`)
+      .send({ content: 'Ứng viên muốn làm ở Goertek, đợi đủ tuổi.' })
+      .expect(201);
+
+    const byNoteKeyword = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: 'goertek' })
+      .expect(200);
+    expect(
+      byNoteKeyword.body.items.some((i: { id: string }) => i.id === leadId),
+    ).toBe(true);
+
+    const byPartialPhrase = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: 'đủ tuổi' })
+      .expect(200);
+    expect(
+      byPartialPhrase.body.items.some((i: { id: string }) => i.id === leadId),
+    ).toBe(true);
+
+    const noMatch = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: 'không tồn tại xyz' })
+      .expect(200);
+    expect(noMatch.body.items).toHaveLength(0);
+  });
+
+  it('UI Polish: ghi chú đã xóa mềm không còn khớp khi tìm theo keyword', async () => {
+    const listRes = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: '0900000001' })
+      .expect(200);
+    const leadId = listRes.body.items[0].id as string;
+
+    const noteRes = await managerAgent
+      .post(`/candidate/${leadId}/note`)
+      .send({ content: 'Ghi chú tạm sẽ bị xóa: từ khóa riêng biệt ABCXYZ' })
+      .expect(201);
+
+    const beforeDelete = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: 'ABCXYZ' })
+      .expect(200);
+    expect(
+      beforeDelete.body.items.some((i: { id: string }) => i.id === leadId),
+    ).toBe(true);
+
+    // Đánh dấu xóa mềm trực tiếp qua Prisma — DELETE /candidate/:id/note/:noteId
+    // chỉ cho phép chính Sale đã ghi tự xóa (Mục 6, docs/13), không phải mục
+    // tiêu của test này (chỉ cần kiểm tra truy vấn tìm kiếm loại đúng note
+    // đã xóa, không kiểm tra lại luồng phân quyền xóa — đã có ở phase3).
+    await prisma.leadNote.update({
+      where: { id: noteRes.body.id as string },
+      data: { isDeleted: true, deletedAt: new Date() },
+    });
+
+    const afterDelete = await mktAAgent
+      .get('/candidate')
+      .query({ keyword: 'ABCXYZ' })
+      .expect(200);
+    expect(
+      afterDelete.body.items.some((i: { id: string }) => i.id === leadId),
+    ).toBe(false);
   });
 
   it('chỉ MKT mới tạo được ứng viên mới — Quản lý bị chặn dù có toàn quyền xem', async () => {

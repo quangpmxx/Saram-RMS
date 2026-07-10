@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
+  Cake,
   ChevronLeft,
   ChevronRight,
+  MapPin,
   Pencil,
   Phone,
   Plus,
@@ -26,11 +28,13 @@ import type {
   DuplicateWarning,
   ImportJobStatus,
   LeadSource,
+  Note,
   PaginatedResult,
   StatusCatalogItem,
   Team,
   TeamMember,
 } from "@/lib/types";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
@@ -38,14 +42,21 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
-import { PageHeader } from "@/components/ui/page-header";
+import { useSetPageTitle } from "@/lib/page-title-context";
 import { DuplicateDetailBadge } from "./duplicate-detail-badge";
+import { ActionLink } from "./action-link";
+import { SourceBadge } from "./source-badge";
+import { CareNoteCell } from "./care-note-cell";
+import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
+import { CarePoolTable } from "./care-pool-table";
 
 const PAGE_SIZE = 50;
 /** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia/chuyển lead. */
 const ASSIGNMENT_ROLES: AccountRole[] = ["admin", "manager", "leader"];
 /** Mục 5, tài liệu 10 (S3): ai được xem "Chờ phân chia". */
 const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt"];
+/** Mục 5, docs/13: GET /care-pool — ai được xem "Cột chăm sóc" (MKT không có quyền). */
+const CARE_POOL_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale"];
 
 type ModalState =
   | { mode: "none" }
@@ -55,15 +66,73 @@ type ModalState =
   | { mode: "assign"; candidateIds: string[] }
   | { mode: "transfer"; candidate: Candidate };
 
-type ViewMode = "all" | "pending";
+type ViewMode = "all" | "pending" | "care_pool";
+
+type DatePreset = "" | "today" | "yesterday" | "7d" | "30d" | "custom";
 
 interface Filters {
   keyword: string;
   source_id: string;
-  is_duplicate_flagged: boolean;
+  team_sale: TeamSaleValue | null;
   interview_status_id: string;
   employment_status_id: string;
-  partner_company_name: string;
+  date_preset: DatePreset;
+  date_from: string;
+  date_to: string;
+}
+
+const DATE_PRESET_OPTIONS: Array<{ value: DatePreset; label: string }> = [
+  { value: "", label: "Tất cả" },
+  { value: "today", label: "Hôm nay" },
+  { value: "yesterday", label: "Hôm qua" },
+  { value: "7d", label: "7 ngày gần đây" },
+  { value: "30d", label: "30 ngày gần đây" },
+  { value: "custom", label: "Tùy chọn..." },
+];
+
+/** UI Polish — quy đổi preset khoảng ngày "Ngày lên số" sang mốc giờ chính xác đầu/cuối ngày (giờ địa phương). */
+function computeDatePresetRange(preset: DatePreset): { date_from: string; date_to: string } | null {
+  if (!preset || preset === "custom") return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+  if (preset === "today") {
+    return { date_from: startOfToday.toISOString(), date_to: endOfToday.toISOString() };
+  }
+  if (preset === "yesterday") {
+    const start = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+    const end = new Date(startOfToday.getTime() - 1);
+    return { date_from: start.toISOString(), date_to: end.toISOString() };
+  }
+  const daysBack = preset === "7d" ? 6 : 29;
+  const start = new Date(startOfToday.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  return { date_from: start.toISOString(), date_to: endOfToday.toISOString() };
+}
+
+/** UI Polish — màu badge trạng thái PV/đi làm dựa theo tên đã chốt (Mục 7, docs/09), thuần hiển thị. */
+function interviewStatusVariant(name: string): "success" | "danger" | "info" {
+  if (name.includes("Đỗ")) return "success";
+  if (name.includes("Bùng") || name.includes("Trượt")) return "danger";
+  return "info";
+}
+
+function employmentStatusVariant(name: string): "success" | "danger" {
+  return name.includes("Không") ? "danger" : "success";
+}
+
+function callResultVariant(name: string): "success" | "warning" | "neutral" {
+  if (name.includes("Không tiềm năng")) return "neutral";
+  if (name.includes("Tiềm năng")) return "success";
+  return "warning";
+}
+
+function formatUploadedAt(value: string): { date: string; time: string } {
+  const parsed = new Date(value);
+  return {
+    date: parsed.toLocaleDateString("vi-VN"),
+    time: parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+  };
 }
 
 export function CandidatesClient({
@@ -76,6 +145,8 @@ export function CandidatesClient({
   initialTeamMembers,
   interviewStatuses,
   employmentStatuses,
+  teams,
+  allSaleMembers,
 }: {
   initialCandidates: Candidate[];
   initialTotal: number;
@@ -86,7 +157,10 @@ export function CandidatesClient({
   initialTeamMembers: TeamMember[];
   interviewStatuses: StatusCatalogItem[];
   employmentStatuses: StatusCatalogItem[];
+  teams: Team[];
+  allSaleMembers: TeamMember[];
 }) {
+  const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
   const router = useRouter();
   const [candidates, setCandidates] = useState(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
@@ -95,19 +169,57 @@ export function CandidatesClient({
   const [filters, setFilters] = useState<Filters>({
     keyword: "",
     source_id: "",
-    is_duplicate_flagged: false,
+    team_sale: null,
     interview_status_id: "",
     employment_status_id: "",
-    partner_company_name: "",
+    date_preset: "",
+    date_from: "",
+    date_to: "",
   });
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
   const [banner, setBanner] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
+  const [latestNoteById, setLatestNoteById] = useState<Map<string, Note | null>>(new Map());
+
+  useSetPageTitle("Ứng viên", "Thu thập, tìm kiếm và quản lý dữ liệu ứng viên.");
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
+  const canViewCarePool = CARE_POOL_VIEW_ROLES.includes(currentUserRole);
+
+  /**
+   * UI Polish — "Tình trạng cuộc gọi" cần hiện nội dung ghi chú chăm sóc gần
+   * nhất, nhưng GET /candidate (danh sách) không trả về nội dung ghi chú
+   * (Mục 0.1, docs/13 — đối tượng Candidate không có trường note). Tái dùng
+   * đúng API đã có GET /candidate/:id/note cho từng dòng đang hiển thị,
+   * không thêm API mới.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.all(
+      candidates.map(async (candidate) => {
+        try {
+          const notes = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
+          const visible = notes.filter((note) => !note.is_deleted);
+          const latest = visible.length > 0 ? visible[visible.length - 1] : null;
+          return [candidate.id, latest] as const;
+        } catch {
+          return [candidate.id, null] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) {
+        setLatestNoteById(new Map(entries));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [candidates]);
 
   function canModify(candidate: Candidate): boolean {
     if (currentUserRole === "admin" || currentUserRole === "manager") return true;
@@ -130,12 +242,27 @@ export function CandidatesClient({
     let result: PaginatedResult<Candidate>;
     if (mode === "pending") {
       result = await clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
+    } else if (mode === "care_pool") {
+      // Mục 5, docs/13: GET /care-pool không nhận cùng bộ filter với /candidate
+      // (chỉ page/page_size/team_id) — dùng query riêng, không lẫn filters hiện tại.
+      const carePoolQuery = new URLSearchParams({ page: String(targetPage), page_size: String(PAGE_SIZE) });
+      result = await clientApi<PaginatedResult<Candidate>>(`/care-pool?${carePoolQuery.toString()}`);
     } else {
       if (filters.keyword) query.set("keyword", filters.keyword);
-      if (filters.is_duplicate_flagged) query.set("is_duplicate_flagged", "true");
+      if (filters.team_sale?.type === "team") query.set("team_id", filters.team_sale.id);
+      if (filters.team_sale?.type === "sale") query.set("assigned_to", filters.team_sale.id);
       if (filters.interview_status_id) query.set("interview_status_id", filters.interview_status_id);
       if (filters.employment_status_id) query.set("employment_status_id", filters.employment_status_id);
-      if (filters.partner_company_name) query.set("partner_company_name", filters.partner_company_name);
+      if (filters.date_preset === "custom") {
+        if (filters.date_from) query.set("date_from", new Date(filters.date_from).toISOString());
+        if (filters.date_to) query.set("date_to", new Date(`${filters.date_to}T23:59:59.999`).toISOString());
+      } else {
+        const range = computeDatePresetRange(filters.date_preset);
+        if (range) {
+          query.set("date_from", range.date_from);
+          query.set("date_to", range.date_to);
+        }
+      }
       result = await clientApi<PaginatedResult<Candidate>>(`/candidate?${query.toString()}`);
     }
 
@@ -190,30 +317,31 @@ export function CandidatesClient({
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <PageHeader
-        title="Ứng viên"
-        description="Thu thập, tìm kiếm và quản lý dữ liệu ứng viên."
-        actions={
-          currentUserRole === "mkt" ? (
-            <>
-              <Button type="button" variant="outline" onClick={() => setModal({ mode: "import" })}>
-                <Upload className="h-4 w-4" strokeWidth={2} />
-                Nhập từ Excel
-              </Button>
-              <Button type="button" onClick={() => setModal({ mode: "create" })}>
-                <Plus className="h-4 w-4" strokeWidth={2.5} />
-                Thêm ứng viên mới
-              </Button>
-            </>
-          ) : undefined
-        }
-      />
+    <div className="w-full">
+      <div className="mb-2 flex items-start justify-between gap-3 md:hidden">
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">Ứng viên</h1>
+          <p className="mt-0.5 text-xs text-slate-500">Thu thập, tìm kiếm và quản lý dữ liệu ứng viên.</p>
+        </div>
+      </div>
+
+      {currentUserRole === "mkt" && (
+        <div className="mb-2 flex justify-end gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "import" })}>
+            <Upload className="h-4 w-4" strokeWidth={2} />
+            Nhập từ Excel
+          </Button>
+          <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+            Thêm ứng viên mới
+          </Button>
+        </div>
+      )}
 
       {currentUserRole === "leader" && teamMembers.length > 0 && (
-        <Card className="mb-4 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <Users className="h-4 w-4 text-brand-600" strokeWidth={2} />
+        <Card className="mb-2 p-2.5">
+          <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-800">
+            <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
             Khối lượng công việc nhóm
           </div>
           <div className="flex flex-wrap gap-2">
@@ -228,42 +356,58 @@ export function CandidatesClient({
 
       {banner && <Banner type={banner.type} text={banner.text} />}
 
-      {canViewPending && (
-        <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
+      {(canViewPending || canViewCarePool) && (
+        <div className="mb-2 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
           <button
             type="button"
             onClick={() => void handleViewModeChange("all")}
-            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
+            className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
               viewMode === "all" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
             Tất cả
           </button>
-          <button
-            type="button"
-            onClick={() => void handleViewModeChange("pending")}
-            className={`rounded-md px-3 py-1.5 font-medium transition-colors ${
-              viewMode === "pending" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            Chờ phân chia
-          </button>
+          {canViewPending && (
+            <button
+              type="button"
+              onClick={() => void handleViewModeChange("pending")}
+              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                viewMode === "pending" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Chờ phân chia
+            </button>
+          )}
+          {canViewCarePool && (
+            <button
+              type="button"
+              onClick={() => void handleViewModeChange("care_pool")}
+              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                viewMode === "care_pool" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Cột chăm sóc
+            </button>
+          )}
         </div>
       )}
 
-      <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
+      {viewMode !== "care_pool" && (
+      <Card className="mb-2 flex flex-wrap items-end gap-2 p-2.5">
         {viewMode === "all" && (
-          <Field label="Tìm theo tên/SĐT" className="min-w-[200px] flex-1">
+          <Field uiSize="sm" label="Tìm theo tên, SĐT hoặc ghi chú" className="min-w-[200px] flex-1">
             <Input
+              uiSize="sm"
               value={filters.keyword}
               onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
               onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
-              placeholder="Tên hoặc số điện thoại"
+              placeholder="Tên, SĐT hoặc nội dung ghi chú chăm sóc"
             />
           </Field>
         )}
-        <Field label="Nguồn">
+        <Field uiSize="sm" label="Nguồn">
           <Select
+            uiSize="sm"
             value={filters.source_id}
             onChange={(event) => setFilters((prev) => ({ ...prev, source_id: event.target.value }))}
           >
@@ -277,8 +421,9 @@ export function CandidatesClient({
         </Field>
         {viewMode === "all" && (
           <>
-            <Field label="Trạng thái PV">
+            <Field uiSize="sm" label="Trạng thái PV">
               <Select
+                uiSize="sm"
                 value={filters.interview_status_id}
                 onChange={(event) => setFilters((prev) => ({ ...prev, interview_status_id: event.target.value }))}
               >
@@ -290,8 +435,9 @@ export function CandidatesClient({
                 ))}
               </Select>
             </Field>
-            <Field label="Trạng thái đi làm">
+            <Field uiSize="sm" label="Trạng thái đi làm">
               <Select
+                uiSize="sm"
                 value={filters.employment_status_id}
                 onChange={(event) => setFilters((prev) => ({ ...prev, employment_status_id: event.target.value }))}
               >
@@ -303,152 +449,243 @@ export function CandidatesClient({
                 ))}
               </Select>
             </Field>
-            <Field label="Công ty đối tác">
-              <Input
-                value={filters.partner_company_name}
-                onChange={(event) => setFilters((prev) => ({ ...prev, partner_company_name: event.target.value }))}
-                onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
-                placeholder="Tên công ty đối tác đã hẹn"
-              />
+            <Field uiSize="sm" label="Ngày lên số">
+              <Select
+                uiSize="sm"
+                value={filters.date_preset}
+                onChange={(event) =>
+                  setFilters((prev) => ({ ...prev, date_preset: event.target.value as DatePreset }))
+                }
+              >
+                {DATE_PRESET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </Field>
-            <label className="flex items-center gap-2 pb-2.5 text-sm">
-              <Checkbox
-                checked={filters.is_duplicate_flagged}
-                onChange={(event) => setFilters((prev) => ({ ...prev, is_duplicate_flagged: event.target.checked }))}
-              />
-              <span className="font-medium text-slate-700">Chỉ hiện trùng SĐT</span>
-            </label>
+            {filters.date_preset === "custom" && (
+              <>
+                <Field uiSize="sm" label="Từ ngày">
+                  <Input
+                    uiSize="sm"
+                    type="date"
+                    value={filters.date_from}
+                    onChange={(event) => setFilters((prev) => ({ ...prev, date_from: event.target.value }))}
+                  />
+                </Field>
+                <Field uiSize="sm" label="Đến ngày">
+                  <Input
+                    uiSize="sm"
+                    type="date"
+                    value={filters.date_to}
+                    onChange={(event) => setFilters((prev) => ({ ...prev, date_to: event.target.value }))}
+                  />
+                </Field>
+              </>
+            )}
+            {currentUserRole !== "sale" && currentUserRole !== "mkt" && (
+              <Field uiSize="sm" label="Nhóm / Nhân viên" className="w-40">
+                <TeamSaleFilter
+                  teams={teams}
+                  saleMembers={allSaleMembers}
+                  value={filters.team_sale}
+                  onChange={(value) => setFilters((prev) => ({ ...prev, team_sale: value }))}
+                />
+              </Field>
+            )}
           </>
         )}
-        <Button type="button" variant="secondary" onClick={() => void handleSearch()}>
+        <Button type="button" size="sm" variant="secondary" onClick={() => void handleSearch()}>
           <Search className="h-4 w-4" strokeWidth={2} />
           Tìm kiếm
         </Button>
       </Card>
+      )}
 
       {viewMode === "pending" && canAssign && selectedIds.size > 0 && (
-        <Card className="mb-4 flex items-center justify-between gap-3 p-3">
+        <Card className="mb-2 flex items-center justify-between gap-3 p-2.5">
           <span className="text-sm text-slate-600">Đã chọn {selectedIds.size} ứng viên</span>
-          <Button type="button" onClick={() => setModal({ mode: "assign", candidateIds: [...selectedIds] })}>
+          <Button type="button" size="sm" onClick={() => setModal({ mode: "assign", candidateIds: [...selectedIds] })}>
             <UserPlus className="h-4 w-4" strokeWidth={2} />
             Phân chia đã chọn
           </Button>
         </Card>
       )}
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
+      <Card className="overflow-hidden p-0">
+        {viewMode === "care_pool" ? (
+          <CarePoolTable
+            candidates={candidates}
+            currentUserId={currentUserId}
+            currentUserRole={currentUserRole}
+            teamNameById={teamNameById}
+            onChanged={() => refresh(page, "care_pool")}
+            onBanner={setBanner}
+          />
+        ) : (
+        <div className="max-h-[calc(100vh-180px)] overflow-auto">
+          <table className="w-full table-fixed border-collapse text-left text-sm">
+            <colgroup>
+              {viewMode === "pending" && canAssign && <col className="w-10" />}
+              <col className="w-[96px]" />
+              <col className="w-[210px]" />
+              <col className="w-[112px]" />
+              <col className="w-[150px]" />
+              <col />
+              <col className="w-[140px]" />
+              <col className="w-[132px]" />
+            </colgroup>
+            <thead className="sticky top-0 z-10 bg-brand-50/95 text-[11px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
-                {viewMode === "pending" && canAssign && <th className="w-10 px-4 py-3" />}
-                <th className="px-4 py-3">Tên lao động</th>
-                <th className="px-4 py-3">SĐT</th>
-                <th className="px-4 py-3">Nguồn</th>
-                <th className="px-4 py-3">Ngày up</th>
-                <th className="px-4 py-3">MKT phụ trách</th>
-                <th className="px-4 py-3">Trạng thái</th>
-                <th className="px-4 py-3">Trạng thái PV</th>
-                <th className="px-4 py-3">Trạng thái đi làm</th>
-                <th className="px-4 py-3">Hành động</th>
+                {viewMode === "pending" && canAssign && <th className="border-r border-slate-100 px-4 py-3" />}
+                <th className="border-r border-slate-100 px-2 py-3 text-center">Ngày lên số</th>
+                <th className="border-r border-slate-100 px-4 py-3">Data lao động</th>
+                <th className="border-r border-slate-100 px-3 py-3">Nguồn</th>
+                <th className="border-r border-slate-100 px-3 py-3">Nhân viên</th>
+                <th className="border-r border-slate-100 px-4 py-3">Tình trạng cuộc gọi</th>
+                <th className="border-r border-slate-100 px-3 py-3">Kết quả</th>
+                <th className="px-2 py-3">Hành động</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {candidates.map((candidate) => (
-                <tr key={candidate.id} className="transition-colors hover:bg-slate-50">
-                  {viewMode === "pending" && canAssign && (
-                    <td className="px-4 py-3">
-                      <Checkbox checked={selectedIds.has(candidate.id)} onChange={() => toggleSelected(candidate.id)} />
+              {candidates.map((candidate, index) => {
+                const uploadedAt = formatUploadedAt(candidate.uploaded_at);
+                const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
+                const latestNote = latestNoteById.has(candidate.id) ? (latestNoteById.get(candidate.id) ?? null) : undefined;
+
+                return (
+                  <tr
+                    key={candidate.id}
+                    className={`align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
+                  >
+                    {viewMode === "pending" && canAssign && (
+                      <td className="border-r border-slate-100 px-4 py-3">
+                        <Checkbox checked={selectedIds.has(candidate.id)} onChange={() => toggleSelected(candidate.id)} />
+                      </td>
+                    )}
+
+                    <td className="border-r border-slate-100 px-2 py-3 text-center whitespace-nowrap">
+                      <p className="font-medium text-slate-800">{uploadedAt.date}</p>
+                      <p className="text-xs text-slate-400">{uploadedAt.time}</p>
                     </td>
-                  )}
-                  <td className="px-4 py-3 font-medium text-slate-800">
-                    <Link href={`/candidates/${candidate.id}`} className="hover:text-brand-700 hover:underline">
-                      {candidate.full_name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-3.5 w-3.5 text-slate-300" strokeWidth={2} />
-                      {candidate.phone_number}
-                      {candidate.is_duplicate_flagged && <DuplicateDetailBadge candidateId={candidate.id} />}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">{candidate.source.name}</td>
-                  <td className="px-4 py-3 text-slate-500">
-                    {new Date(candidate.uploaded_at).toLocaleDateString("vi-VN")}
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">{candidate.uploaded_by.name}</td>
-                  <td className="px-4 py-3">
-                    {candidate.assigned_to ? (
-                      <Badge variant="success">Đã giao: {candidate.assigned_to.name}</Badge>
-                    ) : (
-                      <Badge variant="neutral">Chờ phân chia</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {candidate.current_interview_status ? (
-                      <Badge variant="info">{candidate.current_interview_status.name}</Badge>
-                    ) : (
-                      <Badge variant="neutral">Chưa hẹn PV</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {candidate.current_employment_status ? (
-                      <Badge variant="accent">{candidate.current_employment_status.name}</Badge>
-                    ) : (
-                      <Badge variant="neutral">Chưa có</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {canModify(candidate) && (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setModal({ mode: "edit", candidate })}>
-                          <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                          Sửa
-                        </Button>
-                      )}
-                      {canAssign && !candidate.assigned_to && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
+
+                    <td className="border-r border-slate-100 px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/candidates/${candidate.id}`}
+                          className="font-medium text-slate-800 hover:text-brand-700 hover:underline"
                         >
-                          <UserPlus className="h-3.5 w-3.5" strokeWidth={2} />
-                          Phân chia
-                        </Button>
+                          {candidate.full_name}
+                        </Link>
+                        {candidate.is_duplicate_flagged && <DuplicateDetailBadge candidateId={candidate.id} />}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 text-slate-500">
+                        <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+                        {candidate.phone_number}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 text-slate-500">
+                        <Cake className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+                        {candidate.birth_year ?? "--"}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 text-slate-500">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+                        <span className="break-words whitespace-normal">{candidate.address ?? "--"}</span>
+                      </div>
+                    </td>
+
+                    <td className="border-r border-slate-100 px-3 py-3">
+                      <SourceBadge name={candidate.source.name} />
+                    </td>
+
+                    <td className="border-r border-slate-100 px-3 py-3">
+                      {candidate.assigned_to ? (
+                        <div className="flex items-start gap-1.5">
+                          <Avatar fullName={candidate.assigned_to.name} className="h-7 w-7 shrink-0 text-[11px]" />
+                          <div className="min-w-0 leading-tight">
+                            <p className="font-medium break-words text-slate-800">{candidate.assigned_to.name}</p>
+                            {teamName && <p className="text-xs break-words text-slate-400">{teamName}</p>}
+                          </div>
+                        </div>
+                      ) : (
+                        <Badge variant="neutral">Chờ phân chia</Badge>
                       )}
-                      {canAssign && candidate.assigned_to && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setModal({ mode: "transfer", candidate })}
-                        >
-                          <ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />
-                          Chuyển
-                        </Button>
-                      )}
-                      {canDelete(candidate) && (
-                        <Button
-                          type="button"
-                          variant="danger"
-                          size="sm"
-                          disabled={pendingId === candidate.id}
-                          onClick={() => void handleDelete(candidate)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                          Xóa
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    <td className="border-r border-slate-100 px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {candidate.call_status ? (
+                          <Badge variant="info">{candidate.call_status.name}</Badge>
+                        ) : (
+                          <Badge variant="neutral">Chưa gọi</Badge>
+                        )}
+                        {candidate.call_result && (
+                          <Badge variant={callResultVariant(candidate.call_result.name)}>{candidate.call_result.name}</Badge>
+                        )}
+                      </div>
+                      <CareNoteCell note={latestNote} />
+                    </td>
+
+                    <td className="border-r border-slate-100 px-3 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        {candidate.current_interview_status ? (
+                          <Badge variant={interviewStatusVariant(candidate.current_interview_status.name)}>
+                            {candidate.current_interview_status.name}
+                          </Badge>
+                        ) : (
+                          <Badge variant="neutral">Chưa hẹn PV</Badge>
+                        )}
+                        {candidate.current_employment_status && (
+                          <Badge variant={employmentStatusVariant(candidate.current_employment_status.name)}>
+                            {candidate.current_employment_status.name}
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-2 py-3">
+                      <div className="flex flex-wrap items-center gap-0.5">
+                        {canModify(candidate) && (
+                          <ActionLink icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />} onClick={() => setModal({ mode: "edit", candidate })}>
+                            Sửa
+                          </ActionLink>
+                        )}
+                        {canAssign && !candidate.assigned_to && (
+                          <ActionLink
+                            icon={<UserPlus className="h-3.5 w-3.5" strokeWidth={2} />}
+                            onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
+                          >
+                            Phân chia
+                          </ActionLink>
+                        )}
+                        {canAssign && candidate.assigned_to && (
+                          <ActionLink
+                            icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
+                            onClick={() => setModal({ mode: "transfer", candidate })}
+                          >
+                            Chuyển
+                          </ActionLink>
+                        )}
+                        {canDelete(candidate) && (
+                          <ActionLink
+                            icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
+                            tone="danger"
+                            disabled={pendingId === candidate.id}
+                            onClick={() => void handleDelete(candidate)}
+                          >
+                            Xóa
+                          </ActionLink>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        {candidates.length === 0 && (
+        )}
+        {viewMode !== "care_pool" && candidates.length === 0 && (
           <EmptyState
             title={viewMode === "pending" ? "Không có ứng viên nào đang chờ phân chia" : "Chưa có ứng viên nào khớp bộ lọc"}
             icon={<Search className="h-5 w-5" strokeWidth={1.75} />}

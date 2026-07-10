@@ -18,6 +18,9 @@ import {
  * dữ liệu đã có từ Phase 3 nhưng chưa từng lọc được), interview_status_id,
  * employment_status_id, partner_company_name — đúng danh sách query đã chốt
  * tại Mục 4, docs/13.
+ * UI Polish: `keyword` mở rộng khớp thêm nội dung ghi chú chăm sóc
+ * (lead_notes.content) ngoài tên/SĐT — theo yêu cầu trực tiếp người dùng,
+ * vượt phạm vi mô tả gốc "tìm theo tên/SĐT" tại Mục 4, docs/13.
  */
 export class ListCandidatesQueryDto {
   @IsOptional()

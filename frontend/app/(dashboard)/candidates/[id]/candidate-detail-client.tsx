@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CalendarPlus,
   Clock,
+  Lock,
   MessageSquarePlus,
   Phone,
   PhoneCall,
@@ -23,6 +24,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { InlineEditField } from "./inline-edit-field";
 
 /** Mục 8, docs/09 + Mục 6, docs/13: ai được cập nhật cuộc gọi/thêm ghi chú (KHÔNG gồm MKT). */
 function canUpdatePipeline(
@@ -75,8 +77,11 @@ export function CandidateDetailClient({
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
   const [updatingInterview, setUpdatingInterview] = useState<Interview | null>(null);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
+  const [isHoldSubmitting, setIsHoldSubmitting] = useState(false);
 
   const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
+  // Mục 2.2, docs/12: "Đánh dấu/Bỏ đánh dấu giữ số" — hiện với Sale, trên lead thuộc quyền mình.
+  const canToggleHold = currentUserRole === "sale" && candidate.assigned_to?.id === currentUserId;
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   const canDeleteNote = (note: Note) => currentUserRole === "sale" && note.created_by.id === currentUserId;
   const sortedInterviews = [...interviews].sort((a, b) => b.attempt_no - a.attempt_no);
@@ -94,6 +99,53 @@ export function CandidateDetailClient({
   async function refreshCandidate() {
     const result = await clientApi<Candidate>(`/candidate/${candidate.id}`);
     setCandidate(result);
+  }
+
+  /**
+   * Mục 5, docs/13 + Mục 3, docs/12: Sale mở 1 lead đang ở Cột chăm sóc (không
+   * phải lead của mình) → tự động chiếm khóa xử lý, tránh 2 Sale cùng sửa 1
+   * lúc. Lead của chính Sale đó thì không cần khóa (đã có đường quyền riêng
+   * qua sở hữu lead — Mục "extend assertInScope/loadLeadForUpdate" ở backend).
+   */
+  useEffect(() => {
+    if (currentUserRole !== "sale") return;
+    if (!candidate.entered_care_pool_at) return;
+    if (candidate.assigned_to?.id === currentUserId) return;
+    let cancelled = false;
+    clientApi<Candidate>(`/care-pool/${candidate.id}/lock`, { method: "POST" })
+      .then((updated) => {
+        if (!cancelled) setCandidate(updated);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setBanner({
+          type: "error",
+          text: error instanceof ApiError ? error.message : "Không thể mở khóa xử lý ứng viên này",
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidate.id]);
+
+  async function handleToggleHold() {
+    if (!candidate.is_held) {
+      if (!window.confirm("Đánh dấu giữ số ứng viên này? Ứng viên sẽ không tự động chuyển vào cột chăm sóc khi bạn đang giữ số.")) return;
+    }
+    setIsHoldSubmitting(true);
+    setBanner(null);
+    try {
+      const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/hold`, {
+        method: candidate.is_held ? "DELETE" : "POST",
+      });
+      setCandidate(updated);
+      setBanner({ type: "success", text: updated.is_held ? "Đã đánh dấu giữ số" : "Đã bỏ đánh dấu giữ số" });
+    } catch (error) {
+      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+    } finally {
+      setIsHoldSubmitting(false);
+    }
   }
 
   async function handleDeleteNote(note: Note) {
@@ -122,11 +174,26 @@ export function CandidateDetailClient({
         title={candidate.full_name}
         description={`${candidate.phone_number} · Nguồn: ${candidate.source.name}`}
         actions={
-          canUpdate ? (
-            <Button type="button" onClick={() => setIsCallModalOpen(true)}>
-              <PhoneCall className="h-4 w-4" strokeWidth={2} />
-              Gọi ngay
-            </Button>
+          canUpdate || canToggleHold ? (
+            <div className="flex flex-wrap gap-2">
+              {canToggleHold && (
+                <Button
+                  type="button"
+                  variant={candidate.is_held ? "outline" : "secondary"}
+                  disabled={isHoldSubmitting}
+                  onClick={() => void handleToggleHold()}
+                >
+                  <Lock className="h-4 w-4" strokeWidth={2} />
+                  {isHoldSubmitting ? "Đang lưu..." : candidate.is_held ? "Bỏ giữ số" : "Giữ số"}
+                </Button>
+              )}
+              {canUpdate && (
+                <Button type="button" onClick={() => setIsCallModalOpen(true)}>
+                  <PhoneCall className="h-4 w-4" strokeWidth={2} />
+                  Gọi ngay
+                </Button>
+              )}
+            </div>
           ) : undefined
         }
       />
@@ -137,14 +204,43 @@ export function CandidateDetailClient({
         <Card className="p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Thông tin ứng viên</p>
           <dl className="mt-3 flex flex-col gap-2 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-slate-500">Năm sinh</dt>
-              <dd className="text-slate-800">{candidate.birth_year ?? "—"}</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-slate-500">Địa chỉ</dt>
-              <dd className="text-right text-slate-800">{candidate.address ?? "—"}</dd>
-            </div>
+            <InlineEditField
+              label="Năm sinh"
+              displayValue={candidate.birth_year?.toString() ?? "—"}
+              editValue={candidate.birth_year?.toString() ?? ""}
+              inputType="number"
+              onSave={async (value) => {
+                const trimmed = value.trim();
+                let birthYear: number | null = null;
+                if (trimmed) {
+                  birthYear = Number(trimmed);
+                  const currentYear = new Date().getFullYear();
+                  if (!Number.isInteger(birthYear) || birthYear < 1900 || birthYear > currentYear) {
+                    throw new Error("Năm sinh không hợp lệ (1900 – năm hiện tại)");
+                  }
+                }
+                const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
+                  method: "PUT",
+                  body: JSON.stringify({ birth_year: birthYear }),
+                });
+                setCandidate(updated);
+                setBanner({ type: "success", text: "Đã cập nhật năm sinh" });
+              }}
+            />
+            <InlineEditField
+              label="Địa chỉ"
+              displayValue={candidate.address ?? "—"}
+              editValue={candidate.address ?? ""}
+              onSave={async (value) => {
+                const address = value.trim() || null;
+                const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
+                  method: "PUT",
+                  body: JSON.stringify({ address }),
+                });
+                setCandidate(updated);
+                setBanner({ type: "success", text: "Đã cập nhật địa chỉ" });
+              }}
+            />
             <div className="flex justify-between gap-3">
               <dt className="text-slate-500">MKT nhập</dt>
               <dd className="text-slate-800">{candidate.uploaded_by.name}</dd>
@@ -157,6 +253,26 @@ export function CandidateDetailClient({
               <dt className="text-slate-500">Sale phụ trách</dt>
               <dd className="text-slate-800">{candidate.assigned_to?.name ?? "Chờ phân chia"}</dd>
             </div>
+            {candidate.is_held && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Giữ số</dt>
+                <dd>
+                  <Badge variant="warning">
+                    Đang giữ số{candidate.held_by ? ` — ${candidate.held_by.name}` : ""}
+                  </Badge>
+                </dd>
+              </div>
+            )}
+            {candidate.entered_care_pool_at && candidate.care_pool_locked_by && (
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Cột chăm sóc</dt>
+                <dd>
+                  <Badge variant="info">
+                    Đang xử lý — {candidate.care_pool_locked_by.id === currentUserId ? "Bạn" : candidate.care_pool_locked_by.name}
+                  </Badge>
+                </dd>
+              </div>
+            )}
             {candidate.mkt_note && (
               <div className="border-t border-slate-100 pt-2">
                 <dt className="text-slate-500">Ghi chú MKT</dt>

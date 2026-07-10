@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -12,12 +13,17 @@ import { CandidatesModule } from './candidates/candidates.module';
 import { ImportsModule } from './imports/imports.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { CarePoolModule } from './care-pool/care-pool.module';
+import { SystemConfigModule } from './system-config/system-config.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Phase 5 — bộ lập lịch/worker nền, bắt buộc cho Cột chăm sóc (M6, Mục
+    // 4.3, tài liệu 10) và tái sử dụng sau cho nhắc lịch Zalo (M11, Phase 8).
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuditLogModule,
     AuthModule,
@@ -27,6 +33,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     ImportsModule,
     CatalogModule,
     CalendarModule,
+    CarePoolModule,
+    SystemConfigModule,
   ],
   controllers: [AppController],
   providers: [

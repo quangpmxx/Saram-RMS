@@ -744,6 +744,111 @@ async function seedPhase4Sample(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dữ liệu mẫu Phase 5 để trải nghiệm ngay tab "Cột chăm sóc" + màn hình Cấu
+ * hình vận hành:
+ *  - Tham số CARE_POOL_THRESHOLD_MINUTES (mặc định 30 phút) — seed sẵn để
+ *    Admin có ít nhất 1 dòng sửa được trên màn hình Cấu hình (Mục 9.2,
+ *    docs/12-ui-design.md — màn hình này chỉ sửa tham số có sẵn, không có
+ *    nút "Thêm tham số").
+ *  - 1 ứng viên "Hoàng Văn Đạt" (0901000006) thuộc Sale Demo B, đã gọi 1 lần
+ *    rồi bị bỏ quên quá ngưỡng — set thẳng `enteredCarePoolAt` (thay vì chờ
+ *    CarePoolScannerService quét theo chu kỳ 2 phút) để thấy ngay trong tab
+ *    "Cột chăm sóc" mà không cần đợi worker chạy.
+ * Idempotent: bỏ qua nếu ứng viên/tham số đã tồn tại.
+ */
+async function seedPhase5Sample(prisma: PrismaClient): Promise<void> {
+  const admin = await prisma.account.findUnique({
+    where: { username: 'admin' },
+  });
+  if (admin) {
+    const existingConfig = await prisma.systemConfig.findUnique({
+      where: { configKey: 'CARE_POOL_THRESHOLD_MINUTES' },
+    });
+    // Nếu dòng cấu hình đang trỏ tới 1 tài khoản admin khác (vd: tài khoản
+    // tạm của bộ test e2e chạy chung DB dev — xem README mục cảnh báo
+    // test:e2e) thì gán lại về đúng tài khoản admin seed, KHÔNG đổi giá trị
+    // đang có (tránh ghi đè thay đổi thật của người dùng qua màn hình Cấu hình).
+    if (existingConfig && existingConfig.updatedById !== admin.id) {
+      await prisma.systemConfig.update({
+        where: { configKey: 'CARE_POOL_THRESHOLD_MINUTES' },
+        data: { updatedById: admin.id },
+      });
+    }
+    if (!existingConfig) {
+      await prisma.systemConfig.create({
+        data: {
+          configKey: 'CARE_POOL_THRESHOLD_MINUTES',
+          configValue: '30',
+          description:
+            'Ngưỡng thời gian (phút) trước khi lead bị bỏ quên tự động vào cột chăm sóc',
+          updatedById: admin.id,
+        },
+      });
+      console.log('Đã seed tham số cấu hình CARE_POOL_THRESHOLD_MINUTES = 30.');
+    }
+  }
+
+  const existingLead = await prisma.lead.findFirst({
+    where: { phoneNumber: '0901000006' },
+  });
+  if (existingLead) {
+    console.log('Dữ liệu mẫu Phase 5 (cột chăm sóc) đã tồn tại — bỏ qua.');
+    return;
+  }
+
+  const team = await prisma.team.findFirst({
+    where: { name: 'Nhóm Sale Demo' },
+  });
+  const saleB = await prisma.account.findUnique({
+    where: { username: 'sale_demo_b' },
+  });
+  const mktDemo = await prisma.account.findUnique({
+    where: { username: 'mkt_demo' },
+  });
+  const facebookSource = await prisma.leadSource.findUnique({
+    where: { name: 'Facebook' },
+  });
+  if (!team || !saleB || !mktDemo || !facebookSource) {
+    console.log(
+      'Chưa có nhóm/Sale/nguồn mẫu — bỏ qua seed dữ liệu Phase 5 (chạy lại sau khi các bước seed trước hoàn tất).',
+    );
+    return;
+  }
+  const calledStatus = await prisma.statusCatalog.findUniqueOrThrow({
+    where: { category_code: { category: 'call_status', code: 'CALLED' } },
+  });
+
+  const lead = await prisma.lead.create({
+    data: {
+      fullName: 'Hoàng Văn Đạt',
+      phoneNumber: '0901000006',
+      birthYear: 1997,
+      address: 'Long An',
+      sourceId: facebookSource.id,
+      uploadedById: mktDemo.id,
+      assignedToId: saleB.id,
+      assignedTeamId: team.id,
+      assignedAt: new Date(),
+      assignmentMethod: 'manual',
+      callStatusId: calledStatus.id,
+    },
+  });
+
+  const now = Date.now();
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: {
+      lastActivityAt: new Date(now - 45 * 60 * 1000),
+      enteredCarePoolAt: new Date(now - 15 * 60 * 1000),
+    },
+  });
+
+  console.log(
+    'Đã tạo ứng viên mẫu "Hoàng Văn Đạt" (Sale Demo B) đang ở Cột chăm sóc do bỏ quên quá ngưỡng.',
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -761,6 +866,7 @@ async function main() {
   await seedCrossTeamDuplicateSample(prisma);
   await seedPhase3Sample(prisma);
   await seedPhase4Sample(prisma);
+  await seedPhase5Sample(prisma);
 
   await prisma.$disconnect();
 }

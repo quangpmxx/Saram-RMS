@@ -1,6 +1,6 @@
 # Saram RMS — CRM Tuyển dụng / Cung ứng lao động
 
-Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú) và **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar) đã hoàn thành (xem `docs/14-roadmap.md`).
+Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1** (Thu thập dữ liệu ứng viên), **Phase 2** (Phân chia thủ công & Không gian Sale/Leader), **Phase 3** (Pipeline cuộc gọi & Lịch sử ghi chú), **Phase 4** (Lịch phỏng vấn, lịch gọi lại & Calendar) và **Phase 5** (Cột chăm sóc tự động & Cấu hình vận hành) đã hoàn thành (xem `docs/14-roadmap.md`).
 
 Đã có:
 - Đăng nhập, quản lý tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale), quản lý nhóm, phân quyền theo vai trò, ghi nhật ký thao tác (Phase 0).
@@ -8,8 +8,9 @@ Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1
 - **Chờ phân chia**, phân chia thủ công (từng lead hoặc hàng loạt), chuyển lead giữa các Sale trong nhóm, không gian "Lead của tôi" cho Sale, workload từng Sale cho Leader (Phase 2).
 - Màn hình **Chi tiết ứng viên**: Sale cập nhật tình trạng/kết quả cuộc gọi, ghi lịch sử ghi chú theo thời gian (không ghi đè), xóa mềm ghi chú (vẫn giữ lịch sử) — MKT xem được nhưng không sửa (Phase 3).
 - Đặt lịch hẹn phỏng vấn (kèm hẹn lại khi bùng PV, giữ nguyên lịch sử các lần hẹn), cập nhật kết quả PV/đi làm (đỗ/trượt, đi làm/không đi làm kèm lý do bắt buộc), đặt lịch gọi lại, màn hình **Lịch hẹn** dạng agenda tổng hợp cả 2 loại lịch (Phase 4).
+- **Cột chăm sóc**: lead bị bỏ quên quá ngưỡng thời gian (mặc định 30 phút, chỉnh được) tự động chuyển vào cột chăm sóc dùng chung của nhóm; Sale mở lead để xử lý sẽ tự chiếm khóa (khóa hết hạn sau 15 phút nếu quên giải phóng), Admin gỡ khỏi cột chăm sóc khi cần. Sale đánh dấu/bỏ đánh dấu **giữ số** ngay trên trang Chi tiết ứng viên để tạm dừng cơ chế tự động này. Màn hình **Cấu hình vận hành** (Admin) để chỉnh ngưỡng thời gian trên (Phase 5).
 
-Các nghiệp vụ tuyển dụng tiếp theo (cột chăm sóc, dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
+Các nghiệp vụ tuyển dụng tiếp theo (dashboard, thông báo Zalo...) sẽ có ở các Phase sau.
 
 ---
 
@@ -111,8 +112,10 @@ Nếu thành công, terminal in ra dòng dạng:
 Đã tạo 3 ứng viên trùng SĐT 0901000005 ở 2 nhóm khác nhau + 1 chưa phân chia để thử tooltip "Trùng SĐT".
 Đã cập nhật tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) cho ứng viên "Nguyễn Văn An".
 Đã tạo dữ liệu mẫu Phase 4: lịch hẹn PV cho "Nguyễn Văn An" (đã đi làm) và "Trần Thị Bình" (bùng PV → đỗ nhưng không đi làm → hẹn lại sắp tới) + 1 lịch gọi lại.
+Đã seed tham số cấu hình CARE_POOL_THRESHOLD_MINUTES = 30.
+Đã tạo ứng viên mẫu "Hoàng Văn Đạt" (Sale Demo B) đang ở Cột chăm sóc do bỏ quên quá ngưỡng.
 ```
-**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) và 1 lịch hẹn PV đã "Đỗ PV" + "Đã đi làm"; ứng viên "Trần Thị Bình" có sẵn 3 lần hẹn PV (bùng PV → đỗ nhưng không đi làm kèm lý do → hẹn lại sắp tới) + 1 lịch gọi lại — để thử ngay màn Chi tiết ứng viên và Lịch hẹn, xem mục 5.
+**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) và 1 lịch hẹn PV đã "Đỗ PV" + "Đã đi làm"; ứng viên "Trần Thị Bình" có sẵn 3 lần hẹn PV (bùng PV → đỗ nhưng không đi làm kèm lý do → hẹn lại sắp tới) + 1 lịch gọi lại — để thử ngay màn Chi tiết ứng viên và Lịch hẹn, xem mục 5; ứng viên "Hoàng Văn Đạt" (Sale Demo B) đã được đặt sẵn ở trạng thái bị bỏ quên quá ngưỡng (30 phút) nên xuất hiện ngay trong tab **Cột chăm sóc** mà không cần đợi worker quét — để thử ngay mục 5.7.
 
 ---
 
@@ -197,6 +200,18 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 7. Bấm **Đặt lịch hẹn PV mới** ngay trên trang **Lịch hẹn** (không cần vào Candidate trước) → tìm ứng viên theo tên/SĐT → chọn → nhập công ty đối tác + ngày giờ → xác nhận, không cần mở màn Chi tiết ứng viên trước.
 8. Đăng nhập `sale_demo_a` / `123456` → vào **Lịch hẹn** → chỉ thấy lịch hẹn của ứng viên mình phụ trách ("Nguyễn Văn An"), không thấy lịch của `sale_demo_b`. Đăng nhập `mkt_demo` / `123456` → menu không có mục **Lịch hẹn** (MKT chỉ xem dữ liệu ứng viên, không xử lý pipeline theo `docs/10` Mục 6).
 
+### 5.7. Cột chăm sóc tự động & Cấu hình vận hành (Phase 5)
+
+1. Đăng nhập `sale_demo_a` / `123456` (đồng đội cùng nhóm với `sale_demo_b`, không phụ trách lead dưới đây) → vào **Ứng viên** → bấm tab **Cột chăm sóc** → thấy sẵn ứng viên mẫu "Hoàng Văn Đạt" (do `sale_demo_b` phụ trách, đã gọi 1 lần rồi bị bỏ quên quá ngưỡng) với trạng thái khóa **"Đang rảnh"**.
+2. Bấm **Mở xử lý** trên dòng đó → hệ thống tự động chiếm khóa xử lý (không cần thao tác gì thêm) và mở màn Chi tiết ứng viên — thấy badge **"Cột chăm sóc — Đang xử lý: Bạn"**. Quay lại tab **Cột chăm sóc** → trạng thái khóa đã đổi thành **"Đang xử lý: Bạn"**.
+3. Đăng nhập bằng 1 tài khoản Sale khác cùng nhóm (vd tự tạo qua **Quản lý tài khoản**, hoặc dùng `sale_demo_c` sau khi Admin chuyển vào cùng nhóm) → vào **Cột chăm sóc** → thử bấm **Mở xử lý** trên lead đang bị `sale_demo_a` khóa → hệ thống từ chối (409, "Sale ... đang xử lý, vui lòng thử lại sau").
+4. Quay lại `sale_demo_a` → bấm **Giải phóng** trên dòng đó → khóa được gỡ, dòng trở lại **"Đang rảnh"**, Sale khác giờ mở xử lý được.
+5. Đăng nhập `sale_demo_b` / `123456` (chủ sở hữu lead) → mở ứng viên "Hoàng Văn Đạt" → bấm **Giữ số** → xác nhận popup cảnh báo → thấy badge **"Đang giữ số"** ngay trên trang. Vào lại tab **Cột chăm sóc** bằng tài khoản khác → lead này không còn tự động bị đẩy vào cột chăm sóc lần nữa dù bỏ quên tiếp (cơ chế quét bỏ qua lead đang giữ số). Bấm **Bỏ giữ số** để hủy.
+6. Đăng nhập `admin` / `123456` → vào **Cột chăm sóc** → thấy toàn bộ lead trong cột chăm sóc (không giới hạn theo nhóm, khác Sale/Leader). Bấm **Gỡ** trên 1 dòng → xác nhận → lead biến mất khỏi cột chăm sóc nhưng vẫn còn nguyên trong danh sách **Ứng viên** (không bị xóa).
+7. Đăng nhập `mkt_demo` / `123456` → menu **Ứng viên** không có tab **Cột chăm sóc** (MKT không có quyền xem, theo Mục 5 `docs/13`).
+8. Vẫn với `admin` → vào menu **Cấu hình vận hành** (chỉ Admin thấy mục này) → thấy tham số **"Ngưỡng thời gian vào Cột chăm sóc (phút)"** đang là `30`. Bấm **Sửa** → đổi thành 1 giá trị khác (vd `45`) → xác nhận popup cảnh báo ảnh hưởng toàn hệ thống → lưu thành công, cột "Cập nhật gần nhất" đổi theo. Đăng nhập bằng vai trò khác (Quản lý/Leader/Sale) → không thấy mục **Cấu hình vận hành** trên menu, và gọi thẳng API cũng bị từ chối (chỉ Admin).
+9. Cơ chế quét tự động chạy nền mỗi 2 phút (không cần thao tác gì) — 1 lead bất kỳ đã qua ít nhất 1 lần xử lý (có "Xử lý gần nhất") mà quá ngưỡng thời gian cấu hình ở bước 8, không bị giữ số, sẽ tự động xuất hiện trong **Cột chăm sóc** ở lần quét kế tiếp; lead hoàn toàn mới chưa xử lý lần nào thì không bao giờ tự vào cột chăm sóc dù để lâu.
+
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -212,7 +227,7 @@ npm run lint
 npm run build       # build thử để chắc chắn không lỗi
 ```
 
-> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
+> **⚠️ Cảnh báo quan trọng:** `npm run test:e2e` sẽ chạy `TRUNCATE` toàn bộ bảng `accounts`, `teams`, `sessions`, `audit_logs`, `leads`, `lead_notes`, `interview_appointments`, `callback_schedules`, `system_configs`, `import_jobs` trong database mà `backend/.env` đang trỏ tới, kể cả tài khoản Admin và toàn bộ dữ liệu mẫu đã seed (ứng viên, nhóm, ghi chú, Leader/Sale demo, tham số cấu hình) — đây là hành vi cố ý để test tự chạy lặp lại được, **không phải lỗi**. Nếu chạy lệnh này trên cùng database đang dùng để phát triển/thử nghiệm hàng ngày, phải **chạy lại `npm run seed` ngay sau đó** để có lại toàn bộ tài khoản/dữ liệu mẫu, nếu không đăng nhập sẽ báo "Tên đăng nhập hoặc mật khẩu không đúng" dù mọi thứ khác đều đúng. Tốt nhất nên dùng 1 database riêng cho việc chạy `test:e2e`, tách khỏi database phát triển hàng ngày.
 
 ---
 
@@ -231,7 +246,7 @@ npm run build       # build thử để chắc chắn không lỗi
 
 ## 8. Bước tiếp theo
 
-Phase 0, 1, 2, 3 và 4 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar). Đây là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn. Các nghiệp vụ tiếp theo (cột chăm sóc tự động, tự động phân chia, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo roadmap, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
+Phase 0, 1, 2, 3, 4 và 5 đã xong (Tài khoản & Nhóm; Thu thập dữ liệu ứng viên; Phân chia thủ công & Không gian Sale/Leader; Pipeline cuộc gọi & Lịch sử ghi chú; Lịch phỏng vấn/lịch gọi lại & Calendar; Cột chăm sóc tự động & Cấu hình vận hành). Đây là mốc **MVP nghiệp vụ đầy đủ** theo `docs/14-roadmap.md` — toàn bộ hành trình từ lead mới đến khi đi làm đã được số hóa trọn vẹn, kèm cơ chế tự động thu hồi lead bị bỏ quên. Các nghiệp vụ tiếp theo (tự động phân chia, dashboard, thông báo Zalo...) sẽ được xây dựng lần lượt theo roadmap, từng Phase độc lập và có thể dùng ngay sau khi hoàn thành.
 
 ### Ghi chú khác biệt so với `docs/12-ui-design.md` Mục 7 (Interview/Calendar)
 

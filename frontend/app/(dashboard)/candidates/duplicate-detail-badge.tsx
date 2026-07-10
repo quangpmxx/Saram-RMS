@@ -46,7 +46,7 @@ export function DuplicateDetailBadge({ candidateId }: { candidateId: string }) {
   return (
     <span ref={containerRef} className="relative inline-block">
       <Badge
-        variant="warning"
+        variant="accent"
         role="button"
         tabIndex={0}
         onMouseEnter={open}

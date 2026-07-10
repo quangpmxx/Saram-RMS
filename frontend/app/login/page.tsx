@@ -25,19 +25,19 @@ export default async function LoginPage() {
             <div className="flex flex-col items-center text-center">
               <Logo size="lg" showWordmark={false} />
               <p className="mt-3 text-base font-semibold text-brand-900 sm:text-lg">
-                Công ty TNHH Thương mại Dịch vụ Saram Vina
+                Công Ty TNHH Thương Mại Dịch Vụ Saram Vina
               </p>
             </div>
 
             <div className="mt-8">
               <h2 className="text-lg font-semibold text-slate-900">Đăng nhập</h2>
-              <p className="mt-1 text-sm text-slate-500">Hệ thống quản lý tuyển dụng nội bộ</p>
+              <p className="mt-1 text-sm text-slate-500">Hệ thống quản lý tuyển dụng lao động nội bộ</p>
               <LoginForm />
             </div>
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            © {new Date().getFullYear()} Saram Vina. Nội bộ — không chia sẻ ra ngoài.
+            © {new Date().getFullYear()} Saram Vina. Nội bộ — PMQ
           </p>
         </div>
       </div>
