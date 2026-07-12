@@ -28,13 +28,22 @@ import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
 import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { DuplicateGroupDto } from './dto/duplicate-group.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
-import { isVisibleInCarePool } from './care-pool.util';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
 
-/** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia/chuyển lead. */
+/** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia (cho người khác)/chuyển lead. */
 const ASSIGNMENT_ROLES = new Set(['admin', 'manager', 'leader']);
-/** Mục 5, tài liệu 10 (S3): ai được xem danh sách "Chờ phân chia". */
-const PENDING_VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'mkt']);
+/**
+ * Dự án phụ — nâng cấp toàn diện: bổ sung 'sale' — Sale giờ cũng xem được
+ * "Chờ phân chia" và tự nhận data cho chính mình (xem assertValidAssignTarget()
+ * — nhánh sale chỉ được tự nhận, không được phân cho người khác).
+ */
+const PENDING_VIEW_ROLES = new Set([
+  'admin',
+  'manager',
+  'leader',
+  'mkt',
+  'sale',
+]);
 
 export interface CreateCandidateResult {
   candidate: CandidateResponseDto;
@@ -68,16 +77,27 @@ export class CandidatesService {
       // theo yêu cầu trực tiếp của người dùng trong phiên làm việc. Chỉ khớp
       // ghi chú CHƯA xóa (is_deleted=false), tương ứng đúng nội dung đang
       // hiển thị thật cho người dùng, không tính ghi chú đã xóa mềm.
-      where.OR = [
-        { fullName: { contains: query.keyword, mode: 'insensitive' } },
-        { phoneNumber: { contains: query.keyword } },
+      // Dùng where.AND (không ghi đè where.OR) — buildScopeWhere() ở trên có
+      // thể đã đặt sẵn where.AND cho phạm vi xem của Sale/Leader (gộp "Chờ
+      // phân chia"); ghi đè trực tiếp where.OR sẽ xóa mất phạm vi đó.
+      const scopeAnd = Array.isArray(where.AND)
+        ? (where.AND as Record<string, unknown>[])
+        : [];
+      where.AND = [
+        ...scopeAnd,
         {
-          notes: {
-            some: {
-              content: { contains: query.keyword, mode: 'insensitive' },
-              isDeleted: false,
+          OR: [
+            { fullName: { contains: query.keyword, mode: 'insensitive' } },
+            { phoneNumber: { contains: query.keyword } },
+            {
+              notes: {
+                some: {
+                  content: { contains: query.keyword, mode: 'insensitive' },
+                  isDeleted: false,
+                },
+              },
             },
-          },
+          ],
         },
       ];
     }
@@ -121,7 +141,14 @@ export class CandidatesService {
       this.prisma.lead.findMany({
         where,
         include: CANDIDATE_INCLUDE,
-        orderBy: { uploadedAt: 'desc' },
+        // Dự án phụ — nâng cấp toàn diện: ưu tiên hiện lead CHƯA được phân
+        // chia lên đầu, kế đến là lead chưa xử lý (chưa có ghi chú nào), còn
+        // lại xếp theo ngày lên số mới nhất — đúng thứ tự người dùng yêu cầu.
+        orderBy: [
+          { assignedToId: { sort: 'asc', nulls: 'first' } },
+          { notes: { _count: 'asc' } },
+          { uploadedAt: 'desc' },
+        ],
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),
@@ -583,6 +610,11 @@ export class CandidatesService {
       data: { deletedAt: new Date(), deletedById: currentUser.id },
     });
 
+    // Xóa mềm không tự động gỡ cờ "Trùng SĐT" ở các lead còn lại cùng SĐT —
+    // tính lại đúng như create()/update() (LeadDuplicateService.syncDuplicateFlags
+    // chỉ đếm lead deletedAt: null, nên lead vừa xóa tự loại khỏi phép đếm).
+    await this.duplicateService.syncDuplicateFlags(existing.phoneNumber);
+
     await this.auditLog.log({
       accountId: currentUser.id,
       actionType: 'delete',
@@ -621,7 +653,10 @@ export class CandidatesService {
       this.prisma.lead.findMany({
         where,
         include: CANDIDATE_INCLUDE,
-        orderBy: { uploadedAt: 'desc' },
+        // Dự án phụ — nâng cấp toàn diện: toàn bộ danh sách này đã là "chờ
+        // phân chia" (assignedToId=null) nên chỉ còn ưu tiên thứ 2 — lead
+        // chưa xử lý (chưa có ghi chú) lên trước.
+        orderBy: [{ notes: { _count: 'asc' } }, { uploadedAt: 'desc' }],
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),
@@ -803,7 +838,12 @@ export class CandidatesService {
     accountId: string,
     currentUser: AuthenticatedUser,
   ): Promise<Account> {
-    if (!ASSIGNMENT_ROLES.has(currentUser.role)) {
+    // Dự án phụ — nâng cấp toàn diện: Sale được gọi POST /candidate/:id/assign
+    // ("Nhận data") nhưng CHỈ khi tự nhận cho chính mình — không được phân
+    // chia cho Sale khác (đó vẫn là đặc quyền riêng của ASSIGNMENT_ROLES).
+    const isSelfClaim =
+      currentUser.role === 'sale' && accountId === currentUser.id;
+    if (!ASSIGNMENT_ROLES.has(currentUser.role) && !isSelfClaim) {
       throw new ForbiddenException('Bạn không có quyền phân chia ứng viên');
     }
 
@@ -859,11 +899,13 @@ export class CandidatesService {
   }
 
   /**
-   * Mục 8, docs/09: phạm vi xem — Sale: lead của mình; Leader: cả nhóm; còn
-   * lại: toàn bộ. Phase 2: kết hợp thêm filter assigned_to/team_id (Mục 4,
-   * tài liệu 13) — luôn giao với phạm vi quyền, không cho phép filter vượt
-   * ra ngoài phạm vi được xem (vd Leader truyền team_id khác nhóm mình vẫn
-   * bị ép về nhóm mình).
+   * Dự án phụ — nâng cấp toàn diện (đổi so với Mục 8, docs/09 gốc): Sale giờ
+   * xem được TOÀN BỘ data của nhóm mình (trước đây chỉ lead của mình), khớp
+   * cùng phạm vi Leader — dùng "assigned_to=me" để lọc lại về đúng lead của
+   * mình cho tab "Cá nhân" trên UI. Leader: cả nhóm; còn lại: toàn bộ.
+   * Phase 2: kết hợp thêm filter assigned_to/team_id (Mục 4, tài liệu 13) —
+   * luôn giao với phạm vi quyền, không cho phép filter vượt ra ngoài phạm vi
+   * được xem (vd Leader truyền team_id khác nhóm mình vẫn bị ép về nhóm mình).
    */
   private async buildScopeWhere(
     currentUser: AuthenticatedUser,
@@ -883,17 +925,31 @@ export class CandidatesService {
       return where;
     }
 
-    if (currentUser.role === 'leader') {
+    if (currentUser.role === 'leader' || currentUser.role === 'sale') {
       const teamId = await this.getOwnTeamId(currentUser.id);
-      where.assignedTeamId = teamId ?? '__none__';
       if (assignedToFilter) {
+        // Tab "Cá nhân" — thu hẹp về đúng 1 người, KHÔNG gộp thêm lead chờ
+        // phân chia (khác nghĩa "cá nhân").
+        where.assignedTeamId = teamId ?? '__none__';
         where.assignedToId = assignedToFilter;
+        return where;
       }
+      // Dự án phụ — nâng cấp toàn diện: "Tất cả" giờ gộp cả lead của nhóm
+      // mình VÀ lead đang "Chờ phân chia" (chưa thuộc nhóm nào) — Sale/Leader
+      // không phải đổi tab mới thấy số mới cần xử lý. Dùng where.AND (không
+      // phải where.OR trực tiếp) vì list() còn dùng where.OR riêng cho tìm
+      // kiếm theo từ khóa — gộp trực tiếp sẽ bị ghi đè mất phạm vi xem.
+      where.AND = [
+        {
+          OR: [
+            { assignedTeamId: teamId ?? '__none__' },
+            { assignedToId: null },
+          ],
+        },
+      ];
       return where;
     }
 
-    // sale
-    where.assignedToId = currentUser.id;
     return where;
   }
 
@@ -905,26 +961,19 @@ export class CandidatesService {
       return;
     }
 
-    if (currentUser.role === 'leader') {
+    if (currentUser.role === 'leader' || currentUser.role === 'sale') {
+      // Dự án phụ — nâng cấp toàn diện: xem được toàn bộ lead trong nhóm
+      // mình (trước đây Sale chỉ xem lead của mình), CỘNG THÊM lead đang
+      // "Chờ phân chia" (assignedTeamId=null) — khớp buildScopeWhere() đã
+      // gộp "Chờ phân chia" vào "Tất cả". Sửa (assertCanModify) vẫn đòi hỏi
+      // đã thuộc đúng nhóm — lead chờ phân chia chỉ XEM được, phải "Nhận
+      // data" trước mới sửa được.
       const teamId = await this.getOwnTeamId(currentUser.id);
-      if (teamId && lead.assignedTeamId === teamId) {
+      if (
+        lead.assignedTeamId === null ||
+        (teamId && lead.assignedTeamId === teamId)
+      ) {
         return;
-      }
-      throw new ForbiddenException('Bạn chỉ được xem ứng viên trong nhóm mình');
-    }
-
-    if (currentUser.role === 'sale') {
-      if (lead.assignedToId === currentUser.id) {
-        return;
-      }
-      // Phase 5 — Mục 8, docs/09: "Sale: lead của mình + cột chăm sóc nhóm
-      // mình". Lead đang ở cột chăm sóc (chưa bị Admin gỡ) vẫn xem được nếu
-      // cùng nhóm, dù không phải người phụ trách gốc.
-      if (isVisibleInCarePool(lead)) {
-        const teamId = await this.getOwnTeamId(currentUser.id);
-        if (teamId && lead.assignedTeamId === teamId) {
-          return;
-        }
       }
     }
 
@@ -953,7 +1002,23 @@ export class CandidatesService {
       if (lead.assignedToId === currentUser.id) {
         return;
       }
-      throw new ForbiddenException('Bạn chỉ được sửa ứng viên đang phụ trách');
+      // Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm sửa được
+      // ứng viên KHÔNG phải của mình, NHƯNG chỉ khi ứng viên đó đã được xử
+      // lý ít nhất 1 lần (lastActivityAt khác null) — tôn trọng quyền xử lý
+      // số hoàn toàn mới của người phụ trách gốc, tránh giành số.
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      if (
+        teamId &&
+        lead.assignedTeamId === teamId &&
+        lead.lastActivityAt !== null
+      ) {
+        return;
+      }
+      throw new ForbiddenException(
+        lead.lastActivityAt === null
+          ? 'Ứng viên này chưa được người phụ trách xử lý lần nào, chưa thể sửa'
+          : 'Bạn chỉ được sửa ứng viên trong nhóm mình',
+      );
     }
 
     if (currentUser.role === 'leader') {

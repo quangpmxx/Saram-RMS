@@ -9,6 +9,8 @@ export interface AccountResponseDto {
   team_id: string | null;
   team_name: string | null;
   status: string;
+  /** Dự án phụ — nâng cấp toàn diện: đường dẫn tương đối ảnh đại diện tự upload (vd "/uploads/avatars/xxx.jpg"), null nếu chưa có. */
+  avatar_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +28,7 @@ export function toAccountResponse(
     team_id: account.teamId,
     team_name: account.team?.name ?? null,
     status: account.status,
+    avatar_url: account.avatarUrl,
     created_at: account.createdAt.toISOString(),
     updated_at: account.updatedAt.toISOString(),
   };

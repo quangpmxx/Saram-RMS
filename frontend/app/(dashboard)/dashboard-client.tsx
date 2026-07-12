@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PhoneCall, RefreshCw, Sparkles, Target, Users } from "lucide-react";
+import { PhoneCall, RefreshCw, Sparkles, Target } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import type { AccountRole, DashboardSummary, FunnelStep, SalePerformance, Team, TeamSummary } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
-import { Banner } from "@/components/ui/banner";
 import { useSetPageTitle } from "@/lib/page-title-context";
+import { useToast } from "@/lib/toast-context";
 
-/** Mục 8, docs/13-api-design.md — GET /dashboard/summary: hiện với mọi vai trò. */
-const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt"];
-/** Mục 5, docs/13 — GET /care-pool: MKT không có quyền xem Cột chăm sóc. */
-const CARE_POOL_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale"];
+/**
+ * Mục 8, docs/13-api-design.md — GET /dashboard/summary: hiện với mọi vai trò.
+ * Dự án phụ — nâng cấp toàn diện: bổ sung "sale" — Sale giờ cũng xem được
+ * "Chờ phân chia" (tự nhận data). Thẻ "Cột chăm sóc" đã ẩn khỏi Dashboard.
+ */
+const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt", "sale"];
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
@@ -99,11 +101,10 @@ export function DashboardClient({
   const [customTo, setCustomTo] = useState("");
   const [teamId, setTeamId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const toast = useToast();
   const [quickView, setQuickView] = useState<SalePerformance | null>(null);
 
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
-  const canViewCarePool = CARE_POOL_VIEW_ROLES.includes(currentUserRole);
 
   async function refresh() {
     const range = computeDateRange(datePreset, customFrom, customTo);
@@ -113,7 +114,6 @@ export function DashboardClient({
     if (canFilterByTeam && teamId) query.set("team_id", teamId);
 
     setLoading(true);
-    setBanner(null);
     try {
       const [nextSummary, nextPerformance, nextByTeam] = await Promise.all([
         clientApi<DashboardSummary>(`/dashboard/summary?${query.toString()}`),
@@ -126,7 +126,7 @@ export function DashboardClient({
       setPerformance(nextPerformance);
       setByTeam(nextByTeam);
     } catch {
-      setBanner({ type: "error", text: "Không tải được số liệu, vui lòng thử lại." });
+      toast.error("Không tải được số liệu, vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -142,8 +142,6 @@ export function DashboardClient({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {banner && <Banner type={banner.type} text={banner.text} />}
-
       <Card className="p-5">
         <form
           className="flex flex-wrap items-end gap-3"
@@ -222,19 +220,6 @@ export function DashboardClient({
 
         <Card className="p-5">
           <div className="flex items-center gap-2 text-slate-500">
-            <Users className="h-4 w-4" strokeWidth={2} />
-            <p className="text-xs font-medium">Cột chăm sóc</p>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{summary.care_pool_count.toLocaleString("vi-VN")}</p>
-          {canViewCarePool && (
-            <Link href="/candidates?view=care_pool" className="mt-2 inline-block text-xs font-medium text-accent-600 hover:underline">
-              Xem chi tiết →
-            </Link>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center gap-2 text-slate-500">
             <Target className="h-4 w-4" strokeWidth={2} />
             <p className="text-xs font-medium">Tỷ lệ đi làm</p>
           </div>
@@ -257,7 +242,15 @@ export function DashboardClient({
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Hiệu suất Sale</h2>
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            {/* UI Polish — cố định độ rộng cột theo yêu cầu người dùng, bỏ tính năng co giãn. */}
+            <table className="w-full table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[180px]" />
+                <col className="w-[130px]" />
+                <col className="w-[140px]" />
+                <col className="w-[130px]" />
+                <col className="w-[110px]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-slate-200 text-xs text-slate-500">
                   <th className="py-2 pr-3 font-medium">Sale</th>
@@ -320,7 +313,7 @@ export function DashboardClient({
                         href={`/candidates?team_id=${row.team_id}`}
                         className="text-xs font-medium text-accent-600 hover:underline"
                       >
-                        Xem ứng viên →
+                        Xem lao động →
                       </Link>
                     </td>
                   </tr>

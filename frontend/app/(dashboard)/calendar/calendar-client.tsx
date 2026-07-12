@@ -6,13 +6,13 @@ import { CalendarPlus, CalendarDays, Search } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { CalendarEvent, Candidate, PaginatedResult } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/lib/toast-context";
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("vi-VN");
@@ -51,7 +51,7 @@ export function CalendarClient({
   const [events, setEvents] = useState(initialEvents);
   const [dateFrom, setDateFrom] = useState(initialDateFrom);
   const [dateTo, setDateTo] = useState(initialDateTo);
-  const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const toast = useToast();
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const groups = groupByDate(events);
@@ -74,8 +74,6 @@ export function CalendarClient({
           </Button>
         }
       />
-
-      {banner && <Banner type={banner.type} text={banner.text} />}
 
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
         <Field label="Từ ngày">
@@ -136,7 +134,7 @@ export function CalendarClient({
           onCreated={async () => {
             setIsScheduleModalOpen(false);
             await refresh();
-            setBanner({ type: "success", text: "Đã đặt lịch hẹn phỏng vấn" });
+            toast.success("Đã đặt lịch hẹn phỏng vấn");
           }}
         />
       )}
@@ -177,7 +175,7 @@ function ScheduleInterviewQuickModal({
 
   async function handleSubmit() {
     if (!selected) {
-      setError("Vui lòng chọn ứng viên");
+      setError("Vui lòng chọn lao động");
       return;
     }
     if (!partnerCompanyName.trim() || !scheduledAt) {
@@ -205,7 +203,7 @@ function ScheduleInterviewQuickModal({
   return (
     <Modal
       title="Đặt lịch hẹn phỏng vấn mới"
-      description="Tìm ứng viên rồi nhập thông tin lịch hẹn — giống popup tại trang Chi tiết ứng viên."
+      description="Tìm lao động rồi nhập thông tin lịch hẹn — giống popup tại trang Chi tiết lao động."
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
@@ -218,7 +216,7 @@ function ScheduleInterviewQuickModal({
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Tìm ứng viên (tên/SĐT)">
+        <Field label="Tìm lao động (tên/SĐT)">
           <div className="flex gap-2">
             <Input
               value={keyword}

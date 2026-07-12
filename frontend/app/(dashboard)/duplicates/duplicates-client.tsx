@@ -31,7 +31,7 @@ export function DuplicatesClient({
 }) {
   useSetPageTitle(
     "Trùng lặp",
-    "Danh sách trùng lặp toàn hệ thống — mở rộng từ cảnh báo trên màn Ứng viên.",
+    "Danh sách trùng lặp toàn hệ thống — mở rộng từ cảnh báo trên màn Lao động.",
   );
 
   const [result, setResult] = useState(initialDuplicates);
@@ -66,7 +66,7 @@ export function DuplicatesClient({
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Trùng lặp"
-        description="Danh sách các nhóm ứng viên bị trùng số điện thoại — toàn hệ thống hoặc trong phạm vi nhóm mình."
+        description="Danh sách các nhóm lao động bị trùng số điện thoại — toàn hệ thống hoặc trong phạm vi nhóm mình."
       />
 
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">

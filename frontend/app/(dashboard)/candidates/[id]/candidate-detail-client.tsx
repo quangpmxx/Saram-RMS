@@ -6,21 +6,22 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarClock,
-  CalendarPlus,
   Clock,
   Lock,
   MessageSquarePlus,
   Pencil,
   Phone,
-  PhoneCall,
+  Save,
   Trash2,
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { AccountRole, Candidate, Interview, Note, StatusCatalogItem } from "@/lib/types";
+import { cn } from "@/lib/cn";
+import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
+import { useToast } from "@/lib/toast-context";
+import type { AccountRole, Candidate, Note, StatusCatalogItem } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
@@ -30,7 +31,13 @@ import { InlineEditField } from "./inline-edit-field";
 import { InlineNoteComposer } from "./inline-note-composer";
 import { NoteTimeline } from "../note-timeline";
 
-/** Mục 8, docs/09 + Mục 6, docs/13: ai được cập nhật cuộc gọi/thêm ghi chú (KHÔNG gồm MKT). */
+/**
+ * Mục 8, docs/09 + Mục 6, docs/13: ai được cập nhật cuộc gọi/thêm ghi chú
+ * (KHÔNG gồm MKT).
+ * Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm xử lý được lead
+ * KHÔNG phải của mình, NHƯNG chỉ khi lead đã được xử lý ít nhất 1 lần
+ * (last_activity_at khác null) — khớp loadLeadForUpdate() ở backend.
+ */
 function canUpdatePipeline(
   candidate: Candidate,
   currentUserId: string,
@@ -38,7 +45,10 @@ function canUpdatePipeline(
   currentUserTeamId: string | null,
 ): boolean {
   if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-  if (currentUserRole === "sale") return candidate.assigned_to?.id === currentUserId;
+  if (currentUserRole === "sale") {
+    if (candidate.assigned_to?.id === currentUserId) return true;
+    return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
+  }
   if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
   return false;
 }
@@ -48,7 +58,10 @@ function canUpdatePipeline(
  * điện thoại trên trang Chi tiết ứng viên, khớp đúng phạm vi quyền của
  * assertCanModify() ở backend (candidates.service.ts): Admin/Quản lý
  * không giới hạn; MKT chỉ data do mình upload (giữ nguyên, không mở rộng);
- * Sale chỉ lead đang phụ trách; Leader chỉ nhóm mình.
+ * Leader chỉ nhóm mình.
+ * Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm sửa được lead
+ * KHÔNG phải của mình, NHƯNG chỉ khi lead đã được xử lý ít nhất 1 lần
+ * (last_activity_at khác null).
  */
 function canEditCandidate(
   candidate: Candidate,
@@ -58,7 +71,10 @@ function canEditCandidate(
 ): boolean {
   if (currentUserRole === "admin" || currentUserRole === "manager") return true;
   if (currentUserRole === "mkt") return candidate.uploaded_by.id === currentUserId;
-  if (currentUserRole === "sale") return candidate.assigned_to?.id === currentUserId;
+  if (currentUserRole === "sale") {
+    if (candidate.assigned_to?.id === currentUserId) return true;
+    return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
+  }
   if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
   return false;
 }
@@ -67,25 +83,22 @@ function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("vi-VN");
 }
 
+
 export function CandidateDetailClient({
   initialCandidate,
   initialNotes,
-  initialInterviews,
   callStatuses,
   callResults,
-  interviewStatuses,
-  employmentStatuses,
+  zaloStatuses,
   currentUserId,
   currentUserRole,
   currentUserTeamId,
 }: {
   initialCandidate: Candidate;
   initialNotes: Note[];
-  initialInterviews: Interview[];
   callStatuses: StatusCatalogItem[];
   callResults: StatusCatalogItem[];
-  interviewStatuses: StatusCatalogItem[];
-  employmentStatuses: StatusCatalogItem[];
+  zaloStatuses: StatusCatalogItem[];
   currentUserId: string;
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
@@ -93,18 +106,22 @@ export function CandidateDetailClient({
   const router = useRouter();
   const [candidate, setCandidate] = useState(initialCandidate);
   const [notes, setNotes] = useState(initialNotes);
-  const [interviews, setInterviews] = useState(initialInterviews);
-  const [banner, setBanner] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
-  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
-  const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
+  const toast = useToast();
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
-  const [updatingInterview, setUpdatingInterview] = useState<Interview | null>(null);
+  // UI Polish — "Tình trạng cuộc gọi"/"Kết quả cuộc gọi" đổi từ popup sang
+  // chọn ngay tại trang (vẫn 1 giá trị mỗi ô như cũ, không đổi database) —
+  // nút "Gọi ngay" đổi thành "Lưu thông tin" để lưu 2 lựa chọn này.
+  const [callStatusId, setCallStatusId] = useState(initialCandidate.call_status?.id ?? "");
+  const [callResultId, setCallResultId] = useState(initialCandidate.call_result?.id ?? "");
+  const [zaloStatusId, setZaloStatusId] = useState(initialCandidate.zalo_status?.id ?? "");
+  const [isSavingCallInfo, setIsSavingCallInfo] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
   const [isHoldSubmitting, setIsHoldSubmitting] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [isSavingNoteColor, setIsSavingNoteColor] = useState(false);
 
   const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
   const canEditPhone = canEditCandidate(candidate, currentUserId, currentUserRole, currentUserTeamId);
@@ -129,21 +146,10 @@ export function CandidateDetailClient({
     currentUserRole === "manager" ||
     (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
     (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId);
-  const sortedInterviews = [...interviews].sort((a, b) => b.attempt_no - a.attempt_no);
 
   async function refreshNotes() {
     const result = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
     setNotes(result);
-  }
-
-  async function refreshInterviews() {
-    const result = await clientApi<Interview[]>(`/candidate/${candidate.id}/interview`);
-    setInterviews(result);
-  }
-
-  async function refreshCandidate() {
-    const result = await clientApi<Candidate>(`/candidate/${candidate.id}`);
-    setCandidate(result);
   }
 
   /**
@@ -163,10 +169,7 @@ export function CandidateDetailClient({
       })
       .catch((error) => {
         if (cancelled) return;
-        setBanner({
-          type: "error",
-          text: error instanceof ApiError ? error.message : "Không thể mở khóa xử lý ứng viên này",
-        });
+        toast.error(error instanceof ApiError ? error.message : "Không thể mở khóa xử lý lao động này");
       });
     return () => {
       cancelled = true;
@@ -176,20 +179,70 @@ export function CandidateDetailClient({
 
   async function handleToggleHold() {
     if (!candidate.is_held) {
-      if (!window.confirm("Đánh dấu giữ số ứng viên này? Ứng viên sẽ không tự động chuyển vào cột chăm sóc khi bạn đang giữ số.")) return;
+      if (!window.confirm("Đánh dấu giữ số lao động này? Các sale khác sẽ thấy cảnh báo bạn đang giữ số lao động này.")) return;
     }
     setIsHoldSubmitting(true);
-    setBanner(null);
     try {
       const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/hold`, {
         method: candidate.is_held ? "DELETE" : "POST",
       });
       setCandidate(updated);
-      setBanner({ type: "success", text: updated.is_held ? "Đã đánh dấu giữ số" : "Đã bỏ đánh dấu giữ số" });
+      toast.success(updated.is_held ? "Đã đánh dấu giữ số" : "Đã bỏ đánh dấu giữ số");
     } catch (error) {
-      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setIsHoldSubmitting(false);
+    }
+  }
+
+  /** Bấm màu đang chọn để bỏ chọn (quay về mặc định); bấm màu khác để đổi. */
+  async function handleSetNoteColor(color: "yellow" | "green" | "red") {
+    const next = candidate.note_color === color ? null : color;
+    setIsSavingNoteColor(true);
+    try {
+      const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/note-color`, {
+        method: "PUT",
+        body: JSON.stringify({ note_color: next }),
+      });
+      setCandidate(updated);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSavingNoteColor(false);
+    }
+  }
+
+  /**
+   * Lưu 3 lựa chọn "Tình trạng cuộc gọi"/"Kết quả cuộc gọi"/"Tình trạng Zalo"
+   * — chỉ gọi API cho ô nào thực sự đổi giá trị.
+   * Dự án phụ — nâng cấp toàn diện: sau khi lưu, đóng ngay trang chi tiết và
+   * quay lại danh sách ứng viên (không ở lại trang để xem kết quả).
+   */
+  async function handleSaveCallInfo() {
+    setIsSavingCallInfo(true);
+    try {
+      if (callStatusId && callStatusId !== candidate.call_status?.id) {
+        await clientApi<Candidate>(`/candidate/${candidate.id}/call-status`, {
+          method: "PUT",
+          body: JSON.stringify({ call_status_id: callStatusId }),
+        });
+      }
+      if (callResultId && callResultId !== candidate.call_result?.id) {
+        await clientApi<Candidate>(`/candidate/${candidate.id}/call-result`, {
+          method: "PUT",
+          body: JSON.stringify({ call_result_id: callResultId }),
+        });
+      }
+      if (zaloStatusId && zaloStatusId !== candidate.zalo_status?.id) {
+        await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-status`, {
+          method: "PUT",
+          body: JSON.stringify({ zalo_status_id: zaloStatusId }),
+        });
+      }
+      router.push("/candidates");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+      setIsSavingCallInfo(false);
     }
   }
 
@@ -239,13 +292,12 @@ export function CandidateDetailClient({
   async function handleDeleteNote(note: Note) {
     if (!window.confirm("Xóa ghi chú này? Vẫn được lưu trong lịch sử hệ thống.")) return;
     setPendingNoteId(note.id);
-    setBanner(null);
     try {
       await clientApi(`/candidate/${candidate.id}/note/${note.id}`, { method: "DELETE" });
       await refreshNotes();
-      setBanner({ type: "success", text: "Đã xóa ghi chú" });
+      toast.success("Đã xóa ghi chú");
     } catch (error) {
-      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setPendingNoteId(null);
     }
@@ -255,7 +307,7 @@ export function CandidateDetailClient({
     <div className="mx-auto max-w-4xl">
       <Link href="/candidates" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-        Quay lại danh sách ứng viên
+        Quay lại danh sách lao động
       </Link>
 
       <PageHeader
@@ -276,9 +328,15 @@ export function CandidateDetailClient({
                 </Button>
               )}
               {canUpdate && (
-                <Button type="button" onClick={() => setIsCallModalOpen(true)}>
-                  <PhoneCall className="h-4 w-4" strokeWidth={2} />
-                  Gọi ngay
+                <Button type="button" variant="outline" onClick={() => setIsCallbackModalOpen(true)}>
+                  <CalendarClock className="h-4 w-4" strokeWidth={2} />
+                  Đặt lịch gọi lại
+                </Button>
+              )}
+              {canUpdate && (
+                <Button type="button" disabled={isSavingCallInfo} onClick={() => void handleSaveCallInfo()}>
+                  <Save className="h-4 w-4" strokeWidth={2} />
+                  {isSavingCallInfo ? "Đang lưu..." : "Lưu thông tin"}
                 </Button>
               )}
             </div>
@@ -286,11 +344,16 @@ export function CandidateDetailClient({
         }
       />
 
-      {banner && <Banner type={banner.type} text={banner.text} />}
-
       <div className="mb-4 grid gap-4 sm:grid-cols-2">
         <Card className="p-5">
-          <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Thông tin ứng viên</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Thông tin lao động</p>
+            {candidate.is_held && (
+              <Badge variant="warning">
+                Số được giữ lại bởi sale {candidate.held_by?.name ?? "—"}
+              </Badge>
+            )}
+          </div>
           <dl className="mt-3 flex flex-col gap-2 text-sm">
             {canEditPhone ? (
               <InlineEditField
@@ -307,14 +370,11 @@ export function CandidateDetailClient({
                     body: JSON.stringify({ phone_number: trimmed }),
                   });
                   setCandidate(updated);
-                  setBanner(
-                    updated.is_duplicate_flagged
-                      ? {
-                          type: "warning",
-                          text: "Đã cập nhật số điện thoại — số này đang trùng với (các) ứng viên khác trong hệ thống",
-                        }
-                      : { type: "success", text: "Đã cập nhật số điện thoại" },
-                  );
+                  if (updated.is_duplicate_flagged) {
+                    toast.warning("Đã cập nhật số điện thoại — số này đang trùng với (các) lao động khác trong hệ thống");
+                  } else {
+                    toast.success("Đã cập nhật số điện thoại");
+                  }
                 }}
               />
             ) : (
@@ -324,10 +384,12 @@ export function CandidateDetailClient({
               </div>
             )}
             <InlineEditField
+              key={`birth-year-${candidate.birth_year ?? ""}`}
               label="Năm sinh"
               displayValue={candidate.birth_year?.toString() ?? "—"}
               editValue={candidate.birth_year?.toString() ?? ""}
               inputType="number"
+              alwaysEditable
               onSave={async (value) => {
                 const trimmed = value.trim();
                 let birthYear: number | null = null;
@@ -343,13 +405,15 @@ export function CandidateDetailClient({
                   body: JSON.stringify({ birth_year: birthYear }),
                 });
                 setCandidate(updated);
-                setBanner({ type: "success", text: "Đã cập nhật năm sinh" });
+                toast.success("Đã cập nhật năm sinh");
               }}
             />
             <InlineEditField
+              key={`address-${candidate.address ?? ""}`}
               label="Địa chỉ"
               displayValue={candidate.address ?? "—"}
               editValue={candidate.address ?? ""}
+              alwaysEditable
               onSave={async (value) => {
                 const address = value.trim() || null;
                 const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
@@ -357,7 +421,7 @@ export function CandidateDetailClient({
                   body: JSON.stringify({ address }),
                 });
                 setCandidate(updated);
-                setBanner({ type: "success", text: "Đã cập nhật địa chỉ" });
+                toast.success("Đã cập nhật địa chỉ");
               }}
             />
             <div className="flex justify-between gap-3">
@@ -372,16 +436,6 @@ export function CandidateDetailClient({
               <dt className="text-slate-500">Sale phụ trách</dt>
               <dd className="text-slate-800">{candidate.assigned_to?.name ?? "Chờ phân chia"}</dd>
             </div>
-            {candidate.is_held && (
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Giữ số</dt>
-                <dd>
-                  <Badge variant="warning">
-                    Đang giữ số{candidate.held_by ? ` — ${candidate.held_by.name}` : ""}
-                  </Badge>
-                </dd>
-              </div>
-            )}
             {candidate.entered_care_pool_at && candidate.care_pool_locked_by && (
               <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">Cột chăm sóc</dt>
@@ -404,21 +458,78 @@ export function CandidateDetailClient({
         <Card className="p-5">
           <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Tiến trình cuộc gọi</p>
           <div className="mt-3 flex flex-col gap-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Tình trạng cuộc gọi</span>
-              {candidate.call_status ? (
-                <Badge variant="info">{candidate.call_status.name}</Badge>
-              ) : (
-                <Badge variant="neutral">Chưa cập nhật</Badge>
-              )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="shrink-0 text-slate-500">Tình trạng cuộc gọi</span>
+              <Select
+                uiSize="sm"
+                className="w-40"
+                value={callStatusId}
+                onChange={(event) => setCallStatusId(event.target.value)}
+                disabled={!canUpdate}
+              >
+                <option value="">Chưa cập nhật</option>
+                {callStatuses.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </Select>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Kết quả cuộc gọi</span>
-              {candidate.call_result ? (
-                <Badge variant="accent">{candidate.call_result.name}</Badge>
-              ) : (
-                <Badge variant="neutral">Chưa cập nhật</Badge>
-              )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="shrink-0 text-slate-500">Kết quả cuộc gọi</span>
+              <Select
+                uiSize="sm"
+                className="w-40"
+                value={callResultId}
+                onChange={(event) => setCallResultId(event.target.value)}
+                disabled={!canUpdate}
+              >
+                <option value="">Chưa cập nhật</option>
+                {callResults.map((result) => (
+                  <option key={result.id} value={result.id}>
+                    {result.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="shrink-0 text-slate-500">Tình trạng Zalo</span>
+              <Select
+                uiSize="sm"
+                className="w-40"
+                value={zaloStatusId}
+                onChange={(event) => setZaloStatusId(event.target.value)}
+                disabled={!canUpdate}
+              >
+                <option value="">Chưa cập nhật</option>
+                {zaloStatuses.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="shrink-0 text-slate-500">Đánh dấu màu</span>
+              <div className="flex items-center gap-2">
+                {NOTE_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={c.label}
+                    aria-label={c.label}
+                    disabled={!canUpdate || isSavingNoteColor}
+                    onClick={() => void handleSetNoteColor(c.value)}
+                    className={cn(
+                      "h-5 w-5 rounded-full transition-transform disabled:cursor-not-allowed disabled:opacity-50",
+                      c.swatch,
+                      candidate.note_color === c.value
+                        ? "ring-2 ring-slate-500 ring-offset-2"
+                        : "hover:scale-110",
+                    )}
+                  />
+                ))}
+              </div>
             </div>
             <div className="flex items-center justify-between border-t border-slate-100 pt-3">
               <span className="flex items-center gap-1.5 text-slate-500">
@@ -440,80 +551,12 @@ export function CandidateDetailClient({
         </Card>
       </div>
 
-      <Card className="mb-4 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Phỏng vấn & đi làm</p>
-          {canUpdate && (
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setIsCallbackModalOpen(true)}>
-                <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
-                Đặt lịch gọi lại
-              </Button>
-              <Button type="button" size="sm" onClick={() => setIsInterviewModalOpen(true)}>
-                <CalendarPlus className="h-3.5 w-3.5" strokeWidth={2} />
-                Đặt lịch PV
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-3 flex flex-col gap-2 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Trạng thái PV hiện tại</span>
-            {candidate.current_interview_status ? (
-              <Badge variant="info">{candidate.current_interview_status.name}</Badge>
-            ) : (
-              <Badge variant="neutral">Chưa hẹn PV</Badge>
-            )}
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Trạng thái đi làm</span>
-            {candidate.current_employment_status ? (
-              <Badge variant="accent">{candidate.current_employment_status.name}</Badge>
-            ) : (
-              <Badge variant="neutral">Chưa có</Badge>
-            )}
-          </div>
-          {candidate.current_partner_company_name && (
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Công ty đối tác gần nhất</span>
-              <span className="font-medium text-slate-800">{candidate.current_partner_company_name}</span>
-            </div>
-          )}
-        </div>
-
-        {sortedInterviews.length > 0 && (
-          <ul className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3">
-            {sortedInterviews.map((interview) => (
-              <li
-                key={interview.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2"
-              >
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-medium text-slate-700">Lần {interview.attempt_no}</span>
-                  <span className="text-slate-500">{interview.partner_company_name}</span>
-                  <span className="text-slate-400">·</span>
-                  <span className="text-slate-500">{formatDateTime(interview.scheduled_at)}</span>
-                  <Badge variant="info">{interview.status.name}</Badge>
-                  {interview.employment_status && (
-                    <Badge variant="accent">{interview.employment_status.name}</Badge>
-                  )}
-                  {interview.employment_reason && (
-                    <span className="text-slate-500 italic">— {interview.employment_reason}</span>
-                  )}
-                </div>
-                {canUpdate && (
-                  <Button type="button" size="sm" variant="outline" onClick={() => setUpdatingInterview(interview)}>
-                    Cập nhật kết quả
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card className="overflow-hidden">
+      <Card
+        className="overflow-hidden"
+        style={{
+          backgroundColor: noteColorBgHex(candidate.note_color),
+        }}
+      >
         <div className="border-b border-slate-100 p-4">
           <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
         </div>
@@ -592,347 +635,17 @@ export function CandidateDetailClient({
         )}
       </Card>
 
-      {isCallModalOpen && (
-        <CallUpdateModal
-          candidate={candidate}
-          callStatuses={callStatuses}
-          callResults={callResults}
-          onClose={() => setIsCallModalOpen(false)}
-          onUpdated={(updated) => {
-            setCandidate(updated);
-            setIsCallModalOpen(false);
-            router.refresh();
-            setBanner({ type: "success", text: "Đã cập nhật tiến trình cuộc gọi" });
-          }}
-        />
-      )}
-
-      {isInterviewModalOpen && (
-        <ScheduleInterviewModal
-          candidateId={candidate.id}
-          onClose={() => setIsInterviewModalOpen(false)}
-          onCreated={async () => {
-            setIsInterviewModalOpen(false);
-            await Promise.all([refreshInterviews(), refreshCandidate()]);
-            router.refresh();
-            setBanner({ type: "success", text: "Đã đặt lịch hẹn phỏng vấn" });
-          }}
-        />
-      )}
-
-      {updatingInterview && (
-        <UpdateInterviewModal
-          interview={updatingInterview}
-          interviewStatuses={interviewStatuses}
-          employmentStatuses={employmentStatuses}
-          onClose={() => setUpdatingInterview(null)}
-          onUpdated={async () => {
-            setUpdatingInterview(null);
-            await Promise.all([refreshInterviews(), refreshCandidate()]);
-            router.refresh();
-            setBanner({ type: "success", text: "Đã cập nhật kết quả phỏng vấn" });
-          }}
-        />
-      )}
-
       {isCallbackModalOpen && (
         <ScheduleCallbackModal
           candidateId={candidate.id}
           onClose={() => setIsCallbackModalOpen(false)}
           onCreated={() => {
             setIsCallbackModalOpen(false);
-            setBanner({ type: "success", text: "Đã đặt lịch gọi lại" });
+            toast.success("Đã đặt lịch gọi lại");
           }}
         />
       )}
     </div>
-  );
-}
-
-function CallUpdateModal({
-  candidate,
-  callStatuses,
-  callResults,
-  onClose,
-  onUpdated,
-}: {
-  candidate: Candidate;
-  callStatuses: StatusCatalogItem[];
-  callResults: StatusCatalogItem[];
-  onClose: () => void;
-  onUpdated: (updated: Candidate) => void;
-}) {
-  const [callStatusId, setCallStatusId] = useState(candidate.call_status?.id ?? "");
-  const [callResultId, setCallResultId] = useState(candidate.call_result?.id ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  async function handleSubmit() {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      let updated = candidate;
-      if (callStatusId && callStatusId !== candidate.call_status?.id) {
-        updated = await clientApi<Candidate>(`/candidate/${candidate.id}/call-status`, {
-          method: "PUT",
-          body: JSON.stringify({ call_status_id: callStatusId }),
-        });
-      }
-      if (callResultId && callResultId !== candidate.call_result?.id) {
-        updated = await clientApi<Candidate>(`/candidate/${candidate.id}/call-result`, {
-          method: "PUT",
-          body: JSON.stringify({ call_result_id: callResultId }),
-        });
-      }
-      onUpdated(updated);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      title="Cập nhật tiến trình cuộc gọi"
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-            {isSubmitting ? "Đang lưu..." : "Cập nhật"}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="Tình trạng cuộc gọi">
-          <Select value={callStatusId} onChange={(event) => setCallStatusId(event.target.value)}>
-            <option value="">— Chưa cập nhật —</option>
-            {callStatuses.map((status) => (
-              <option key={status.id} value={status.id}>
-                {status.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field label="Kết quả cuộc gọi">
-          <Select value={callResultId} onChange={(event) => setCallResultId(event.target.value)}>
-            <option value="">— Chưa cập nhật —</option>
-            {callResults.map((result) => (
-              <option key={result.id} value={result.id}>
-                {result.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function ScheduleInterviewModal({
-  candidateId,
-  onClose,
-  onCreated,
-}: {
-  candidateId: string;
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [partnerCompanyName, setPartnerCompanyName] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  async function handleSubmit() {
-    if (!partnerCompanyName.trim() || !scheduledAt) {
-      setError("Vui lòng nhập đầy đủ công ty đối tác và ngày giờ hẹn");
-      return;
-    }
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await clientApi(`/candidate/${candidateId}/interview`, {
-        method: "POST",
-        body: JSON.stringify({
-          partner_company_name: partnerCompanyName,
-          scheduled_at: new Date(scheduledAt).toISOString(),
-        }),
-      });
-      await onCreated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      title="Đặt lịch hẹn phỏng vấn"
-      description="Hẹn PV mới — kể cả trường hợp hẹn lại sau khi bùng PV, hệ thống tự lưu lại lịch sử các lần hẹn."
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-            {isSubmitting ? "Đang lưu..." : "Đặt lịch"}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="Công ty đối tác (nhà máy) hẹn PV">
-          <Input
-            value={partnerCompanyName}
-            onChange={(event) => setPartnerCompanyName(event.target.value)}
-            placeholder="Nhập tên công ty đối tác"
-            autoFocus
-          />
-        </Field>
-
-        <Field label="Ngày giờ hẹn">
-          <Input
-            type="datetime-local"
-            value={scheduledAt}
-            onChange={(event) => setScheduledAt(event.target.value)}
-          />
-        </Field>
-
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function UpdateInterviewModal({
-  interview,
-  interviewStatuses,
-  employmentStatuses,
-  onClose,
-  onUpdated,
-}: {
-  interview: Interview;
-  interviewStatuses: StatusCatalogItem[];
-  employmentStatuses: StatusCatalogItem[];
-  onClose: () => void;
-  onUpdated: () => Promise<void>;
-}) {
-  const [statusId, setStatusId] = useState(interview.status.id);
-  const [employmentStatusId, setEmploymentStatusId] = useState(interview.employment_status?.id ?? "");
-  const [employmentReason, setEmploymentReason] = useState(interview.employment_reason ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const selectedStatus = interviewStatuses.find((status) => status.id === statusId);
-  const isPassed = selectedStatus?.code === "PASSED";
-  const selectedEmploymentStatus = employmentStatuses.find((status) => status.id === employmentStatusId);
-  const isNotEmployed = selectedEmploymentStatus?.code === "NOT_EMPLOYED";
-
-  async function handleSubmit() {
-    if (isNotEmployed && !employmentReason.trim()) {
-      setError('Bắt buộc nhập lý do khi ghi nhận "Không đi làm"');
-      return;
-    }
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await clientApi(`/interview/${interview.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          status_id: statusId,
-          employment_status_id: isPassed && employmentStatusId ? employmentStatusId : undefined,
-          employment_reason: isPassed && employmentStatusId ? employmentReason || undefined : undefined,
-        }),
-      });
-      await onUpdated();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      title={`Cập nhật kết quả PV — Lần ${interview.attempt_no}`}
-      description={`${interview.partner_company_name} · ${formatDateTime(interview.scheduled_at)}`}
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-            {isSubmitting ? "Đang lưu..." : "Cập nhật"}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="Trạng thái phỏng vấn">
-          <Select
-            value={statusId}
-            onChange={(event) => {
-              setStatusId(event.target.value);
-              setEmploymentStatusId("");
-              setEmploymentReason("");
-            }}
-          >
-            {interviewStatuses.map((status) => (
-              <option key={status.id} value={status.id}>
-                {status.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        {isPassed && (
-          <>
-            <Field label="Kết quả đi làm" hint="Chỉ áp dụng khi trạng thái là Đỗ PV">
-              <Select value={employmentStatusId} onChange={(event) => setEmploymentStatusId(event.target.value)}>
-                <option value="">— Chưa cập nhật —</option>
-                {employmentStatuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
-            {isNotEmployed && (
-              <Field label="Lý do không đi làm">
-                <Textarea
-                  value={employmentReason}
-                  onChange={(event) => setEmploymentReason(event.target.value)}
-                  rows={3}
-                  placeholder="Nhập lý do ứng viên không đi làm dù đã đỗ phỏng vấn"
-                />
-              </Field>
-            )}
-          </>
-        )}
-
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
-      </div>
-    </Modal>
   );
 }
 

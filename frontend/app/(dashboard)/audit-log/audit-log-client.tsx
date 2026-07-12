@@ -39,7 +39,7 @@ const ENTITY_TYPE_LABEL: Record<string, string> = {
   distribution_rule: "Cấu hình tự động phân chia",
   import_job: "Import Excel",
   interview_appointment: "Lịch hẹn PV",
-  lead: "Ứng viên",
+  lead: "Lao động",
   lead_note: "Ghi chú",
   system_config: "Cấu hình hệ thống",
   team: "Nhóm",
@@ -159,7 +159,7 @@ export function AuditLogClient({
           <Field label="ID đối tượng" uiSize="sm" className="w-48">
             <Input
               uiSize="sm"
-              placeholder="vd: id ứng viên/tài khoản"
+              placeholder="vd: id lao động/tài khoản"
               value={filters.entity_id}
               onChange={(event) => setFilters((prev) => ({ ...prev, entity_id: event.target.value }))}
             />

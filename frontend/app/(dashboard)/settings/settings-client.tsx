@@ -6,11 +6,11 @@ import { Pencil, Settings2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { SystemConfig } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/lib/toast-context";
 
 /** Tên hiển thị thân thiện cho từng tham số đã biết — Mục 9.2, docs/12-ui-design.md. */
 const CONFIG_LABEL: Record<string, string> = {
@@ -26,7 +26,7 @@ export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfi
   const router = useRouter();
   const [configs, setConfigs] = useState(initialConfigs);
   const [editing, setEditing] = useState<SystemConfig | null>(null);
-  const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const toast = useToast();
 
   async function refresh() {
     const result = await clientApi<SystemConfig[]>("/config");
@@ -40,8 +40,6 @@ export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfi
         title="Cấu hình vận hành"
         description="Tham số vận hành toàn hệ thống — chỉ Admin xem/sửa được."
       />
-
-      {banner && <Banner type={banner.type} text={banner.text} />}
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -92,7 +90,7 @@ export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfi
           onSaved={async () => {
             setEditing(null);
             await refresh();
-            setBanner({ type: "success", text: "Đã lưu cấu hình" });
+            toast.success("Đã lưu cấu hình");
           }}
         />
       )}

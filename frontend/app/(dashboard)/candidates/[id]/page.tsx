@@ -1,12 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi, ApiError } from "@/lib/api-server";
-import type { Candidate, Interview, Note, StatusCatalogItem } from "@/lib/types";
+import type { Candidate, Note, StatusCatalogItem } from "@/lib/types";
 import { CandidateDetailClient } from "./candidate-detail-client";
 
 /**
- * S5 (phần cuộc gọi/ghi chú), Mục 2.2, docs/12-ui-design.md — Phase 3 +
- * Phase 4 (lịch sử hẹn PV, cập nhật kết quả PV/đi làm, đặt lịch gọi lại).
+ * S5 (phần cuộc gọi/ghi chú), Mục 2.2, docs/12-ui-design.md — Phase 3.
+ * Dự án phụ — nâng cấp toàn diện: bỏ hẳn phần "Phỏng vấn & đi làm" khỏi
+ * trang này (sẽ làm lại thành 1 trang riêng, nhập thủ công — tính sau) —
+ * không còn tải GET /candidate/:id/interview hay danh mục trạng thái PV/đi làm.
  */
 export default async function CandidateDetailPage({
   params,
@@ -22,12 +24,10 @@ export default async function CandidateDetailPage({
 
   let candidate: Candidate;
   let notes: Note[];
-  let interviews: Interview[];
   try {
-    [candidate, notes, interviews] = await Promise.all([
+    [candidate, notes] = await Promise.all([
       serverApi<Candidate>(`/candidate/${id}`),
       serverApi<Note[]>(`/candidate/${id}/note`),
-      serverApi<Interview[]>(`/candidate/${id}/interview`),
     ]);
   } catch (error) {
     if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
@@ -36,22 +36,19 @@ export default async function CandidateDetailPage({
     throw error;
   }
 
-  const [callStatuses, callResults, interviewStatuses, employmentStatuses] = await Promise.all([
+  const [callStatuses, callResults, zaloStatuses] = await Promise.all([
     serverApi<StatusCatalogItem[]>("/status?category=call_status"),
     serverApi<StatusCatalogItem[]>("/status?category=call_result"),
-    serverApi<StatusCatalogItem[]>("/status?category=interview_status"),
-    serverApi<StatusCatalogItem[]>("/status?category=employment_status"),
+    serverApi<StatusCatalogItem[]>("/status?category=zalo_status"),
   ]);
 
   return (
     <CandidateDetailClient
       initialCandidate={candidate}
       initialNotes={notes}
-      initialInterviews={interviews}
       callStatuses={callStatuses}
       callResults={callResults}
-      interviewStatuses={interviewStatuses}
-      employmentStatuses={employmentStatuses}
+      zaloStatuses={zaloStatuses}
       currentUserId={user.id}
       currentUserRole={user.role}
       currentUserTeamId={user.team_id}

@@ -6,24 +6,30 @@ import { Input } from "@/components/ui/form";
 
 /**
  * UI Polish — sửa nhanh trực tiếp 1 trường ngay trên trang Chi tiết ứng
- * viên (không chuyển trang), dùng chung cho Năm sinh/Địa chỉ. Gọi PUT
- * /candidate/:id/quick-edit (API mới, mở cho tất cả vai trò) — xem
+ * viên (không chuyển trang), dùng chung cho Số điện thoại/Năm sinh/Địa chỉ.
+ * Gọi PUT /candidate/:id/quick-edit (API mới, mở cho tất cả vai trò) — xem
  * candidates.service.ts (backend) để biết lý do không dùng PUT /candidate/:id.
+ *
+ * Dự án phụ — nâng cấp toàn diện: `alwaysEditable` cho Năm sinh/Địa chỉ —
+ * hiện sẵn 1 ô nhập text (không cần bấm bút chì), gõ xong bấm Enter là lưu.
+ * Số điện thoại KHÔNG đổi (vẫn kiểu bấm bút chì mới hiện ô sửa như cũ).
  */
 export function InlineEditField({
   label,
   displayValue,
   editValue,
   inputType = "text",
+  alwaysEditable = false,
   onSave,
 }: {
   label: string;
   displayValue: string;
   editValue: string;
   inputType?: "text" | "number";
+  alwaysEditable?: boolean;
   onSave: (value: string) => Promise<void>;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(alwaysEditable);
   const [draft, setDraft] = useState(editValue);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +45,7 @@ export function InlineEditField({
     setIsSaving(true);
     try {
       await onSave(draft);
-      setIsEditing(false);
+      if (!alwaysEditable) setIsEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Có lỗi xảy ra");
     } finally {
@@ -60,30 +66,34 @@ export function InlineEditField({
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void handleSave();
-                if (event.key === "Escape") setIsEditing(false);
+                if (event.key === "Escape" && !alwaysEditable) setIsEditing(false);
               }}
               className="w-32"
-              autoFocus
+              autoFocus={!alwaysEditable}
               disabled={isSaving}
             />
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => void handleSave()}
-              className="rounded-md p-1 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
-              title="Lưu"
-            >
-              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => setIsEditing(false)}
-              className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 disabled:opacity-50"
-              title="Hủy"
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </button>
+            {!alwaysEditable && (
+              <>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => void handleSave()}
+                  className="rounded-md p-1 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                  title="Lưu"
+                >
+                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => setIsEditing(false)}
+                  className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 disabled:opacity-50"
+                  title="Hủy"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </button>
+              </>
+            )}
           </div>
         </div>
         {error && <p className="text-right text-xs text-red-600">{error}</p>}

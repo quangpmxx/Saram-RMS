@@ -11,20 +11,21 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-50">
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-[22%] -left-[20%] h-[62vw] w-[62vw] max-h-[820px] max-w-[820px] rounded-full bg-accent-400" />
-        <div className="absolute -top-[28%] -left-[26%] h-[62vw] w-[62vw] max-h-[820px] max-w-[820px] rounded-full bg-gradient-to-br from-brand-800 to-brand-600" />
-        <div className="absolute -right-[20%] -bottom-[22%] h-[62vw] w-[62vw] max-h-[820px] max-w-[820px] rounded-full bg-accent-400" />
-        <div className="absolute -right-[26%] -bottom-[28%] h-[62vw] w-[62vw] max-h-[820px] max-w-[820px] rounded-full bg-gradient-to-tl from-brand-800 to-brand-600" />
-      </div>
+    <div className="relative min-h-screen w-screen overflow-hidden bg-slate-50">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 h-screen w-screen bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url(/login-bg.png)" }}
+      />
+      {/* Lớp phủ rất nhẹ chỉ để tăng độ tương phản, không làm tối ảnh nền. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-white/5" />
 
       <div className="relative flex min-h-screen items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="rounded-3xl bg-white p-8 shadow-2xl shadow-brand-900/20 sm:p-10">
+          <div className="rounded-3xl bg-white/90 p-8 shadow-2xl shadow-brand-900/20 backdrop-blur-sm sm:p-10">
             <div className="flex flex-col items-center text-center">
               <Logo size="lg" showWordmark={false} />
-              <p className="mt-3 text-base font-semibold text-brand-900 sm:text-lg">
+              <p className="mt-1 text-base font-semibold text-brand-900 sm:text-lg">
                 Công Ty TNHH Thương Mại Dịch Vụ Saram Vina
               </p>
             </div>
@@ -37,7 +38,7 @@ export default async function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            © {new Date().getFullYear()} Saram Vina. Nội bộ — PMQ
+            © {new Date().getFullYear()} Saram Vina . Nội bộ
           </p>
         </div>
       </div>

@@ -126,6 +126,10 @@ model Account {
   role         AccountRole
   teamId       String?       @map("team_id") @db.Uuid
   status       AccountStatus @default(active)
+  // Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
+  // ảnh đại diện tự upload, đường dẫn tương đối phục vụ tĩnh qua
+  // useStaticAssets() trong main.ts (vd "/uploads/avatars/xxx.jpg").
+  avatarUrl    String?       @map("avatar_url") @db.VarChar(500)
   createdById  String?       @map("created_by") @db.Uuid
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
@@ -157,12 +161,17 @@ model Account {
   // Phase 5 — quan hệ ngược từ SystemConfig
   updatedConfigs SystemConfig[]
 
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ColumnWidthConfig
+  updatedColumnWidthConfigs ColumnWidthConfig[]
+
   // Phase 6 — quan hệ ngược từ DistributionRule/DistributionMember
   createdDistributionRules DistributionRule[]
   distributionMemberships  DistributionMember[]
 
   // Phase 8 — quan hệ ngược từ Notification
   notifications Notification[]
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược người gửi (admin_message)
+  sentNotifications Notification[] @relation("NotificationSender")
 
   // Phase 9 — quan hệ ngược từ AccountPermission
   permissionGrants        AccountPermission[] @relation("AccountPermissionAccount")
@@ -212,8 +221,21 @@ enum StatusCategory {
   call_result
   interview_status
   employment_status
+  /// Dự án phụ — nâng cấp toàn diện: tình trạng kết bạn Zalo (3 lựa chọn cố
+  /// định: đã kết bạn / chưa đồng ý / không có Zalo) — xem seed.ts.
+  zalo_status
 
   @@map("status_category")
+}
+
+/// Dự án phụ — nâng cấp toàn diện: 3 màu đánh dấu cố định cho ô "Lịch sử
+/// ghi chú/cuộc gọi" trên trang Chi tiết ứng viên (không phải StatusCatalog).
+enum NoteColor {
+  yellow
+  green
+  red
+
+  @@map("note_color")
 }
 
 /// Khớp cột "assignment_method" của bảng leads (Mục 2.8, tài liệu 11).
@@ -255,6 +277,7 @@ model StatusCatalog {
 
   leadsByCallStatus              Lead[]                 @relation("LeadCallStatus")
   leadsByCallResult              Lead[]                 @relation("LeadCallResult")
+  leadsByZaloStatus              Lead[]                 @relation("LeadZaloStatus")
   leadsByCurrentInterviewStatus  Lead[]                 @relation("LeadCurrentInterviewStatus")
   leadsByCurrentEmploymentStatus Lead[]                 @relation("LeadCurrentEmploymentStatus")
   notesByCallStatus              LeadNote[]             @relation("LeadNoteCallStatus")
@@ -291,6 +314,13 @@ model Lead {
   callStatusId String? @map("call_status_id") @db.Uuid
   callResultId String? @map("call_result_id") @db.Uuid
 
+  // Dự án phụ — nâng cấp toàn diện: tình trạng kết bạn Zalo, chọn tại trang Chi tiết ứng viên.
+  zaloStatusId String? @map("zalo_status_id") @db.Uuid
+
+  // Dự án phụ — nâng cấp toàn diện: màu đánh dấu ô "Lịch sử ghi chú/cuộc gọi"
+  // trên trang Chi tiết ứng viên (không liên quan StatusCatalog — chỉ 3 màu cố định).
+  noteColor NoteColor? @map("note_color")
+
   // Phase 4 — chưa có logic ghi ở Phase 1, luôn NULL
   currentInterviewStatusId  String? @map("current_interview_status_id") @db.Uuid
   currentEmploymentStatusId String? @map("current_employment_status_id") @db.Uuid
@@ -323,6 +353,7 @@ model Lead {
   deletedBy               Account?               @relation("LeadDeletedBy", fields: [deletedById], references: [id])
   callStatus              StatusCatalog?         @relation("LeadCallStatus", fields: [callStatusId], references: [id])
   callResult              StatusCatalog?         @relation("LeadCallResult", fields: [callResultId], references: [id])
+  zaloStatus              StatusCatalog?         @relation("LeadZaloStatus", fields: [zaloStatusId], references: [id])
   currentInterviewStatus  StatusCatalog?         @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
   currentEmploymentStatus StatusCatalog?         @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
   notes                   LeadNote[]
@@ -448,6 +479,25 @@ model SystemConfig {
   @@map("system_configs")
 }
 
+/// Dự án phụ — nâng cấp toàn diện: độ rộng cột do Admin tùy chỉnh, áp dụng
+/// chung cho MỌI tài khoản (không phải preference riêng từng người).
+/// `tableKey` là 1 chuỗi tự do do từng trang tự đặt (vd "candidates_list",
+/// "sale_performance") — không cần đổi schema/migration khi thêm bảng mới
+/// sau này, chỉ cần trang đó gọi PUT với tableKey riêng. `columnWidths` lưu
+/// dạng JSON string {"tên_cột": độ_rộng_px, ...} — validate ở service, không
+/// ràng buộc cấu trúc cột cụ thể ở DB (mỗi trang tự định nghĩa danh sách cột).
+model ColumnWidthConfig {
+  id            String   @id @default(uuid()) @db.Uuid
+  tableKey      String   @unique @map("table_key") @db.VarChar(100)
+  columnWidths  String   @map("column_widths") @db.VarChar(2000)
+  updatedById   String   @map("updated_by") @db.Uuid
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  updatedBy Account @relation(fields: [updatedById], references: [id])
+
+  @@map("column_width_configs")
+}
+
 // ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────
 
 /// Mục 2.12, tài liệu 11 — Cấu hình tự động phân chia của 1 nhóm (tối đa 1
@@ -489,6 +539,9 @@ model DistributionMember {
 enum NotificationType {
   callback_reminder
   interview_reminder
+  /// Dự án phụ — nâng cấp toàn diện: Admin soạn + gửi thủ công cho 1 nhóm/
+  /// nhiều thành viên cụ thể (POST /notification) — dùng chung ô "content".
+  admin_message
 
   @@map("notification_type")
 }
@@ -497,6 +550,9 @@ enum NotificationType {
 // chỉ có 1 giá trị (kênh gửi duy nhất đã xác nhận, Mục 10.10 tài liệu 09).
 enum NotificationChannel {
   zalo
+  /// Dự án phụ — nâng cấp toàn diện: thông báo trong ứng dụng (chuông/toast),
+  /// không gửi qua Zalo — dùng cho type=admin_message.
+  in_app
 
   @@map("notification_channel")
 }
@@ -518,13 +574,20 @@ model Notification {
   leadId      String?             @map("lead_id") @db.Uuid
   type        NotificationType
   channel     NotificationChannel @default(zalo)
+  /// Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message,
+  /// null với 2 loại nhắc lịch cũ (nội dung tự dựng ở tầng hiển thị như trước).
+  content     String?
+  /// Dự án phụ — nâng cấp toàn diện: Admin đã gửi (type=admin_message), null
+  /// với 2 loại nhắc lịch cũ (hệ thống tự tạo, không có người gửi cụ thể).
+  senderId    String?             @map("sender_id") @db.Uuid
   scheduledAt DateTime            @map("scheduled_at")
   sentAt      DateTime?           @map("sent_at")
   status      NotificationStatus  @default(pending)
   createdAt   DateTime            @default(now()) @map("created_at")
 
-  account Account @relation(fields: [accountId], references: [id])
-  lead    Lead?   @relation(fields: [leadId], references: [id])
+  account Account  @relation(fields: [accountId], references: [id])
+  sender  Account? @relation("NotificationSender", fields: [senderId], references: [id])
+  lead    Lead?    @relation(fields: [leadId], references: [id])
 
   @@index([status, scheduledAt])
   @@index([leadId, type])

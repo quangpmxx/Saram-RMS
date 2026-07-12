@@ -19,6 +19,8 @@ export interface Account {
   team_id: string | null;
   team_name: string | null;
   status: AccountStatus;
+  /** Dự án phụ — nâng cấp toàn diện: đường dẫn tương đối ảnh đại diện tự upload, null nếu chưa có. */
+  avatar_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,6 +76,8 @@ export interface Candidate {
   assignment_method: string | null;
   call_status: NamedRef | null;
   call_result: NamedRef | null;
+  zalo_status: NamedRef | null;
+  note_color: "yellow" | "green" | "red" | null;
   current_interview_status: NamedRef | null;
   current_employment_status: NamedRef | null;
   current_partner_company_name: string | null;
@@ -151,7 +155,7 @@ export interface AssignBulkResult {
 
 // ── Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú ────────────────────────
 
-export type StatusCategory = "call_status" | "call_result" | "interview_status" | "employment_status";
+export type StatusCategory = "call_status" | "call_result" | "interview_status" | "employment_status" | "zalo_status";
 
 /** GET /status — Mục 9, docs/13-api-design.md. */
 export interface StatusCatalogItem {
@@ -309,4 +313,22 @@ export interface Permission {
 /** PUT /account/:id/permission response — Mục 2, docs/13-api-design.md. */
 export interface AccountPermissionGrant extends Permission {
   is_granted: boolean;
+}
+
+// ── Phase 8 — Thông báo Zalo ──────────────────────────────────────────
+
+/** Đối tượng "Notification" — Mục 0.1, docs/13-api-design.md. GET /notification. */
+export interface AppNotification {
+  id: string;
+  account_id: string;
+  lead_id: string | null;
+  type: "callback_reminder" | "interview_reminder" | "admin_message";
+  channel: string;
+  /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
+  content: string | null;
+  /** Dự án phụ — nâng cấp toàn diện: người gửi khi type=admin_message, null với 2 loại nhắc lịch cũ (hệ thống tự tạo). */
+  sender: { id: string; name: string; role: AccountRole; avatar_url: string | null } | null;
+  scheduled_at: string;
+  sent_at: string | null;
+  status: "pending" | "sent" | "failed";
 }

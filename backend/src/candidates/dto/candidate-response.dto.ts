@@ -2,6 +2,7 @@ import {
   Account,
   Lead,
   LeadSource,
+  NoteColor,
   StatusCatalog,
 } from '../../../generated/prisma/client';
 
@@ -23,6 +24,8 @@ export interface CandidateResponseDto {
   assignment_method: string | null;
   call_status: { id: string; name: string } | null;
   call_result: { id: string; name: string } | null;
+  zalo_status: { id: string; name: string } | null;
+  note_color: NoteColor | null;
   current_interview_status: { id: string; name: string } | null;
   current_employment_status: { id: string; name: string } | null;
   current_partner_company_name: string | null;
@@ -45,6 +48,7 @@ type LeadWithRelations = Lead & {
   carePoolLockedBy?: Pick<Account, 'id' | 'fullName'> | null;
   callStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
   callResult?: Pick<StatusCatalog, 'id' | 'name'> | null;
+  zaloStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
   currentInterviewStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
   currentEmploymentStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
 };
@@ -75,6 +79,10 @@ export function toCandidateResponse(
     call_result: lead.callResult
       ? { id: lead.callResult.id, name: lead.callResult.name }
       : null,
+    zalo_status: lead.zaloStatus
+      ? { id: lead.zaloStatus.id, name: lead.zaloStatus.name }
+      : null,
+    note_color: lead.noteColor,
     current_interview_status: lead.currentInterviewStatus
       ? {
           id: lead.currentInterviewStatus.id,
@@ -113,6 +121,7 @@ export const CANDIDATE_INCLUDE = {
   carePoolLockedBy: { select: { id: true, fullName: true } },
   callStatus: { select: { id: true, name: true } },
   callResult: { select: { id: true, name: true } },
+  zaloStatus: { select: { id: true, name: true } },
   currentInterviewStatus: { select: { id: true, name: true } },
   currentEmploymentStatus: { select: { id: true, name: true } },
 } as const;

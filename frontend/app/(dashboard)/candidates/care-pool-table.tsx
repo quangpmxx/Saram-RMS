@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LogIn, Trash2, Unlock, Users } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { AccountRole, Candidate } from "@/lib/types";
@@ -36,6 +37,7 @@ export function CarePoolTable({
   onChanged: () => Promise<void>;
   onBanner: (banner: { type: "error" | "success"; text: string }) => void;
 }) {
+  const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   async function handleRelease(candidate: Candidate) {
@@ -52,7 +54,7 @@ export function CarePoolTable({
   }
 
   async function handleRemove(candidate: Candidate) {
-    if (!window.confirm(`Gỡ "${candidate.full_name}" khỏi cột chăm sóc? Ứng viên không bị xóa, chỉ ẩn khỏi danh sách này.`)) {
+    if (!window.confirm(`Gỡ "${candidate.full_name}" khỏi cột chăm sóc? Lao động không bị xóa, chỉ ẩn khỏi danh sách này.`)) {
       return;
     }
     setPendingId(candidate.id);
@@ -73,23 +75,28 @@ export function CarePoolTable({
 
   return (
     <div className="max-h-[calc(100vh-180px)] overflow-auto">
+      {/* UI Polish — tinh chỉnh thêm độ rộng cột (đồng bộ với bảng chính):
+          Ứng viên/Nguồn/Sale phụ trách/Hành động thu hẹp hết mức trong khi
+          vẫn hiển thị đủ dữ liệu — width/min-width/max-width cố định bằng
+          px trên <col>. Bảng này không có cột "Tình trạng cuộc gọi" nên phần
+          tiết kiệm được không cộng vào đâu — chỉ đơn giản là bảng gọn hơn. */}
       <table className="w-full table-fixed border-collapse text-left text-sm">
         <colgroup>
-          <col className="w-[220px]" />
-          <col className="w-[112px]" />
-          <col className="w-[170px]" />
-          <col className="w-[140px]" />
-          <col className="w-[190px]" />
-          <col className="w-[160px]" />
+          <col className="w-[112px] min-w-[112px] max-w-[112px]" />
+          <col className="w-[38px] min-w-[38px] max-w-[38px]" />
+          <col className="w-[70px] min-w-[70px] max-w-[70px]" />
+          <col className="w-[140px] min-w-[140px] max-w-[140px]" />
+          <col className="w-[190px] min-w-[190px] max-w-[190px]" />
+          <col className="w-[101px] min-w-[101px] max-w-[101px]" />
         </colgroup>
         <thead className="sticky top-0 z-10 bg-brand-50/95 text-[11px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
           <tr>
-            <th className="border-r border-slate-100 px-4 py-3">Ứng viên</th>
-            <th className="border-r border-slate-100 px-3 py-3">Nguồn</th>
-            <th className="border-r border-slate-100 px-3 py-3">Sale phụ trách</th>
-            <th className="border-r border-slate-100 px-3 py-3">Vào cột chăm sóc</th>
-            <th className="border-r border-slate-100 px-3 py-3">Trạng thái khóa</th>
-            <th className="px-2 py-3">Hành động</th>
+            <th className="border-r border-slate-100 px-1.5 py-3 text-center">Lao động</th>
+            <th className="border-r border-slate-100 px-1 py-3 text-center">Nguồn</th>
+            <th className="border-r border-slate-100 px-1 py-3 text-center">Sale phụ trách</th>
+            <th className="border-r border-slate-100 px-3 py-3 text-center">Vào cột chăm sóc</th>
+            <th className="border-r border-slate-100 px-3 py-3 text-center">Trạng thái khóa</th>
+            <th className="px-1 py-3 text-center">Hành động</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -104,31 +111,48 @@ export function CarePoolTable({
                 key={candidate.id}
                 className={`align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
               >
-                <td className="border-r border-slate-100 px-4 py-3">
+                <td
+                  className="cursor-pointer border-r border-slate-100 px-1.5 py-3"
+                  onClick={(event) => {
+                    // UI Polish — cả ô mở được chi tiết ứng viên, không chỉ riêng tên.
+                    const target = event.target as HTMLElement;
+                    if (target.closest("a, [role='button']")) return;
+                    router.push(`/candidates/${candidate.id}`);
+                  }}
+                >
                   <Link
                     href={`/candidates/${candidate.id}`}
-                    className="font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                    title={candidate.full_name}
+                    className="line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline"
                   >
                     {candidate.full_name}
                   </Link>
-                  <p className="mt-1 text-xs text-slate-500">{candidate.phone_number}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">{candidate.phone_number}</p>
                 </td>
 
-                <td className="border-r border-slate-100 px-3 py-3">
-                  <SourceBadge name={candidate.source.name} />
+                <td className="border-r border-slate-100 px-1 py-3 text-center">
+                  <SourceBadge name={candidate.source.name} className="text-[10px] px-1.5 py-0" />
                 </td>
 
-                <td className="border-r border-slate-100 px-3 py-3">
+                <td className="border-r border-slate-100 px-1 py-3">
                   {candidate.assigned_to ? (
-                    <div className="flex items-start gap-1.5">
-                      <Avatar fullName={candidate.assigned_to.name} className="h-7 w-7 shrink-0 text-[11px]" />
-                      <div className="min-w-0 leading-tight">
-                        <p className="font-medium break-words text-slate-800">{candidate.assigned_to.name}</p>
-                        {teamName && <p className="text-xs break-words text-slate-400">{teamName}</p>}
+                    <div className="flex flex-col items-center gap-0.5 text-center">
+                      <Avatar fullName={candidate.assigned_to.name} className="h-6 w-6 shrink-0 text-[10px]" />
+                      <div className="min-w-0 w-full leading-tight">
+                        <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
+                          {candidate.assigned_to.name}
+                        </p>
+                        {teamName && (
+                          <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
+                            {teamName}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <Badge variant="neutral">Chờ phân chia</Badge>
+                    <Badge variant="neutral" className="text-[10px] px-2 py-0">
+                      Chờ phân chia
+                    </Badge>
                   )}
                 </td>
 
@@ -146,7 +170,7 @@ export function CarePoolTable({
                   )}
                 </td>
 
-                <td className="px-2 py-3">
+                <td className="px-1 py-3">
                   <div className="flex flex-wrap items-center gap-0.5">
                     {currentUserRole === "sale" && !lockedByOther && (
                       <Link

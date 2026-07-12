@@ -24,6 +24,8 @@ import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
+import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
+import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
@@ -197,6 +199,24 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pipelineService.updateCallResult(id, dto, user);
+  }
+
+  @Put(':id/zalo-status')
+  updateZaloStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateZaloStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateZaloStatus(id, dto, user);
+  }
+
+  @Put(':id/note-color')
+  updateNoteColor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateNoteColorDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateNoteColor(id, dto, user);
   }
 
   @Get(':id/note')

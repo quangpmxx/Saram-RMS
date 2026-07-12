@@ -2,7 +2,12 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
-type Size = "sm" | "md";
+/**
+ * `xs`: UI Polish — tinh chỉnh mật độ hiển thị riêng cho bộ lọc trang Ứng
+ * viên — KHÔNG đổi `sm`/`md` để không ảnh hưởng các nút khác đang dùng
+ * chung 2 size đó ở khắp nơi trong app.
+ */
+type Size = "xs" | "sm" | "md";
 
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
@@ -16,6 +21,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
+  xs: "px-2 py-1 text-xs",
   sm: "px-3 py-1.5 text-xs",
   md: "px-4 py-2.5 text-sm",
 };

@@ -17,6 +17,8 @@ import {
 } from './dto/candidate-response.dto';
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
+import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
+import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
@@ -104,6 +106,67 @@ export class LeadPipelineService {
       fieldChanged: 'call_result_id',
       oldValue: lead.callResultId ?? undefined,
       newValue: dto.call_result_id,
+    });
+
+    return this.reloadCandidate(id);
+  }
+
+  /**
+   * Dự án phụ — nâng cấp toàn diện: PUT /candidate/:id/zalo-status — cùng
+   * phạm vi quyền với updateCallStatus/updateCallResult (loadLeadForUpdate).
+   */
+  async updateZaloStatus(
+    id: string,
+    dto: UpdateZaloStatusDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const lead = await this.loadLeadForUpdate(id, currentUser);
+    await this.assertStatusInCategory(dto.zalo_status_id, 'zalo_status');
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: { zaloStatusId: dto.zalo_status_id, lastActivityAt: new Date() },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'lead',
+      entityId: id,
+      fieldChanged: 'zalo_status_id',
+      oldValue: lead.zaloStatusId ?? undefined,
+      newValue: dto.zalo_status_id,
+    });
+
+    return this.reloadCandidate(id);
+  }
+
+  /**
+   * Dự án phụ — nâng cấp toàn diện: PUT /candidate/:id/note-color — màu đánh
+   * dấu ô "Lịch sử ghi chú/cuộc gọi", cùng phạm vi quyền với
+   * updateCallStatus/updateZaloStatus (loadLeadForUpdate). note_color = null
+   * nghĩa là bỏ chọn màu.
+   */
+  async updateNoteColor(
+    id: string,
+    dto: UpdateNoteColorDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const lead = await this.loadLeadForUpdate(id, currentUser);
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: { noteColor: dto.note_color, lastActivityAt: new Date() },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'lead',
+      entityId: id,
+      fieldChanged: 'note_color',
+      oldValue: lead.noteColor ?? undefined,
+      newValue: dto.note_color ?? undefined,
     });
 
     return this.reloadCandidate(id);
@@ -513,33 +576,39 @@ export class LeadPipelineService {
       if (lead.assignedToId === currentUser.id) {
         return lead;
       }
+      const account = await this.prisma.account.findUnique({
+        where: { id: currentUser.id },
+      });
+      const sameTeam = Boolean(
+        account?.teamId && lead.assignedTeamId === account.teamId,
+      );
+      // Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm được xử
+      // lý tiếp 1 lead KHÔNG phải của mình (thêm ghi chú, cập nhật trạng
+      // thái cuộc gọi/PV/lịch gọi lại...), NHƯNG chỉ khi lead đã được xử lý
+      // ít nhất 1 lần (lastActivityAt khác null) — tôn trọng quyền xử lý số
+      // hoàn toàn mới của người phụ trách gốc, tránh giành số.
+      if (sameTeam && lead.lastActivityAt !== null) {
+        return lead;
+      }
       // Phase 5 — Mục 8, docs/09: Sale cũng xử lý được lead trong cột chăm
       // sóc của nhóm mình, nhưng BẮT BUỘC đã chiếm khóa trước (POST
       // /care-pool/:id/lock) — đúng quy tắc "chỉ 1 người xử lý 1 lead tại 1
       // thời điểm" (Mục 10.1, docs/09).
-      if (isVisibleInCarePool(lead)) {
-        const account = await this.prisma.account.findUnique({
-          where: { id: currentUser.id },
-        });
-        if (account?.teamId && lead.assignedTeamId === account.teamId) {
-          if (
-            lead.carePoolLockedById === currentUser.id &&
-            isLockActive(lead)
-          ) {
-            return lead;
-          }
-          if (lead.carePoolLockedById && isLockActive(lead)) {
-            const locker = await this.prisma.account.findUnique({
-              where: { id: lead.carePoolLockedById },
-            });
-            throw new ConflictException(
-              `Sale ${locker?.fullName ?? 'khác'} đang xử lý ứng viên này, vui lòng thử lại sau`,
-            );
-          }
-          throw new ForbiddenException(
-            'Bạn cần chiếm khóa xử lý (mở lead trong Cột chăm sóc) trước khi thao tác',
+      if (isVisibleInCarePool(lead) && sameTeam) {
+        if (lead.carePoolLockedById === currentUser.id && isLockActive(lead)) {
+          return lead;
+        }
+        if (lead.carePoolLockedById && isLockActive(lead)) {
+          const locker = await this.prisma.account.findUnique({
+            where: { id: lead.carePoolLockedById },
+          });
+          throw new ConflictException(
+            `Sale ${locker?.fullName ?? 'khác'} đang xử lý ứng viên này, vui lòng thử lại sau`,
           );
         }
+        throw new ForbiddenException(
+          'Bạn cần chiếm khóa xử lý (mở lead trong Cột chăm sóc) trước khi thao tác',
+        );
       }
       throw new ForbiddenException(
         'Bạn chỉ được cập nhật ứng viên đang phụ trách',
@@ -563,7 +632,11 @@ export class LeadPipelineService {
   private async assertStatusInCategory(
     statusId: string,
     category:
-      'call_status' | 'call_result' | 'interview_status' | 'employment_status',
+      | 'call_status'
+      | 'call_result'
+      | 'interview_status'
+      | 'employment_status'
+      | 'zalo_status',
   ) {
     const status = await this.prisma.statusCatalog.findUnique({
       where: { id: statusId },

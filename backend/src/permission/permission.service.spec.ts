@@ -26,13 +26,23 @@ describe('PermissionService', () => {
 
   it('ánh xạ đúng đối tượng Permission theo danh mục đã seed (Phase 9 — xem seedPhase9Permissions())', async () => {
     prisma.permission.findMany.mockResolvedValue([
-      { id: 'perm-1', code: 'ADD_EMPLOYEE', name: 'Thêm nhân viên', description: null },
+      {
+        id: 'perm-1',
+        code: 'ADD_EMPLOYEE',
+        name: 'Thêm nhân viên',
+        description: null,
+      },
     ]);
 
     const result = await service.list();
 
     expect(result).toEqual([
-      { id: 'perm-1', code: 'ADD_EMPLOYEE', name: 'Thêm nhân viên', description: null },
+      {
+        id: 'perm-1',
+        code: 'ADD_EMPLOYEE',
+        name: 'Thêm nhân viên',
+        description: null,
+      },
     ]);
   });
 });

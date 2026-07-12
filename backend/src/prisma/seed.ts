@@ -68,7 +68,11 @@ async function seedLeadSources(prisma: PrismaClient): Promise<void> {
 async function seedStatusCatalog(prisma: PrismaClient): Promise<void> {
   const entries: Array<{
     category:
-      'call_status' | 'call_result' | 'interview_status' | 'employment_status';
+      | 'call_status'
+      | 'call_result'
+      | 'interview_status'
+      | 'employment_status'
+      | 'zalo_status';
     code: string;
     name: string;
     sortOrder: number;
@@ -160,6 +164,25 @@ async function seedStatusCatalog(prisma: PrismaClient): Promise<void> {
       code: 'NOT_EMPLOYED',
       name: 'Không đi làm',
       sortOrder: 2,
+    },
+
+    {
+      category: 'zalo_status',
+      code: 'ADDED',
+      name: 'Đã kết bạn Zalo',
+      sortOrder: 1,
+    },
+    {
+      category: 'zalo_status',
+      code: 'NOT_AGREED',
+      name: 'Chưa đồng ý kết bạn Zalo',
+      sortOrder: 2,
+    },
+    {
+      category: 'zalo_status',
+      code: 'NO_ZALO',
+      name: 'Không có Zalo',
+      sortOrder: 3,
     },
   ];
 

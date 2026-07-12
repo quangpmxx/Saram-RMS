@@ -36,6 +36,7 @@ describe('LeadPipelineService', () => {
     assignedTeamId: 'team-1',
     callStatusId: null,
     callResultId: null,
+    lastActivityAt: null,
   };
 
   const saleUser = { id: 'sale-1', role: 'sale' as const, sessionId: 's' };
@@ -94,6 +95,63 @@ describe('LeadPipelineService', () => {
 
     it('Sale không được cập nhật lead không phải của mình', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
+      await expect(
+        service.updateCallStatus(
+          'lead-1',
+          { call_status_id: 'x' },
+          otherSaleUser,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: Sale khác cùng nhóm KHÔNG được xử lý lead chưa ai đụng tới (lastActivityAt=null)', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead); // lastActivityAt: null
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      await expect(
+        service.updateCallStatus(
+          'lead-1',
+          { call_status_id: 'x' },
+          otherSaleUser,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: Sale khác cùng nhóm xử lý được lead đã có ít nhất 1 lần hoạt động (lastActivityAt khác null)', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        lastActivityAt: new Date('2026-01-02'),
+      });
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'status-1',
+        category: 'call_status',
+      });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        callStatusId: 'status-1',
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await expect(
+        service.updateCallStatus(
+          'lead-1',
+          { call_status_id: 'status-1' },
+          otherSaleUser,
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: Sale khác NHÓM KHÁC vẫn bị từ chối dù lead đã có hoạt động', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        lastActivityAt: new Date('2026-01-02'),
+      });
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-2' });
       await expect(
         service.updateCallStatus(
           'lead-1',
@@ -193,6 +251,122 @@ describe('LeadPipelineService', () => {
           leaderUser,
         ),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('updateZaloStatus', () => {
+    it('ném NotFoundException nếu ứng viên không tồn tại/đã xóa mềm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateZaloStatus('ghost', { zalo_status_id: 'x' }, saleUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('từ chối nếu zalo_status_id không thuộc category zalo_status', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'status-1',
+        category: 'call_result',
+      });
+      await expect(
+        service.updateZaloStatus(
+          'lead-1',
+          { zalo_status_id: 'status-1' },
+          saleUser,
+        ),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('Sale cập nhật thành công cho lead của mình, ghi last_activity_at + audit log', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'status-1',
+        category: 'zalo_status',
+      });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        zaloStatusId: 'status-1',
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await service.updateZaloStatus(
+        'lead-1',
+        { zalo_status_id: 'status-1' },
+        saleUser,
+      );
+
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { zaloStatusId: 'status-1', lastActivityAt: expect.any(Date) },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'update',
+          fieldChanged: 'zalo_status_id',
+        }),
+      );
+    });
+  });
+
+  describe('updateNoteColor', () => {
+    it('ném NotFoundException nếu ứng viên không tồn tại/đã xóa mềm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateNoteColor('ghost', { note_color: 'red' }, saleUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('Sale cập nhật thành công cho lead của mình, ghi last_activity_at + audit log', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        noteColor: 'red',
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await service.updateNoteColor('lead-1', { note_color: 'red' }, saleUser);
+
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { noteColor: 'red', lastActivityAt: expect.any(Date) },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'update',
+          fieldChanged: 'note_color',
+        }),
+      );
+    });
+
+    it('cho phép gửi note_color=null để bỏ chọn màu', async () => {
+      prisma.lead.findUnique.mockResolvedValue({ ...baseLead, noteColor: 'red' });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        noteColor: null,
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await service.updateNoteColor('lead-1', { note_color: null }, saleUser);
+
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { noteColor: null, lastActivityAt: expect.any(Date) },
+      });
     });
   });
 

@@ -13,12 +13,12 @@ import {
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { Checkbox, Field, Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/lib/toast-context";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
 /** Mục 9.1, docs/12-ui-design.md: "Cấu hình quyền chi tiết" chỉ áp dụng cho Quản lý/Leader. */
@@ -41,7 +41,7 @@ export function AccountsClient({
   const [accounts, setAccounts] = useState(initialAccounts);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const toast = useToast();
 
   async function refresh() {
     const result = await clientApi<{ items: Account[] }>("/account?page=1&page_size=100");
@@ -51,13 +51,12 @@ export function AccountsClient({
 
   async function handleDeactivate(account: Account) {
     setPendingId(account.id);
-    setBanner(null);
     try {
       await clientApi(`/account/${account.id}`, { method: "DELETE" });
       await refresh();
-      setBanner({ type: "success", text: `Đã vô hiệu hóa tài khoản "${account.username}"` });
+      toast.success(`Đã vô hiệu hóa tài khoản "${account.username}"`);
     } catch (error) {
-      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setPendingId(null);
     }
@@ -65,16 +64,15 @@ export function AccountsClient({
 
   async function handleReactivate(account: Account) {
     setPendingId(account.id);
-    setBanner(null);
     try {
       await clientApi(`/account/${account.id}`, {
         method: "PUT",
         body: JSON.stringify({ status: "active" }),
       });
       await refresh();
-      setBanner({ type: "success", text: `Đã kích hoạt lại tài khoản "${account.username}"` });
+      toast.success(`Đã kích hoạt lại tài khoản "${account.username}"`);
     } catch (error) {
-      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setPendingId(null);
     }
@@ -82,12 +80,11 @@ export function AccountsClient({
 
   async function handleResetPassword(account: Account) {
     setPendingId(account.id);
-    setBanner(null);
     try {
       await clientApi(`/account/${account.id}/reset-password`, { method: "POST" });
-      setBanner({ type: "success", text: `Đã đặt lại mật khẩu mặc định cho "${account.username}"` });
+      toast.success(`Đã đặt lại mật khẩu mặc định cho "${account.username}"`);
     } catch (error) {
-      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setPendingId(null);
     }
@@ -106,11 +103,18 @@ export function AccountsClient({
         }
       />
 
-      {banner && <Banner type={banner.type} text={banner.text} />}
-
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          {/* UI Polish — cố định độ rộng cột theo yêu cầu người dùng, bỏ tính năng co giãn. */}
+          <table className="w-full table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[180px]" />
+              <col className="w-[150px]" />
+              <col className="w-[120px]" />
+              <col className="w-[140px]" />
+              <col className="w-[140px]" />
+              <col className="w-[320px]" />
+            </colgroup>
             <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
                 <th className="px-4 py-3">Họ tên</th>
@@ -197,7 +201,7 @@ export function AccountsClient({
             await clientApi("/account", { method: "POST", body: JSON.stringify(payload) });
             setModal({ mode: "none" });
             await refresh();
-            setBanner({ type: "success", text: "Đã tạo tài khoản mới" });
+            toast.success("Đã tạo tài khoản mới");
           }}
         />
       )}
@@ -215,7 +219,7 @@ export function AccountsClient({
             });
             setModal({ mode: "none" });
             await refresh();
-            setBanner({ type: "success", text: "Đã cập nhật tài khoản" });
+            toast.success("Đã cập nhật tài khoản");
           }}
         />
       )}
@@ -224,7 +228,7 @@ export function AccountsClient({
         <PermissionModal
           account={modal.account}
           onClose={() => setModal({ mode: "none" })}
-          onSaved={() => setBanner({ type: "success", text: "Đã lưu cấu hình quyền" })}
+          onSaved={() => toast.success("Đã lưu cấu hình quyền")}
         />
       )}
     </div>

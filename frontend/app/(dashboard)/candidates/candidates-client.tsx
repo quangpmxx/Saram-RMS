@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  StickyNote,
   Trash2,
   Upload,
   UploadCloud,
@@ -21,6 +22,8 @@ import {
   Users,
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
+import { noteColorBgHex } from "@/lib/note-colors";
 import type {
   AccountRole,
   AssignBulkResult,
@@ -31,19 +34,18 @@ import type {
   LeadSource,
   Note,
   PaginatedResult,
-  StatusCatalogItem,
   Team,
   TeamMember,
 } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { useSetPageTitle } from "@/lib/page-title-context";
+import { useToast } from "@/lib/toast-context";
 import { DuplicateDetailBadge } from "./duplicate-detail-badge";
 import { ActionLink } from "./action-link";
 import { SourceBadge } from "./source-badge";
@@ -53,12 +55,16 @@ import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
 
 const PAGE_SIZE = 50;
-/** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia/chuyển lead. */
+/** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia (cho người khác)/chuyển lead. */
 const ASSIGNMENT_ROLES: AccountRole[] = ["admin", "manager", "leader"];
-/** Mục 5, tài liệu 10 (S3): ai được xem "Chờ phân chia". */
-const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt"];
-/** Mục 5, docs/13: GET /care-pool — ai được xem "Cột chăm sóc" (MKT không có quyền). */
-const CARE_POOL_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale"];
+/**
+ * Dự án phụ — nâng cấp toàn diện: bổ sung "sale" — Sale giờ cũng xem được
+ * "Chờ phân chia" và tự nhận data qua nút "Nhận data" (xem handleClaim()),
+ * khác ASSIGNMENT_ROLES (chỉ vai trò trên mới được phân chia CHO NGƯỜI KHÁC).
+ */
+const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt", "sale"];
+/** Dự án phụ — nâng cấp toàn diện: tab "Cá nhân" (lead đang gán cho chính mình) — chỉ Sale. */
+const MINE_VIEW_ROLES: AccountRole[] = ["sale"];
 
 type ModalState =
   | { mode: "none" }
@@ -68,7 +74,7 @@ type ModalState =
   | { mode: "assign"; candidateIds: string[] }
   | { mode: "transfer"; candidate: Candidate };
 
-type ViewMode = "all" | "pending" | "care_pool";
+type ViewMode = "all" | "pending" | "care_pool" | "mine";
 
 type DatePreset = "" | "today" | "yesterday" | "7d" | "30d" | "custom";
 
@@ -76,8 +82,6 @@ interface Filters {
   keyword: string;
   source_id: string;
   team_sale: TeamSaleValue | null;
-  interview_status_id: string;
-  employment_status_id: string;
   date_preset: DatePreset;
   date_from: string;
   date_to: string;
@@ -112,17 +116,6 @@ function computeDatePresetRange(preset: DatePreset): { date_from: string; date_t
   return { date_from: start.toISOString(), date_to: endOfToday.toISOString() };
 }
 
-/** UI Polish — màu badge trạng thái PV/đi làm dựa theo tên đã chốt (Mục 7, docs/09), thuần hiển thị. */
-function interviewStatusVariant(name: string): "success" | "danger" | "info" {
-  if (name.includes("Đỗ")) return "success";
-  if (name.includes("Bùng") || name.includes("Trượt")) return "danger";
-  return "info";
-}
-
-function employmentStatusVariant(name: string): "success" | "danger" {
-  return name.includes("Không") ? "danger" : "success";
-}
-
 function callResultVariant(name: string): "success" | "warning" | "neutral" {
   if (name.includes("Không tiềm năng")) return "neutral";
   if (name.includes("Tiềm năng")) return "success";
@@ -145,8 +138,6 @@ export function CandidatesClient({
   currentUserRole,
   currentUserTeamId,
   initialTeamMembers,
-  interviewStatuses,
-  employmentStatuses,
   teams,
   allSaleMembers,
   initialViewMode,
@@ -159,8 +150,6 @@ export function CandidatesClient({
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
   initialTeamMembers: TeamMember[];
-  interviewStatuses: StatusCatalogItem[];
-  employmentStatuses: StatusCatalogItem[];
   teams: Team[];
   allSaleMembers: TeamMember[];
   /**
@@ -182,26 +171,25 @@ export function CandidatesClient({
       keyword: "",
       source_id: "",
       team_sale: null,
-      interview_status_id: "",
-      employment_status_id: "",
       date_preset: "",
       date_from: "",
       date_to: "",
     },
   );
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
-  const [banner, setBanner] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
+  const toast = useToast();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
   const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
 
-  useSetPageTitle("Ứng viên", "Thu thập, tìm kiếm và quản lý dữ liệu ứng viên.");
+  useSetPageTitle("Data lao động", "Thu thập, tìm kiếm và quản lý dữ liệu lao động.");
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
-  const canViewCarePool = CARE_POOL_VIEW_ROLES.includes(currentUserRole);
+  const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
+  const canClaim = currentUserRole === "sale";
 
   /**
    * UI Polish (bổ sung) — "Tình trạng cuộc gọi" cần hiện TOÀN BỘ lịch sử
@@ -238,7 +226,14 @@ export function CandidatesClient({
     if (currentUserRole === "admin" || currentUserRole === "manager") return true;
     if (currentUserRole === "mkt") return candidate.uploaded_by.id === currentUserId;
     if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-    if (currentUserRole === "sale") return candidate.assigned_to?.id === currentUserId;
+    // Dự án phụ — nâng cấp toàn diện: Sale sửa được ứng viên KHÔNG phải của
+    // mình nếu cùng nhóm, NHƯNG chỉ khi ứng viên đã được xử lý ít nhất 1 lần
+    // (last_activity_at khác null) — khớp assertCanModify()/loadLeadForUpdate()
+    // ở backend, tránh giành số hoàn toàn mới của đồng nghiệp.
+    if (currentUserRole === "sale") {
+      if (candidate.assigned_to?.id === currentUserId) return true;
+      return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
+    }
     return false;
   }
 
@@ -264,8 +259,6 @@ export function CandidatesClient({
       if (filters.keyword) query.set("keyword", filters.keyword);
       if (filters.team_sale?.type === "team") query.set("team_id", filters.team_sale.id);
       if (filters.team_sale?.type === "sale") query.set("assigned_to", filters.team_sale.id);
-      if (filters.interview_status_id) query.set("interview_status_id", filters.interview_status_id);
-      if (filters.employment_status_id) query.set("employment_status_id", filters.employment_status_id);
       if (filters.date_preset === "custom") {
         if (filters.date_from) query.set("date_from", new Date(filters.date_from).toISOString());
         if (filters.date_to) query.set("date_to", new Date(`${filters.date_to}T23:59:59.999`).toISOString());
@@ -276,6 +269,10 @@ export function CandidatesClient({
           query.set("date_to", range.date_to);
         }
       }
+      // Dự án phụ — nâng cấp toàn diện: tab "Cá nhân" (chỉ Sale) — thu hẹp
+      // "Tất cả" (nay đã theo phạm vi cả nhóm) về đúng lead đang gán cho
+      // chính mình, dùng lại đúng filter assigned_to=me backend đã hỗ trợ.
+      if (mode === "mine") query.set("assigned_to", "me");
       result = await clientApi<PaginatedResult<Candidate>>(`/candidate?${query.toString()}`);
     }
 
@@ -313,17 +310,33 @@ export function CandidatesClient({
   }
 
   async function handleDelete(candidate: Candidate) {
-    if (!window.confirm(`Xóa ứng viên "${candidate.full_name}"? Hành động này không thể hoàn tác trên giao diện.`)) {
+    if (!window.confirm(`Xóa lao động "${candidate.full_name}"? Hành động này không thể hoàn tác trên giao diện.`)) {
       return;
     }
     setPendingId(candidate.id);
-    setBanner(null);
     try {
       await clientApi(`/candidate/${candidate.id}`, { method: "DELETE" });
       await refresh();
-      setBanner({ type: "success", text: `Đã xóa ứng viên "${candidate.full_name}"` });
+      toast.success(`Đã xóa lao động "${candidate.full_name}"`);
     } catch (error) {
-      setBanner({ type: "error", text: error instanceof ApiError ? error.message : "Có lỗi xảy ra" });
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  /** Dự án phụ — nâng cấp toàn diện: Sale tự nhận 1 lead đang "Chờ phân chia" cho chính mình. */
+  async function handleClaim(candidate: Candidate) {
+    setPendingId(candidate.id);
+    try {
+      await clientApi(`/candidate/${candidate.id}/assign`, {
+        method: "POST",
+        body: JSON.stringify({ account_id: currentUserId }),
+      });
+      await refresh();
+      toast.success(`Đã nhận lao động "${candidate.full_name}"`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setPendingId(null);
     }
@@ -331,10 +344,11 @@ export function CandidatesClient({
 
   return (
     <div className="w-full">
-      <div className="mb-2 flex items-start justify-between gap-3 md:hidden">
+      {/* UI Polish — tinh chỉnh mật độ hiển thị: thu nhỏ tiêu đề ~11% (text-lg → text-base), giảm mb-2 → mb-1 để sát bộ lọc hơn. */}
+      <div className="mb-1 flex items-start justify-between gap-3 md:hidden">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Ứng viên</h1>
-          <p className="mt-0.5 text-xs text-slate-500">Thu thập, tìm kiếm và quản lý dữ liệu ứng viên.</p>
+          <h1 className="text-base font-bold text-slate-900">Data lao động</h1>
+          <p className="mt-0.5 text-xs text-slate-500">Thu thập, tìm kiếm và quản lý dữ liệu lao động.</p>
         </div>
       </div>
 
@@ -346,7 +360,7 @@ export function CandidatesClient({
           </Button>
           <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
             <Plus className="h-4 w-4" strokeWidth={2.5} />
-            Thêm ứng viên mới
+            Thêm lao động mới
           </Button>
         </div>
       )}
@@ -380,9 +394,8 @@ export function CandidatesClient({
         </Card>
       )}
 
-      {banner && <Banner type={banner.type} text={banner.text} />}
 
-      {(canViewPending || canViewCarePool) && (
+      {(canViewPending || canViewMine) && (
         <div className="mb-2 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
           <button
             type="button"
@@ -404,26 +417,27 @@ export function CandidatesClient({
               Chờ phân chia
             </button>
           )}
-          {canViewCarePool && (
+          {canViewMine && (
             <button
               type="button"
-              onClick={() => void handleViewModeChange("care_pool")}
+              onClick={() => void handleViewModeChange("mine")}
               className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                viewMode === "care_pool" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                viewMode === "mine" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
               }`}
             >
-              Cột chăm sóc
+              Cá nhân
             </button>
           )}
         </div>
       )}
 
       {viewMode !== "care_pool" && (
-      <Card className="mb-2 flex flex-wrap items-end gap-2 p-2.5">
-        {viewMode === "all" && (
-          <Field uiSize="sm" label="Tìm theo tên, SĐT hoặc ghi chú" className="min-w-[200px] flex-1">
+      // UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng.
+      <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
+        {(viewMode === "all" || viewMode === "mine") && (
+          <Field uiSize="xs" label="Tìm theo tên, SĐT hoặc ghi chú" className="min-w-[200px] flex-1">
             <Input
-              uiSize="sm"
+              uiSize="xs"
               value={filters.keyword}
               onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
               onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
@@ -431,9 +445,9 @@ export function CandidatesClient({
             />
           </Field>
         )}
-        <Field uiSize="sm" label="Nguồn">
+        <Field uiSize="xs" label="Nguồn">
           <Select
-            uiSize="sm"
+            uiSize="xs"
             value={filters.source_id}
             onChange={(event) => setFilters((prev) => ({ ...prev, source_id: event.target.value }))}
           >
@@ -445,39 +459,11 @@ export function CandidatesClient({
             ))}
           </Select>
         </Field>
-        {viewMode === "all" && (
+        {(viewMode === "all" || viewMode === "mine") && (
           <>
-            <Field uiSize="sm" label="Trạng thái PV">
+            <Field uiSize="xs" label="Ngày lên số">
               <Select
-                uiSize="sm"
-                value={filters.interview_status_id}
-                onChange={(event) => setFilters((prev) => ({ ...prev, interview_status_id: event.target.value }))}
-              >
-                <option value="">Tất cả</option>
-                {interviewStatuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field uiSize="sm" label="Trạng thái đi làm">
-              <Select
-                uiSize="sm"
-                value={filters.employment_status_id}
-                onChange={(event) => setFilters((prev) => ({ ...prev, employment_status_id: event.target.value }))}
-              >
-                <option value="">Tất cả</option>
-                {employmentStatuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field uiSize="sm" label="Ngày lên số">
-              <Select
-                uiSize="sm"
+                uiSize="xs"
                 value={filters.date_preset}
                 onChange={(event) =>
                   setFilters((prev) => ({ ...prev, date_preset: event.target.value as DatePreset }))
@@ -492,17 +478,17 @@ export function CandidatesClient({
             </Field>
             {filters.date_preset === "custom" && (
               <>
-                <Field uiSize="sm" label="Từ ngày">
+                <Field uiSize="xs" label="Từ ngày">
                   <Input
-                    uiSize="sm"
+                    uiSize="xs"
                     type="date"
                     value={filters.date_from}
                     onChange={(event) => setFilters((prev) => ({ ...prev, date_from: event.target.value }))}
                   />
                 </Field>
-                <Field uiSize="sm" label="Đến ngày">
+                <Field uiSize="xs" label="Đến ngày">
                   <Input
-                    uiSize="sm"
+                    uiSize="xs"
                     type="date"
                     value={filters.date_to}
                     onChange={(event) => setFilters((prev) => ({ ...prev, date_to: event.target.value }))}
@@ -511,7 +497,7 @@ export function CandidatesClient({
               </>
             )}
             {currentUserRole !== "sale" && currentUserRole !== "mkt" && (
-              <Field uiSize="sm" label="Nhóm / Nhân viên" className="w-40">
+              <Field uiSize="xs" label="Nhóm / Nhân viên" className="w-40">
                 <TeamSaleFilter
                   teams={teams}
                   saleMembers={allSaleMembers}
@@ -522,8 +508,8 @@ export function CandidatesClient({
             )}
           </>
         )}
-        <Button type="button" size="sm" variant="secondary" onClick={() => void handleSearch()}>
-          <Search className="h-4 w-4" strokeWidth={2} />
+        <Button type="button" size="xs" variant="secondary" onClick={() => void handleSearch()}>
+          <Search className="h-3.5 w-3.5" strokeWidth={2} />
           Tìm kiếm
         </Button>
       </Card>
@@ -531,7 +517,7 @@ export function CandidatesClient({
 
       {viewMode === "pending" && canAssign && selectedIds.size > 0 && (
         <Card className="mb-2 flex items-center justify-between gap-3 p-2.5">
-          <span className="text-sm text-slate-600">Đã chọn {selectedIds.size} ứng viên</span>
+          <span className="text-sm text-slate-600">Đã chọn {selectedIds.size} lao động</span>
           <Button type="button" size="sm" onClick={() => setModal({ mode: "assign", candidateIds: [...selectedIds] })}>
             <UserPlus className="h-4 w-4" strokeWidth={2} />
             Phân chia đã chọn
@@ -547,31 +533,37 @@ export function CandidatesClient({
             currentUserRole={currentUserRole}
             teamNameById={teamNameById}
             onChanged={() => refresh(page, "care_pool")}
-            onBanner={setBanner}
+            onBanner={(b) => (b.type === "success" ? toast.success(b.text) : toast.error(b.text))}
           />
         ) : (
         <div className="max-h-[calc(100vh-180px)] overflow-auto">
-          <table className="w-full table-fixed border-collapse text-left text-sm">
+          {/* UI Polish — giảm cỡ chữ toàn bảng (text-sm → text-xs) theo yêu cầu. */}
+          {/* UI Polish — nhường tối đa diện tích cho cột "Tình trạng cuộc gọi"
+              (280px → 370px). Nguyên tắc cố định từ đây: mỗi khi thu hẹp các
+              cột khác, phần dôi ra mặc định cộng vào cột này (trừ khi có yêu
+              cầu khác). Các cột còn lại thu hẹp hết mức trong khi vẫn đảm bảo
+              hiển thị đủ dữ liệu — width/min-width/max-width cố định bằng px
+              trên từng <col> (table-fixed dùng đúng giá trị này, không phụ
+              thuộc nội dung/data dài ngắn). */}
+          <table className="w-full table-fixed border-collapse text-left text-xs">
             <colgroup>
-              {viewMode === "pending" && canAssign && <col className="w-10" />}
-              <col className="w-[96px]" />
-              <col className="w-[210px]" />
-              <col className="w-[112px]" />
-              <col className="w-[150px]" />
-              <col />
-              <col className="w-[140px]" />
-              <col className="w-[132px]" />
+              {viewMode === "pending" && canAssign && <col className="w-10 min-w-10 max-w-10" />}
+              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
+              <col className="w-[108px] min-w-[108px] max-w-[108px]" />
+              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
+              <col className="w-[64px] min-w-[64px] max-w-[64px]" />
+              <col className="w-[391px] min-w-[391px] max-w-[391px]" />
+              <col className="w-[21px] min-w-[21px] max-w-[21px]" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[11px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
-                {viewMode === "pending" && canAssign && <th className="border-r border-slate-100 px-4 py-3" />}
-                <th className="border-r border-slate-100 px-2 py-3 text-center">Ngày lên số</th>
-                <th className="border-r border-slate-100 px-4 py-3">Data lao động</th>
-                <th className="border-r border-slate-100 px-3 py-3">Nguồn</th>
-                <th className="border-r border-slate-100 px-3 py-3">Nhân viên</th>
-                <th className="border-r border-slate-100 px-4 py-3">Tình trạng cuộc gọi</th>
-                <th className="border-r border-slate-100 px-3 py-3">Kết quả</th>
-                <th className="px-2 py-3">Hành động</th>
+                {viewMode === "pending" && canAssign && <th className="border-r border-slate-100 px-4 py-2" />}
+                <th className="border-r border-slate-100 px-0.5 py-2 text-center">Ngày</th>
+                <th className="border-r border-slate-100 px-1.5 py-2 text-center">Thông tin lao động</th>
+                <th className="border-r border-slate-100 px-1 py-2 text-center">Nguồn</th>
+                <th className="border-r border-slate-100 px-1 py-2 text-center">Nhân viên</th>
+                <th className="border-r border-slate-100 px-4 py-2 text-center">Tình trạng cuộc gọi</th>
+                <th className="px-1 py-2 text-center">HĐ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -583,124 +575,180 @@ export function CandidatesClient({
                 return (
                   <tr
                     key={candidate.id}
-                    className={`h-[120px] align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
+                    // UI Polish — h-28 (thay vì h-24): với tên/địa chỉ đã cố định 1 dòng ở
+                    // trên, 96px hơi thiếu 1 chút khiến vài hàng vẫn bị đẩy cao hơn — 112px
+                    // đủ chỗ cho đúng 4 dòng cố định (tên + SĐT + năm sinh + địa chỉ), mọi
+                    // hàng cao bằng nhau tuyệt đối.
+                    className={`h-28 align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
                   >
                     {viewMode === "pending" && canAssign && (
-                      <td className="border-r border-slate-100 px-4 py-3">
+                      <td className="border-r border-slate-100 px-4 py-2">
                         <Checkbox checked={selectedIds.has(candidate.id)} onChange={() => toggleSelected(candidate.id)} />
                       </td>
                     )}
 
-                    <td className="border-r border-slate-100 px-2 py-3 text-center whitespace-nowrap">
+                    <td className="border-r border-slate-100 px-0.5 py-2 text-center whitespace-nowrap">
                       <p className="font-medium text-slate-800">{uploadedAt.date}</p>
-                      <p className="text-xs text-slate-400">{uploadedAt.time}</p>
+                      <p className="text-[10px] text-slate-400">{uploadedAt.time}</p>
                     </td>
 
-                    <td className="border-r border-slate-100 px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <Link
-                          href={`/candidates/${candidate.id}`}
-                          className="font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                    <td
+                      className="cursor-pointer border-r border-slate-100 px-1.5 py-2"
+                      onClick={(event) => {
+                        // UI Polish — cả ô mở được chi tiết ứng viên, không chỉ riêng tên
+                        // nữa. Bỏ qua nếu click trúng chính link tên hoặc nhãn "Trùng SĐT"
+                        // (role="button") — 2 phần tử đó tự xử lý click riêng, tránh điều
+                        // hướng 2 lần chồng lên nhau.
+                        const target = event.target as HTMLElement;
+                        if (target.closest("a, [role='button']")) return;
+                        router.push(`/candidates/${candidate.id}`);
+                      }}
+                    >
+                      {/* UI Polish — tên cho phép xuống dòng tối đa 2 dòng rồi ellipsis
+                          (line-clamp-2) thay vì cố định 1 dòng, theo yêu cầu tinh chỉnh độ
+                          rộng cột — cột đã hẹp lại nên 1 dòng dễ cắt cụt tên quá sớm. Các
+                          trường còn lại vẫn 1 dòng + ellipsis để không giãn cột. */}
+                      {/* UI Polish — nhãn "Trùng SĐT" đổi từ badge viên thuốc cạnh tên sang
+                          nhãn nhỏ chéo ở góc phải trên cùng của cụm tên + SĐT (thay vì chiếm
+                          chỗ ngang bên cạnh tên) — cần bọc relative đúng vùng này. */}
+                      <div className="relative">
+                        <div className={cn(candidate.is_duplicate_flagged && "pr-4")}>
+                          <Link
+                            href={`/candidates/${candidate.id}`}
+                            title={candidate.full_name}
+                            className="line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                          >
+                            {candidate.full_name}
+                          </Link>
+                        </div>
+                        <div
+                          className={cn(
+                            "mt-0.5 flex items-center gap-1 text-slate-500",
+                            candidate.is_duplicate_flagged && "pr-4",
+                          )}
                         >
-                          {candidate.full_name}
-                        </Link>
+                          <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+                          <span className="truncate">{candidate.phone_number}</span>
+                        </div>
                         {candidate.is_duplicate_flagged && <DuplicateDetailBadge candidateId={candidate.id} />}
                       </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-slate-500">
-                        <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
-                        {candidate.phone_number}
-                      </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-slate-500">
+                      <div className="mt-0.5 flex items-center gap-1 text-slate-500">
                         <Cake className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
                         {candidate.birth_year ?? "--"}
                       </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-slate-500">
+                      <div className="mt-0.5 flex items-center gap-1 text-slate-500">
                         <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
-                        <span className="break-words whitespace-normal">{candidate.address ?? "--"}</span>
+                        <span className="truncate" title={candidate.address ?? undefined}>
+                          {candidate.address ?? "--"}
+                        </span>
                       </div>
-                    </td>
-
-                    <td className="border-r border-slate-100 px-3 py-3">
-                      <SourceBadge name={candidate.source.name} />
-                    </td>
-
-                    <td className="border-r border-slate-100 px-3 py-3">
-                      {candidate.assigned_to ? (
-                        <div className="flex items-start gap-1.5">
-                          <Avatar fullName={candidate.assigned_to.name} className="h-7 w-7 shrink-0 text-[11px]" />
-                          <div className="min-w-0 leading-tight">
-                            <p className="font-medium break-words text-slate-800">{candidate.assigned_to.name}</p>
-                            {teamName && <p className="text-xs break-words text-slate-400">{teamName}</p>}
-                          </div>
+                      {candidate.mkt_note && (
+                        <div className="mt-0.5 flex items-center gap-1 text-red-600">
+                          <StickyNote className="h-3.5 w-3.5 shrink-0 text-red-400" strokeWidth={2} />
+                          <span className="truncate" title={candidate.mkt_note}>
+                            {candidate.mkt_note}
+                          </span>
                         </div>
-                      ) : (
-                        <Badge variant="neutral">Chờ phân chia</Badge>
                       )}
                     </td>
 
-                    <td className="border-r border-slate-100 px-4 py-3">
+                    <td className="border-r border-slate-100 px-1 py-2 text-center">
+                      <SourceBadge name={candidate.source.name} className="text-[10px] px-1.5 py-0" />
+                    </td>
+
+                    <td className="border-r border-slate-100 px-1 py-2">
+                      {candidate.assigned_to ? (
+                        // UI Polish — Avatar chuyển lên trên, tên/nhóm bên dưới. Cột đã hẹp
+                        // thêm ~30% nên tên/nhóm đổi từ truncate (1 dòng) sang line-clamp-2
+                        // (xuống dòng tối đa 2 dòng rồi ellipsis) để không cắt cụt quá sớm.
+                        <div className="flex flex-col items-center gap-0.5 text-center">
+                          <Avatar fullName={candidate.assigned_to.name} className="h-6 w-6 shrink-0 text-[10px]" />
+                          <div className="min-w-0 w-full leading-tight">
+                            <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
+                              {candidate.assigned_to.name}
+                            </p>
+                            {teamName && (
+                              <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
+                                {teamName}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-start gap-1.5">
+                          <Badge variant="neutral" className="text-[10px] px-2 py-0">
+                            Chờ phân chia
+                          </Badge>
+                          {canClaim && (
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={pendingId === candidate.id}
+                              onClick={() => void handleClaim(candidate)}
+                            >
+                              <UserPlus className="h-3 w-3" strokeWidth={2} />
+                              {pendingId === candidate.id ? "Đang nhận..." : "Nhận data"}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    <td
+                      className="border-r border-slate-100 px-4 py-2"
+                      style={{ backgroundColor: noteColorBgHex(candidate.note_color) }}
+                    >
                       <div className="flex flex-wrap items-center gap-1.5">
                         {candidate.call_status ? (
-                          <Badge variant="info">{candidate.call_status.name}</Badge>
+                          <Badge variant="info" className="text-[10px] px-2 py-0">
+                            {candidate.call_status.name}
+                          </Badge>
                         ) : (
-                          <Badge variant="neutral">Chưa gọi</Badge>
+                          <Badge variant="neutral" className="text-[10px] px-2 py-0">
+                            Chưa gọi
+                          </Badge>
                         )}
                         {candidate.call_result && (
-                          <Badge variant={callResultVariant(candidate.call_result.name)}>{candidate.call_result.name}</Badge>
+                          <Badge variant={callResultVariant(candidate.call_result.name)} className="text-[10px] px-2 py-0">
+                            {candidate.call_result.name}
+                          </Badge>
                         )}
                       </div>
                       <CareNoteCell notes={candidateNotes} />
                     </td>
 
-                    <td className="border-r border-slate-100 px-3 py-3">
-                      <div className="flex flex-col items-start gap-1">
-                        {candidate.current_interview_status ? (
-                          <Badge variant={interviewStatusVariant(candidate.current_interview_status.name)}>
-                            {candidate.current_interview_status.name}
-                          </Badge>
-                        ) : (
-                          <Badge variant="neutral">Chưa hẹn PV</Badge>
-                        )}
-                        {candidate.current_employment_status && (
-                          <Badge variant={employmentStatusVariant(candidate.current_employment_status.name)}>
-                            {candidate.current_employment_status.name}
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="px-2 py-3">
+                    <td className="px-1 py-2">
                       <div className="flex flex-wrap items-center gap-0.5">
                         {canModify(candidate) && (
-                          <ActionLink icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />} onClick={() => setModal({ mode: "edit", candidate })}>
-                            Sửa
-                          </ActionLink>
+                          <ActionLink
+                            icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />}
+                            title="Sửa"
+                            onClick={() => setModal({ mode: "edit", candidate })}
+                          />
                         )}
                         {canAssign && !candidate.assigned_to && (
                           <ActionLink
                             icon={<UserPlus className="h-3.5 w-3.5" strokeWidth={2} />}
+                            title="Phân chia"
                             onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
-                          >
-                            Phân chia
-                          </ActionLink>
+                          />
                         )}
                         {canAssign && candidate.assigned_to && (
                           <ActionLink
                             icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
+                            title="Chuyển"
                             onClick={() => setModal({ mode: "transfer", candidate })}
-                          >
-                            Chuyển
-                          </ActionLink>
+                          />
                         )}
                         {canDelete(candidate) && (
                           <ActionLink
                             icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
+                            title="Xóa"
                             tone="danger"
                             disabled={pendingId === candidate.id}
                             onClick={() => void handleDelete(candidate)}
-                          >
-                            Xóa
-                          </ActionLink>
+                          />
                         )}
                       </div>
                     </td>
@@ -713,7 +761,7 @@ export function CandidatesClient({
         )}
         {viewMode !== "care_pool" && candidates.length === 0 && (
           <EmptyState
-            title={viewMode === "pending" ? "Không có ứng viên nào đang chờ phân chia" : "Chưa có ứng viên nào khớp bộ lọc"}
+            title={viewMode === "pending" ? "Không có lao động nào đang chờ phân chia" : "Chưa có lao động nào khớp bộ lọc"}
             icon={<Search className="h-5 w-5" strokeWidth={1.75} />}
           />
         )}
@@ -721,7 +769,7 @@ export function CandidatesClient({
 
       <div className="mt-3 flex items-center justify-between text-sm text-slate-500">
         <span>
-          Trang {page} — hiển thị {candidates.length} / {total} ứng viên
+          Trang {page} — hiển thị {candidates.length} / {total} lao động
         </span>
         <div className="flex gap-2">
           <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => void refresh(page - 1)}>
@@ -743,7 +791,7 @@ export function CandidatesClient({
 
       {modal.mode === "create" && (
         <CandidateFormModal
-          title="Thêm ứng viên mới"
+          title="Thêm lao động mới"
           sources={sources}
           onClose={() => setModal({ mode: "none" })}
           onSubmit={async (payload) => {
@@ -753,14 +801,16 @@ export function CandidatesClient({
             });
             setModal({ mode: "none" });
             await refresh();
-            setBanner(buildCreateBanner(result));
+            const created = buildCreateBanner(result);
+            if (created.type === "success") toast.success(created.text);
+            else toast.warning(created.text);
           }}
         />
       )}
 
       {modal.mode === "edit" && (
         <CandidateFormModal
-          title={`Sửa ứng viên "${modal.candidate.full_name}"`}
+          title={`Sửa lao động "${modal.candidate.full_name}"`}
           sources={sources}
           initialCandidate={modal.candidate}
           onClose={() => setModal({ mode: "none" })}
@@ -768,7 +818,7 @@ export function CandidatesClient({
             await clientApi(`/candidate/${modal.candidate.id}`, { method: "PUT", body: JSON.stringify(payload) });
             setModal({ mode: "none" });
             await refresh();
-            setBanner({ type: "success", text: "Đã cập nhật ứng viên" });
+            toast.success("Đã cập nhật lao động");
           }}
         />
       )}
@@ -778,10 +828,9 @@ export function CandidatesClient({
           onClose={() => setModal({ mode: "none" })}
           onFinished={async (summary) => {
             await refresh();
-            setBanner({
-              type: summary.error_count > 0 ? "warning" : "success",
-              text: `Import xong: ${summary.success_count} thành công, ${summary.error_count} lỗi, ${summary.duplicate_count} trùng SĐT.`,
-            });
+            const text = `Import xong: ${summary.success_count} thành công, ${summary.error_count} lỗi, ${summary.duplicate_count} trùng SĐT.`;
+            if (summary.error_count > 0) toast.warning(text);
+            else toast.success(text);
           }}
         />
       )}
@@ -796,7 +845,7 @@ export function CandidatesClient({
             setModal({ mode: "none" });
             await refresh();
             if (currentUserTeamId) await refreshTeamMembers(currentUserTeamId);
-            setBanner({ type: "success", text: `Đã phân chia ${count} ứng viên` });
+            toast.success(`Đã phân chia ${count} lao động`);
           }}
         />
       )}
@@ -809,7 +858,7 @@ export function CandidatesClient({
             setModal({ mode: "none" });
             await refresh();
             if (currentUserTeamId) await refreshTeamMembers(currentUserTeamId);
-            setBanner({ type: "success", text: "Đã chuyển ứng viên sang Sale khác" });
+            toast.success("Đã chuyển lao động sang Sale khác");
           }}
         />
       )}
@@ -819,7 +868,7 @@ export function CandidatesClient({
           teamId={currentUserTeamId}
           teamMembers={teamMembers}
           onClose={() => setIsDistributionModalOpen(false)}
-          onChanged={() => setBanner({ type: "success", text: "Đã cập nhật cấu hình tự động phân chia" })}
+          onChanged={() => toast.success("Đã cập nhật cấu hình tự động phân chia")}
         />
       )}
     </div>
@@ -828,7 +877,7 @@ export function CandidatesClient({
 
 function buildCreateBanner(result: CreateCandidateResult): { type: "warning" | "success"; text: string } {
   if (!result.duplicate_warning) {
-    return { type: "success", text: "Đã thêm ứng viên mới" };
+    return { type: "success", text: "Đã thêm lao động mới" };
   }
   const warning: DuplicateWarning = result.duplicate_warning;
   const details = warning.matches
@@ -836,7 +885,7 @@ function buildCreateBanner(result: CreateCandidateResult): { type: "warning" | "
     .join("\n");
   return {
     type: "warning",
-    text: `Đã thêm ứng viên mới, nhưng SĐT ${warning.phone_number} đã trùng với:\n${details}`,
+    text: `Đã thêm lao động mới, nhưng SĐT ${warning.phone_number} đã trùng với:\n${details}`,
   };
 }
 
@@ -992,7 +1041,7 @@ function ImportModal({
 
   return (
     <Modal
-      title="Nhập ứng viên từ Excel"
+      title="Nhập lao động từ Excel"
       description="File .xlsx, cột theo thứ tự: Tên lao động, Số điện thoại, Nguồn, Năm sinh, Địa chỉ, Ghi chú. 3 cột đầu bắt buộc."
       maxWidth="max-w-lg"
       footer={
@@ -1121,7 +1170,7 @@ function AssignModal({
 
   async function handleSubmit() {
     if (!accountId) {
-      setError("Vui lòng chọn Sale nhận ứng viên");
+      setError("Vui lòng chọn Sale nhận lao động");
       return;
     }
     setError(null);
@@ -1149,7 +1198,7 @@ function AssignModal({
 
   return (
     <Modal
-      title={candidateIds.length > 1 ? `Phân chia ${candidateIds.length} ứng viên` : "Phân chia ứng viên"}
+      title={candidateIds.length > 1 ? `Phân chia ${candidateIds.length} lao động` : "Phân chia lao động"}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
@@ -1179,7 +1228,7 @@ function AssignModal({
           </Field>
         )}
 
-        <Field label="Sale nhận ứng viên" hint={isLoadingMembers ? "Đang tải danh sách Sale..." : undefined}>
+        <Field label="Sale nhận lao động" hint={isLoadingMembers ? "Đang tải danh sách Sale..." : undefined}>
           <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
             <option value="">— Chọn Sale —</option>
             {members.map((member) => (
@@ -1233,11 +1282,11 @@ function TransferModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate.assigned_team_id]);
 
-  const missingTeamError = candidate.assigned_team_id ? null : "Ứng viên chưa thuộc nhóm nào";
+  const missingTeamError = candidate.assigned_team_id ? null : "Lao động chưa thuộc nhóm nào";
 
   async function handleSubmit() {
     if (!accountId) {
-      setError("Vui lòng chọn Sale nhận ứng viên");
+      setError("Vui lòng chọn Sale nhận lao động");
       return;
     }
     setError(null);
@@ -1257,7 +1306,7 @@ function TransferModal({
 
   return (
     <Modal
-      title={`Chuyển ứng viên "${candidate.full_name}"`}
+      title={`Chuyển lao động "${candidate.full_name}"`}
       description={`Đang thuộc: ${candidate.assigned_to?.name ?? "—"}`}
       footer={
         <>

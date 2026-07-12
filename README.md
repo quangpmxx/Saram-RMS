@@ -286,6 +286,7 @@ npm run build       # build thử để chắc chắn không lỗi
 | `next dev` báo "Port 3000 is in use" | Có tiến trình cũ chưa tắt hẳn — đóng hết các tab Terminal cũ đang chạy `next` rồi mở lại, hoặc tắt tiến trình đang chiếm cổng. |
 | Quên mật khẩu tài khoản Admin duy nhất | Chạy lại `npm run seed` sẽ báo "đã tồn tại — bỏ qua"; cần tạo Admin khác bằng cách sửa trực tiếp database, hoặc liên hệ để được hướng dẫn thêm (chưa có màn hình "quên mật khẩu" ở Phase 0, đúng theo thiết kế — chỉ Admin reset được mật khẩu người khác). |
 | Trang web thỉnh thoảng báo lỗi 401/500 ngẫu nhiên (vd. màn Quản lý nhóm) dù đã đăng nhập đúng | Chỉ xảy ra khi dùng Cách A (`npx prisma dev`) — kiểm tra `backend/.env` có dòng `DATABASE_POOL_MAX=1` chưa; nếu thiếu, thêm vào rồi khởi động lại backend. |
+| Share link localhost (qua ngrok/VS Code Port Forwarding...) cho người khác → họ đăng nhập báo "không kết nối được máy chủ" | `frontend/.env.local` phải có `NEXT_PUBLIC_API_URL=/api` (đường dẫn tương đối, không phải `http://localhost:3001`) — Next.js tự proxy `/api/*` sang backend qua `next.config.ts` nên trình duyệt của người xem chỉ cần biết 1 địa chỉ duy nhất. Nếu để `http://localhost:3001` tuyệt đối, trình duyệt của họ sẽ gọi cổng 3001 trên **máy của họ** (không có gì chạy ở đó) chứ không phải máy đang chạy dev. Chỉ cần forward/share đúng 1 cổng (3000), không cần cổng 3001. Sau khi sửa `.env.local` phải khởi động lại `next dev` (biến `NEXT_PUBLIC_*` chỉ đọc lúc khởi động). |
 
 ---
 

@@ -17,7 +17,5 @@ export default async function AccountsPage() {
     serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100"),
   ]);
 
-  return (
-    <AccountsClient initialAccounts={accountsResult.items} teams={teamsResult.items} />
-  );
+  return <AccountsClient initialAccounts={accountsResult.items} teams={teamsResult.items} />;
 }

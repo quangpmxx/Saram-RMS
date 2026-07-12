@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
-import { Banner } from "@/components/ui/banner";
 import { useSetPageTitle } from "@/lib/page-title-context";
+import { useToast } from "@/lib/toast-context";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
@@ -101,7 +101,7 @@ export function ReportsClient({
   const [accountId, setAccountId] = useState(initialFilters.account_id);
   const [sourceId, setSourceId] = useState(initialFilters.source_id);
   const [loading, setLoading] = useState(false);
-  const [banner, setBanner] = useState<{ type: "error"; text: string } | null>(null);
+  const toast = useToast();
 
   async function refresh() {
     const range = computeDateRange(datePreset, customFrom, customTo);
@@ -115,7 +115,6 @@ export function ReportsClient({
     if (accountId) funnelQuery.set("account_id", accountId);
 
     setLoading(true);
-    setBanner(null);
     try {
       const [nextFunnel, nextBySource] = await Promise.all([
         clientApi<FunnelStep[]>(`/report/funnel?${funnelQuery.toString()}`),
@@ -124,7 +123,7 @@ export function ReportsClient({
       setFunnel(nextFunnel);
       setBySource(nextBySource);
     } catch {
-      setBanner({ type: "error", text: "Không tải được báo cáo, vui lòng thử lại." });
+      toast.error("Không tải được báo cáo, vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -146,8 +145,6 @@ export function ReportsClient({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {banner && <Banner type={banner.type} text={banner.text} />}
-
       <Card className="p-5">
         <form
           className="flex flex-wrap items-end gap-3"

@@ -43,9 +43,10 @@ export function useSetPageTitle(title: string, description?: string): void {
 export function PageTitleSlot() {
   const value = useContext(PageTitleValueContext);
   if (!value) return null;
+  // UI Polish — tinh chỉnh mật độ hiển thị: text-base → text-sm (~12.5%, thu nhỏ tiêu đề trang trong header dùng chung).
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-base font-semibold text-slate-900">{value.title}</h1>
+      <h1 className="truncate text-sm font-semibold text-slate-900">{value.title}</h1>
       {value.description && <p className="truncate text-xs text-slate-500">{value.description}</p>}
     </div>
   );

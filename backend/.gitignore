@@ -6,3 +6,9 @@ coverage
 .env
 
 /generated/prisma
+
+# File người dùng tự upload (ảnh đại diện...) — không commit nội dung nhị
+# phân, chỉ giữ cấu trúc thư mục qua .gitkeep. (Không dùng "/uploads/*" vì
+# git sẽ không đi vào thư mục con đã bị loại trừ để áp negation pattern.)
+/uploads/avatars/*
+!/uploads/avatars/.gitkeep

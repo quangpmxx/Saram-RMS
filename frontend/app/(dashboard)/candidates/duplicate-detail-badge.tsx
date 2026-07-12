@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { clientApi } from "@/lib/api-client";
 import type { DuplicateDetail } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/cn";
 
 /**
  * Mục 2.1, docs/12-ui-design.md: "Tooltip/popup nhanh khi hover/click vào
@@ -12,8 +12,14 @@ import { Badge } from "@/components/ui/badge";
  * bổ sung của chủ doanh nghiệp (Leader/Sale chỉ xem trong nhóm mình) —
  * toàn bộ logic ẩn/hiện đã xử lý ở backend (GET /candidate/:id/duplicates),
  * component này chỉ hiển thị đúng những gì API trả về.
+ *
+ * UI Polish — đổi từ badge dạng viên thuốc nằm cạnh tên (chiếm chỗ ngang,
+ * làm tên/SĐT bị chật) sang 1 nhãn nhỏ chéo ở góc trái trên cùng — nơi gọi
+ * (candidates-client.tsx) cần đặt component này trong 1 container
+ * `position: relative` bọc đúng vùng tên + SĐT. Toàn bộ logic
+ * hover/click/tooltip chi tiết giữ nguyên, chỉ đổi hình dạng nhãn kích hoạt.
  */
-export function DuplicateDetailBadge({ candidateId }: { candidateId: string }) {
+export function DuplicateDetailBadge({ candidateId, className }: { candidateId: string; className?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [detail, setDetail] = useState<DuplicateDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,11 +50,11 @@ export function DuplicateDetailBadge({ candidateId }: { candidateId: string }) {
   }
 
   return (
-    <span ref={containerRef} className="relative inline-block">
-      <Badge
-        variant="accent"
+    <span ref={containerRef} className={cn("absolute top-0 right-0 z-10", className)}>
+      <span
         role="button"
         tabIndex={0}
+        title="Trùng SĐT — bấm để xem chi tiết"
         onMouseEnter={open}
         onMouseLeave={() => setIsOpen(false)}
         onClick={(event) => {
@@ -69,15 +75,15 @@ export function DuplicateDetailBadge({ candidateId }: { candidateId: string }) {
             }
           }
         }}
-        className="cursor-pointer"
+        className="-mt-1 -mr-1 inline-block rotate-45 cursor-pointer rounded bg-accent-500 px-1.5 py-px text-[8px] font-bold whitespace-nowrap text-white shadow-sm select-none"
       >
-        Trùng SĐT
-      </Badge>
+        Trùng
+      </span>
 
       {isOpen && (
         <div
           role="tooltip"
-          className="absolute top-full left-0 z-30 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs shadow-xl shadow-slate-900/10"
+          className="absolute top-4 left-0 z-30 w-72 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs shadow-xl shadow-slate-900/10"
         >
           {isLoading && <p className="text-slate-500">Đang tải...</p>}
           {error && <p className="text-red-600">{error}</p>}

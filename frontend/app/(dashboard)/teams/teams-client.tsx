@@ -7,20 +7,26 @@ import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account, Team } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/lib/toast-context";
 
 type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; team: Team };
 
-export function TeamsClient({ initialTeams, leaders }: { initialTeams: Team[]; leaders: Account[] }) {
+export function TeamsClient({
+  initialTeams,
+  leaders,
+}: {
+  initialTeams: Team[];
+  leaders: Account[];
+}) {
   const router = useRouter();
   const [teams, setTeams] = useState(initialTeams);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
-  const [banner, setBanner] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const toast = useToast();
 
   async function refresh() {
     const result = await clientApi<{ items: Team[] }>("/team?page=1&page_size=100");
@@ -41,11 +47,16 @@ export function TeamsClient({ initialTeams, leaders }: { initialTeams: Team[]; l
         }
       />
 
-      {banner && <Banner type={banner.type} text={banner.text} />}
-
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          {/* UI Polish — cố định độ rộng cột theo yêu cầu người dùng, bỏ tính năng co giãn. */}
+          <table className="w-full table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[220px]" />
+              <col className="w-[200px]" />
+              <col className="w-[160px]" />
+              <col className="w-[120px]" />
+            </colgroup>
             <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
                 <th className="px-4 py-3">Tên nhóm</th>
@@ -88,7 +99,7 @@ export function TeamsClient({ initialTeams, leaders }: { initialTeams: Team[]; l
             await clientApi("/team", { method: "POST", body: JSON.stringify(payload) });
             setModal({ mode: "none" });
             await refresh();
-            setBanner({ type: "success", text: "Đã tạo nhóm mới" });
+            toast.success("Đã tạo nhóm mới");
           }}
         />
       )}
@@ -103,7 +114,7 @@ export function TeamsClient({ initialTeams, leaders }: { initialTeams: Team[]; l
             await clientApi(`/team/${modal.team.id}`, { method: "PUT", body: JSON.stringify(payload) });
             setModal({ mode: "none" });
             await refresh();
-            setBanner({ type: "success", text: "Đã cập nhật nhóm" });
+            toast.success("Đã cập nhật nhóm");
           }}
         />
       )}

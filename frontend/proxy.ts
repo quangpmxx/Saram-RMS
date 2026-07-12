@@ -34,5 +34,11 @@ export const config = {
   // Loại trừ mọi đường dẫn có phần mở rộng file (vd. /saram-logo.jpg, các
   // *.svg trong public/) — nếu không, proxy sẽ redirect luôn cả request tải
   // ảnh tĩnh về /login khi chưa đăng nhập, khiến ảnh hiển thị "broken".
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  // Loại trừ "/api" — đây là rewrite proxy sang backend NestJS (xem
+  // next.config.ts), KHÔNG phải trang giao diện, không được redirect về
+  // /login (backend tự trả lỗi 401 dạng JSON, đã được lib/api-client.ts và
+  // lib/api-server.ts xử lý đúng qua ApiError). Nếu không loại trừ, request
+  // /api/login đầu tiên (chưa có cookie) sẽ bị chặn redirect trước khi kịp
+  // gọi tới backend.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|.*\\..*).*)"],
 };

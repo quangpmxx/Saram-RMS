@@ -322,7 +322,10 @@ describe('AccountsService', () => {
       expect(prisma.accountPermission.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            accountId_permissionId: { accountId: 'mgr-1', permissionId: 'perm-1' },
+            accountId_permissionId: {
+              accountId: 'mgr-1',
+              permissionId: 'perm-1',
+            },
           },
           create: expect.objectContaining({
             accountId: 'mgr-1',

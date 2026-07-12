@@ -19,6 +19,7 @@ import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
 import { PermissionModule } from './permission/permission.module';
+import { ColumnWidthModule } from './column-width/column-width.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -43,6 +44,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     DashboardModule,
     NotificationModule,
     PermissionModule,
+    ColumnWidthModule,
   ],
   controllers: [AppController],
   providers: [

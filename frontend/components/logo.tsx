@@ -18,9 +18,11 @@ export function Logo({
   className?: string;
 }) {
   if (size === "lg") {
+    // Kích thước gốc 112px/128px, tăng ~25-29% (yêu cầu tinh chỉnh trang đăng
+    // nhập) — "lg" chỉ dùng riêng ở đó, không ảnh hưởng logo sidebar/header.
     return (
-      <div className={cn("relative h-28 w-28 sm:h-32 sm:w-32", className)}>
-        <Image src="/saram-logo.jpg" alt="Saram Group" fill sizes="128px" className="object-contain" priority />
+      <div className={cn("relative h-36 w-36 sm:h-40 sm:w-40", className)}>
+        <Image src="/saram-logo.jpg" alt="Saram Group" fill sizes="160px" className="object-contain" priority />
       </div>
     );
   }

@@ -57,7 +57,10 @@ export function NoteTimeline({
   const hasMore = sorted.length > previewCount;
   const visible = isExpanded ? sorted : sorted.slice(0, previewCount);
 
-  const gapClass = compact ? "gap-1" : "gap-3";
+  // UI Polish — tinh chỉnh mật độ hiển thị: chỉ thu hẹp thêm khoảng cách ở
+  // chế độ compact (cột "Tình trạng cuộc gọi" trong danh sách) — chế độ
+  // thường (trang Chi tiết ứng viên) giữ nguyên gap-3.
+  const gapClass = compact ? "gap-0.5" : "gap-3";
   const itemPaddingClass = compact ? "pl-6" : "pl-8";
   const lineOffsetClass = compact ? "left-3" : "left-[15px]";
   const dotClass = compact
