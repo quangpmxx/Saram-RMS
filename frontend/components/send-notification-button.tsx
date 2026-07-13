@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type Account, type PaginatedResult, type Team } from "@/lib/types";
+import { adminGoldTextStyle } from "@/lib/admin-gold";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Field, Textarea, Checkbox } from "@/components/ui/form";
@@ -176,7 +177,7 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
                 <Checkbox checked={selectedIds.has(account.id)} onChange={() => toggleId(account.id)} />
                 {account.full_name}
                 <span className="text-xs text-slate-400">
-                  ({ACCOUNT_ROLE_LABEL[account.role]}
+                  (<span style={adminGoldTextStyle(account.role)}>{ACCOUNT_ROLE_LABEL[account.role]}</span>
                   {account.team_name ? ` · ${account.team_name}` : ""})
                 </span>
               </label>

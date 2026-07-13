@@ -18,6 +18,7 @@ import {
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
+import { UpdateZaloFriendStatusDto } from './dto/update-zalo-friend-status.dto';
 import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
@@ -121,7 +122,9 @@ export class LeadPipelineService {
     currentUser: AuthenticatedUser,
   ): Promise<CandidateResponseDto> {
     const lead = await this.loadLeadForUpdate(id, currentUser);
-    await this.assertStatusInCategory(dto.zalo_status_id, 'zalo_status');
+    if (dto.zalo_status_id !== null) {
+      await this.assertStatusInCategory(dto.zalo_status_id, 'zalo_status');
+    }
 
     await this.prisma.lead.update({
       where: { id },
@@ -135,7 +138,46 @@ export class LeadPipelineService {
       entityId: id,
       fieldChanged: 'zalo_status_id',
       oldValue: lead.zaloStatusId ?? undefined,
-      newValue: dto.zalo_status_id,
+      newValue: dto.zalo_status_id ?? undefined,
+    });
+
+    return this.reloadCandidate(id);
+  }
+
+  /**
+   * Dự án phụ — nâng cấp toàn diện: PUT /candidate/:id/zalo-friend-status —
+   * tình trạng kết bạn Zalo, tách riêng khỏi "Kết quả" (updateZaloStatus) —
+   * cùng phạm vi quyền (loadLeadForUpdate).
+   */
+  async updateZaloFriendStatus(
+    id: string,
+    dto: UpdateZaloFriendStatusDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const lead = await this.loadLeadForUpdate(id, currentUser);
+    if (dto.zalo_friend_status_id !== null) {
+      await this.assertStatusInCategory(
+        dto.zalo_friend_status_id,
+        'zalo_friend_status',
+      );
+    }
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: {
+        zaloFriendStatusId: dto.zalo_friend_status_id,
+        lastActivityAt: new Date(),
+      },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'lead',
+      entityId: id,
+      fieldChanged: 'zalo_friend_status_id',
+      oldValue: lead.zaloFriendStatusId ?? undefined,
+      newValue: dto.zalo_friend_status_id ?? undefined,
     });
 
     return this.reloadCandidate(id);
@@ -211,6 +253,8 @@ export class LeadPipelineService {
         // Snapshot tình trạng/kết quả cuộc gọi tại thời điểm ghi (Mục 2.9, docs/11).
         callStatusId: lead.callStatusId,
         callResultId: lead.callResultId,
+        // Dự án phụ — nâng cấp toàn diện: snapshot Tình trạng Zalo cùng cơ chế.
+        zaloFriendStatusId: lead.zaloFriendStatusId,
       },
       include: NOTE_INCLUDE,
     });
@@ -636,7 +680,8 @@ export class LeadPipelineService {
       | 'call_result'
       | 'interview_status'
       | 'employment_status'
-      | 'zalo_status',
+      | 'zalo_status'
+      | 'zalo_friend_status',
   ) {
     const status = await this.prisma.statusCatalog.findUnique({
       where: { id: statusId },

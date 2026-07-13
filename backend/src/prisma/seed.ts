@@ -72,7 +72,8 @@ async function seedStatusCatalog(prisma: PrismaClient): Promise<void> {
       | 'call_result'
       | 'interview_status'
       | 'employment_status'
-      | 'zalo_status';
+      | 'zalo_status'
+      | 'zalo_friend_status';
     code: string;
     name: string;
     sortOrder: number;
@@ -95,6 +96,19 @@ async function seedStatusCatalog(prisma: PrismaClient): Promise<void> {
       code: 'UNREACHABLE',
       name: 'Thuê bao',
       sortOrder: 4,
+    },
+    // Dự án phụ — nâng cấp toàn diện: thêm 2 lựa chọn "Tình trạng cuộc gọi".
+    {
+      category: 'call_status',
+      code: 'BUSY',
+      name: 'Máy bận',
+      sortOrder: 5,
+    },
+    {
+      category: 'call_status',
+      code: 'WRONG_NUMBER',
+      name: 'Sai số',
+      sortOrder: 6,
     },
 
     {
@@ -166,20 +180,35 @@ async function seedStatusCatalog(prisma: PrismaClient): Promise<void> {
       sortOrder: 2,
     },
 
+    // Dự án phụ — nâng cấp toàn diện: đổi ý, bỏ 3 lựa chọn Zalo cũ (Đã kết
+    // bạn/Chưa đồng ý/Không có Zalo), thay bằng cột "Kết quả" chỉ 1 lựa
+    // chọn "Đã gửi CCCD" (để trống = chưa có). Field/category vẫn giữ tên
+    // kỹ thuật cũ "zalo_status"/"zaloStatusId" (không đổi DB/API) — chỉ đổi
+    // tên hiển thị + giá trị catalog, tránh thêm 1 lần migrate enum.
     {
       category: 'zalo_status',
-      code: 'ADDED',
-      name: 'Đã kết bạn Zalo',
+      code: 'SENT_CCCD',
+      name: 'Đã gửi CCCD',
+      sortOrder: 1,
+    },
+
+    // Dự án phụ — nâng cấp toàn diện: thêm lại "Tình trạng Zalo", tách riêng
+    // khỏi "Kết quả" ở trên (category zalo_status) — category/field mới,
+    // không tái dùng.
+    {
+      category: 'zalo_friend_status',
+      code: 'NOT_FRIEND',
+      name: 'Chưa kết bạn Zalo',
       sortOrder: 1,
     },
     {
-      category: 'zalo_status',
-      code: 'NOT_AGREED',
-      name: 'Chưa đồng ý kết bạn Zalo',
+      category: 'zalo_friend_status',
+      code: 'FRIEND',
+      name: 'Đã kết bạn Zalo',
       sortOrder: 2,
     },
     {
-      category: 'zalo_status',
+      category: 'zalo_friend_status',
       code: 'NO_ZALO',
       name: 'Không có Zalo',
       sortOrder: 3,
@@ -1082,6 +1111,179 @@ async function seedPhase9Permissions(prisma: PrismaClient): Promise<void> {
   );
 }
 
+/**
+ * Dự án phụ — nâng cấp toàn diện: dữ liệu mẫu "Danh sách đưa đón" — module
+ * ĐỘC LẬP, không liên kết Lead/module khác nên không cần lead/team/account
+ * mẫu Phase 2 tồn tại trước — chỉ cần 1 tài khoản bất kỳ làm created_by.
+ */
+async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
+  const existingCount = await prisma.shuttleRecord.count();
+  if (existingCount > 0) {
+    console.log('Dữ liệu mẫu Danh sách đưa đón đã tồn tại — bỏ qua.');
+    return;
+  }
+
+  const admin = await prisma.account.findUnique({
+    where: { username: 'admin' },
+  });
+  if (!admin) {
+    console.log(
+      'Chưa có tài khoản admin — bỏ qua seed dữ liệu mẫu Danh sách đưa đón (chạy lại sau khi seedAdmin xong).',
+    );
+    return;
+  }
+
+  const today = new Date();
+  const dateAt = (daysOffset: number) => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() + daysOffset);
+    return new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+    );
+  };
+
+  const records = [
+    {
+      date: dateAt(0),
+      fullName: 'Nguyễn Văn Toàn',
+      phoneNumber: '0912345001',
+      company: 'Goertek',
+      area: 'Bắc Ninh',
+      type: 'Chính thức',
+      sale: 'Sale Demo A',
+      driver: 'Anh Hùng',
+      interviewTime: '08:30',
+      contractor: 'Nhà thầu Minh Phát',
+      status: 'Đã đón',
+      note: 'Đón tại bến xe Mỹ Đình, đã lên xe đúng giờ.',
+    },
+    {
+      date: dateAt(0),
+      fullName: 'Trần Thị Hạnh',
+      phoneNumber: '0912345002',
+      company: 'Samsung',
+      area: 'Thái Nguyên',
+      type: 'Thời vụ',
+      sale: 'Sale Demo B',
+      driver: 'Anh Tuấn',
+      interviewTime: '09:00',
+      contractor: 'Nhà thầu An Phú',
+      status: 'Đã đón',
+      note: '',
+    },
+    {
+      date: dateAt(1),
+      fullName: 'Lê Văn Đức',
+      phoneNumber: '0912345003',
+      company: 'Foxconn',
+      area: 'Bắc Giang',
+      type: 'Chính thức',
+      sale: 'Sale Demo A',
+      driver: 'Anh Hùng',
+      interviewTime: '13:30',
+      contractor: 'Nhà thầu Minh Phát',
+      status: 'Hẹn lại',
+      note: 'Lao động báo bận đột xuất, hẹn lại tuần sau.',
+    },
+    {
+      date: dateAt(-1),
+      fullName: 'Phạm Thị Ngọc',
+      phoneNumber: '0912345004',
+      company: 'Goertek',
+      area: 'Bắc Ninh',
+      type: 'Chính thức',
+      sale: 'Sale Demo B',
+      driver: 'Anh Tuấn',
+      interviewTime: '08:00',
+      contractor: 'Nhà thầu An Phú',
+      status: 'Đã đón',
+      interviewResult: 'Trượt phỏng vấn',
+      note: '',
+    },
+    {
+      date: dateAt(-2),
+      fullName: 'Hoàng Văn Nam',
+      phoneNumber: '0912345005',
+      company: 'Samsung',
+      area: 'Thái Nguyên',
+      type: 'Thời vụ',
+      sale: 'Sale Demo A',
+      driver: 'Anh Hùng',
+      interviewTime: '10:15',
+      contractor: 'Nhà thầu Minh Phát',
+      status: 'Chưa đón được',
+      note: 'Lao động không nghe máy, không đón được.',
+    },
+  ];
+
+  for (const record of records) {
+    await prisma.shuttleRecord.create({
+      data: { ...record, createdById: admin.id, updatedById: admin.id },
+    });
+  }
+
+  console.log(`Đã tạo ${records.length} dòng dữ liệu mẫu Danh sách đưa đón.`);
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện: danh sách gợi ý CÓ LƯU LẠI (bảng
+ * shuttle_options) kèm màu nền cho 9 trường "chọn" của Danh sách đưa đón —
+ * backfill đúng các giá trị đã seed ở seedShuttleSample() để không "biến
+ * mất" khỏi trình đơn thả xuống. "status" = "Tình trạng đón" (Đã đón/Chưa
+ * đón được/Hẹn lại), "interview_result" = "Kết quả PV" (Đỗ phỏng vấn/Trượt
+ * phỏng vấn) — tách từ 1 cột "Trạng thái" cũ theo yêu cầu trực tiếp người
+ * dùng. "interview_time" (Giờ phỏng vấn) đổi từ ô nhập tay tự do sang chọn
+ * từ trình đơn thả xuống — không có màu (colorKey null), chỉ là giờ preset.
+ */
+async function seedShuttleOptions(prisma: PrismaClient): Promise<void> {
+  const entries: Array<{
+    field: string;
+    value: string;
+    colorKey: string | null;
+  }> = [
+    { field: 'company', value: 'Goertek', colorKey: 'green' },
+    { field: 'company', value: 'Samsung', colorKey: 'purple' },
+    { field: 'company', value: 'Foxconn', colorKey: 'blue' },
+    { field: 'area', value: 'Bắc Ninh', colorKey: 'teal' },
+    { field: 'area', value: 'Thái Nguyên', colorKey: 'indigo' },
+    { field: 'area', value: 'Bắc Giang', colorKey: 'orange' },
+    { field: 'type', value: 'Chính thức', colorKey: 'blue' },
+    { field: 'type', value: 'Thời vụ', colorKey: 'amber' },
+    { field: 'sale', value: 'Sale Demo A', colorKey: 'green' },
+    { field: 'sale', value: 'Sale Demo B', colorKey: 'purple' },
+    { field: 'driver', value: 'Anh Hùng', colorKey: 'blue' },
+    { field: 'driver', value: 'Anh Tuấn', colorKey: 'teal' },
+    { field: 'contractor', value: 'Nhà thầu Minh Phát', colorKey: 'orange' },
+    { field: 'contractor', value: 'Nhà thầu An Phú', colorKey: 'pink' },
+    { field: 'status', value: 'Đã đón', colorKey: 'green' },
+    { field: 'status', value: 'Chưa đón được', colorKey: 'red' },
+    { field: 'status', value: 'Hẹn lại', colorKey: 'amber' },
+    { field: 'interview_result', value: 'Đỗ phỏng vấn', colorKey: 'green' },
+    { field: 'interview_result', value: 'Trượt phỏng vấn', colorKey: 'purple' },
+    { field: 'interview_time', value: '08:00', colorKey: null },
+    { field: 'interview_time', value: '08:30', colorKey: null },
+    { field: 'interview_time', value: '09:00', colorKey: null },
+    { field: 'interview_time', value: '09:30', colorKey: null },
+    { field: 'interview_time', value: '10:00', colorKey: null },
+    { field: 'interview_time', value: '10:15', colorKey: null },
+    { field: 'interview_time', value: '13:30', colorKey: null },
+    { field: 'interview_time', value: '14:00', colorKey: null },
+    { field: 'interview_time', value: '14:30', colorKey: null },
+  ];
+
+  for (const entry of entries) {
+    await prisma.shuttleOption.upsert({
+      where: { field_value: { field: entry.field, value: entry.value } },
+      update: {},
+      create: entry,
+    });
+  }
+
+  console.log(
+    `Đã đảm bảo đủ ${entries.length} giá trị gợi ý mẫu (Danh sách đưa đón).`,
+  );
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -1103,6 +1305,8 @@ async function main() {
   await seedPhase6Sample(prisma);
   await seedPhase8Sample(prisma);
   await seedPhase9Permissions(prisma);
+  await seedShuttleSample(prisma);
+  await seedShuttleOptions(prisma);
 
   await prisma.$disconnect();
 }

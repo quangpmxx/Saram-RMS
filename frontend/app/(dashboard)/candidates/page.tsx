@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import type { Candidate, LeadSource, PaginatedResult, Team, TeamMember } from "@/lib/types";
+import type { Candidate, LeadSource, PaginatedResult, StatusCatalogItem, Team, TeamMember } from "@/lib/types";
+import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { CandidatesClient } from "./candidates-client";
 import type { TeamSaleValue } from "./team-sale-filter";
 
@@ -42,7 +43,9 @@ export default async function CandidatesPage({
     return Array.isArray(value) ? value[0] : value;
   };
 
-  const canListTeams = ["admin", "manager", "leader"].includes(user.role);
+  // Dự án phụ — nâng cấp toàn diện: bổ sung 'mkt' — MKT giờ bắt buộc chọn
+  // nhóm khi up data mới, cần danh sách nhóm để hiển thị lựa chọn.
+  const canListTeams = ["admin", "manager", "leader", "mkt"].includes(user.role);
   const canBrowseAllSales = ["admin", "manager"].includes(user.role);
   // Dự án phụ — nâng cấp toàn diện: Sale giờ cũng xem "Chờ phân chia" (tự
   // nhận data). "Cột chăm sóc" đã ẩn khỏi UI — không còn nhận view=care_pool.
@@ -68,16 +71,12 @@ export default async function CandidatesPage({
     keyword: string;
     source_id: string;
     team_sale: TeamSaleValue | null;
-    date_preset: "" | "custom";
-    date_from: string;
-    date_to: string;
+    date: DateRangeValue;
   } = {
     keyword: keyword ?? "",
     source_id: sourceId ?? "",
     team_sale: teamIdParam ? { type: "team", id: teamIdParam } : assignedTo ? { type: "sale", id: assignedTo } : null,
-    date_preset: dateFrom || dateTo ? "custom" : "",
-    date_from: dateFrom ?? "",
-    date_to: dateTo ?? "",
+    date: dateFrom || dateTo ? { preset: "custom", from: dateFrom ?? "", to: dateTo ?? "" } : EMPTY_DATE_RANGE,
   };
 
   const candidateQuery = new URLSearchParams({ page: "1", page_size: "50" });
@@ -100,7 +99,7 @@ export default async function CandidatesPage({
       ? `/candidate/pending?${candidateQuery.toString()}`
       : `/candidate?${candidateQuery.toString()}`;
 
-  const [candidatesResult, sources, teamMembers, teamsResult] = await Promise.all([
+  const [candidatesResult, sources, teamMembers, teamsResult, zaloStatuses] = await Promise.all([
     serverApi<PaginatedResult<Candidate>>(candidateEndpoint),
     serverApi<LeadSource[]>("/lead-source"),
     user.role === "leader" && user.team_id
@@ -109,6 +108,7 @@ export default async function CandidatesPage({
     canListTeams
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
+    serverApi<StatusCatalogItem[]>("/status?category=zalo_status"),
   ]);
 
   const allSaleMembers = canBrowseAllSales
@@ -130,6 +130,7 @@ export default async function CandidatesPage({
       initialTeamMembers={teamMembers}
       teams={teamsResult.items}
       allSaleMembers={allSaleMembers}
+      zaloStatuses={zaloStatuses}
       initialViewMode={initialViewMode}
       initialFilters={initialFilters}
     />

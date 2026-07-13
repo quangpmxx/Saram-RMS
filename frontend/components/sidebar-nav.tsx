@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
+  Bus,
   CalendarDays,
   Copy,
   History,
@@ -26,6 +27,7 @@ const ICONS = {
   duplicates: Copy,
   auditLog: History,
   settings: Settings2,
+  shuttle: Bus,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

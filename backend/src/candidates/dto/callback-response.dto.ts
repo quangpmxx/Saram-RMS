@@ -1,4 +1,5 @@
 import { Account, CallbackSchedule } from '../../../generated/prisma/client';
+import { NamedRefWithRole } from './candidate-response.dto';
 
 /** Đối tượng "Callback" dùng chung — Mục 0.1, docs/13-api-design.md. */
 export interface CallbackResponseDto {
@@ -6,12 +7,12 @@ export interface CallbackResponseDto {
   lead_id: string;
   scheduled_at: string;
   is_completed: boolean;
-  created_by: { id: string; name: string };
+  created_by: NamedRefWithRole;
   created_at: string;
 }
 
 type CallbackWithRelations = CallbackSchedule & {
-  createdBy: Pick<Account, 'id' | 'fullName'>;
+  createdBy: Pick<Account, 'id' | 'fullName' | 'role'>;
 };
 
 export function toCallbackResponse(
@@ -25,11 +26,12 @@ export function toCallbackResponse(
     created_by: {
       id: callback.createdBy.id,
       name: callback.createdBy.fullName,
+      role: callback.createdBy.role,
     },
     created_at: callback.createdAt.toISOString(),
   };
 }
 
 export const CALLBACK_INCLUDE = {
-  createdBy: { select: { id: true, fullName: true } },
+  createdBy: { select: { id: true, fullName: true, role: true } },
 } as const;

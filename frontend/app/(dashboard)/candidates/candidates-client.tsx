@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
   Cake,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   MapPin,
@@ -23,7 +24,9 @@ import {
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { callStatusVariant } from "@/lib/call-status-variant";
 import { noteColorBgHex } from "@/lib/note-colors";
+import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type {
   AccountRole,
   AssignBulkResult,
@@ -34,16 +37,20 @@ import type {
   LeadSource,
   Note,
   PaginatedResult,
+  StatusCatalogItem,
   Team,
   TeamMember,
 } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
+import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { DuplicateDetailBadge } from "./duplicate-detail-badge";
@@ -55,6 +62,8 @@ import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
 
 const PAGE_SIZE = 50;
+/** Dự án phụ — nâng cấp toàn diện: mức thu phóng bảng, y hệt danh sách % của Google Sheet (yêu cầu trực tiếp người dùng). */
+const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
 /** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia (cho người khác)/chuyển lead. */
 const ASSIGNMENT_ROLES: AccountRole[] = ["admin", "manager", "leader"];
 /**
@@ -76,44 +85,12 @@ type ModalState =
 
 type ViewMode = "all" | "pending" | "care_pool" | "mine";
 
-type DatePreset = "" | "today" | "yesterday" | "7d" | "30d" | "custom";
-
 interface Filters {
   keyword: string;
   source_id: string;
   team_sale: TeamSaleValue | null;
-  date_preset: DatePreset;
-  date_from: string;
-  date_to: string;
-}
-
-const DATE_PRESET_OPTIONS: Array<{ value: DatePreset; label: string }> = [
-  { value: "", label: "Tất cả" },
-  { value: "today", label: "Hôm nay" },
-  { value: "yesterday", label: "Hôm qua" },
-  { value: "7d", label: "7 ngày gần đây" },
-  { value: "30d", label: "30 ngày gần đây" },
-  { value: "custom", label: "Tùy chọn..." },
-];
-
-/** UI Polish — quy đổi preset khoảng ngày "Ngày lên số" sang mốc giờ chính xác đầu/cuối ngày (giờ địa phương). */
-function computeDatePresetRange(preset: DatePreset): { date_from: string; date_to: string } | null {
-  if (!preset || preset === "custom") return null;
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
-
-  if (preset === "today") {
-    return { date_from: startOfToday.toISOString(), date_to: endOfToday.toISOString() };
-  }
-  if (preset === "yesterday") {
-    const start = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
-    const end = new Date(startOfToday.getTime() - 1);
-    return { date_from: start.toISOString(), date_to: end.toISOString() };
-  }
-  const daysBack = preset === "7d" ? 6 : 29;
-  const start = new Date(startOfToday.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  return { date_from: start.toISOString(), date_to: endOfToday.toISOString() };
+  /** Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng chung (xem components/ui/date-range-picker.tsx). */
+  date: DateRangeValue;
 }
 
 function callResultVariant(name: string): "success" | "warning" | "neutral" {
@@ -130,6 +107,18 @@ function formatUploadedAt(value: string): { date: string; time: string } {
   };
 }
 
+/**
+ * Dự án phụ — nâng cấp toàn diện: màu nền ô "Kết quả" — "Đã gửi CCCD" = xanh
+ * lá full ô, để trống = không màu. Dùng style inline (không phải class
+ * Tailwind) — ô này nằm trong bảng có thể lồng nhiều lớp nền/hover, style
+ * inline luôn thắng chắc chắn (cùng lý do đã áp dụng cho màu nền ô ghi chú
+ * — xem lib/note-colors.ts).
+ */
+function zaloStatusStyle(name: string | undefined): { backgroundColor: string; color: string } | undefined {
+  if (name === "Đã gửi CCCD") return { backgroundColor: "#15803d", color: "#ffffff" };
+  return undefined;
+}
+
 export function CandidatesClient({
   initialCandidates,
   initialTotal,
@@ -140,6 +129,7 @@ export function CandidatesClient({
   initialTeamMembers,
   teams,
   allSaleMembers,
+  zaloStatuses,
   initialViewMode,
   initialFilters,
 }: {
@@ -152,6 +142,7 @@ export function CandidatesClient({
   initialTeamMembers: TeamMember[];
   teams: Team[];
   allSaleMembers: TeamMember[];
+  zaloStatuses: StatusCatalogItem[];
   /**
    * Phase 7 — mở sẵn đúng danh sách đã lọc khi bấm vào 1 con số breakdown
    * từ Dashboard/Reports (Mục 1/8, docs/12). Không truyền (trang Ứng viên
@@ -171,12 +162,11 @@ export function CandidatesClient({
       keyword: "",
       source_id: "",
       team_sale: null,
-      date_preset: "",
-      date_from: "",
-      date_to: "",
+      date: EMPTY_DATE_RANGE,
     },
   );
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
+  const [zoomLevel, setZoomLevel] = useState<(typeof ZOOM_LEVELS)[number]>(100);
   const toast = useToast();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -243,6 +233,24 @@ export function CandidatesClient({
     return false;
   }
 
+  /**
+   * Dự án phụ — nâng cấp toàn diện: cho sửa cột "Kết quả" (đổi ý từ "Tình
+   * trạng Zalo" — vẫn dùng chung field zalo_status kỹ thuật cũ, chỉ đổi tên
+   * hiển thị + giá trị) ngay tại bảng danh sách, không cần vào trang Chi
+   * tiết. Khớp ĐÚNG phạm vi quyền của canUpdatePipeline() ở trang Chi tiết /
+   * loadLeadForUpdate() ở backend — KHÔNG gồm MKT (cùng nhóm field "tiến
+   * trình cuộc gọi", không phải field cơ bản MKT được sửa qua canModify()).
+   */
+  function canUpdateZaloStatus(candidate: Candidate): boolean {
+    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
+    if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
+    if (currentUserRole === "sale") {
+      if (candidate.assigned_to?.id === currentUserId) return true;
+      return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
+    }
+    return false;
+  }
+
   async function refresh(targetPage = page, mode: ViewMode = viewMode) {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(PAGE_SIZE) });
     if (filters.source_id) query.set("source_id", filters.source_id);
@@ -259,16 +267,12 @@ export function CandidatesClient({
       if (filters.keyword) query.set("keyword", filters.keyword);
       if (filters.team_sale?.type === "team") query.set("team_id", filters.team_sale.id);
       if (filters.team_sale?.type === "sale") query.set("assigned_to", filters.team_sale.id);
-      if (filters.date_preset === "custom") {
-        if (filters.date_from) query.set("date_from", new Date(filters.date_from).toISOString());
-        if (filters.date_to) query.set("date_to", new Date(`${filters.date_to}T23:59:59.999`).toISOString());
-      } else {
-        const range = computeDatePresetRange(filters.date_preset);
-        if (range) {
-          query.set("date_from", range.date_from);
-          query.set("date_to", range.date_to);
-        }
-      }
+      // DateRangePicker đã tự quy đổi preset ("7 ngày qua"...) thành from/to cụ
+      // thể ngay lúc bấm "Cập nhật" — ở đây chỉ còn việc quy đổi sang mốc ISO
+      // đầu/cuối ngày (giờ địa phương) như hành vi gốc, không cần phân biệt
+      // preset/tùy chỉnh nữa.
+      if (filters.date.from) query.set("date_from", new Date(filters.date.from).toISOString());
+      if (filters.date.to) query.set("date_to", new Date(`${filters.date.to}T23:59:59.999`).toISOString());
       // Dự án phụ — nâng cấp toàn diện: tab "Cá nhân" (chỉ Sale) — thu hẹp
       // "Tất cả" (nay đã theo phạm vi cả nhóm) về đúng lead đang gán cho
       // chính mình, dùng lại đúng filter assigned_to=me backend đã hỗ trợ.
@@ -342,6 +346,23 @@ export function CandidatesClient({
     }
   }
 
+  /**
+   * Dự án phụ — nâng cấp toàn diện: sửa cột "Kết quả" ngay tại bảng danh
+   * sách — chọn xong lưu ngay (không cần nút Lưu riêng), cập nhật trực tiếp
+   * dòng đó trong bảng (không tải lại cả trang cho nhanh).
+   */
+  async function handleZaloStatusChange(candidate: Candidate, zaloStatusId: string | null) {
+    try {
+      const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-status`, {
+        method: "PUT",
+        body: JSON.stringify({ zalo_status_id: zaloStatusId }),
+      });
+      setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    }
+  }
+
   return (
     <div className="w-full">
       {/* UI Polish — tinh chỉnh mật độ hiển thị: thu nhỏ tiêu đề ~11% (text-lg → text-base), giảm mb-2 → mb-1 để sát bộ lọc hơn. */}
@@ -351,19 +372,6 @@ export function CandidatesClient({
           <p className="mt-0.5 text-xs text-slate-500">Thu thập, tìm kiếm và quản lý dữ liệu lao động.</p>
         </div>
       </div>
-
-      {currentUserRole === "mkt" && (
-        <div className="mb-2 flex justify-end gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "import" })}>
-            <Upload className="h-4 w-4" strokeWidth={2} />
-            Nhập từ Excel
-          </Button>
-          <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-            Thêm lao động mới
-          </Button>
-        </div>
-      )}
 
       {currentUserRole === "leader" && teamMembers.length > 0 && (
         <Card className="mb-2 p-2.5">
@@ -395,38 +403,58 @@ export function CandidatesClient({
       )}
 
 
-      {(canViewPending || canViewMine) && (
-        <div className="mb-2 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => void handleViewModeChange("all")}
-            className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-              viewMode === "all" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            Tất cả
-          </button>
-          {canViewPending && (
-            <button
-              type="button"
-              onClick={() => void handleViewModeChange("pending")}
-              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                viewMode === "pending" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              Chờ phân chia
-            </button>
+      {/* Dự án phụ — nâng cấp toàn diện: gộp hàng tab (Tất cả/Chờ phân chia/Cá
+          nhân) và 2 nút Nhập từ Excel/Thêm lao động mới vào chung 1 hàng
+          (song song, 2 đầu trái-phải) để tiết kiệm chiều cao cho phần bảng data. */}
+      {(canViewPending || canViewMine || currentUserRole === "mkt" || currentUserRole === "admin") && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          {(canViewPending || canViewMine) && (
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => void handleViewModeChange("all")}
+                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                  viewMode === "all" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Tất cả
+              </button>
+              {canViewPending && (
+                <button
+                  type="button"
+                  onClick={() => void handleViewModeChange("pending")}
+                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    viewMode === "pending" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  Chờ phân chia
+                </button>
+              )}
+              {canViewMine && (
+                <button
+                  type="button"
+                  onClick={() => void handleViewModeChange("mine")}
+                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    viewMode === "mine" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  Cá nhân
+                </button>
+              )}
+            </div>
           )}
-          {canViewMine && (
-            <button
-              type="button"
-              onClick={() => void handleViewModeChange("mine")}
-              className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                viewMode === "mine" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              Cá nhân
-            </button>
+
+          {(currentUserRole === "mkt" || currentUserRole === "admin") && (
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "import" })}>
+                <Upload className="h-4 w-4" strokeWidth={2} />
+                Nhập từ Excel
+              </Button>
+              <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+                Thêm lao động mới
+              </Button>
+            </div>
           )}
         </div>
       )}
@@ -445,6 +473,20 @@ export function CandidatesClient({
             />
           </Field>
         )}
+        <Field uiSize="xs" label="Thu phóng">
+          <Select
+            uiSize="xs"
+            className="w-16"
+            value={String(zoomLevel)}
+            onChange={(event) => setZoomLevel(Number(event.target.value) as (typeof ZOOM_LEVELS)[number])}
+          >
+            {ZOOM_LEVELS.map((zoom) => (
+              <option key={zoom} value={zoom}>
+                {zoom}%
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field uiSize="xs" label="Nguồn">
           <Select
             uiSize="xs"
@@ -461,41 +503,14 @@ export function CandidatesClient({
         </Field>
         {(viewMode === "all" || viewMode === "mine") && (
           <>
-            <Field uiSize="xs" label="Ngày lên số">
-              <Select
-                uiSize="xs"
-                value={filters.date_preset}
-                onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, date_preset: event.target.value as DatePreset }))
-                }
-              >
-                {DATE_PRESET_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
+            <Field uiSize="xs" label="Ngày lên số" className="w-40">
+              <DateRangePicker
+                value={filters.date}
+                onChange={(next) => setFilters((prev) => ({ ...prev, date: next }))}
+                placeholder="Tất cả"
+                allowClear
+              />
             </Field>
-            {filters.date_preset === "custom" && (
-              <>
-                <Field uiSize="xs" label="Từ ngày">
-                  <Input
-                    uiSize="xs"
-                    type="date"
-                    value={filters.date_from}
-                    onChange={(event) => setFilters((prev) => ({ ...prev, date_from: event.target.value }))}
-                  />
-                </Field>
-                <Field uiSize="xs" label="Đến ngày">
-                  <Input
-                    uiSize="xs"
-                    type="date"
-                    value={filters.date_to}
-                    onChange={(event) => setFilters((prev) => ({ ...prev, date_to: event.target.value }))}
-                  />
-                </Field>
-              </>
-            )}
             {currentUserRole !== "sale" && currentUserRole !== "mkt" && (
               <Field uiSize="xs" label="Nhóm / Nhân viên" className="w-40">
                 <TeamSaleFilter
@@ -537,6 +552,12 @@ export function CandidatesClient({
           />
         ) : (
         <div className="max-h-[calc(100vh-180px)] overflow-auto">
+          {/* Dự án phụ — nâng cấp toàn diện: bọc riêng <table> trong 1 div có
+              "zoom" (không phải transform: scale) — zoom tính lại layout thật
+              theo tỉ lệ mới nên thu nhỏ hiện được nhiều dòng hơn, không để lại
+              khoảng trắng thừa; không zoom khối cuộn ngoài để max-height tính
+              bằng viewport (100vh-180px) không bị lệch theo tỉ lệ zoom. */}
+          <div style={{ zoom: zoomLevel / 100 }}>
           {/* UI Polish — giảm cỡ chữ toàn bảng (text-sm → text-xs) theo yêu cầu. */}
           {/* UI Polish — nhường tối đa diện tích cho cột "Tình trạng cuộc gọi"
               (280px → 370px). Nguyên tắc cố định từ đây: mỗi khi thu hẹp các
@@ -552,10 +573,11 @@ export function CandidatesClient({
               <col className="w-[108px] min-w-[108px] max-w-[108px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[64px] min-w-[64px] max-w-[64px]" />
-              <col className="w-[391px] min-w-[391px] max-w-[391px]" />
+              <col className="w-[353px] min-w-[353px] max-w-[353px]" />
+              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[21px] min-w-[21px] max-w-[21px]" />
             </colgroup>
-            <thead className="sticky top-0 z-10 bg-brand-50/95 text-[11px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
+            <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
                 {viewMode === "pending" && canAssign && <th className="border-r border-slate-100 px-4 py-2" />}
                 <th className="border-r border-slate-100 px-0.5 py-2 text-center">Ngày</th>
@@ -563,10 +585,11 @@ export function CandidatesClient({
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nguồn</th>
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nhân viên</th>
                 <th className="border-r border-slate-100 px-4 py-2 text-center">Tình trạng cuộc gọi</th>
+                <th className="border-r border-slate-100 px-1 py-2 text-center">Kết quả</th>
                 <th className="px-1 py-2 text-center">HĐ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-brand-400">
               {candidates.map((candidate, index) => {
                 const uploadedAt = formatUploadedAt(candidate.uploaded_at);
                 const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
@@ -616,7 +639,10 @@ export function CandidatesClient({
                           <Link
                             href={`/candidates/${candidate.id}`}
                             title={candidate.full_name}
-                            className="line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                            className={cn(
+                              "line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline",
+                              candidate.is_held && "bg-orange-200",
+                            )}
                           >
                             {candidate.full_name}
                           </Link>
@@ -665,7 +691,7 @@ export function CandidatesClient({
                           <Avatar fullName={candidate.assigned_to.name} className="h-6 w-6 shrink-0 text-[10px]" />
                           <div className="min-w-0 w-full leading-tight">
                             <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
-                              {candidate.assigned_to.name}
+                              <NameWithRoleHint account={candidate.assigned_to} />
                             </p>
                             {teamName && (
                               <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
@@ -701,7 +727,7 @@ export function CandidatesClient({
                     >
                       <div className="flex flex-wrap items-center gap-1.5">
                         {candidate.call_status ? (
-                          <Badge variant="info" className="text-[10px] px-2 py-0">
+                          <Badge variant={callStatusVariant(candidate.call_status.name)} className="text-[10px] px-2 py-0">
                             {candidate.call_status.name}
                           </Badge>
                         ) : (
@@ -714,8 +740,52 @@ export function CandidatesClient({
                             {candidate.call_result.name}
                           </Badge>
                         )}
+                        {candidate.zalo_friend_status && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0 text-[10px] font-medium whitespace-nowrap ring-1 ring-inset ring-black/10"
+                            style={zaloFriendStatusStyle(candidate.zalo_friend_status.name)}
+                          >
+                            {candidate.zalo_friend_status.name}
+                          </span>
+                        )}
                       </div>
                       <CareNoteCell notes={candidateNotes} />
+                    </td>
+
+                    <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">
+                      {canUpdateZaloStatus(candidate) ? (
+                        // Chỉ 1 lựa chọn thật ("Đã gửi CCCD") nên bấm = đảo trạng thái
+                        // (có/không) thay vì mở danh sách chọn — mũi tên chỉ là gợi ý
+                        // hình ảnh giống ô chọn, không phải dropdown thật (select gốc
+                        // của trình duyệt không xuống dòng được khi chữ dài).
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleZaloStatusChange(
+                              candidate,
+                              candidate.zalo_status ? null : (zaloStatuses[0]?.id ?? null),
+                            )
+                          }
+                          style={zaloStatusStyle(candidate.zalo_status?.name)}
+                          className={cn(
+                            "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
+                            candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
+                          )}
+                        >
+                          <span>{candidate.zalo_status?.name ?? "--"}</span>
+                          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
+                        </button>
+                      ) : (
+                        <span
+                          style={zaloStatusStyle(candidate.zalo_status?.name)}
+                          className={cn(
+                            "mx-auto block w-fit max-w-full rounded-lg px-1.5 py-1 text-center text-[10px] font-semibold break-words whitespace-normal",
+                            candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
+                          )}
+                        >
+                          {candidate.zalo_status?.name ?? "--"}
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-1 py-2">
@@ -757,6 +827,7 @@ export function CandidatesClient({
               })}
             </tbody>
           </table>
+          </div>
         </div>
         )}
         {viewMode !== "care_pool" && candidates.length === 0 && (
@@ -793,6 +864,7 @@ export function CandidatesClient({
         <CandidateFormModal
           title="Thêm lao động mới"
           sources={sources}
+          teams={teams}
           onClose={() => setModal({ mode: "none" })}
           onSubmit={async (payload) => {
             const result = await clientApi<CreateCandidateResult>("/candidate", {
@@ -812,6 +884,7 @@ export function CandidatesClient({
         <CandidateFormModal
           title={`Sửa lao động "${modal.candidate.full_name}"`}
           sources={sources}
+          teams={teams}
           initialCandidate={modal.candidate}
           onClose={() => setModal({ mode: "none" })}
           onSubmit={async (payload) => {
@@ -894,26 +967,41 @@ interface CandidateFormPayload {
   phone_number: string;
   source_id: string;
   mkt_note?: string;
+  team_id?: string;
   birth_year?: number;
   address?: string;
 }
 
+/**
+ * Dự án phụ — nâng cấp toàn diện: SỬA nghiệp vụ theo yêu cầu trực tiếp
+ * người dùng — form "Thêm lao động mới" chỉ còn 4 trường (Tên, SĐT, Nhóm,
+ * Ghi chú MKT) + Nguồn giữ nguyên như cũ; bỏ Năm sinh/Địa chỉ (MKT không
+ * biết, để Sale tự khai thác — vẫn sửa được sau qua trang Chi tiết lao
+ * động). Bắt buộc chọn Nhóm ngay khi up — data thuộc đúng 1 nhóm, chỉ
+ * Leader/Sale nhóm đó thấy được (chờ Leader phân số hoặc Sale tự nhận).
+ * Form "Sửa" (edit) giữ nguyên như cũ — không đổi Năm sinh/Địa chỉ, không
+ * có Nhóm (đổi nhóm không thuộc phạm vi form này).
+ */
 function CandidateFormModal({
   title,
   sources,
+  teams,
   initialCandidate,
   onClose,
   onSubmit,
 }: {
   title: string;
   sources: LeadSource[];
+  teams: Team[];
   initialCandidate?: Candidate;
   onClose: () => void;
   onSubmit: (payload: CandidateFormPayload) => Promise<void>;
 }) {
+  const isEditing = Boolean(initialCandidate);
   const [fullName, setFullName] = useState(initialCandidate?.full_name ?? "");
   const [phoneNumber, setPhoneNumber] = useState(initialCandidate?.phone_number ?? "");
   const [sourceId, setSourceId] = useState(initialCandidate?.source.id ?? sources[0]?.id ?? "");
+  const [teamId, setTeamId] = useState("");
   const [birthYear, setBirthYear] = useState(initialCandidate?.birth_year?.toString() ?? "");
   const [address, setAddress] = useState(initialCandidate?.address ?? "");
   const [mktNote, setMktNote] = useState(initialCandidate?.mkt_note ?? "");
@@ -922,6 +1010,10 @@ function CandidateFormModal({
 
   async function handleSubmit() {
     setError(null);
+    if (!isEditing && !teamId) {
+      setError("Vui lòng chọn nhóm");
+      return;
+    }
     setIsSubmitting(true);
     try {
       await onSubmit({
@@ -929,8 +1021,9 @@ function CandidateFormModal({
         phone_number: phoneNumber,
         source_id: sourceId,
         mkt_note: mktNote || undefined,
-        birth_year: birthYear ? Number(birthYear) : undefined,
-        address: address || undefined,
+        ...(isEditing
+          ? { birth_year: birthYear ? Number(birthYear) : undefined, address: address || undefined }
+          : { team_id: teamId }),
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
@@ -972,13 +1065,28 @@ function CandidateFormModal({
           </Select>
         </Field>
 
-        <Field label="Năm sinh (không bắt buộc)">
-          <Input value={birthYear} onChange={(event) => setBirthYear(event.target.value)} inputMode="numeric" />
-        </Field>
+        {isEditing ? (
+          <>
+            <Field label="Năm sinh (không bắt buộc)">
+              <Input value={birthYear} onChange={(event) => setBirthYear(event.target.value)} inputMode="numeric" />
+            </Field>
 
-        <Field label="Địa chỉ (không bắt buộc)">
-          <Input value={address} onChange={(event) => setAddress(event.target.value)} />
-        </Field>
+            <Field label="Địa chỉ (không bắt buộc)">
+              <Input value={address} onChange={(event) => setAddress(event.target.value)} />
+            </Field>
+          </>
+        ) : (
+          <Field label="Nhóm">
+            <Select value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+              <option value="">-- Chọn nhóm --</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Field label="Ghi chú MKT (không bắt buộc)">
           <Textarea value={mktNote} onChange={(event) => setMktNote(event.target.value)} rows={2} />

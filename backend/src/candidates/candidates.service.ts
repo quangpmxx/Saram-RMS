@@ -339,6 +339,7 @@ export class CandidatesService {
     currentUser: AuthenticatedUser,
   ): Promise<CreateCandidateResult> {
     await this.assertSourceExists(dto.source_id);
+    await this.assertTeamExists(dto.team_id);
 
     const created = await this.prisma.lead.create({
       data: {
@@ -347,12 +348,17 @@ export class CandidatesService {
         sourceId: dto.source_id,
         mktNote: dto.mkt_note,
         uploadedById: currentUser.id,
+        // Dự án phụ — nâng cấp toàn diện: gán nhóm ngay khi up — CHỈ
+        // Leader/Sale nhóm này thấy được (xem buildScopeWhere/getPending),
+        // chờ Leader phân số hoặc Sale trong nhóm tự nhận (chưa gán người).
+        assignedTeamId: dto.team_id,
       },
     });
 
-    // Phase 6 — Mục 3, docs/09: lead mới "Chờ phân chia" tự động gán ngay
-    // nếu có nhóm đang bật tự động phân chia (round-robin); nếu không, giữ
-    // nguyên "Chờ phân chia" như hành vi Phase 1-2 cũ (không đổi).
+    // Phase 6 — Mục 3, docs/09: lead mới tự động gán ngay nếu nhóm đang bật
+    // tự động phân chia (round-robin); nếu không, giữ "Chờ phân chia" trong
+    // đúng nhóm đã chọn (Dự án phụ — nâng cấp toàn diện: chỉ áp dụng quy tắc
+    // tự động phân chia CỦA ĐÚNG NHÓM data này, không lấy quy tắc nhóm khác).
     await this.distributionRuleService.tryAutoAssign(created);
 
     const matches = await this.duplicateService.syncDuplicateFlags(
@@ -535,7 +541,15 @@ export class CandidatesService {
     return this.setHold(id, true, currentUser);
   }
 
-  /** Mục 6, docs/13: DELETE /candidate/:id/hold — Sale (chỉ với lead của mình). */
+  /**
+   * Mục 6, docs/13: DELETE /candidate/:id/hold.
+   *
+   * Dự án phụ — nâng cấp toàn diện (bổ sung nghiệp vụ ngoài docs/09-13 gốc,
+   * yêu cầu trực tiếp người dùng): CHỈ người ĐANG giữ số (lead.heldById)
+   * mới được bỏ giữ — người khác (kể cả Quản lý, kể cả Sale đang phụ trách
+   * lead nhưng không phải người giữ) không bỏ được. Admin có full quyền,
+   * bỏ được bất kỳ lead nào bất kể ai đang giữ.
+   */
   async unhold(
     id: string,
     currentUser: AuthenticatedUser,
@@ -547,7 +561,8 @@ export class CandidatesService {
    * Admin/Quản lý kế thừa toàn bộ quyền nghiệp vụ của Sale (yêu cầu bổ
    * sung "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp
    * dưới") — không giới hạn theo người phụ trách, khác Sale (chỉ lead
-   * của mình).
+   * của mình). Riêng BỎ giữ số (isHeld=false) có thêm ràng buộc: chỉ đúng
+   * người đang giữ số hoặc Admin mới được bỏ (xem unhold()).
    */
   private async setHold(
     id: string,
@@ -560,7 +575,7 @@ export class CandidatesService {
     }
 
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-      // không giới hạn.
+      // không giới hạn theo người phụ trách.
     } else if (currentUser.role === 'sale') {
       if (lead.assignedToId !== currentUser.id) {
         throw new ForbiddenException(
@@ -570,6 +585,17 @@ export class CandidatesService {
     } else {
       throw new ForbiddenException(
         'Chỉ Sale, Quản lý hoặc Admin mới được đánh dấu/bỏ đánh dấu giữ số',
+      );
+    }
+
+    if (
+      !isHeld &&
+      currentUser.role !== 'admin' &&
+      lead.isHeld &&
+      lead.heldById !== currentUser.id
+    ) {
+      throw new ForbiddenException(
+        'Chỉ người đang giữ số này (hoặc Admin) mới được bỏ giữ số',
       );
     }
 
@@ -638,6 +664,18 @@ export class CandidatesService {
       deletedAt: null,
       assignedToId: null,
     };
+    // Dự án phụ — nâng cấp toàn diện: SỬA LỖI nghiệp vụ — "Chờ phân chia"
+    // trước đây hiện cho MỌI Leader/Sale toàn hệ thống bất kể data đã lên
+    // nhóm nào. Từ khi up data bắt buộc chọn nhóm, Leader/Sale chỉ thấy
+    // đúng data của nhóm mình (hoặc data thật sự chưa có nhóm, vd Excel cũ)
+    // — Admin/Quản lý/MKT vẫn xem toàn bộ như cũ (Mục 2.6, docs/09).
+    if (currentUser.role === 'leader' || currentUser.role === 'sale') {
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      where.OR = [
+        { assignedTeamId: teamId ?? '__none__' },
+        { assignedTeamId: null },
+      ];
+    }
     if (query.source_id) {
       where.sourceId = query.source_id;
     }
@@ -934,16 +972,21 @@ export class CandidatesService {
         where.assignedToId = assignedToFilter;
         return where;
       }
-      // Dự án phụ — nâng cấp toàn diện: "Tất cả" giờ gộp cả lead của nhóm
-      // mình VÀ lead đang "Chờ phân chia" (chưa thuộc nhóm nào) — Sale/Leader
-      // không phải đổi tab mới thấy số mới cần xử lý. Dùng where.AND (không
-      // phải where.OR trực tiếp) vì list() còn dùng where.OR riêng cho tìm
-      // kiếm theo từ khóa — gộp trực tiếp sẽ bị ghi đè mất phạm vi xem.
+      // Dự án phụ — nâng cấp toàn diện: "Tất cả" gộp lead của nhóm mình VÀ
+      // lead THẬT SỰ chưa thuộc nhóm nào (assignedTeamId=null — vd data
+      // nhập Excel cũ chưa gán nhóm). SỬA LỖI nghiệp vụ: trước đây dùng
+      // "assignedToId: null" làm điều kiện gộp — khiến data đã lên nhóm
+      // khác (assignedTeamId đã set, chỉ chưa gán người) vẫn lộ sang MỌI
+      // nhóm khác. Từ khi up data bắt buộc chọn nhóm (POST /candidate), 1
+      // data thuộc đúng 1 nhóm duy nhất — chỉ Leader/Sale nhóm đó thấy,
+      // không còn hiện toàn hệ thống nữa. Dùng where.AND (không phải
+      // where.OR trực tiếp) vì list() còn dùng where.OR riêng cho tìm kiếm
+      // theo từ khóa — gộp trực tiếp sẽ bị ghi đè mất phạm vi xem.
       where.AND = [
         {
           OR: [
             { assignedTeamId: teamId ?? '__none__' },
-            { assignedToId: null },
+            { assignedTeamId: null },
           ],
         },
       ];
@@ -980,12 +1023,30 @@ export class CandidatesService {
     throw new ForbiddenException('Bạn không có quyền xem ứng viên này');
   }
 
-  /** Mục 4, docs/13: MKT (data của mình), Sale (lead của mình), Leader (nhóm mình), Quản lý/Admin. */
+  /**
+   * Mục 4, docs/13: MKT (data của mình), Sale (lead của mình), Leader (nhóm
+   * mình), Quản lý/Admin.
+   *
+   * Dự án phụ — nâng cấp toàn diện (bổ sung nghiệp vụ ngoài docs/09-13 gốc,
+   * yêu cầu trực tiếp người dùng): lead đang được giữ số (isHeld=true) thì
+   * CHỈ đúng người đang giữ (heldById) mới sửa được — người khác (kể cả
+   * Quản lý) đều bị chặn. Admin có full quyền, không bị ràng buộc này.
+   */
   private async assertCanModify(
     lead: Lead,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+    if (currentUser.role === 'admin') {
+      return;
+    }
+
+    if (lead.isHeld && lead.heldById !== currentUser.id) {
+      throw new ForbiddenException(
+        'Ứng viên này đang được giữ số, chỉ người đang giữ mới sửa được',
+      );
+    }
+
+    if (currentUser.role === 'manager') {
       return;
     }
 
@@ -1057,6 +1118,16 @@ export class CandidatesService {
     if (!source) {
       throw new NotFoundException(
         'Không tìm thấy nguồn kênh (source_id không tồn tại)',
+      );
+    }
+  }
+
+  /** Dự án phụ — nâng cấp toàn diện: xác thực team_id khi up data mới. */
+  private async assertTeamExists(teamId: string): Promise<void> {
+    const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) {
+      throw new NotFoundException(
+        'Không tìm thấy nhóm (team_id không tồn tại)',
       );
     }
   }

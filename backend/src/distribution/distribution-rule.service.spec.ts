@@ -339,6 +339,34 @@ describe('DistributionRuleService', () => {
       expect(result).toBe(lead);
     });
 
+    it('Dự án phụ — nâng cấp toàn diện: SỬA LỖI nghiệp vụ — lead đã có nhóm (up data bắt buộc chọn nhóm) CHỈ áp dụng đúng quy tắc của nhóm đó, không quét quy tắc nhóm khác', async () => {
+      prisma.distributionRule.findMany.mockResolvedValue([]);
+      const lead = {
+        id: 'lead-1',
+        assignedToId: null,
+        assignedTeamId: 'team-1',
+      };
+
+      await service.tryAutoAssign(lead as never);
+
+      expect(prisma.distributionRule.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { isActive: true, teamId: 'team-1' },
+        }),
+      );
+    });
+
+    it('lead chưa có nhóm (vd nhập Excel — chưa sửa đợt này) vẫn quét mọi quy tắc đang bật như hành vi cũ', async () => {
+      prisma.distributionRule.findMany.mockResolvedValue([]);
+      const lead = { id: 'lead-1', assignedToId: null, assignedTeamId: null };
+
+      await service.tryAutoAssign(lead as never);
+
+      expect(prisma.distributionRule.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isActive: true } }),
+      );
+    });
+
     it('lỗi hạ tầng (vd CSDL thoáng qua) không được ném ra ngoài — trả về nguyên lead, không làm hỏng luồng tạo lead chính', async () => {
       prisma.distributionRule.findMany.mockRejectedValue(new Error('DB down'));
       const lead = { id: 'lead-1', assignedToId: null };

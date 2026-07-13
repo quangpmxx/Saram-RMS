@@ -311,6 +311,146 @@ describe('LeadPipelineService', () => {
         }),
       );
     });
+
+    it('Dự án phụ — nâng cấp toàn diện: cho phép gửi zalo_status_id=null để bỏ chọn, KHÔNG kiểm tra assertStatusInCategory', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        zaloStatusId: 'status-1',
+      });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        zaloStatusId: null,
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await service.updateZaloStatus(
+        'lead-1',
+        { zalo_status_id: null },
+        saleUser,
+      );
+
+      expect(prisma.statusCatalog.findUnique).not.toHaveBeenCalled();
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { zaloStatusId: null, lastActivityAt: expect.any(Date) },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'update',
+          fieldChanged: 'zalo_status_id',
+          oldValue: 'status-1',
+          newValue: undefined,
+        }),
+      );
+    });
+  });
+
+  describe('updateZaloFriendStatus', () => {
+    it('ném NotFoundException nếu ứng viên không tồn tại/đã xóa mềm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateZaloFriendStatus(
+          'ghost',
+          { zalo_friend_status_id: 'x' },
+          saleUser,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('từ chối nếu zalo_friend_status_id không thuộc category zalo_friend_status', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'status-1',
+        category: 'zalo_status',
+      });
+      await expect(
+        service.updateZaloFriendStatus(
+          'lead-1',
+          { zalo_friend_status_id: 'status-1' },
+          saleUser,
+        ),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('Sale cập nhật thành công cho lead của mình, ghi last_activity_at + audit log', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'status-1',
+        category: 'zalo_friend_status',
+      });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        zaloFriendStatusId: 'status-1',
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await service.updateZaloFriendStatus(
+        'lead-1',
+        { zalo_friend_status_id: 'status-1' },
+        saleUser,
+      );
+
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: {
+          zaloFriendStatusId: 'status-1',
+          lastActivityAt: expect.any(Date),
+        },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'update',
+          fieldChanged: 'zalo_friend_status_id',
+        }),
+      );
+    });
+
+    it('cho phép gửi zalo_friend_status_id=null để bỏ chọn, KHÔNG kiểm tra assertStatusInCategory', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        zaloFriendStatusId: 'status-1',
+      });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        zaloFriendStatusId: null,
+        source: { id: 's', name: 'Facebook' },
+        uploadedBy: { id: 'mkt-1', fullName: 'MKT A' },
+        uploadedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+      });
+
+      await service.updateZaloFriendStatus(
+        'lead-1',
+        { zalo_friend_status_id: null },
+        saleUser,
+      );
+
+      expect(prisma.statusCatalog.findUnique).not.toHaveBeenCalled();
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { zaloFriendStatusId: null, lastActivityAt: expect.any(Date) },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'update',
+          fieldChanged: 'zalo_friend_status_id',
+          oldValue: 'status-1',
+          newValue: undefined,
+        }),
+      );
+    });
   });
 
   describe('updateNoteColor', () => {
@@ -349,7 +489,10 @@ describe('LeadPipelineService', () => {
     });
 
     it('cho phép gửi note_color=null để bỏ chọn màu', async () => {
-      prisma.lead.findUnique.mockResolvedValue({ ...baseLead, noteColor: 'red' });
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        noteColor: 'red',
+      });
       prisma.lead.update.mockResolvedValue(baseLead);
       prisma.lead.findUniqueOrThrow.mockResolvedValue({
         ...baseLead,
@@ -431,6 +574,29 @@ describe('LeadPipelineService', () => {
           data: expect.objectContaining({
             callStatusId: 'status-called',
             callResultId: 'result-potential',
+          }),
+        }),
+      );
+    });
+
+    it('snapshot zalo_friend_status_id hiện tại của lead vào note', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        zaloFriendStatusId: 'zalo-friend-1',
+      });
+      prisma.leadNote.create.mockResolvedValue({
+        id: 'note-1',
+        createdBy: { id: 's', fullName: 'Sale A' },
+        createdAt: new Date('2026-01-01'),
+      });
+      prisma.lead.update.mockResolvedValue(baseLead);
+
+      await service.createNote('lead-1', { content: 'Gọi lần 1' }, saleUser);
+
+      expect(prisma.leadNote.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            zaloFriendStatusId: 'zalo-friend-1',
           }),
         }),
       );

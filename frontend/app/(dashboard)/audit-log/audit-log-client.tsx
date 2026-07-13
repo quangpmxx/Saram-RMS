@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 
 const PAGE_SIZE = 20;
@@ -50,8 +52,7 @@ interface Filters {
   action_type: string;
   entity_type: string;
   entity_id: string;
-  date_from: string;
-  date_to: string;
+  date: DateRangeValue;
 }
 
 function formatDateTime(value: string): string {
@@ -75,8 +76,7 @@ export function AuditLogClient({
     action_type: "",
     entity_type: "",
     entity_id: "",
-    date_from: "",
-    date_to: "",
+    date: EMPTY_DATE_RANGE,
   });
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<AuditLogEntry | null>(null);
@@ -89,8 +89,8 @@ export function AuditLogClient({
       if (filters.action_type) query.set("action_type", filters.action_type);
       if (filters.entity_type) query.set("entity_type", filters.entity_type);
       if (filters.entity_id) query.set("entity_id", filters.entity_id);
-      if (filters.date_from) query.set("date_from", new Date(filters.date_from).toISOString());
-      if (filters.date_to) query.set("date_to", new Date(`${filters.date_to}T23:59:59.999`).toISOString());
+      if (filters.date.from) query.set("date_from", new Date(filters.date.from).toISOString());
+      if (filters.date.to) query.set("date_to", new Date(`${filters.date.to}T23:59:59.999`).toISOString());
       const next = await clientApi<PaginatedResult<AuditLogEntry>>(`/audit-log?${query.toString()}`);
       setResult(next);
     } finally {
@@ -164,20 +164,12 @@ export function AuditLogClient({
               onChange={(event) => setFilters((prev) => ({ ...prev, entity_id: event.target.value }))}
             />
           </Field>
-          <Field label="Từ ngày" uiSize="sm" className="w-36">
-            <Input
-              uiSize="sm"
-              type="date"
-              value={filters.date_from}
-              onChange={(event) => setFilters((prev) => ({ ...prev, date_from: event.target.value }))}
-            />
-          </Field>
-          <Field label="Đến ngày" uiSize="sm" className="w-36">
-            <Input
-              uiSize="sm"
-              type="date"
-              value={filters.date_to}
-              onChange={(event) => setFilters((prev) => ({ ...prev, date_to: event.target.value }))}
+          <Field label="Khoảng thời gian" uiSize="sm" className="w-40">
+            <DateRangePicker
+              value={filters.date}
+              onChange={(next) => setFilters((prev) => ({ ...prev, date: next }))}
+              placeholder="Tất cả"
+              allowClear
             />
           </Field>
           <Button type="submit" variant="outline" size="sm" disabled={loading}>

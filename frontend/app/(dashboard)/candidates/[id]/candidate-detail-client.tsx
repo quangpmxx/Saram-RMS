@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,10 +16,13 @@ import {
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { callStatusVariant } from "@/lib/call-status-variant";
 import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
 import { useToast } from "@/lib/toast-context";
+import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type { AccountRole, Candidate, Note, StatusCatalogItem } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
+import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -90,6 +93,7 @@ export function CandidateDetailClient({
   callStatuses,
   callResults,
   zaloStatuses,
+  zaloFriendStatuses,
   currentUserId,
   currentUserRole,
   currentUserTeamId,
@@ -99,6 +103,7 @@ export function CandidateDetailClient({
   callStatuses: StatusCatalogItem[];
   callResults: StatusCatalogItem[];
   zaloStatuses: StatusCatalogItem[];
+  zaloFriendStatuses: StatusCatalogItem[];
   currentUserId: string;
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
@@ -114,6 +119,29 @@ export function CandidateDetailClient({
   const [callStatusId, setCallStatusId] = useState(initialCandidate.call_status?.id ?? "");
   const [callResultId, setCallResultId] = useState(initialCandidate.call_result?.id ?? "");
   const [zaloStatusId, setZaloStatusId] = useState(initialCandidate.zalo_status?.id ?? "");
+  const [zaloFriendStatusId, setZaloFriendStatusId] = useState(
+    initialCandidate.zalo_friend_status?.id ?? "",
+  );
+  /**
+   * Dự án phụ — nâng cấp toàn diện: tự động lưu "Tình trạng cuộc gọi/Kết quả
+   * cuộc gọi/Kết quả" khi rời trang mà QUÊN bấm "Lưu thông tin" (yêu cầu
+   * trực tiếp người dùng). `savedCallInfoRef` là MỐC đã lưu gần nhất (cập
+   * nhật lại sau mỗi lần bấm "Lưu thông tin" thành công) — so với mốc này
+   * thay vì `candidate.call_status?.id` vì handleSaveCallInfo() không cập
+   * nhật lại `candidate` sau khi lưu (điều hướng đi luôn), so với candidate
+   * cũ sẽ luôn thấy "còn thay đổi" và tự lưu thừa 1 lần nữa mỗi khi rời
+   * trang ngay sau khi vừa bấm lưu thủ công.
+   */
+  const savedCallInfoRef = useRef({
+    callStatusId: initialCandidate.call_status?.id ?? "",
+    callResultId: initialCandidate.call_result?.id ?? "",
+    zaloStatusId: initialCandidate.zalo_status?.id ?? "",
+  });
+  const liveCallInfoRef = useRef({ candidateId: candidate.id, callStatusId, callResultId, zaloStatusId });
+  useEffect(() => {
+    liveCallInfoRef.current = { candidateId: candidate.id, callStatusId, callResultId, zaloStatusId };
+  });
+  const [isSavingZaloFriendStatus, setIsSavingZaloFriendStatus] = useState(false);
   const [isSavingCallInfo, setIsSavingCallInfo] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
   const [isHoldSubmitting, setIsHoldSubmitting] = useState(false);
@@ -213,7 +241,31 @@ export function CandidateDetailClient({
   }
 
   /**
-   * Lưu 3 lựa chọn "Tình trạng cuộc gọi"/"Kết quả cuộc gọi"/"Tình trạng Zalo"
+   * Dự án phụ — nâng cấp toàn diện: "Tình trạng Zalo" — lưu ngay khi đổi lựa
+   * chọn (khác với Tình trạng cuộc gọi/Kết quả cuộc gọi/Kết quả, gộp vào nút
+   * "Lưu thông tin" ở handleSaveCallInfo) vì đặt ở đầu khối lịch sử ghi
+   * chú/cuộc gọi, tách biệt khỏi khối "Tiến trình cuộc gọi".
+   */
+  async function handleSetZaloFriendStatus(value: string) {
+    setZaloFriendStatusId(value);
+    setIsSavingZaloFriendStatus(true);
+    try {
+      const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-friend-status`, {
+        method: "PUT",
+        body: JSON.stringify({ zalo_friend_status_id: value || null }),
+      });
+      setCandidate(updated);
+    } catch (error) {
+      setZaloFriendStatusId(candidate.zalo_friend_status?.id ?? "");
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSavingZaloFriendStatus(false);
+    }
+  }
+
+  /**
+   * Lưu 3 lựa chọn "Tình trạng cuộc gọi"/"Kết quả cuộc gọi"/"Kết quả" (đổi ý
+   * từ "Tình trạng Zalo" — vẫn dùng chung field zalo_status kỹ thuật cũ)
    * — chỉ gọi API cho ô nào thực sự đổi giá trị.
    * Dự án phụ — nâng cấp toàn diện: sau khi lưu, đóng ngay trang chi tiết và
    * quay lại danh sách ứng viên (không ở lại trang để xem kết quả).
@@ -239,12 +291,76 @@ export function CandidateDetailClient({
           body: JSON.stringify({ zalo_status_id: zaloStatusId }),
         });
       }
+      savedCallInfoRef.current = { callStatusId, callResultId, zaloStatusId };
       router.push("/candidates");
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
       setIsSavingCallInfo(false);
     }
   }
+
+  /**
+   * Dự án phụ — nâng cấp toàn diện: tự động lưu "Tình trạng cuộc gọi/Kết quả
+   * cuộc gọi/Kết quả" nếu người dùng rời trang mà quên bấm "Lưu thông tin"
+   * (yêu cầu trực tiếp người dùng) — cả khi điều hướng trong app (bấm "Quay
+   * lại danh sách lao động", cleanup của effect chạy lúc unmount) lẫn khi
+   * đóng hẳn tab/tải lại trang (sự kiện beforeunload, dùng fetch keepalive
+   * để trình duyệt vẫn cố gắng gửi xong request dù trang đã rời đi — không
+   * đảm bảo 100% như sendBeacon nhưng sendBeacon chỉ hỗ trợ POST, không hợp
+   * với PUT hiện có). Dùng ref thay vì đọc thẳng state trong closure vì
+   * effect cleanup chỉ chạy 1 lần lúc mount (deps rỗng), cần đọc GIÁ TRỊ MỚI
+   * NHẤT tại thời điểm rời trang, không phải giá trị lúc mount.
+   */
+  useEffect(() => {
+    function collectUnsavedCallInfo() {
+      const live = liveCallInfoRef.current;
+      const saved = savedCallInfoRef.current;
+      const changes: Array<() => Promise<unknown>> = [];
+      if (live.callStatusId && live.callStatusId !== saved.callStatusId) {
+        changes.push(() =>
+          clientApi(`/candidate/${live.candidateId}/call-status`, {
+            method: "PUT",
+            body: JSON.stringify({ call_status_id: live.callStatusId }),
+            keepalive: true,
+          }),
+        );
+      }
+      if (live.callResultId && live.callResultId !== saved.callResultId) {
+        changes.push(() =>
+          clientApi(`/candidate/${live.candidateId}/call-result`, {
+            method: "PUT",
+            body: JSON.stringify({ call_result_id: live.callResultId }),
+            keepalive: true,
+          }),
+        );
+      }
+      if (live.zaloStatusId && live.zaloStatusId !== saved.zaloStatusId) {
+        changes.push(() =>
+          clientApi(`/candidate/${live.candidateId}/zalo-status`, {
+            method: "PUT",
+            body: JSON.stringify({ zalo_status_id: live.zaloStatusId }),
+            keepalive: true,
+          }),
+        );
+      }
+      return changes;
+    }
+
+    function handleBeforeUnload() {
+      for (const save of collectUnsavedCallInfo()) void save();
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      for (const save of collectUnsavedCallInfo()) {
+        save().catch(() => {
+          // Đã rời trang, không còn UI để báo lỗi — im lặng bỏ qua, ưu tiên
+          // cố gắng lưu hơn là chắc chắn mất hẳn thay đổi.
+        });
+      }
+    };
+  }, []);
 
   async function handleAddNote(content: string) {
     await clientApi(`/candidate/${candidate.id}/note`, {
@@ -350,7 +466,8 @@ export function CandidateDetailClient({
             <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Thông tin lao động</p>
             {candidate.is_held && (
               <Badge variant="warning">
-                Số được giữ lại bởi sale {candidate.held_by?.name ?? "—"}
+                Số được giữ lại bởi{" "}
+                {candidate.held_by ? <NameWithRoleHint account={candidate.held_by} /> : "—"}
               </Badge>
             )}
           </div>
@@ -426,7 +543,9 @@ export function CandidateDetailClient({
             />
             <div className="flex justify-between gap-3">
               <dt className="text-slate-500">MKT nhập</dt>
-              <dd className="text-slate-800">{candidate.uploaded_by.name}</dd>
+              <dd className="text-slate-800">
+                <NameWithRoleHint account={candidate.uploaded_by} />
+              </dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-slate-500">Ngày up</dt>
@@ -434,14 +553,21 @@ export function CandidateDetailClient({
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-slate-500">Sale phụ trách</dt>
-              <dd className="text-slate-800">{candidate.assigned_to?.name ?? "Chờ phân chia"}</dd>
+              <dd className="text-slate-800">
+                {candidate.assigned_to ? <NameWithRoleHint account={candidate.assigned_to} /> : "Chờ phân chia"}
+              </dd>
             </div>
             {candidate.entered_care_pool_at && candidate.care_pool_locked_by && (
               <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">Cột chăm sóc</dt>
                 <dd>
                   <Badge variant="info">
-                    Đang xử lý — {candidate.care_pool_locked_by.id === currentUserId ? "Bạn" : candidate.care_pool_locked_by.name}
+                    Đang xử lý —{" "}
+                    {candidate.care_pool_locked_by.id === currentUserId ? (
+                      "Bạn"
+                    ) : (
+                      <NameWithRoleHint account={candidate.care_pool_locked_by} />
+                    )}
                   </Badge>
                 </dd>
               </div>
@@ -460,54 +586,63 @@ export function CandidateDetailClient({
           <div className="mt-3 flex flex-col gap-3 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="shrink-0 text-slate-500">Tình trạng cuộc gọi</span>
-              <Select
-                uiSize="sm"
-                className="w-40"
-                value={callStatusId}
-                onChange={(event) => setCallStatusId(event.target.value)}
-                disabled={!canUpdate}
-              >
-                <option value="">Chưa cập nhật</option>
-                {callStatuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </Select>
+              {/* UI Polish — Select mặc định có sẵn class "w-full" trong
+                  fieldBaseClass; ghi đè bằng 1 class w-* khác trên chính
+                  Select không đáng tin cậy (cn() không dedup, thứ tự CSS
+                  Tailwind sinh ra quyết định class nào thắng chứ không phải
+                  thứ tự trong chuỗi className) — nên bọc trong 1 div
+                  shrink-0 có độ rộng cố định để cả 3 ô bằng nhau, thẳng hàng. */}
+              <div className="w-36 shrink-0">
+                <Select
+                  uiSize="sm"
+                  value={callStatusId}
+                  onChange={(event) => setCallStatusId(event.target.value)}
+                  disabled={!canUpdate}
+                >
+                  <option value="">Chưa cập nhật</option>
+                  {callStatuses.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="shrink-0 text-slate-500">Kết quả cuộc gọi</span>
-              <Select
-                uiSize="sm"
-                className="w-40"
-                value={callResultId}
-                onChange={(event) => setCallResultId(event.target.value)}
-                disabled={!canUpdate}
-              >
-                <option value="">Chưa cập nhật</option>
-                {callResults.map((result) => (
-                  <option key={result.id} value={result.id}>
-                    {result.name}
-                  </option>
-                ))}
-              </Select>
+              <div className="w-36 shrink-0">
+                <Select
+                  uiSize="sm"
+                  value={callResultId}
+                  onChange={(event) => setCallResultId(event.target.value)}
+                  disabled={!canUpdate}
+                >
+                  <option value="">Chưa cập nhật</option>
+                  {callResults.map((result) => (
+                    <option key={result.id} value={result.id}>
+                      {result.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="shrink-0 text-slate-500">Tình trạng Zalo</span>
-              <Select
-                uiSize="sm"
-                className="w-40"
-                value={zaloStatusId}
-                onChange={(event) => setZaloStatusId(event.target.value)}
-                disabled={!canUpdate}
-              >
-                <option value="">Chưa cập nhật</option>
-                {zaloStatuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </Select>
+              <span className="shrink-0 text-slate-500">Kết quả</span>
+              <div className="w-36 shrink-0">
+                <Select
+                  uiSize="sm"
+                  value={zaloStatusId}
+                  onChange={(event) => setZaloStatusId(event.target.value)}
+                  disabled={!canUpdate}
+                >
+                  <option value="">Chưa cập nhật</option>
+                  {zaloStatuses.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="shrink-0 text-slate-500">Đánh dấu màu</span>
@@ -557,8 +692,25 @@ export function CandidateDetailClient({
           backgroundColor: noteColorBgHex(candidate.note_color),
         }}
       >
-        <div className="border-b border-slate-100 p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
           <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-sm text-slate-500">Tình trạng Zalo</span>
+            <Select
+              uiSize="sm"
+              className="w-44"
+              value={zaloFriendStatusId}
+              onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
+              disabled={!canUpdate || isSavingZaloFriendStatus}
+            >
+              <option value="">Chưa cập nhật</option>
+              {zaloFriendStatuses.map((status) => (
+                <option key={status.id} value={status.id}>
+                  {status.name}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
 
         {canUpdate && <InlineNoteComposer onSubmit={handleAddNote} />}
@@ -576,10 +728,20 @@ export function CandidateDetailClient({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <Avatar fullName={note.created_by.name} className="h-6 w-6 text-[10px]" />
-                        <span className="text-xs font-medium text-slate-700">{note.created_by.name}</span>
+                        <NameWithRoleHint account={note.created_by} className="text-xs font-medium text-slate-700" />
                         <span className="text-xs text-slate-400">{formatDateTime(note.created_at)}</span>
-                        {note.call_status && <Badge variant="info">{note.call_status.name}</Badge>}
+                        {note.call_status && (
+                          <Badge variant={callStatusVariant(note.call_status.name)}>{note.call_status.name}</Badge>
+                        )}
                         {note.call_result && <Badge variant="accent">{note.call_result.name}</Badge>}
+                        {note.zalo_friend_status && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset ring-black/10"
+                            style={zaloFriendStatusStyle(note.zalo_friend_status.name)}
+                          >
+                            {note.zalo_friend_status.name}
+                          </span>
+                        )}
                       </div>
                       {!isEditing && (canEditNote(note) || canDeleteNote(note)) && (
                         <div className="flex items-center gap-1">

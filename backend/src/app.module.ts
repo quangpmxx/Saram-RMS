@@ -20,6 +20,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
 import { PermissionModule } from './permission/permission.module';
 import { ColumnWidthModule } from './column-width/column-width.module';
+import { ShuttleModule } from './shuttle/shuttle.module';
+import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -45,6 +47,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     NotificationModule,
     PermissionModule,
     ColumnWidthModule,
+    ShuttleModule,
+    SaleReminderModule,
   ],
   controllers: [AppController],
   providers: [

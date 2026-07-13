@@ -177,6 +177,10 @@ model Account {
   permissionGrants        AccountPermission[] @relation("AccountPermissionAccount")
   updatedPermissionGrants AccountPermission[] @relation("AccountPermissionUpdatedBy")
 
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ShuttleRecord (Danh sách đưa đón)
+  createdShuttleRecords ShuttleRecord[] @relation("ShuttleRecordCreatedBy")
+  updatedShuttleRecords ShuttleRecord[] @relation("ShuttleRecordUpdatedBy")
+
   @@map("accounts")
 }
 
@@ -221,9 +225,13 @@ enum StatusCategory {
   call_result
   interview_status
   employment_status
-  /// Dự án phụ — nâng cấp toàn diện: tình trạng kết bạn Zalo (3 lựa chọn cố
-  /// định: đã kết bạn / chưa đồng ý / không có Zalo) — xem seed.ts.
+  /// Dự án phụ — nâng cấp toàn diện: field/category kỹ thuật cũ, nay dùng
+  /// cho cột "Kết quả" (chỉ 1 lựa chọn "Đã gửi CCCD") — xem seed.ts.
   zalo_status
+  /// Dự án phụ — nâng cấp toàn diện: tình trạng kết bạn Zalo (thêm lại, tách
+  /// riêng khỏi "Kết quả") — 3 lựa chọn cố định: chưa kết bạn / đã kết bạn /
+  /// không có Zalo — xem seed.ts.
+  zalo_friend_status
 
   @@map("status_category")
 }
@@ -278,10 +286,12 @@ model StatusCatalog {
   leadsByCallStatus              Lead[]                 @relation("LeadCallStatus")
   leadsByCallResult              Lead[]                 @relation("LeadCallResult")
   leadsByZaloStatus              Lead[]                 @relation("LeadZaloStatus")
+  leadsByZaloFriendStatus        Lead[]                 @relation("LeadZaloFriendStatus")
   leadsByCurrentInterviewStatus  Lead[]                 @relation("LeadCurrentInterviewStatus")
   leadsByCurrentEmploymentStatus Lead[]                 @relation("LeadCurrentEmploymentStatus")
   notesByCallStatus              LeadNote[]             @relation("LeadNoteCallStatus")
   notesByCallResult              LeadNote[]             @relation("LeadNoteCallResult")
+  notesByZaloFriendStatus        LeadNote[]             @relation("LeadNoteZaloFriendStatus")
   interviewsByStatus             InterviewAppointment[] @relation("InterviewAppointmentStatus")
   interviewsByEmploymentStatus   InterviewAppointment[] @relation("InterviewAppointmentEmploymentStatus")
 
@@ -314,8 +324,12 @@ model Lead {
   callStatusId String? @map("call_status_id") @db.Uuid
   callResultId String? @map("call_result_id") @db.Uuid
 
-  // Dự án phụ — nâng cấp toàn diện: tình trạng kết bạn Zalo, chọn tại trang Chi tiết ứng viên.
+  // Dự án phụ — nâng cấp toàn diện: cột "Kết quả" (chỉ "Đã gửi CCCD"), chọn tại trang Chi tiết ứng viên.
   zaloStatusId String? @map("zalo_status_id") @db.Uuid
+
+  // Dự án phụ — nâng cấp toàn diện: tình trạng kết bạn Zalo (tách riêng khỏi
+  // "Kết quả" ở trên), chọn tại trang Chi tiết ứng viên.
+  zaloFriendStatusId String? @map("zalo_friend_status_id") @db.Uuid
 
   // Dự án phụ — nâng cấp toàn diện: màu đánh dấu ô "Lịch sử ghi chú/cuộc gọi"
   // trên trang Chi tiết ứng viên (không liên quan StatusCatalog — chỉ 3 màu cố định).
@@ -354,6 +368,7 @@ model Lead {
   callStatus              StatusCatalog?         @relation("LeadCallStatus", fields: [callStatusId], references: [id])
   callResult              StatusCatalog?         @relation("LeadCallResult", fields: [callResultId], references: [id])
   zaloStatus              StatusCatalog?         @relation("LeadZaloStatus", fields: [zaloStatusId], references: [id])
+  zaloFriendStatus        StatusCatalog?         @relation("LeadZaloFriendStatus", fields: [zaloFriendStatusId], references: [id])
   currentInterviewStatus  StatusCatalog?         @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
   currentEmploymentStatus StatusCatalog?         @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
   notes                   LeadNote[]
@@ -401,16 +416,21 @@ model LeadNote {
   content      String
   callStatusId String?   @map("call_status_id") @db.Uuid
   callResultId String?   @map("call_result_id") @db.Uuid
-  createdAt    DateTime  @default(now()) @map("created_at")
-  isDeleted    Boolean   @default(false) @map("is_deleted")
-  deletedById  String?   @map("deleted_by") @db.Uuid
-  deletedAt    DateTime? @map("deleted_at")
+  // Dự án phụ — nâng cấp toàn diện: snapshot "Tình trạng Zalo" tại thời điểm
+  // ghi note, cùng cơ chế với callStatusId/callResultId ở trên — hiện dưới
+  // dạng "tag" phía trên note (Mục 2.9, docs/11).
+  zaloFriendStatusId String?   @map("zalo_friend_status_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  isDeleted          Boolean   @default(false) @map("is_deleted")
+  deletedById        String?   @map("deleted_by") @db.Uuid
+  deletedAt          DateTime? @map("deleted_at")
 
-  lead       Lead           @relation(fields: [leadId], references: [id])
-  createdBy  Account        @relation("LeadNoteCreatedBy", fields: [createdById], references: [id])
-  deletedBy  Account?       @relation("LeadNoteDeletedBy", fields: [deletedById], references: [id])
-  callStatus StatusCatalog? @relation("LeadNoteCallStatus", fields: [callStatusId], references: [id])
-  callResult StatusCatalog? @relation("LeadNoteCallResult", fields: [callResultId], references: [id])
+  lead             Lead           @relation(fields: [leadId], references: [id])
+  createdBy        Account        @relation("LeadNoteCreatedBy", fields: [createdById], references: [id])
+  deletedBy        Account?       @relation("LeadNoteDeletedBy", fields: [deletedById], references: [id])
+  callStatus       StatusCatalog? @relation("LeadNoteCallStatus", fields: [callStatusId], references: [id])
+  callResult       StatusCatalog? @relation("LeadNoteCallResult", fields: [callResultId], references: [id])
+  zaloFriendStatus StatusCatalog? @relation("LeadNoteZaloFriendStatus", fields: [zaloFriendStatusId], references: [id])
 
   @@index([leadId])
   @@index([leadId, createdAt])
@@ -542,6 +562,10 @@ enum NotificationType {
   /// Dự án phụ — nâng cấp toàn diện: Admin soạn + gửi thủ công cho 1 nhóm/
   /// nhiều thành viên cụ thể (POST /notification) — dùng chung ô "content".
   admin_message
+  /// Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
+  /// cảnh báo tự động 1 Sale không có bản ghi nào trong "Danh sách đưa đón"
+  /// (shuttle_records.sale) suốt 3 ngày liên tiếp — xem SaleReminderService.
+  sale_no_shuttle_reminder
 
   @@map("notification_type")
 }
@@ -626,4 +650,73 @@ model AccountPermission {
 
   @@unique([accountId, permissionId])
   @@map("account_permissions")
+}
+
+// ── Dự án phụ — nâng cấp toàn diện: Danh sách đưa đón ────────────────────
+
+/// Danh sách đưa đón lao động — nhập tay ĐỘC LẬP, thay thế Google Sheet đang
+/// dùng. KHÔNG liên kết với Lead/ứng viên hay bất kỳ module nghiệp vụ nào
+/// khác (yêu cầu trực tiếp người dùng) — mọi trường (kể cả "Sale"/"Nhà thầu")
+/// đều là text tự do, không phải khóa ngoại. Mọi vai trò đã đăng nhập đều
+/// được thêm/sửa/xóa tự do (không giới hạn theo nhóm/người phụ trách).
+model ShuttleRecord {
+  id            String   @id @default(uuid()) @db.Uuid
+  date          DateTime @db.Date
+  fullName      String   @map("full_name") @db.VarChar(150)
+  phoneNumber   String   @map("phone_number") @db.VarChar(20)
+  company       String?  @db.VarChar(150)
+  area          String?  @db.VarChar(150)
+  type          String?  @db.VarChar(100)
+  sale          String?  @db.VarChar(150)
+  driver        String?  @map("driver") @db.VarChar(150)
+  /// Lưu dạng chuỗi "HH:mm" — chỉ là giờ hẹn PV, tách biệt khỏi cột "date".
+  interviewTime String?  @map("interview_time") @db.VarChar(5)
+  contractor    String?  @db.VarChar(150)
+  /// "Tình trạng đón" (Đã đón/Chưa đón được/Hẹn lại) — tên cột DB giữ
+  /// nguyên "status" (không đổi để tránh thêm 1 lần migrate) dù giao diện
+  /// đã tách riêng khỏi "Kết quả PV" (interviewResult, xem bên dưới) — yêu
+  /// cầu trực tiếp người dùng, tách 1 cột "Trạng thái" cũ thành 2 cột.
+  status        String?  @db.VarChar(50)
+  /// Dự án phụ — nâng cấp toàn diện: "Kết quả PV" (Đỗ phỏng vấn/Trượt phỏng
+  /// vấn) — tách riêng khỏi "Tình trạng đón" ở trên.
+  interviewResult String? @map("interview_result") @db.VarChar(50)
+  note          String?
+  createdById   String   @map("created_by") @db.Uuid
+  updatedById   String   @map("updated_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  createdBy Account @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
+  updatedBy Account @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([date])
+  @@index([status])
+  @@index([interviewResult])
+  @@map("shuttle_records")
+}
+
+/// Dự án phụ — nâng cấp toàn diện: danh sách gợi ý CÓ LƯU LẠI (khác cách cũ
+/// tự suy ra từ giá trị distinct trong shuttle_records) cho 7 trường "chọn"
+/// của Danh sách đưa đón (Công ty/Khu vực/Loại hình/Sale/Nhân viên đưa đón/
+/// Nhà thầu/Trạng thái) — cần bảng riêng vì yêu cầu trực tiếp người dùng:
+/// xóa được 1 giá trị cũ khỏi danh sách gợi ý (không đụng dữ liệu các dòng
+/// đã nhập), và chọn màu nền khi thêm giá trị mới — cả 2 việc này không thể
+/// làm được nếu danh sách chỉ suy ra từ dữ liệu sẵn có. `colorKey` tham chiếu
+/// 1 trong các màu cố định ở SHUTTLE_OPTION_COLORS (frontend) — null = màu
+/// mặc định (xám).
+model ShuttleOption {
+  id        String   @id @default(uuid()) @db.Uuid
+  field     String   @db.VarChar(20)
+  value     String   @db.VarChar(150)
+  colorKey  String?  @map("color_key") @db.VarChar(20)
+  /// Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
+  /// màu CHỮ riêng, độc lập với colorKey (màu nền) — yêu cầu trực tiếp người
+  /// dùng: "ngoài cho phép đổi màu nền chữ thì cho phép đổi màu chữ nữa".
+  /// null = dùng màu chữ tương phản tự động theo colorKey (hành vi cũ).
+  textColorKey String? @map("text_color_key") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([field, value])
+  @@index([field])
+  @@map("shuttle_options")
 }

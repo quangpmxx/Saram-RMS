@@ -8,56 +8,11 @@ import type { BySourceReport, FunnelStep, LeadSource, Team, TeamMember } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Field, Input, Select } from "@/components/ui/form";
+import { Field, Select } from "@/components/ui/form";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { computeDateRange, isoToLocalDateOnly, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
-
-type DatePreset = "today" | "week" | "month" | "custom";
-
-const DATE_PRESET_OPTIONS: Array<{ value: DatePreset; label: string }> = [
-  { value: "today", label: "Hôm nay" },
-  { value: "week", label: "Tuần này" },
-  { value: "month", label: "Tháng này" },
-  { value: "custom", label: "Tùy chọn..." },
-];
-
-function computeDateRange(preset: DatePreset, customFrom: string, customTo: string): { date_from: string; date_to: string } | null {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
-
-  if (preset === "custom") {
-    if (!customFrom && !customTo) return null;
-    return {
-      date_from: customFrom ? new Date(customFrom).toISOString() : "",
-      date_to: customTo ? new Date(`${customTo}T23:59:59.999`).toISOString() : "",
-    };
-  }
-  if (preset === "today") {
-    return { date_from: startOfToday.toISOString(), date_to: endOfToday.toISOString() };
-  }
-  if (preset === "week") {
-    const dayIndex = (startOfToday.getDay() + 6) % 7;
-    const start = new Date(startOfToday.getTime() - dayIndex * 24 * 60 * 60 * 1000);
-    return { date_from: start.toISOString(), date_to: endOfToday.toISOString() };
-  }
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { date_from: start.toISOString(), date_to: endOfToday.toISOString() };
-}
-
-/**
- * Đổi 1 mốc thời gian (ISO, UTC) sang chuỗi ngày dương lịch "YYYY-MM-DD"
- * theo giờ ĐỊA PHƯƠNG — không dùng iso.slice(0, 10) vì đó là ngày theo giờ
- * UTC, lệch mất 1 ngày ở múi giờ Việt Nam (UTC+7) khi ISO rơi vào khoảng
- * 00:00–07:00 giờ VN.
- */
-function toLocalDateInputValue(iso: string): string {
-  const date = new Date(iso);
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 interface ReportFilters {
   team_id: string;
@@ -90,12 +45,23 @@ export function ReportsClient({
 
   const [funnel, setFunnel] = useState(initialFunnel);
   const [bySource, setBySource] = useState(initialBySource);
-  const [datePreset, setDatePreset] = useState<DatePreset>(initialDatePresetIsCustom ? "custom" : "month");
-  const [customFrom, setCustomFrom] = useState(
-    initialDatePresetIsCustom && initialFilters.date_from ? toLocalDateInputValue(initialFilters.date_from) : "",
-  );
-  const [customTo, setCustomTo] = useState(
-    initialDatePresetIsCustom && initialFilters.date_to ? toLocalDateInputValue(initialFilters.date_to) : "",
+  /**
+   * Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng
+   * chung (xem components/ui/date-range-picker.tsx) — mặc định "Tháng này"
+   * khớp preset gốc đã chốt (Mục 8, docs/12: Báo cáo là "mở rộng của
+   * Dashboard", dùng chung mặc định preset). initialFilters.date_from/to
+   * luôn là ISO datetime đầy đủ (server tự tính mặc định hoặc lấy từ link
+   * "Xem chi tiết" ở Dashboard) — đổi sang "YYYY-MM-DD" bằng
+   * isoToLocalDateOnly() để đổ vào DateRangePicker.
+   */
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() =>
+    initialDatePresetIsCustom
+      ? {
+          preset: "custom",
+          from: isoToLocalDateOnly(initialFilters.date_from),
+          to: isoToLocalDateOnly(initialFilters.date_to),
+        }
+      : { preset: "this_month", ...computeDateRange("this_month") },
   );
   const [teamId, setTeamId] = useState(initialFilters.team_id);
   const [accountId, setAccountId] = useState(initialFilters.account_id);
@@ -103,11 +69,15 @@ export function ReportsClient({
   const [loading, setLoading] = useState(false);
   const toast = useToast();
 
+  function buildDateQuery(): URLSearchParams {
+    const query = new URLSearchParams();
+    if (dateRange.from) query.set("date_from", new Date(dateRange.from).toISOString());
+    if (dateRange.to) query.set("date_to", new Date(`${dateRange.to}T23:59:59.999`).toISOString());
+    return query;
+  }
+
   async function refresh() {
-    const range = computeDateRange(datePreset, customFrom, customTo);
-    const baseQuery = new URLSearchParams();
-    if (range?.date_from) baseQuery.set("date_from", range.date_from);
-    if (range?.date_to) baseQuery.set("date_to", range.date_to);
+    const baseQuery = buildDateQuery();
     if (canFilterByTeam && teamId) baseQuery.set("team_id", teamId);
     if (sourceId) baseQuery.set("source_id", sourceId);
 
@@ -130,10 +100,9 @@ export function ReportsClient({
   }
 
   function candidateLinkParams(extra?: Record<string, string>): string {
-    const range = computeDateRange(datePreset, customFrom, customTo);
     const params = new URLSearchParams();
-    if (range?.date_from) params.set("date_from", toLocalDateInputValue(range.date_from));
-    if (range?.date_to) params.set("date_to", toLocalDateInputValue(range.date_to));
+    if (dateRange.from) params.set("date_from", dateRange.from);
+    if (dateRange.to) params.set("date_to", dateRange.to);
     if (teamId) params.set("team_id", teamId);
     if (accountId) params.set("assigned_to", accountId);
     if (sourceId) params.set("source_id", sourceId);
@@ -153,25 +122,9 @@ export function ReportsClient({
             void refresh();
           }}
         >
-          <Field label="Khoảng thời gian" uiSize="sm" className="w-40">
-            <Select uiSize="sm" value={datePreset} onChange={(event) => setDatePreset(event.target.value as DatePreset)}>
-              {DATE_PRESET_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+          <Field label="Khoảng thời gian" uiSize="sm" className="w-44">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
           </Field>
-          {datePreset === "custom" && (
-            <>
-              <Field label="Từ ngày" uiSize="sm" className="w-40">
-                <Input uiSize="sm" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
-              </Field>
-              <Field label="Đến ngày" uiSize="sm" className="w-40">
-                <Input uiSize="sm" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
-              </Field>
-            </>
-          )}
           {canFilterByTeam && (
             <Field label="Nhóm" uiSize="sm" className="w-44">
               <Select uiSize="sm" value={teamId} onChange={(event) => setTeamId(event.target.value)}>

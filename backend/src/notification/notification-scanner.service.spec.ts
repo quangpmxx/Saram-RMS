@@ -286,4 +286,106 @@ describe('NotificationScannerService', () => {
       await expect(service.tick()).resolves.toBeUndefined();
     });
   });
+
+  describe('Dự án phụ — nâng cấp toàn diện: chuông + toast trong ứng dụng đúng giờ hẹn gọi lại', () => {
+    it('lịch đã đến giờ (scheduledAt <= now) → tạo ngay notification channel=in_app, status=sent, đúng nội dung', async () => {
+      const scheduledAt = new Date(Date.now() - 30 * 1000);
+      prisma.callbackSchedule.findMany.mockResolvedValue([
+        {
+          id: 'cb-1',
+          scheduledAt,
+          lead: {
+            id: 'lead-1',
+            fullName: 'Nguyễn Văn A',
+            phoneNumber: '0901000001',
+            assignedToId: 'sale-1',
+          },
+        },
+      ]);
+
+      const sent = await service.runInAppCallbackTick();
+
+      expect(sent).toBe(1);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          accountId: 'sale-1',
+          leadId: 'lead-1',
+          type: 'callback_reminder',
+          channel: 'in_app',
+          status: 'sent',
+          scheduledAt,
+          content: expect.stringContaining(
+            'Bạn có lịch gọi lại lao động Nguyễn Văn A, sđt 0901000001 vào lúc',
+          ),
+        }),
+      });
+    });
+
+    it('lịch chưa đến giờ (scheduledAt trong tương lai) — không tạo thông báo', async () => {
+      prisma.callbackSchedule.findMany.mockResolvedValue([]);
+
+      const sent = await service.runInAppCallbackTick();
+
+      expect(sent).toBe(0);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(prisma.callbackSchedule.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            isCompleted: false,
+            scheduledAt: expect.objectContaining({
+              lte: expect.any(Date),
+              gte: expect.any(Date),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('đã có notification in_app đúng leadId+scheduledAt — không tạo trùng', async () => {
+      const scheduledAt = new Date(Date.now() - 30 * 1000);
+      prisma.callbackSchedule.findMany.mockResolvedValue([
+        {
+          id: 'cb-2',
+          scheduledAt,
+          lead: {
+            id: 'lead-2',
+            fullName: 'Trần Thị B',
+            phoneNumber: '0901000002',
+            assignedToId: 'sale-2',
+          },
+        },
+      ]);
+      prisma.notification.findFirst.mockResolvedValueOnce({ id: 'existing' });
+
+      const sent = await service.runInAppCallbackTick();
+
+      expect(sent).toBe(0);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('lịch gọi lại chưa gán Sale (assignedToId null) — không tạo thông báo', async () => {
+      prisma.callbackSchedule.findMany.mockResolvedValue([
+        {
+          id: 'cb-3',
+          scheduledAt: new Date(Date.now() - 30 * 1000),
+          lead: {
+            id: 'lead-3',
+            fullName: 'C',
+            phoneNumber: '0901000003',
+            assignedToId: null,
+          },
+        },
+      ]);
+
+      const sent = await service.runInAppCallbackTick();
+
+      expect(sent).toBe(0);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('tickInAppCallback() (wrapper định kỳ) không throw ra ngoài kể cả khi lỗi toàn bộ', async () => {
+      prisma.callbackSchedule.findMany.mockRejectedValue(new Error('DB down'));
+      await expect(service.tickInAppCallback()).resolves.toBeUndefined();
+    });
+  });
 });

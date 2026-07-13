@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Bell, CalendarClock, Megaphone, Phone, X } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type AppNotification, type PaginatedResult } from "@/lib/types";
+import { adminGoldTextStyle } from "@/lib/admin-gold";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -27,7 +28,16 @@ const STATUS_CLASS: Record<AppNotification["status"], string> = {
 };
 
 const POLL_INTERVAL_MS = 20_000;
-const TOAST_DURATION_MS = 30_000;
+
+/**
+ * Dự án phụ — nâng cấp toàn diện: "Nhắc lịch gọi lại" hiện nổi 1 phút (yêu
+ * cầu trực tiếp người dùng), các loại còn lại giữ nguyên 30s như trước.
+ */
+const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
+  callback_reminder: 60_000,
+  interview_reminder: 30_000,
+  admin_message: 30_000,
+};
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("vi-VN");
@@ -56,7 +66,13 @@ function NotificationSenderRow({ n }: { n: AppNotification }) {
       <Avatar fullName={name} avatarUrl={n.sender?.avatar_url} className="h-[19.6px] w-[19.6px] shrink-0 text-[10px]" />
       <span className="truncate text-[13px] font-medium text-slate-600">
         {name}
-        {n.sender && ` (${ACCOUNT_ROLE_LABEL[n.sender.role]})`}
+        {n.sender && (
+          <>
+            {" ("}
+            <span style={adminGoldTextStyle(n.sender.role)}>{ACCOUNT_ROLE_LABEL[n.sender.role]}</span>
+            {")"}
+          </>
+        )}
       </span>
     </div>
   );
@@ -215,7 +231,7 @@ export function NotificationBell({ userId }: { userId: string }) {
     playNotificationSound();
     setToasts((prev) => [...prev, ...freshOnes]);
     for (const n of freshOnes) {
-      const timeout = setTimeout(() => dismissToast(n.id, false), TOAST_DURATION_MS);
+      const timeout = setTimeout(() => dismissToast(n.id, false), TOAST_DURATION_MS[n.type]);
       toastTimeoutsRef.current.set(n.id, timeout);
     }
   }

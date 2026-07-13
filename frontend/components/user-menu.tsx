@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type Account } from "@/lib/types";
+import { adminGoldTextStyle } from "@/lib/admin-gold";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
 
@@ -72,7 +73,7 @@ export function UserMenu({ user }: { user: Account }) {
         <div className="hidden text-right text-xs leading-tight sm:block">
           <p className="font-medium text-slate-800">{user.full_name}</p>
           <p className="text-[11px] text-slate-500">
-            {ACCOUNT_ROLE_LABEL[user.role]}
+            <span style={adminGoldTextStyle(user.role)}>{ACCOUNT_ROLE_LABEL[user.role]}</span>
             {user.team_name ? ` · ${user.team_name}` : ""}
           </p>
         </div>

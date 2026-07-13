@@ -25,6 +25,7 @@ describe('CandidatesService', () => {
       groupBy: jest.Mock;
     };
     leadSource: { findUnique: jest.Mock };
+    team: { findUnique: jest.Mock };
     account: { findUnique: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -79,6 +80,11 @@ describe('CandidatesService', () => {
     role: 'leader' as const,
     sessionId: 's',
   };
+  const managerUser = {
+    id: 'manager-1',
+    role: 'manager' as const,
+    sessionId: 's',
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -93,6 +99,7 @@ describe('CandidatesService', () => {
         groupBy: jest.fn(),
       },
       leadSource: { findUnique: jest.fn() },
+      team: { findUnique: jest.fn() },
       account: { findUnique: jest.fn(), findMany: jest.fn() },
       $transaction: jest.fn(),
     };
@@ -122,7 +129,29 @@ describe('CandidatesService', () => {
 
       await expect(
         service.create(
-          { full_name: 'X', phone_number: '090', source_id: 'ghost' },
+          {
+            full_name: 'X',
+            phone_number: '090',
+            source_id: 'ghost',
+            team_id: 'team-1',
+          },
+          mktUser,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: từ chối nếu team_id không tồn tại', async () => {
+      prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          {
+            full_name: 'X',
+            phone_number: '090',
+            source_id: 'source-1',
+            team_id: 'ghost',
+          },
           mktUser,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -130,6 +159,10 @@ describe('CandidatesService', () => {
 
     it('tạo thành công, không trùng SĐT → duplicate_warning là null', async () => {
       prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue({
+        id: 'team-1',
+        name: 'Nhóm Sale Demo',
+      });
       prisma.lead.create.mockResolvedValue(baseLead);
       prisma.lead.findMany.mockResolvedValue([baseLead]); // chỉ chính nó
       prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
@@ -139,11 +172,18 @@ describe('CandidatesService', () => {
           full_name: 'Nguyễn Văn A',
           phone_number: '0900000001',
           source_id: 'source-1',
+          team_id: 'team-1',
         },
         mktUser,
       );
 
       expect(result.duplicate_warning).toBeNull();
+      // Dự án phụ — nâng cấp toàn diện: data mới bắt buộc gán nhóm ngay khi up.
+      expect(prisma.lead.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ assignedTeamId: 'team-1' }),
+        }),
+      );
       // Chỉ 1 bản ghi khớp SĐT (chính nó) → LeadDuplicateService vẫn đồng bộ để đảm bảo
       // is_duplicate_flagged = false (idempotent), không phải bỏ qua hoàn toàn.
       expect(prisma.lead.updateMany).toHaveBeenCalledWith({
@@ -160,6 +200,10 @@ describe('CandidatesService', () => {
       const newLead = { ...baseLead, id: 'lead-1' };
 
       prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue({
+        id: 'team-1',
+        name: 'Nhóm Sale Demo',
+      });
       prisma.lead.create.mockResolvedValue(newLead);
       prisma.lead.findMany.mockResolvedValue([existingLead, newLead]);
       prisma.account.findMany.mockResolvedValue([
@@ -175,6 +219,7 @@ describe('CandidatesService', () => {
           full_name: 'Nguyễn Văn A',
           phone_number: '0900000001',
           source_id: 'source-1',
+          team_id: 'team-1',
         },
         mktUser,
       );
@@ -276,6 +321,59 @@ describe('CandidatesService', () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
       prisma.lead.update.mockResolvedValue(baseLead);
       prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+
+      await expect(
+        service.update('lead-1', { full_name: 'X' }, adminUser),
+      ).resolves.toBeDefined();
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: lead đang giữ số — chỉ đúng người đang giữ mới sửa được, người khác (kể cả Quản lý) bị chặn', async () => {
+      const heldLead = {
+        ...baseLead,
+        uploadedById: 'mkt-1',
+        assignedToId: 'sale-1',
+        isHeld: true,
+        heldById: 'sale-1',
+      };
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+
+      // MKT là người upload gốc — bình thường sửa được — nhưng lead đang bị giữ bởi Sale khác nên vẫn bị chặn.
+      await expect(
+        service.update('lead-1', { full_name: 'X' }, mktUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      // Quản lý bình thường sửa được mọi lead — vẫn bị chặn khi không phải người giữ số.
+      await expect(
+        service.update('lead-1', { full_name: 'X' }, managerUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: lead đang giữ số — đúng người đang giữ (Sale) vẫn sửa được bình thường', async () => {
+      const heldLead = {
+        ...baseLead,
+        assignedToId: 'sale-1',
+        isHeld: true,
+        heldById: 'sale-1',
+      };
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+      prisma.lead.update.mockResolvedValue(heldLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
+
+      await expect(
+        service.update('lead-1', { full_name: 'X' }, saleUser),
+      ).resolves.toBeDefined();
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện: lead đang giữ số — Admin vẫn sửa được bình thường (full quyền)', async () => {
+      const heldLead = {
+        ...baseLead,
+        assignedToId: 'sale-1',
+        isHeld: true,
+        heldById: 'sale-1',
+      };
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+      prisma.lead.update.mockResolvedValue(heldLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
 
       await expect(
         service.update('lead-1', { full_name: 'X' }, adminUser),
@@ -393,6 +491,80 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('hold/unhold — Dự án phụ — nâng cấp toàn diện: chỉ người đang giữ số (hoặc Admin) mới được bỏ giữ số', () => {
+    const heldLead = {
+      ...baseLead,
+      assignedToId: 'sale-1',
+      isHeld: true,
+      heldById: 'sale-1',
+      heldAt: new Date('2026-01-01'),
+    };
+
+    it('Giữ số (hold): giữ nguyên quy tắc cũ — Sale chỉ giữ được lead đang phụ trách', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedToId: 'sale-2',
+      });
+
+      await expect(service.hold('lead-1', saleUser)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('Giữ số (hold): Admin/Quản lý giữ được lead bất kỳ, không giới hạn người phụ trách', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+
+      await expect(service.hold('lead-1', managerUser)).resolves.toBeDefined();
+    });
+
+    it('Bỏ giữ số (unhold): đúng người đang giữ số thì bỏ được', async () => {
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+      prisma.lead.update.mockResolvedValue(heldLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
+
+      await expect(service.unhold('lead-1', saleUser)).resolves.toBeDefined();
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { isHeld: false, heldById: null, heldAt: null },
+      });
+    });
+
+    it('Bỏ giữ số (unhold): Sale khác — dù cùng phụ trách lead nhưng KHÔNG phải người giữ số — cũng KHÔNG bỏ được', async () => {
+      const otherSaleHolder = {
+        id: 'sale-3',
+        role: 'sale' as const,
+        sessionId: 's',
+      };
+      prisma.lead.findUnique.mockResolvedValue({
+        ...heldLead,
+        assignedToId: 'sale-3', // lead hiện phụ trách bởi sale-3...
+        heldById: 'sale-1', // ...nhưng người ĐANG GIỮ SỐ vẫn là sale-1.
+      });
+
+      await expect(
+        service.unhold('lead-1', otherSaleHolder),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Bỏ giữ số (unhold): Quản lý KHÔNG phải người giữ số thì KHÔNG bỏ được', async () => {
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+
+      await expect(
+        service.unhold('lead-1', managerUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Bỏ giữ số (unhold): Admin bỏ được bất kỳ lead nào, bất kể ai đang giữ', async () => {
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+      prisma.lead.update.mockResolvedValue(heldLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
+
+      await expect(service.unhold('lead-1', adminUser)).resolves.toBeDefined();
+    });
+  });
+
   describe('findOne', () => {
     it('ném NotFoundException nếu không tồn tại/đã xóa mềm', async () => {
       prisma.lead.findUnique.mockResolvedValue(null);
@@ -458,7 +630,7 @@ describe('CandidatesService', () => {
         where: expect.objectContaining({
           AND: [
             {
-              OR: [{ assignedTeamId: 'team-1' }, { assignedToId: null }],
+              OR: [{ assignedTeamId: 'team-1' }, { assignedTeamId: null }],
             },
           ],
         }),
@@ -496,7 +668,7 @@ describe('CandidatesService', () => {
       const whereArg = prisma.lead.count.mock.calls[0][0].where;
       expect(whereArg.AND).toHaveLength(2);
       expect(whereArg.AND[0]).toEqual({
-        OR: [{ assignedTeamId: 'team-1' }, { assignedToId: null }],
+        OR: [{ assignedTeamId: 'team-1' }, { assignedTeamId: null }],
       });
       expect(whereArg.AND[1].OR).toBeDefined();
     });
@@ -530,6 +702,7 @@ describe('CandidatesService', () => {
 
   describe('getPending', () => {
     it('Dự án phụ — nâng cấp toàn diện: Sale giờ cũng xem được danh sách chờ phân chia (để tự nhận data)', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
       prisma.$transaction.mockResolvedValue([0, []]);
 
       await expect(
@@ -537,14 +710,30 @@ describe('CandidatesService', () => {
       ).resolves.toBeDefined();
     });
 
-    it('Leader/MKT/Admin xem được, luôn lọc assignedToId=null, không lọc theo nhóm', async () => {
+    it('Dự án phụ — nâng cấp toàn diện: SỬA LỖI nghiệp vụ — Leader/Sale CHỈ xem "Chờ phân chia" của đúng nhóm mình (hoặc data thật sự chưa có nhóm), không còn thấy toàn hệ thống', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
       prisma.$transaction.mockResolvedValue([0, []]);
 
       await service.getPending({ page: 1, page_size: 20 }, leaderUser);
 
       expect(prisma.lead.count).toHaveBeenCalledWith({
+        where: {
+          deletedAt: null,
+          assignedToId: null,
+          OR: [{ assignedTeamId: 'team-1' }, { assignedTeamId: null }],
+        },
+      });
+    });
+
+    it('MKT/Admin/Quản lý vẫn xem toàn bộ "Chờ phân chia", không lọc theo nhóm', async () => {
+      prisma.$transaction.mockResolvedValue([0, []]);
+
+      await service.getPending({ page: 1, page_size: 20 }, adminUser);
+
+      expect(prisma.lead.count).toHaveBeenCalledWith({
         where: { deletedAt: null, assignedToId: null },
       });
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
     });
   });
 

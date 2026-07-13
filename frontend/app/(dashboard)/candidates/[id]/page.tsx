@@ -36,10 +36,11 @@ export default async function CandidateDetailPage({
     throw error;
   }
 
-  const [callStatuses, callResults, zaloStatuses] = await Promise.all([
+  const [callStatuses, callResults, zaloStatuses, zaloFriendStatuses] = await Promise.all([
     serverApi<StatusCatalogItem[]>("/status?category=call_status"),
     serverApi<StatusCatalogItem[]>("/status?category=call_result"),
     serverApi<StatusCatalogItem[]>("/status?category=zalo_status"),
+    serverApi<StatusCatalogItem[]>("/status?category=zalo_friend_status"),
   ]);
 
   return (
@@ -49,6 +50,7 @@ export default async function CandidateDetailPage({
       callStatuses={callStatuses}
       callResults={callResults}
       zaloStatuses={zaloStatuses}
+      zaloFriendStatuses={zaloFriendStatuses}
       currentUserId={user.id}
       currentUserRole={user.role}
       currentUserTeamId={user.team_id}

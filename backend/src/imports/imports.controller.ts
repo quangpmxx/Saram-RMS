@@ -16,9 +16,13 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
 
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB — đủ cho ~20.000 dòng (Mục 2, docs/09)
 
-/** Mục 4, docs/13-api-design.md — chỉ MKT (đúng như POST /candidate). */
+/**
+ * Mục 4, docs/13-api-design.md — MKT (đúng như POST /candidate). Dự án phụ
+ * — nâng cấp toàn diện: bổ sung Admin theo đúng nguyên tắc "Admin/Quản lý
+ * kế thừa toàn bộ quyền của vai trò cấp dưới" (yêu cầu trực tiếp người dùng).
+ */
 @Controller('candidate')
-@Roles('mkt')
+@Roles('mkt', 'admin')
 export class ImportsController {
   constructor(private readonly importsService: ImportsService) {}
 

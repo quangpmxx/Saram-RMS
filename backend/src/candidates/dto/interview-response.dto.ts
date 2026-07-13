@@ -3,6 +3,7 @@ import {
   InterviewAppointment,
   StatusCatalog,
 } from '../../../generated/prisma/client';
+import { NamedRefWithRole } from './candidate-response.dto';
 
 /** Đối tượng "Interview" dùng chung — Mục 0.1, docs/13-api-design.md. */
 export interface InterviewResponseDto {
@@ -14,14 +15,14 @@ export interface InterviewResponseDto {
   status: { id: string; name: string };
   employment_status: { id: string; name: string } | null;
   employment_reason: string | null;
-  created_by: { id: string; name: string };
+  created_by: NamedRefWithRole;
   created_at: string;
 }
 
 type InterviewWithRelations = InterviewAppointment & {
   status: Pick<StatusCatalog, 'id' | 'name'>;
   employmentStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
-  createdBy: Pick<Account, 'id' | 'fullName'>;
+  createdBy: Pick<Account, 'id' | 'fullName' | 'role'>;
 };
 
 export function toInterviewResponse(
@@ -44,6 +45,7 @@ export function toInterviewResponse(
     created_by: {
       id: interview.createdBy.id,
       name: interview.createdBy.fullName,
+      role: interview.createdBy.role,
     },
     created_at: interview.createdAt.toISOString(),
   };
@@ -52,5 +54,5 @@ export function toInterviewResponse(
 export const INTERVIEW_INCLUDE = {
   status: { select: { id: true, name: true } },
   employmentStatus: { select: { id: true, name: true } },
-  createdBy: { select: { id: true, fullName: true } },
+  createdBy: { select: { id: true, fullName: true, role: true } },
 } as const;

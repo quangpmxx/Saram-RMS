@@ -208,4 +208,102 @@ export class NotificationScannerService {
       ? `Nhắc lịch gọi lại ứng viên ${leadFullName}.`
       : `Nhắc lịch hẹn phỏng vấn ứng viên ${leadFullName}.`;
   }
+
+  /**
+   * Dự án phụ — nâng cấp toàn diện: chuông + toast TRONG ỨNG DỤNG đúng thời
+   * điểm đặt lịch gọi lại (khác với syncCallbackReminders/sendDuePending ở
+   * trên — nhắc qua Zalo, TRƯỚC giờ hẹn N phút theo cấu hình). Tách hẳn
+   * thành 1 tick/method riêng, quét nhanh hơn (30s thay vì 2 phút) để đúng
+   * yêu cầu "đến thời điểm đặt lịch" — NotificationBell (frontend) tự phát
+   * hiện thông báo mới qua GET /notification, không cần API riêng.
+   */
+  @Interval(30 * 1000)
+  async tickInAppCallback(): Promise<void> {
+    try {
+      const sent = await this.runInAppCallbackTick();
+      if (sent > 0) {
+        this.logger.log(
+          `Thông báo trong ứng dụng (lịch gọi lại đến giờ): đã gửi ${sent}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Quét thông báo trong ứng dụng (lịch gọi lại) thất bại',
+        error as Error,
+      );
+    }
+  }
+
+  /** Tách riêng khỏi tickInAppCallback() để test/gọi thủ công được, không cần chờ timer. */
+  async runInAppCallbackTick(): Promise<number> {
+    const now = new Date();
+    // Chỉ bù các lịch đến hạn trong 1 giờ gần nhất — tránh dồn gửi hàng loạt
+    // thông báo cũ nếu worker gián đoạn lâu (deploy lại, khởi động lại...).
+    const graceWindowStart = new Date(now.getTime() - 60 * 60 * 1000);
+
+    const dueCallbacks = await this.prisma.callbackSchedule.findMany({
+      where: {
+        isCompleted: false,
+        scheduledAt: { lte: now, gte: graceWindowStart },
+        lead: { deletedAt: null, assignedToId: { not: null } },
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+            assignedToId: true,
+          },
+        },
+      },
+    });
+
+    let sentCount = 0;
+    for (const callback of dueCallbacks) {
+      if (!callback.lead.assignedToId) continue;
+
+      const existing = await this.prisma.notification.findFirst({
+        where: {
+          leadId: callback.lead.id,
+          type: 'callback_reminder',
+          channel: 'in_app',
+          scheduledAt: callback.scheduledAt,
+        },
+      });
+      if (existing) continue;
+
+      await this.prisma.notification.create({
+        data: {
+          accountId: callback.lead.assignedToId,
+          leadId: callback.lead.id,
+          type: 'callback_reminder',
+          channel: 'in_app',
+          content: this.buildInAppCallbackMessage(
+            callback.lead.fullName,
+            callback.lead.phoneNumber,
+            callback.scheduledAt,
+          ),
+          scheduledAt: callback.scheduledAt,
+          sentAt: new Date(),
+          status: 'sent',
+        },
+      });
+      sentCount++;
+    }
+    return sentCount;
+  }
+
+  private buildInAppCallbackMessage(
+    fullName: string,
+    phoneNumber: string,
+    scheduledAt: Date,
+  ): string {
+    const hh = String(scheduledAt.getHours()).padStart(2, '0');
+    const mm = String(scheduledAt.getMinutes()).padStart(2, '0');
+    const dd = String(scheduledAt.getDate()).padStart(2, '0');
+    const MM = String(scheduledAt.getMonth() + 1).padStart(2, '0');
+    const yyyy = scheduledAt.getFullYear();
+    return `Bạn có lịch gọi lại lao động ${fullName}, sđt ${phoneNumber} vào lúc ${hh}:${mm} ngày ${dd}/${MM}/${yyyy}`;
+  }
 }

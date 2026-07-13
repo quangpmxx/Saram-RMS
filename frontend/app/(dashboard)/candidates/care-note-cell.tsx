@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Note } from "@/lib/types";
+import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { NoteTimeline } from "./note-timeline";
 
 /** Bảng "Data lao động" — chiều cao hàng cố định, ô ghi chú chỉ hiện bản tóm tắt (Mục 6, yêu cầu tối ưu bảng); lịch sử đầy đủ xem tại trang Chi tiết ứng viên. */
@@ -88,7 +89,7 @@ export function CareNoteCell({ notes }: { notes: Note[] | undefined }) {
         renderNote={(note) => (
           <div className="rounded-lg bg-slate-50 px-2 py-0.5">
             <div className="flex flex-wrap items-center gap-1 text-[10px]">
-              <span className="font-semibold text-slate-700">{note.created_by.name}</span>
+              <NameWithRoleHint account={note.created_by} className="font-semibold text-slate-700" />
               <span className="text-slate-300">·</span>
               <span className="text-slate-400">{formatNoteTimestamp(note.created_at)}</span>
               {note.call_status && <MiniStatusBadge label={note.call_status.name} />}

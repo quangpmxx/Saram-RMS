@@ -21,6 +21,12 @@ const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
     icon: "duplicates",
     roles: ["admin", "manager", "leader", "mkt", "sale"],
   },
+  {
+    href: "/shuttle",
+    label: "Danh sách đưa đón",
+    icon: "shuttle",
+    roles: ["admin", "manager", "leader", "mkt", "sale"],
+  },
   { href: "/audit-log", label: "Nhật ký", icon: "auditLog", roles: ["admin", "manager"] },
   { href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", roles: ["admin"] },
   { href: "/teams", label: "Quản lý nhóm", icon: "teams", roles: ["admin"] },
@@ -54,7 +60,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <CollapsibleSidebar navItems={navItems} />
 
           <div className="flex min-w-0 flex-1 flex-col md:h-screen md:overflow-y-auto">
-            <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
+            {/*
+              Dự án phụ — nâng cấp toàn diện: z-50 — LUÔN LÀ LỚP NỔI CAO NHẤT
+              toàn ứng dụng (yêu cầu trực tiếp người dùng: "thanh header này
+              luôn để làm lớp đầu tiên của trang web"). Mọi phần tử
+              sticky/fixed/portal thêm mới ở BẤT KỲ trang nào (bộ lọc dính,
+              dropdown, modal...) PHẢI dùng z-index THẤP HƠN z-50 — hiện tại
+              giá trị lớn nhất còn lại trong codebase là z-40
+              (notification-bell.tsx, danh sách toast).
+            */}
+            <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
               {/* UI Polish — tinh chỉnh mật độ hiển thị: py-2.5 → py-1.5 (giảm ~28% chiều
                   cao header khi cộng với avatar/font thu nhỏ trong UserMenu). */}
               <div className="flex items-center justify-between gap-3 px-4 py-1.5 md:px-6">

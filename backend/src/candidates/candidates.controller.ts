@@ -25,6 +25,7 @@ import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
+import { UpdateZaloFriendStatusDto } from './dto/update-zalo-friend-status.dto';
 import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
@@ -36,10 +37,13 @@ import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
 /**
- * Mục 4-6, docs/13-api-design.md. Chỉ POST / gắn @Roles('mkt') cố định (quy
- * tắc cứng theo vai trò, không phụ thuộc dữ liệu). Các endpoint còn lại
- * không gắn @Roles() vì quyền phụ thuộc dữ liệu (chủ sở hữu/nhóm) — toàn bộ
- * kiểm tra chi tiết nằm trong CandidatesService/LeadPipelineService.
+ * Mục 4-6, docs/13-api-design.md. POST / gắn @Roles('mkt', 'admin') cố định
+ * (quy tắc cứng theo vai trò, không phụ thuộc dữ liệu) — Dự án phụ, nâng
+ * cấp toàn diện: bổ sung 'admin' theo đúng nguyên tắc đã áp dụng xuyên suốt
+ * "Admin/Quản lý kế thừa toàn bộ quyền của vai trò cấp dưới" (yêu cầu trực
+ * tiếp người dùng), gốc docs/13 chỉ ghi 'mkt'. Các endpoint còn lại không
+ * gắn @Roles() vì quyền phụ thuộc dữ liệu (chủ sở hữu/nhóm) — toàn bộ kiểm
+ * tra chi tiết nằm trong CandidatesService/LeadPipelineService.
  *
  * LƯU Ý THỨ TỰ ROUTE: "pending", "duplicate" và "assign-bulk" phải khai báo
  * TRƯỚC ":id" — Nest/Express khớp route theo thứ tự khai báo, nếu ":id" đứng
@@ -78,7 +82,7 @@ export class CandidatesController {
   }
 
   @Post()
-  @Roles('mkt')
+  @Roles('mkt', 'admin')
   create(
     @Body() dto: CreateCandidateDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -208,6 +212,15 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pipelineService.updateZaloStatus(id, dto, user);
+  }
+
+  @Put(':id/zalo-friend-status')
+  updateZaloFriendStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateZaloFriendStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateZaloFriendStatus(id, dto, user);
   }
 
   @Put(':id/note-color')

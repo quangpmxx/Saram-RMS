@@ -24,7 +24,11 @@ export function Modal({
   // có nền mờ, không thấy tiêu đề). Portal thoát hẳn khỏi cây DOM của nút
   // mở popup nên không còn bị ảnh hưởng bởi containing block của tổ tiên.
   return createPortal(
-    <div className="fixed inset-0 z-20 overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+    // z-[60] — CAO HƠN header dùng chung (z-50, xem layout.tsx) — yêu cầu
+    // trực tiếp người dùng: header là lớp cao nhất, NGOẠI TRỪ khi có popup
+    // đang mở thì popup phải nổi trên cả header (đúng UX popup thông
+    // thường: nền mờ che hết trang, kể cả header).
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
       <div className="flex min-h-full items-center justify-center">
         {/* max-h-[85vh] + overflow-y-auto: modal có nội dung dài hơn màn hình
             (vd Cài đặt tài khoản: ảnh đại diện + họ tên + đổi mật khẩu) vẫn

@@ -10,8 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input } from "@/components/ui/form";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal } from "@/components/ui/modal";
 import { PageHeader } from "@/components/ui/page-header";
+import { type DateRangeValue } from "@/lib/date-range";
 import { useToast } from "@/lib/toast-context";
 
 function formatDateTime(value: string): string {
@@ -49,15 +51,25 @@ export function CalendarClient({
   initialDateTo: string;
 }) {
   const [events, setEvents] = useState(initialEvents);
-  const [dateFrom, setDateFrom] = useState(initialDateFrom);
-  const [dateTo, setDateTo] = useState(initialDateTo);
+  /**
+   * Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng
+   * chung (xem components/ui/date-range-picker.tsx). Trang này trước đây
+   * không có khái niệm preset, chỉ có 2 ô ngày rời — mặc định server
+   * (page.tsx: hôm nay - 7 đến hôm nay + 30) không khớp preset nào có sẵn
+   * nên giữ nguyên dạng "custom" như cũ, không đổi hành vi mặc định.
+   */
+  const [dateRange, setDateRange] = useState<DateRangeValue>({
+    preset: "custom",
+    from: initialDateFrom,
+    to: initialDateTo,
+  });
   const toast = useToast();
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const groups = groupByDate(events);
 
   async function refresh() {
-    const query = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+    const query = new URLSearchParams({ date_from: dateRange.from, date_to: dateRange.to });
     const result = await clientApi<CalendarEvent[]>(`/calendar?${query.toString()}`);
     setEvents(result);
   }
@@ -76,11 +88,8 @@ export function CalendarClient({
       />
 
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
-        <Field label="Từ ngày">
-          <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-        </Field>
-        <Field label="Đến ngày">
-          <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+        <Field label="Khoảng thời gian" className="w-44">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
         </Field>
         <Button type="button" variant="outline" onClick={() => void refresh()}>
           <Search className="h-4 w-4" strokeWidth={2} />

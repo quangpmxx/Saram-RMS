@@ -16,13 +16,17 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
-/** Mục 3, docs/13-api-design.md */
+/**
+ * Mục 3, docs/13-api-design.md. Dự án phụ — nâng cấp toàn diện: bổ sung
+ * 'mkt' vào GET / — MKT giờ bắt buộc chọn nhóm khi up data mới (POST
+ * /candidate), cần danh sách nhóm để hiển thị lựa chọn.
+ */
 @Controller('team')
 export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Get()
-  @Roles('admin', 'manager', 'leader')
+  @Roles('admin', 'manager', 'leader', 'mkt')
   list(
     @Query() query: ListTeamsQueryDto,
     @CurrentUser() user: AuthenticatedUser,

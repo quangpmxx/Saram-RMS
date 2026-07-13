@@ -9,6 +9,7 @@ import type { AccountRole, Candidate } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { ActionLink } from "./action-link";
 import { SourceBadge } from "./source-badge";
 
@@ -99,7 +100,7 @@ export function CarePoolTable({
             <th className="px-1 py-3 text-center">Hành động</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-brand-400">
           {candidates.map((candidate, index) => {
             const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
             const lockedBySelf = candidate.care_pool_locked_by?.id === currentUserId;
@@ -140,7 +141,7 @@ export function CarePoolTable({
                       <Avatar fullName={candidate.assigned_to.name} className="h-6 w-6 shrink-0 text-[10px]" />
                       <div className="min-w-0 w-full leading-tight">
                         <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
-                          {candidate.assigned_to.name}
+                          <NameWithRoleHint account={candidate.assigned_to} />
                         </p>
                         {teamName && (
                           <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
@@ -163,7 +164,7 @@ export function CarePoolTable({
                 <td className="border-r border-slate-100 px-3 py-3">
                   {candidate.care_pool_locked_by ? (
                     <Badge variant="warning">
-                      Đang xử lý: {lockedBySelf ? "Bạn" : candidate.care_pool_locked_by.name}
+                      Đang xử lý: {lockedBySelf ? "Bạn" : <NameWithRoleHint account={candidate.care_pool_locked_by} />}
                     </Badge>
                   ) : (
                     <Badge variant="neutral">Đang rảnh</Badge>

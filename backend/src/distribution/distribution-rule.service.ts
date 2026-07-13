@@ -209,8 +209,16 @@ export class DistributionRuleService {
       return lead;
     }
 
+    // Dự án phụ — nâng cấp toàn diện: SỬA LỖI nghiệp vụ — trước đây quét
+    // TẤT CẢ quy tắc đang bật bất kể nhóm nào, có thể tự gán nhầm data của
+    // nhóm A cho Sale nhóm B (quy tắc nhóm B chỉ tình cờ "cũ" hơn). Từ khi
+    // up data (POST /candidate) bắt buộc chọn nhóm, CHỈ áp dụng đúng quy
+    // tắc của nhóm data đó. Lead chưa có nhóm (vd nhập Excel — chưa sửa đợt
+    // này) vẫn giữ hành vi cũ: quét mọi quy tắc đang bật.
     const activeRules = await this.prisma.distributionRule.findMany({
-      where: { isActive: true },
+      where: lead.assignedTeamId
+        ? { isActive: true, teamId: lead.assignedTeamId }
+        : { isActive: true },
       include: DISTRIBUTION_RULE_INCLUDE,
       orderBy: { updatedAt: 'asc' },
     });

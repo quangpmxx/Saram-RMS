@@ -58,6 +58,17 @@ interface NamedRef {
   name: string;
 }
 
+/**
+ * Dự án phụ — nâng cấp toàn diện: dùng cho MỌI tài khoản thực hiện hành động
+ * (uploaded_by/assigned_to/held_by/care_pool_locked_by trên Candidate,
+ * created_by trên Note/Interview/Callback) — yêu cầu trực tiếp người dùng:
+ * "vai trò admin/quản lý/leader thì thao tác ở đâu cũng phải mở ngoặc vai
+ * trò cạnh tên".
+ */
+export interface NamedRefWithRole extends NamedRef {
+  role: AccountRole;
+}
+
 /** Đối tượng "Candidate" — Mục 0.1, docs/13-api-design.md. */
 export interface Candidate {
   id: string;
@@ -68,25 +79,26 @@ export interface Candidate {
   source: NamedRef;
   mkt_note: string | null;
   data_quality_score: number | null;
-  uploaded_by: NamedRef;
+  uploaded_by: NamedRefWithRole;
   uploaded_at: string;
-  assigned_to: NamedRef | null;
+  assigned_to: NamedRefWithRole | null;
   assigned_team_id: string | null;
   assigned_at: string | null;
   assignment_method: string | null;
   call_status: NamedRef | null;
   call_result: NamedRef | null;
   zalo_status: NamedRef | null;
+  zalo_friend_status: NamedRef | null;
   note_color: "yellow" | "green" | "red" | null;
   current_interview_status: NamedRef | null;
   current_employment_status: NamedRef | null;
   current_partner_company_name: string | null;
   is_held: boolean;
-  held_by: NamedRef | null;
+  held_by: NamedRefWithRole | null;
   held_at: string | null;
   last_activity_at: string | null;
   entered_care_pool_at: string | null;
-  care_pool_locked_by: NamedRef | null;
+  care_pool_locked_by: NamedRefWithRole | null;
   is_duplicate_flagged: boolean;
   created_at: string;
   updated_at: string;
@@ -155,7 +167,13 @@ export interface AssignBulkResult {
 
 // ── Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú ────────────────────────
 
-export type StatusCategory = "call_status" | "call_result" | "interview_status" | "employment_status" | "zalo_status";
+export type StatusCategory =
+  | "call_status"
+  | "call_result"
+  | "interview_status"
+  | "employment_status"
+  | "zalo_status"
+  | "zalo_friend_status";
 
 /** GET /status — Mục 9, docs/13-api-design.md. */
 export interface StatusCatalogItem {
@@ -170,10 +188,11 @@ export interface StatusCatalogItem {
 export interface Note {
   id: string;
   lead_id: string;
-  created_by: NamedRef;
+  created_by: NamedRefWithRole;
   content: string;
   call_status: NamedRef | null;
   call_result: NamedRef | null;
+  zalo_friend_status: NamedRef | null;
   created_at: string;
   is_deleted: boolean;
 }
@@ -190,7 +209,7 @@ export interface Interview {
   status: NamedRef;
   employment_status: NamedRef | null;
   employment_reason: string | null;
-  created_by: NamedRef;
+  created_by: NamedRefWithRole;
   created_at: string;
 }
 
@@ -200,7 +219,7 @@ export interface Callback {
   lead_id: string;
   scheduled_at: string;
   is_completed: boolean;
-  created_by: NamedRef;
+  created_by: NamedRefWithRole;
   created_at: string;
 }
 
@@ -331,4 +350,62 @@ export interface AppNotification {
   scheduled_at: string;
   sent_at: string | null;
   status: "pending" | "sent" | "failed";
+}
+
+// ── Dự án phụ — nâng cấp toàn diện: Danh sách đưa đón ──────────────────
+
+/**
+ * Đối tượng "ShuttleRecord" (Danh sách đưa đón) — module ĐỘC LẬP, nhập tay
+ * tự do, không liên kết Lead/module nghiệp vụ khác.
+ */
+export interface ShuttleRecord {
+  id: string;
+  date: string;
+  full_name: string;
+  phone_number: string;
+  company: string | null;
+  area: string | null;
+  type: string | null;
+  sale: string | null;
+  driver: string | null;
+  interview_time: string | null;
+  contractor: string | null;
+  /** "Tình trạng đón" (Đã đón/Chưa đón được/Hẹn lại). */
+  status: string | null;
+  /** "Kết quả PV" (Đỗ phỏng vấn/Trượt phỏng vấn) — tách riêng khỏi "Tình trạng đón". */
+  interview_result: string | null;
+  note: string | null;
+  created_by: NamedRef;
+  updated_by: NamedRef;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /shuttle/options — giá trị đã dùng qua, gợi ý cho form/bộ lọc. */
+/** Dự án phụ — nâng cấp toàn diện: mỗi giá trị gợi ý kèm màu nền đã chọn, có thể xóa riêng. */
+export interface ShuttleOptionItem {
+  id: string;
+  value: string;
+  color_key: string | null;
+  /** Dự án phụ — nâng cấp toàn diện: màu CHỮ riêng, độc lập với color_key (màu nền) — null = dùng màu chữ tương phản tự động theo color_key. */
+  text_color_key: string | null;
+}
+
+export interface ShuttleOptions {
+  companies: ShuttleOptionItem[];
+  areas: ShuttleOptionItem[];
+  types: ShuttleOptionItem[];
+  /** "sale" chỉ lưu MÀU cho tài khoản Sale thật (value = họ tên tài khoản) — không dùng để liệt kê tên (xem SaleAccountItem/listSaleAccounts). */
+  sales: ShuttleOptionItem[];
+  drivers: ShuttleOptionItem[];
+  contractors: ShuttleOptionItem[];
+  statuses: ShuttleOptionItem[];
+  interviewResults: ShuttleOptionItem[];
+  interviewTimes: ShuttleOptionItem[];
+}
+
+/** GET /shuttle/sale-accounts — tài khoản role=sale, đang active — nguồn cột "Sale" (yêu cầu trực tiếp người dùng: lấy từ danh sách tài khoản để sau này làm báo cáo). */
+export interface SaleAccountItem {
+  id: string;
+  full_name: string;
 }
