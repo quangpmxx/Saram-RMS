@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Select, Field } from "@/components/ui/form";
-import { PageHeader } from "@/components/ui/page-header";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { SourceBadge } from "../candidates/source-badge";
 
@@ -64,11 +63,6 @@ export function DuplicatesClient({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader
-        title="Trùng lặp"
-        description="Danh sách các nhóm lao động bị trùng số điện thoại — toàn hệ thống hoặc trong phạm vi nhóm mình."
-      />
-
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
         {canFilterByTeam && (
           <Field label="Nhóm" uiSize="sm" className="w-48">

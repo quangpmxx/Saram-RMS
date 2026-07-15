@@ -80,6 +80,34 @@ enum AccountStatus {
   @@map("account_status")
 }
 
+/// Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
+/// docs/09-13 — module hoàn toàn mới, yêu cầu trực tiếp người dùng): 5 trạng
+/// thái chấm công/ngày. "Ô trống = chưa chấm" KHÔNG phải 1 giá trị enum — thể
+/// hiện bằng việc KHÔNG có bản ghi AttendanceRecord cho (account, date) đó
+/// (xem attendance.service.ts) — xóa trạng thái = xóa hẳn bản ghi.
+enum AttendanceStatus {
+  /// Có công (✓) = 1 công
+  present
+  /// Nửa công (½) = 0,5 công
+  half
+  /// Nghỉ phép (NP) = 0 công — chưa có quy tắc phép hưởng lương nào có sẵn
+  /// trong hệ thống (đã rà soát docs/09-13 + toàn bộ codebase, không thấy),
+  /// nên dùng đúng giá trị dự phòng "0 công" mà yêu cầu người dùng đã nêu.
+  paid_leave
+  /// Nghỉ không phép (N) = 0 công
+  unpaid_leave
+  /// Nghỉ lễ (L) = 0 công (tính vào nhóm "các trạng thái nghỉ = 0" theo yêu
+  /// cầu người dùng — hệ thống hiện chưa có quy tắc lễ hưởng lương riêng)
+  holiday
+  /// Nghỉ bù (B) = 0 công, thêm 2026-07-15 (yêu cầu trực tiếp người dùng) —
+  /// cùng nhóm "các trạng thái nghỉ = 0" như NP/N/L. KHÔNG trừ vào
+  /// remainingLeaveDays (khác NP) — nghỉ bù không phải phép năm, chưa có
+  /// yêu cầu liên kết với số dư phép, không tự phát minh thêm liên kết đó.
+  compensatory_leave
+
+  @@map("attendance_status")
+}
+
 // Khớp cột "action_type" của bảng audit_logs (Mục 2.16, tài liệu 11)
 // Đầy đủ toàn bộ giá trị đã liệt kê, kể cả những giá trị chưa dùng ở Phase 0
 // (assign/transfer/hold/lock/unlock sẽ dùng ở Phase 2/5) — vì đây là cấu trúc
@@ -114,6 +142,9 @@ model Team {
   // Phase 6 — quan hệ ngược tới cấu hình tự động phân chia
   distributionRule DistributionRule?
 
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ DailyReport (Báo cáo hằng ngày)
+  dailyReports DailyReport[]
+
   @@map("teams")
 }
 
@@ -130,6 +161,34 @@ model Account {
   // ảnh đại diện tự upload, đường dẫn tương đối phục vụ tĩnh qua
   // useStaticAssets() trong main.ts (vd "/uploads/avatars/xxx.jpg").
   avatarUrl    String?       @map("avatar_url") @db.VarChar(500)
+  // Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+  // docs/09-13, yêu cầu trực tiếp người dùng — module Chấm công): "chức vụ"
+  // tùy chỉnh, sửa tay được — null = chưa đặt, khi đó cột "Vị trí" ở bảng
+  // chấm công hiện nhãn vai trò (role) mặc định như trước (xem
+  // attendance.service.ts). Không thay thế `role` (vẫn giữ nguyên nghiệp vụ
+  // phân quyền dựa trên role) — chỉ là nhãn hiển thị tùy chỉnh thêm.
+  position     String?       @db.VarChar(100)
+  // Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+  // docs/09-13, yêu cầu trực tiếp người dùng): 5 field hồ sơ nhân sự — CHỈ
+  // Admin sửa được (qua trang Quản lý tài khoản), Nhân viên/Leader chỉ XEM
+  // (trang Cài đặt tài khoản, xem accounts.controller.ts/@Roles('admin') so
+  // với auth.controller.ts GET /me không giới hạn vai trò). Đều nullable —
+  // tài khoản cũ chưa có dữ liệu.
+  dateOfBirth        DateTime? @map("date_of_birth") @db.Date
+  hireDate           DateTime? @map("hire_date") @db.Date
+  personalPhone      String?   @map("personal_phone") @db.VarChar(20)
+  personalEmail      String?   @map("personal_email") @db.VarChar(255)
+  /// Số ngày phép còn lại. Admin đặt số ban đầu (trang Quản lý tài khoản).
+  /// Từ 2026-07-15 (yêu cầu trực tiếp người dùng): TỰ ĐỘNG +1 mỗi khi sang
+  /// tháng mới (xem leave-accrual.service.ts), và TỰ ĐỘNG trừ 1 khi tick
+  /// "NP" (Nghỉ phép) trên bảng chấm công / hoàn lại khi bỏ tick (xem
+  /// attendance.service.ts bulkSave()) — không còn là số tay hoàn toàn.
+  remainingLeaveDays Float?    @map("remaining_leave_days")
+  /// Dấu mốc lần gần nhất được cộng dồn phép tháng — dùng để 1 tài khoản
+  /// không bao giờ bị cộng 2 lần trong cùng 1 tháng dù cron chạy lại/server
+  /// khởi động lại (so sánh tháng theo giờ Việt Nam, không so đúng giờ
+  /// phút). NULL = chưa từng được cộng.
+  lastLeaveAccrualAt DateTime? @map("last_leave_accrual_at")
   createdById  String?       @map("created_by") @db.Uuid
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
@@ -180,6 +239,16 @@ model Account {
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ShuttleRecord (Danh sách đưa đón)
   createdShuttleRecords ShuttleRecord[] @relation("ShuttleRecordCreatedBy")
   updatedShuttleRecords ShuttleRecord[] @relation("ShuttleRecordUpdatedBy")
+
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ DailyReport (Báo cáo hằng ngày)
+  dailyReports        DailyReport[] @relation("DailyReportAccount")
+  createdDailyReports DailyReport[] @relation("DailyReportCreatedBy")
+  updatedDailyReports DailyReport[] @relation("DailyReportUpdatedBy")
+
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ AttendanceRecord (Chấm công thủ công)
+  attendanceRecords        AttendanceRecord[] @relation("AttendanceRecordAccount")
+  createdAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordCreatedBy")
+  updatedAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordUpdatedBy")
 
   @@map("accounts")
 }
@@ -719,4 +788,75 @@ model ShuttleOption {
   @@unique([field, value])
   @@index([field])
   @@map("shuttle_options")
+}
+
+/// Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
+/// docs/09-13 — module hoàn toàn mới, yêu cầu trực tiếp người dùng): 1 dòng
+/// báo cáo hằng ngày của 1 Sale. `date` luôn là NGÀY HIỆN TẠI theo giờ Việt
+/// Nam tại thời điểm tạo (không cho chọn ngày khác — "báo cáo hằng ngày"),
+/// sửa được CHỈ trong đúng ngày đó (xem daily-reports.service.ts). `teamId`
+/// LƯU SNAPSHOT nhóm tại thời điểm báo cáo — cùng nguyên tắc denormalize đã
+/// có sẵn với Lead.assignedTeamId (không phát minh quy ước mới), để lịch sử
+/// báo cáo không đổi theo nếu Sale sau này chuyển nhóm. "Data mới" KHÔNG lưu
+/// ở đây — luôn tính trực tiếp từ Lead.uploadedAt (đúng field "ngày lên số"
+/// Dashboard/Báo cáo đang dùng làm chuẩn) tại thời điểm đọc, không cho nhập
+/// tay (yêu cầu trực tiếp người dùng).
+model DailyReport {
+  id                 String   @id @default(uuid()) @db.Uuid
+  date               DateTime @db.Date
+  accountId          String   @map("account_id") @db.Uuid
+  teamId             String?  @map("team_id") @db.Uuid
+  calls              Int      @default(0)
+  oldData            Int      @default(0) @map("old_data")
+  noAnswer           Int      @default(0) @map("no_answer")
+  interested         Int      @default(0)
+  interviewScheduled Int      @default(0) @map("interview_scheduled")
+  interviewPassed    Int      @default(0) @map("interview_passed")
+  employed           Int      @default(0)
+  createdById        String   @map("created_by") @db.Uuid
+  updatedById        String   @map("updated_by") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  account   Account  @relation("DailyReportAccount", fields: [accountId], references: [id])
+  team      Team?    @relation(fields: [teamId], references: [id])
+  createdBy Account  @relation("DailyReportCreatedBy", fields: [createdById], references: [id])
+  updatedBy Account  @relation("DailyReportUpdatedBy", fields: [updatedById], references: [id])
+
+  /// "Mỗi nhân viên chỉ có 1 báo cáo cho mỗi ngày" — yêu cầu trực tiếp người dùng.
+  @@unique([accountId, date])
+  @@index([date])
+  @@index([teamId])
+  @@map("daily_reports")
+}
+
+/// Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
+/// docs/09-13 — module hoàn toàn mới, yêu cầu trực tiếp người dùng): "Chấm
+/// công thủ công". 1 bản ghi / (nhân viên, ngày thực tế) — "ô trống = chưa
+/// chấm" thể hiện bằng KHÔNG có bản ghi (không dùng 1 giá trị enum riêng cho
+/// "trống"), xóa trạng thái = xóa hẳn row (xem attendance.service.ts).
+/// `note` phục vụ "đi muộn/về sớm... kèm ghi chú nếu cần" — gộp chung vào 1
+/// field ghi chú tự do đi kèm MỌI trạng thái, không tách thành trạng thái
+/// riêng (yêu cầu người dùng đã cho phép giản lược thao tác nâng cao ở Mục 4
+/// nếu làm phức tạp quá).
+model AttendanceRecord {
+  id          String           @id @default(uuid()) @db.Uuid
+  date        DateTime         @db.Date
+  accountId   String           @map("account_id") @db.Uuid
+  status      AttendanceStatus
+  note        String?          @db.VarChar(255)
+  createdById String           @map("created_by") @db.Uuid
+  updatedById String           @map("updated_by") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  account   Account @relation("AttendanceRecordAccount", fields: [accountId], references: [id])
+  createdBy Account @relation("AttendanceRecordCreatedBy", fields: [createdById], references: [id])
+  updatedBy Account @relation("AttendanceRecordUpdatedBy", fields: [updatedById], references: [id])
+
+  /// "Mỗi nhân viên, mỗi ngày chỉ có một bản ghi chấm công" — yêu cầu trực tiếp người dùng.
+  @@unique([accountId, date])
+  @@index([date])
+  @@index([accountId])
+  @@map("attendance_records")
 }

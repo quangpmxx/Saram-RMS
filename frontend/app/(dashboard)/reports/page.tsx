@@ -1,88 +1,65 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import type { BySourceReport, FunnelStep, LeadSource, PaginatedResult, Team, TeamMember } from "@/lib/types";
+import type { DailyReportRow, DailyReportSummary, PaginatedResult, Team, TeamMember } from "@/lib/types";
 import { ReportsClient } from "./reports-client";
 
 /**
- * Phase 7 (docs/14-roadmap.md) — trang Báo cáo mới, đúng Mục 8, docs/12:
- * "phần mở rộng của Dashboard", dùng chung đúng bộ chỉ số Mục 9, tài liệu
- * 09, chỉ khác ở chỗ lọc sâu hơn + xem breakdown chi tiết. Quyền xem GET
- * /report/funnel + /report/by-source: Leader/Quản lý/Admin (Mục 8, docs/13)
- * — Sale/MKT không có trang này (khớp mục roles của nav item, layout.tsx).
+ * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
+ * docs/09-13 — thiết kế lại toàn bộ nội dung trang "Báo cáo" thành Báo cáo
+ * hằng ngày theo nhóm/nhân viên, yêu cầu trực tiếp người dùng). Mặc định
+ * xem đúng HÔM NAY (theo giờ Việt Nam, do server tính — khớp cách backend
+ * xác định "hôm nay" ở daily-reports.service.ts) — "báo cáo hằng ngày" nên
+ * mặc định hẹp, không mở sẵn cả tháng như Dashboard cũ.
+ *
+ * Quyền xem (Mục 3, yêu cầu người dùng): Admin/Quản lý (toàn bộ) + Leader
+ * (nhóm mình) + Nhân viên/Sale (chỉ chính mình, có nút "Nhập báo cáo hằng
+ * ngày") — KHÁC trang Báo cáo cũ (không có Sale) nên đã bổ sung "sale" vào
+ * roles của mục nav "/reports" ở layout.tsx (chỉ đúng 1 dòng, không đụng
+ * mục nav nào khác).
  */
-export default async function ReportsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function ReportsPage() {
   const user = await getCurrentUser();
-  if (!user || !["admin", "manager", "leader"].includes(user.role)) {
+  if (!user || !["admin", "manager", "leader", "sale"].includes(user.role)) {
     redirect("/");
   }
 
-  const params = await searchParams;
-  const getParam = (key: string): string | undefined => {
-    const value = params[key];
-    return Array.isArray(value) ? value[0] : value;
-  };
-
   const canFilterByTeam = ["admin", "manager"].includes(user.role);
+  const canFilterBySale = ["admin", "manager", "leader"].includes(user.role);
+  const canSubmitReport = user.role === "sale";
 
-  const initialTeamId = getParam("team_id") ?? "";
-  const initialAccountId = getParam("account_id") ?? "";
-  const initialSourceId = getParam("source_id") ?? "";
-
-  // Chỉ khi URL thực sự mang date_from/date_to (vd. link "Xem chi tiết
-  // trong Báo cáo" từ popup Dashboard) mới coi là người dùng đã chọn
-  // khoảng ngày tường minh (preset "Tùy chọn") — nếu không, trang vẫn dùng
-  // đúng mặc định preset "Tháng này" như Dashboard.
-  const hasExplicitDateFilter = Boolean(getParam("date_from") || getParam("date_to"));
-
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
-  const initialDateFrom = getParam("date_from") ?? startOfMonth.toISOString();
-  const initialDateTo = getParam("date_to") ?? endOfToday.toISOString();
-
-  const baseQuery = new URLSearchParams({ date_from: initialDateFrom, date_to: initialDateTo });
-  if (initialTeamId) baseQuery.set("team_id", initialTeamId);
-  if (initialSourceId) baseQuery.set("source_id", initialSourceId);
-
-  const funnelQuery = new URLSearchParams(baseQuery);
-  if (initialAccountId) funnelQuery.set("account_id", initialAccountId);
-
-  const [funnel, bySource, teamsResult, sources] = await Promise.all([
-    serverApi<FunnelStep[]>(`/report/funnel?${funnelQuery.toString()}`),
-    serverApi<BySourceReport[]>(`/report/by-source?${baseQuery.toString()}`),
+  // Không tự tính "hôm nay" ở đây (new Date().toISOString() lấy theo giờ
+  // UTC — lệch mất 1 ngày vào khoảng 00:00-07:00 giờ Việt Nam, đúng lỗi đã
+  // cảnh báo ở lib/date-range.ts). Để trống date_from/date_to, backend tự
+  // mặc định đúng "hôm nay" theo giờ Việt Nam (daily-reports.service.ts,
+  // toDateOnly()) — sau đó suy ngược lại chuỗi ngày từ chính dữ liệu trả về.
+  const [initialSummary, initialRows, teamsResult] = await Promise.all([
+    serverApi<DailyReportSummary>("/daily-report/summary"),
+    serverApi<DailyReportRow[]>("/daily-report"),
     canFilterByTeam
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
-    serverApi<LeadSource[]>("/lead-source"),
   ]);
 
   const teamsForMembers = canFilterByTeam ? teamsResult.items : user.team_id ? [{ id: user.team_id }] : [];
-  const saleMembers = (
-    await Promise.all(teamsForMembers.map((team) => serverApi<TeamMember[]>(`/team/${team.id}/member`)))
-  ).flat();
+  const saleMembers = canFilterBySale
+    ? (await Promise.all(teamsForMembers.map((team) => serverApi<TeamMember[]>(`/team/${team.id}/member`)))).flat()
+    : [];
+
+  const today = initialRows[0]?.date ?? new Date().toISOString().slice(0, 10);
 
   return (
     <ReportsClient
+      currentUserRole={user.role}
       canFilterByTeam={canFilterByTeam}
+      canFilterBySale={canFilterBySale}
+      canSubmitReport={canSubmitReport}
       teams={teamsResult.items}
       saleMembers={saleMembers}
-      sources={sources}
-      initialDatePresetIsCustom={hasExplicitDateFilter}
-      initialFilters={{
-        team_id: initialTeamId,
-        account_id: initialAccountId,
-        source_id: initialSourceId,
-        date_from: initialDateFrom,
-        date_to: initialDateTo,
-      }}
-      initialFunnel={funnel}
-      initialBySource={bySource}
+      initialDateFrom={today}
+      initialDateTo={today}
+      initialSummary={initialSummary}
+      initialRows={initialRows}
     />
   );
 }

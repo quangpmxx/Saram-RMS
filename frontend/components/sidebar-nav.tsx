@@ -6,6 +6,8 @@ import {
   BarChart3,
   Building2,
   Bus,
+  Calculator,
+  CalendarCheck,
   CalendarDays,
   Copy,
   History,
@@ -28,6 +30,8 @@ const ICONS = {
   auditLog: History,
   settings: Settings2,
   shuttle: Bus,
+  accounting: Calculator,
+  attendance: CalendarCheck,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

@@ -9,11 +9,18 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
-import { PageHeader } from "@/components/ui/page-header";
+import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB — khớp đúng giới hạn backend (POST /me/avatar)
+
+/** "YYYY-MM-DD" -> "DD/MM/YYYY" cho dễ đọc — chỉ dùng để hiển thị readonly, không phải input thật. */
+function formatDateOnly(value: string | null): string {
+  if (!value) return "—";
+  const [y, m, d] = value.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 /**
  * Tinh chỉnh khu vực tài khoản (dự án phụ — nâng cấp toàn diện): trang riêng
@@ -22,6 +29,7 @@ const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB — khớp đúng giới h
  * Trước đây là modal, đổi sang trang riêng để tránh giới hạn chiều cao popup.
  */
 export function AccountSettingsClient({ user }: { user: Account }) {
+  useSetPageTitle("Cài đặt tài khoản", "Ảnh đại diện, tên người dùng và mật khẩu đăng nhập.");
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,8 +128,6 @@ export function AccountSettingsClient({ user }: { user: Account }) {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="Cài đặt tài khoản" description="Ảnh đại diện, tên người dùng và mật khẩu đăng nhập." />
-
       <Card className="p-6">
         <div className="flex flex-col gap-6">
           {/* Ảnh đại diện */}
@@ -159,9 +165,35 @@ export function AccountSettingsClient({ user }: { user: Account }) {
 
           {/* Tên người dùng — readonly, chỉ Admin đổi được cho tài khoản khác qua Quản lý tài khoản */}
           <section>
-            <Field label="Tên người dùng" hint="Chỉ Admin mới đổi được, qua màn Quản lý tài khoản.">
+            <Field label="Tên người dùng">
               <Input value={user.full_name} disabled readOnly />
             </Field>
+          </section>
+
+          {/* Thông tin nhân sự — readonly (yêu cầu trực tiếp người dùng,
+              2026-07-15): "Nhân viên nhìn thấy thông tin ở mục Cài đặt tài
+              khoản" — CHỈ Admin sửa được qua trang Quản lý tài khoản, ở đây
+              chỉ hiển thị, cùng pattern disabled/readOnly + hint đã dùng cho
+              "Tên người dùng" ở trên. */}
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900">Thông tin nhân sự</h3>
+            <div className="mt-3 flex flex-col gap-3">
+              <Field label="Ngày sinh">
+                <Input value={formatDateOnly(user.date_of_birth)} disabled readOnly />
+              </Field>
+              <Field label="Ngày bắt đầu làm việc">
+                <Input value={formatDateOnly(user.hire_date)} disabled readOnly />
+              </Field>
+              <Field label="Số điện thoại cá nhân">
+                <Input value={user.personal_phone ?? "—"} disabled readOnly />
+              </Field>
+              <Field label="Email cá nhân">
+                <Input value={user.personal_email ?? "—"} disabled readOnly />
+              </Field>
+              <Field label="Số ngày phép còn lại">
+                <Input value={user.remaining_leave_days != null ? String(user.remaining_leave_days) : "—"} disabled readOnly />
+              </Field>
+            </div>
           </section>
 
           {/* Đổi mật khẩu */}

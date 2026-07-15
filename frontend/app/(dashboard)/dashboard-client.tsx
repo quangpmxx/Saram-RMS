@@ -1,10 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { PhoneCall, RefreshCw, Sparkles, Target } from "lucide-react";
+import {
+  Award,
+  Briefcase,
+  CalendarClock,
+  CheckCircle2,
+  ChevronRight,
+  Medal,
+  RefreshCw,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  UserCheck,
+  UserX,
+  Users,
+  XCircle,
+} from "lucide-react";
 import { clientApi } from "@/lib/api-client";
-import type { AccountRole, DashboardSummary, FunnelStep, SalePerformance, Team, TeamSummary } from "@/lib/types";
+import { cn } from "@/lib/cn";
+import type { AccountRole, DashboardSummary, KpiBreakdown, LeadSource, SalePerformance, Team, TeamSummary } from "@/lib/types";
+import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,28 +34,136 @@ import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 /**
- * Mục 8, docs/13-api-design.md — GET /dashboard/summary: hiện với mọi vai trò.
- * Dự án phụ — nâng cấp toàn diện: bổ sung "sale" — Sale giờ cũng xem được
- * "Chờ phân chia" (tự nhận data). Thẻ "Cột chăm sóc" đã ẩn khỏi Dashboard.
+ * Dự án phụ — nâng cấp toàn diện (riêng giao diện Dashboard, ngoài phạm vi
+ * Design Freeze docs/09-13): thiết kế lại toàn bộ trang theo yêu cầu trực
+ * tiếp người dùng (2026-07-14) — 7 thẻ KPI + hiệu suất toàn công ty/theo
+ * nhóm/theo nhân viên, ưu tiên xem nhanh trong 5 giây. KHÔNG đổi nghiệp vụ/
+ * DB/API cũ — chỉ CỘNG THÊM field `kpi`/`kpi_previous` (xem
+ * dashboard.service.ts, computeKpiBreakdown() — tách riêng khỏi
+ * computeFunnel() nên không ảnh hưởng trang Báo cáo).
  */
 const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt", "sale"];
 
+type KpiKey = keyof Pick<
+  KpiBreakdown,
+  "new_leads" | "interview_scheduled" | "attended" | "no_show" | "passed" | "failed" | "employed"
+>;
 
-function FunnelBar({ funnel }: { funnel: FunnelStep[] }) {
+const KPI_CARDS: Array<{
+  key: KpiKey;
+  label: string;
+  icon: typeof Sparkles;
+  tint: string;
+  iconColor: string;
+}> = [
+  { key: "new_leads", label: "Data mới", icon: Sparkles, tint: "bg-brand-50", iconColor: "text-brand-600" },
+  { key: "interview_scheduled", label: "Hẹn PV", icon: CalendarClock, tint: "bg-brand-50", iconColor: "text-brand-600" },
+  { key: "attended", label: "Đến PV", icon: UserCheck, tint: "bg-emerald-50", iconColor: "text-emerald-600" },
+  { key: "no_show", label: "Bùng PV", icon: UserX, tint: "bg-red-50", iconColor: "text-red-600" },
+  { key: "passed", label: "Đỗ PV", icon: CheckCircle2, tint: "bg-emerald-50", iconColor: "text-emerald-700" },
+  { key: "failed", label: "Trượt PV", icon: XCircle, tint: "bg-red-50", iconColor: "text-red-700" },
+  { key: "employed", label: "Đi làm", icon: Briefcase, tint: "bg-accent-50", iconColor: "text-accent-600" },
+];
+
+/** null = không đủ dữ liệu kỳ trước để so sánh (chưa chọn khoảng ngày, hoặc kỳ trước = 0 mà kỳ này cũng = 0). */
+function percentChange(current: number, previous: number | undefined): number | null {
+  if (previous === undefined) return null;
+  if (previous === 0) return current === 0 ? null : Infinity;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+function ChangeBadge({ value }: { value: number | null }) {
+  if (value === null) return null;
+  if (value === Infinity) {
+    return (
+      <Badge variant="accent" className="gap-0.5">
+        <TrendingUp className="h-3 w-3" strokeWidth={2.5} />
+        Mới
+      </Badge>
+    );
+  }
+  if (value === 0) return null;
+  const isUp = value > 0;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-      {funnel.map((step) => (
-        <div key={step.code} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-          <p className="text-lg font-bold text-slate-900">{step.count.toLocaleString("vi-VN")}</p>
-          <p className="mt-0.5 text-xs font-medium text-slate-600">{step.label}</p>
-          <Badge variant={step.code === "LEAD" ? "neutral" : "info"} className="mt-1.5">
-            {step.percentage}%
-          </Badge>
-        </div>
-      ))}
+    <Badge variant={isUp ? "success" : "danger"} className="gap-0.5">
+      {isUp ? <TrendingUp className="h-3 w-3" strokeWidth={2.5} /> : <TrendingDown className="h-3 w-3" strokeWidth={2.5} />}
+      {isUp ? "+" : ""}
+      {value}%
+    </Badge>
+  );
+}
+
+function ProgressBar({ percent, colorClass = "bg-accent-500" }: { percent: number; colorClass?: string }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className={`h-full rounded-full ${colorClass} transition-all duration-200`} style={{ width: `${clamped}%` }} />
     </div>
   );
 }
+
+type Rank = 1 | 2 | 3;
+
+const RANK_BADGE_CLASS: Record<Rank, string> = {
+  1: "bg-amber-100 text-amber-600",
+  2: "bg-slate-100 text-slate-500",
+  3: "bg-orange-100 text-orange-700",
+};
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (riêng giao diện Dashboard, ngoài phạm vi
+ * Design Freeze docs/09-13): 1 dòng trong bảng "Top 3" — yêu cầu trực tiếp
+ * người dùng (2026-07-14). Hạng 1 icon Trophy + nổi bật hơn (nền vàng nhạt,
+ * avatar to hơn), hạng 2/3 icon Medal màu bạc/đồng.
+ */
+function RankingRow({
+  rank,
+  fullName,
+  avatarUrl,
+  teamName,
+  primaryValue,
+  secondaryPercent,
+  secondaryLabel,
+}: {
+  rank: Rank;
+  fullName: string;
+  avatarUrl: string | null;
+  teamName: string;
+  primaryValue: number;
+  secondaryPercent: number;
+  secondaryLabel: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-[64px] items-center gap-3 rounded-xl px-2 transition-colors hover:bg-slate-50",
+        rank === 1 && "bg-amber-50/50",
+      )}
+    >
+      <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", RANK_BADGE_CLASS[rank])}>
+        {rank === 1 ? <Trophy className="h-4 w-4" strokeWidth={2.2} /> : <Medal className="h-4 w-4" strokeWidth={2.2} />}
+      </div>
+      <Avatar fullName={fullName} avatarUrl={avatarUrl} className={rank === 1 ? "h-9 w-9 text-sm" : "h-8 w-8 text-xs"} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-slate-800">{fullName}</p>
+        <p className="truncate text-[11px] text-slate-400">{teamName || "—"}</p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="text-base font-bold text-slate-900">{primaryValue.toLocaleString("vi-VN")}</p>
+        <p className="text-[11px] text-slate-400">
+          {secondaryPercent}% {secondaryLabel}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RankingEmptyState() {
+  return <p className="py-6 text-center text-sm text-slate-400">Chưa có dữ liệu xếp hạng trong khoảng thời gian này.</p>;
+}
+
+type EmployeeSort = "new_leads" | "employed" | "performance";
+type TeamSort = "new_leads" | "performance";
 
 export function DashboardClient({
   currentUserFullName,
@@ -46,6 +172,7 @@ export function DashboardClient({
   canViewByTeam,
   canFilterByTeam,
   teams,
+  sources,
   initialSummary,
   initialPerformance,
   initialByTeam,
@@ -56,6 +183,7 @@ export function DashboardClient({
   canViewByTeam: boolean;
   canFilterByTeam: boolean;
   teams: Team[];
+  sources: LeadSource[];
   initialSummary: DashboardSummary;
   initialPerformance: SalePerformance[];
   initialByTeam: TeamSummary[];
@@ -65,36 +193,57 @@ export function DashboardClient({
   const [summary, setSummary] = useState(initialSummary);
   const [performance, setPerformance] = useState(initialPerformance);
   const [byTeam, setByTeam] = useState(initialByTeam);
-  /**
-   * Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng
-   * chung (xem components/ui/date-range-picker.tsx) — mặc định "Tháng này"
-   * khớp preset gốc đã chốt (Mục 1, docs/12: 4 preset today/week/month/
-   * custom cho Dashboard) — công thức tính ngày cho các preset này giữ
-   * nguyên y hệt (nay chuyển vào computeDateRange() dùng chung, lib/date-
-   * range.ts), chỉ đổi giao diện chọn, không đổi nghiệp vụ.
-   */
+  /** Danh sách CỐ ĐỊNH cho dropdown "Nhân viên" — lấy 1 lần từ initialPerformance (chưa lọc), không đổi theo kết quả performance đã lọc sau đó (nếu không sẽ chỉ còn 1 lựa chọn sau khi lọc theo 1 nhân viên). */
+  const [employeeOptions] = useState(initialPerformance);
+
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => ({
     preset: "this_month",
     ...computeDateRange("this_month"),
   }));
   const [teamId, setTeamId] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [sourceId, setSourceId] = useState("");
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const [quickView, setQuickView] = useState<SalePerformance | null>(null);
+  const [employeeSort, setEmployeeSort] = useState<EmployeeSort>("employed");
+  const [teamSort, setTeamSort] = useState<TeamSort>("new_leads");
 
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
 
-  function buildDateQuery(): URLSearchParams {
+  /**
+   * Nhận thẳng giá trị bộ lọc vừa đổi qua `overrides` (không đọc lại state
+   * cha) — setState bất đồng bộ, đọc lại state ngay sau khi gọi setter vẫn
+   * là giá trị CŨ (closure của lần render hiện tại), nên mỗi handler onChange
+   * dưới đây truyền thẳng giá trị mới vào refresh() cùng lúc với setState.
+   */
+  function buildQuery(overrides?: {
+    dateRange?: DateRangeValue;
+    teamId?: string;
+    accountId?: string;
+    sourceId?: string;
+  }): URLSearchParams {
+    const effectiveDateRange = overrides?.dateRange ?? dateRange;
+    const effectiveTeamId = overrides?.teamId ?? teamId;
+    const effectiveAccountId = overrides?.accountId ?? accountId;
+    const effectiveSourceId = overrides?.sourceId ?? sourceId;
+
     const query = new URLSearchParams();
-    if (dateRange.from) query.set("date_from", new Date(dateRange.from).toISOString());
-    if (dateRange.to) query.set("date_to", new Date(`${dateRange.to}T23:59:59.999`).toISOString());
+    if (effectiveDateRange.from) query.set("date_from", new Date(effectiveDateRange.from).toISOString());
+    if (effectiveDateRange.to) query.set("date_to", new Date(`${effectiveDateRange.to}T23:59:59.999`).toISOString());
+    if (canFilterByTeam && effectiveTeamId) query.set("team_id", effectiveTeamId);
+    if (effectiveAccountId) query.set("account_id", effectiveAccountId);
+    if (effectiveSourceId) query.set("source_id", effectiveSourceId);
     return query;
   }
 
-  async function refresh() {
-    const query = buildDateQuery();
-    if (canFilterByTeam && teamId) query.set("team_id", teamId);
-
+  async function refresh(overrides?: {
+    dateRange?: DateRangeValue;
+    teamId?: string;
+    accountId?: string;
+    sourceId?: string;
+  }) {
+    const query = buildQuery(overrides);
     setLoading(true);
     try {
       const [nextSummary, nextPerformance, nextByTeam] = await Promise.all([
@@ -114,24 +263,85 @@ export function DashboardClient({
     }
   }
 
-  const dateRangeQuery = buildDateQuery().toString();
+  const dateRangeQuery = buildQuery().toString();
+
+  const sortedTeams = useMemo(() => {
+    const copy = [...byTeam];
+    copy.sort((a, b) =>
+      teamSort === "performance"
+        ? (b.kpi.performance_rate ?? 0) - (a.kpi.performance_rate ?? 0)
+        : b.kpi.new_leads - a.kpi.new_leads,
+    );
+    return copy;
+  }, [byTeam, teamSort]);
+
+  const sortedPerformance = useMemo(() => {
+    const copy = [...performance];
+    copy.sort((a, b) => {
+      if (employeeSort === "performance") return (b.kpi.performance_rate ?? 0) - (a.kpi.performance_rate ?? 0);
+      if (employeeSort === "employed") return (b.kpi.employed ?? 0) - (a.kpi.employed ?? 0);
+      return b.kpi.new_leads - a.kpi.new_leads;
+    });
+    return copy;
+  }, [performance, employeeSort]);
+
+  const teamNameById = useMemo(() => new Map(teams.map((team) => [team.id, team.name])), [teams]);
+
+  /**
+   * Dự án phụ — nâng cấp toàn diện (riêng giao diện Dashboard, ngoài phạm vi
+   * Design Freeze docs/09-13): 2 bảng "Top 3" — yêu cầu trực tiếp người dùng
+   * (2026-07-14). Tính THẲNG từ `performance` (đã áp dụng đúng bộ lọc hiện
+   * tại qua refresh() — không gọi API riêng) nên tự động đồng bộ theo mọi
+   * bộ lọc Dashboard, không cần thêm state/fetch nào. Loại bỏ người có 0 —
+   * xếp hạng "0 Hẹn PV"/"0 Đỗ PV" không có ý nghĩa.
+   */
+  const topScheduled = useMemo(() => {
+    return performance
+      .filter((row) => row.kpi.interview_scheduled > 0)
+      .map((row) => ({
+        row,
+        ratio: row.kpi.new_leads > 0 ? Math.round((row.kpi.interview_scheduled / row.kpi.new_leads) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.row.kpi.interview_scheduled - a.row.kpi.interview_scheduled || b.ratio - a.ratio)
+      .slice(0, 3);
+  }, [performance]);
+
+  const topPassed = useMemo(() => {
+    return performance
+      .filter((row) => row.kpi.passed > 0)
+      .map((row) => ({
+        row,
+        ratio: row.kpi.attended > 0 ? Math.round((row.kpi.passed / row.kpi.attended) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.row.kpi.passed - a.row.kpi.passed || b.ratio - a.ratio)
+      .slice(0, 3);
+  }, [performance]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <Card className="p-5">
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void refresh();
-          }}
-        >
-          <Field label="Khoảng thời gian" uiSize="sm" className="w-44">
-            <DateRangePicker value={dateRange} onChange={setDateRange} />
+    <div className="-mt-3 mx-auto max-w-7xl space-y-5">
+      {/* Bộ lọc — Mục 5, yêu cầu trực tiếp người dùng: Khoảng thời gian/Nhóm/Nhân viên/Nguồn, cập nhật realtime. Thu hẹp cả cụm lọc (2026-07-14, yêu cầu trực tiếp người dùng). */}
+      <Card className="p-3">
+        <div className="flex flex-wrap items-end gap-2.5">
+          <Field label="Khoảng thời gian" uiSize="sm" className="w-36">
+            <DateRangePicker
+              value={dateRange}
+              onChange={(next) => {
+                setDateRange(next);
+                void refresh({ dateRange: next });
+              }}
+            />
           </Field>
           {canFilterByTeam && (
-            <Field label="Nhóm" uiSize="sm" className="w-48">
-              <Select uiSize="sm" value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+            <Field label="Nhóm" uiSize="sm" className="w-36">
+              <Select
+                uiSize="sm"
+                value={teamId}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setTeamId(next);
+                  void refresh({ teamId: next });
+                }}
+              >
                 <option value="">Tất cả nhóm</option>
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
@@ -141,147 +351,282 @@ export function DashboardClient({
               </Select>
             </Field>
           )}
-          <Button type="submit" variant="outline" size="sm" disabled={loading}>
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} strokeWidth={2} />
-            Làm mới dữ liệu
-          </Button>
-        </form>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-5">
-          <div className="flex items-center gap-2 text-slate-500">
-            <Sparkles className="h-4 w-4" strokeWidth={2} />
-            <p className="text-xs font-medium">Lead mới</p>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{summary.new_leads_total.toLocaleString("vi-VN")}</p>
-          <div className="mt-2 space-y-1">
-            {summary.new_leads_by_source.map((row) => (
-              <div key={row.source_id} className="flex items-center justify-between text-xs text-slate-500">
-                <span>{row.source_name}</span>
-                <span className="font-medium text-slate-700">{row.count.toLocaleString("vi-VN")}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center gap-2 text-slate-500">
-            <PhoneCall className="h-4 w-4" strokeWidth={2} />
-            <p className="text-xs font-medium">Lead chờ phân chia</p>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{summary.pending_count.toLocaleString("vi-VN")}</p>
-          {canViewPending && (
-            <Link href="/candidates?view=pending" className="mt-2 inline-block text-xs font-medium text-accent-600 hover:underline">
-              Xem chi tiết →
-            </Link>
+          {canViewPerformance && (
+            <Field label="Nhân viên" uiSize="sm" className="w-36">
+              <Select
+                uiSize="sm"
+                value={accountId}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setAccountId(next);
+                  void refresh({ accountId: next });
+                }}
+              >
+                <option value="">Tất cả nhân viên</option>
+                {employeeOptions.map((employee) => (
+                  <option key={employee.account_id} value={employee.account_id}>
+                    {employee.full_name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           )}
-        </Card>
+          <Field label="Nguồn" uiSize="sm" className="w-32">
+            <Select
+              uiSize="sm"
+              value={sourceId}
+              onChange={(event) => {
+                const next = event.target.value;
+                setSourceId(next);
+                void refresh({ sourceId: next });
+              }}
+            >
+              <option value="">Tất cả nguồn</option>
+              {sources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-        <Card className="p-5">
-          <div className="flex items-center gap-2 text-slate-500">
-            <Target className="h-4 w-4" strokeWidth={2} />
-            <p className="text-xs font-medium">Tỷ lệ đi làm</p>
+          <div className="ml-auto flex items-center gap-3">
+            {canViewPending && (
+              <Link
+                href="/candidates?view=pending"
+                className="flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
+              >
+                <Users className="h-3.5 w-3.5" strokeWidth={2} />
+                Chờ phân chia: {summary.pending_count.toLocaleString("vi-VN")}
+                <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+              </Link>
+            )}
+            <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void refresh()}>
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} strokeWidth={2} />
+              Làm mới
+            </Button>
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {(summary.funnel.find((step) => step.code === "EMPLOYED")?.percentage ?? 0).toLocaleString("vi-VN")}%
-          </p>
-          <p className="mt-2 text-xs text-slate-400">So với tổng số Lead trong khoảng thời gian đã chọn</p>
-        </Card>
-      </div>
-
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Phễu chuyển đổi</h2>
-        <p className="text-xs text-slate-500">Lead → Hẹn PV → Đến PV → Đỗ PV → Đi làm</p>
-        <div className="mt-4">
-          <FunnelBar funnel={summary.funnel} />
         </div>
       </Card>
 
+      {/* 1. KPI toàn công ty — Mục 1, yêu cầu trực tiếp người dùng: 7 thẻ, xem nhanh trong 5 giây. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        {KPI_CARDS.map(({ key, label, icon: Icon, tint, iconColor }) => {
+          const value = summary.kpi[key];
+          const previous = summary.kpi_previous?.[key];
+          const change = value === null ? null : percentChange(value, previous ?? undefined);
+          return (
+            <Card
+              key={key}
+              className="flex min-h-[112px] flex-col justify-between gap-2 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-start gap-3">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tint}`}>
+                  <Icon className={`h-4.5 w-4.5 ${iconColor}`} strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-3xl font-bold tracking-tight text-brand-900">
+                    {value === null ? "—" : value.toLocaleString("vi-VN")}
+                  </p>
+                  <p className="mt-1 truncate text-xs font-medium text-slate-500">{label}</p>
+                </div>
+              </div>
+              <div className="flex justify-center">
+                <ChangeBadge value={change} />
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
+      <Card className="p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Hiệu suất toàn công ty</h2>
+        <p className="text-xs text-slate-500">Tỷ lệ chuyển đổi qua từng bước phễu — % tính trên Data mới.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-xl bg-brand-50 p-2 text-center">
+            <p className="text-base font-bold text-brand-700">{summary.kpi.schedule_rate}%</p>
+            <p className="text-xs text-brand-600/70">Tỷ lệ hẹn PV</p>
+          </div>
+          <div className="rounded-xl bg-emerald-50 p-2 text-center">
+            <p className="text-base font-bold text-emerald-600">{summary.kpi.attend_rate}%</p>
+            <p className="text-xs text-emerald-600/70">Tỷ lệ đến PV</p>
+          </div>
+          <div className="rounded-xl bg-emerald-100 p-2 text-center">
+            <p className="text-base font-bold text-emerald-700">{summary.kpi.pass_rate}%</p>
+            <p className="text-xs text-emerald-700/70">Tỷ lệ đỗ PV</p>
+          </div>
+          <div className="rounded-xl bg-accent-50 p-2 text-center">
+            <p className="text-base font-bold text-accent-600">
+              {summary.kpi.employed_rate === null ? "—" : `${summary.kpi.employed_rate}%`}
+            </p>
+            <p className="text-xs text-accent-600/70">Tỷ lệ đi làm</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* 2b. Top 3 xếp hạng — yêu cầu trực tiếp người dùng (2026-07-14): tính thẳng từ `performance` nên tự đồng bộ theo mọi bộ lọc, không cần fetch riêng. */}
       {canViewPerformance && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-amber-500" strokeWidth={2} />
+              <h2 className="text-sm font-semibold text-slate-900">Top 3 nhân viên hẹn PV nhiều nhất</h2>
+            </div>
+            <p className="text-xs text-slate-500">Số lượng Hẹn PV cao nhất trong khoảng thời gian và bộ lọc hiện tại.</p>
+            <div className="mt-3 flex flex-col gap-1">
+              {topScheduled.map(({ row, ratio }, index) => (
+                <RankingRow
+                  key={row.account_id}
+                  rank={(index + 1) as Rank}
+                  fullName={row.full_name}
+                  avatarUrl={row.avatar_url}
+                  teamName={row.team_id ? (teamNameById.get(row.team_id) ?? "") : ""}
+                  primaryValue={row.kpi.interview_scheduled}
+                  secondaryPercent={ratio}
+                  secondaryLabel="/ Data mới"
+                />
+              ))}
+              {topScheduled.length === 0 && <RankingEmptyState />}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4 text-emerald-600" strokeWidth={2} />
+              <h2 className="text-sm font-semibold text-slate-900">Top 3 nhân viên đỗ PV cao nhất</h2>
+            </div>
+            <p className="text-xs text-slate-500">Số lượng Đỗ PV cao nhất trong khoảng thời gian và bộ lọc hiện tại.</p>
+            <div className="mt-3 flex flex-col gap-1">
+              {topPassed.map(({ row, ratio }, index) => (
+                <RankingRow
+                  key={row.account_id}
+                  rank={(index + 1) as Rank}
+                  fullName={row.full_name}
+                  avatarUrl={row.avatar_url}
+                  teamName={row.team_id ? (teamNameById.get(row.team_id) ?? "") : ""}
+                  primaryValue={row.kpi.passed}
+                  secondaryPercent={ratio}
+                  secondaryLabel="/ Đến PV"
+                />
+              ))}
+              {topPassed.length === 0 && <RankingEmptyState />}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* 3. Hiệu suất theo nhóm */}
+      {canViewByTeam && (
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Hiệu suất Sale</h2>
-          <div className="mt-3 overflow-x-auto">
-            {/* UI Polish — cố định độ rộng cột theo yêu cầu người dùng, bỏ tính năng co giãn. */}
-            <table className="w-full table-fixed text-left text-sm">
-              <colgroup>
-                <col className="w-[180px]" />
-                <col className="w-[130px]" />
-                <col className="w-[140px]" />
-                <col className="w-[130px]" />
-                <col className="w-[110px]" />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-slate-200 text-xs text-slate-500">
-                  <th className="py-2 pr-3 font-medium">Sale</th>
-                  <th className="py-2 pr-3 font-medium">Số cuộc gọi</th>
-                  <th className="py-2 pr-3 font-medium">Lead tiềm năng</th>
-                  <th className="py-2 pr-3 font-medium">Số lịch hẹn</th>
-                  <th className="py-2 pr-3 font-medium">Đi làm</th>
-                </tr>
-              </thead>
-              <tbody>
-                {performance.map((row) => (
-                  <tr
-                    key={row.account_id}
-                    className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
-                    onClick={() => setQuickView(row)}
-                  >
-                    <td className="py-2 pr-3 font-medium text-slate-800">{row.full_name}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.calls.toLocaleString("vi-VN")}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.potential_leads.toLocaleString("vi-VN")}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.interview_count.toLocaleString("vi-VN")}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.employed_count.toLocaleString("vi-VN")}</td>
-                  </tr>
-                ))}
-                {performance.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-sm text-slate-400">
-                      Không có dữ liệu trong khoảng thời gian đã chọn.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">Hiệu suất theo nhóm</h2>
+            <Select uiSize="xs" className="w-44" value={teamSort} onChange={(event) => setTeamSort(event.target.value as TeamSort)}>
+              <option value="new_leads">Nhiều Data nhất</option>
+              <option value="performance">Hiệu suất cao nhất</option>
+            </Select>
+          </div>
+          <div className="mt-3 flex flex-col divide-y divide-brand-400">
+            {sortedTeams.map((team) => (
+              <div key={team.team_id} className="flex flex-wrap items-center gap-4 py-3">
+                <div className="w-32 shrink-0">
+                  <p className="text-sm font-semibold text-slate-800">{team.team_name}</p>
+                </div>
+                <div className="grid flex-1 grid-cols-4 divide-x divide-slate-100 sm:grid-cols-7">
+                  {KPI_CARDS.map(({ key, label }) => (
+                    <div key={key} className="px-2 text-center">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {team.kpi[key] === null ? "—" : team.kpi[key]!.toLocaleString("vi-VN")}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex w-32 shrink-0 items-center gap-2">
+                  <ProgressBar percent={team.kpi.performance_rate ?? 0} />
+                  <span className="w-10 shrink-0 text-right text-xs font-semibold text-slate-600">
+                    {team.kpi.performance_rate === null ? "—" : `${team.kpi.performance_rate}%`}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {sortedTeams.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Chưa có nhóm nào.</p>}
           </div>
         </Card>
       )}
 
-      {canViewByTeam && (
+      {/* 4. Hiệu suất từng nhân viên */}
+      {canViewPerformance && (
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Tổng hợp theo nhóm</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">Hiệu suất từng nhân viên</h2>
+            <Select
+              uiSize="xs"
+              className="w-40"
+              value={employeeSort}
+              onChange={(event) => setEmployeeSort(event.target.value as EmployeeSort)}
+            >
+              <option value="employed">Sắp xếp: Đi làm</option>
+              <option value="new_leads">Sắp xếp: Data</option>
+              <option value="performance">Sắp xếp: Hiệu suất</option>
+            </Select>
+          </div>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-xs text-slate-500">
-                  <th className="py-2 pr-3 font-medium">Nhóm</th>
-                  <th className="py-2 pr-3 font-medium">Số lead</th>
-                  <th className="py-2 pr-3 font-medium">Tỷ lệ chuyển đổi</th>
-                  <th className="py-2 pr-3 font-medium">Cột chăm sóc</th>
-                  <th className="py-2 pr-3 font-medium"></th>
+                <tr className="border-b border-brand-400 text-xs text-slate-500">
+                  <th className="border-r border-slate-100 py-2 pr-3 font-medium">Nhân viên</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Data mới</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Hẹn PV</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Đến PV</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Bùng PV</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Đỗ PV</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Trượt PV</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Đi làm</th>
+                  <th className="py-2 pr-3 font-medium">Hiệu suất</th>
                 </tr>
               </thead>
               <tbody>
-                {byTeam.map((row) => (
-                  <tr key={row.team_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="py-2 pr-3 font-medium text-slate-800">{row.team_name}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.lead_count.toLocaleString("vi-VN")}</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.conversion_rate}%</td>
-                    <td className="py-2 pr-3 text-slate-600">{row.care_pool_count.toLocaleString("vi-VN")}</td>
-                    <td className="py-2 pr-3">
-                      <Link
-                        href={`/candidates?team_id=${row.team_id}`}
-                        className="text-xs font-medium text-accent-600 hover:underline"
-                      >
-                        Xem lao động →
-                      </Link>
+                {sortedPerformance.map((row) => (
+                  <tr
+                    key={row.account_id}
+                    className="cursor-pointer border-b border-brand-400 last:border-0 hover:bg-slate-50"
+                    onClick={() => setQuickView(row)}
+                  >
+                    <td className="border-r border-slate-100 py-2.5 pr-3">
+                      <div className="flex items-center gap-2">
+                        <Avatar fullName={row.full_name} avatarUrl={row.avatar_url} className="h-7 w-7 text-xs" />
+                        <div>
+                          <p className="font-medium text-slate-800">{row.full_name}</p>
+                          {row.team_id && <p className="text-[11px] text-slate-400">{teamNameById.get(row.team_id) ?? ""}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.new_leads.toLocaleString("vi-VN")}</td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.interview_scheduled.toLocaleString("vi-VN")}</td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.attended.toLocaleString("vi-VN")}</td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.no_show.toLocaleString("vi-VN")}</td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.passed.toLocaleString("vi-VN")}</td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.failed.toLocaleString("vi-VN")}</td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center font-semibold text-slate-800">
+                      {row.kpi.employed === null ? "—" : row.kpi.employed.toLocaleString("vi-VN")}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16">
+                          <ProgressBar percent={row.kpi.performance_rate ?? 0} />
+                        </div>
+                        <span className="w-9 shrink-0 text-xs font-semibold text-slate-600">
+                          {row.kpi.performance_rate === null ? "—" : `${row.kpi.performance_rate}%`}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ))}
-                {byTeam.length === 0 && (
+                {sortedPerformance.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-sm text-slate-400">
-                      Chưa có nhóm nào.
+                    <td colSpan={9} className="py-6 text-center text-sm text-slate-400">
+                      Không có dữ liệu trong khoảng thời gian đã chọn.
                     </td>
                   </tr>
                 )}
@@ -318,12 +663,40 @@ export function DashboardClient({
               <dd className="font-semibold text-slate-900">{quickView.potential_leads.toLocaleString("vi-VN")}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">Số lịch hẹn</dt>
-              <dd className="font-semibold text-slate-900">{quickView.interview_count.toLocaleString("vi-VN")}</dd>
+              <dt className="text-xs text-slate-500">Data mới</dt>
+              <dd className="font-semibold text-slate-900">{quickView.kpi.new_leads.toLocaleString("vi-VN")}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Hẹn PV</dt>
+              <dd className="font-semibold text-slate-900">{quickView.kpi.interview_scheduled.toLocaleString("vi-VN")}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Đến PV</dt>
+              <dd className="font-semibold text-slate-900">{quickView.kpi.attended.toLocaleString("vi-VN")}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Bùng PV</dt>
+              <dd className="font-semibold text-slate-900">{quickView.kpi.no_show.toLocaleString("vi-VN")}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Đỗ PV</dt>
+              <dd className="font-semibold text-slate-900">{quickView.kpi.passed.toLocaleString("vi-VN")}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Trượt PV</dt>
+              <dd className="font-semibold text-slate-900">{quickView.kpi.failed.toLocaleString("vi-VN")}</dd>
             </div>
             <div>
               <dt className="text-xs text-slate-500">Đi làm</dt>
-              <dd className="font-semibold text-slate-900">{quickView.employed_count.toLocaleString("vi-VN")}</dd>
+              <dd className="font-semibold text-slate-900">
+                {quickView.kpi.employed === null ? "—" : quickView.kpi.employed.toLocaleString("vi-VN")}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Hiệu suất (%)</dt>
+              <dd className="font-semibold text-accent-600">
+                {quickView.kpi.performance_rate === null ? "—" : `${quickView.kpi.performance_rate}%`}
+              </dd>
             </div>
           </dl>
         </Modal>

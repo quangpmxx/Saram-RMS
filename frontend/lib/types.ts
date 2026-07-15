@@ -21,6 +21,17 @@ export interface Account {
   status: AccountStatus;
   /** Dự án phụ — nâng cấp toàn diện: đường dẫn tương đối ảnh đại diện tự upload, null nếu chưa có. */
   avatar_url: string | null;
+  /**
+   * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+   * docs/09-13, yêu cầu trực tiếp người dùng): 5 field hồ sơ nhân sự — CHỈ
+   * Admin sửa được (trang Quản lý tài khoản), Nhân viên/Leader chỉ xem
+   * (trang Cài đặt tài khoản). "YYYY-MM-DD" cho 2 field ngày.
+   */
+  date_of_birth: string | null;
+  hire_date: string | null;
+  personal_phone: string | null;
+  personal_email: string | null;
+  remaining_leave_days: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -229,6 +240,8 @@ export interface CalendarEvent {
   id: string;
   scheduled_at: string;
   candidate: { id: string; full_name: string; phone_number: string };
+  /** Dự án phụ — nâng cấp toàn diện: Sale nào đặt lịch hẹn này — yêu cầu trực tiếp người dùng (2026-07-14). */
+  created_by: NamedRefWithRole;
 }
 
 // ── Phase 5 — Cột chăm sóc tự động (Care Pool) ───────────────────────────
@@ -263,6 +276,29 @@ export interface FunnelStep {
   percentage: number;
 }
 
+/**
+ * Dự án phụ — nâng cấp toàn diện (riêng giao diện Dashboard, ngoài phạm vi
+ * Design Freeze docs/09-13): 7 chỉ số đầy đủ + tỷ lệ, xem chi tiết công thức
+ * tại backend/src/dashboard/dto/dashboard-response.dto.ts. Hẹn/Đến/Bùng/Đỗ/
+ * Trượt PV (2026-07-14) lấy từ module Đưa đón. employed/employed_rate/
+ * performance_rate = null (chưa có nguồn dữ liệu — chờ module Quản lý lao
+ * động mới cung cấp API).
+ */
+export interface KpiBreakdown {
+  new_leads: number;
+  interview_scheduled: number;
+  attended: number;
+  no_show: number;
+  passed: number;
+  failed: number;
+  employed: number | null;
+  schedule_rate: number;
+  attend_rate: number;
+  pass_rate: number;
+  employed_rate: number | null;
+  performance_rate: number | null;
+}
+
 /** GET /dashboard/summary — Mục 8, docs/13-api-design.md. */
 export interface DashboardSummary {
   new_leads_total: number;
@@ -270,16 +306,21 @@ export interface DashboardSummary {
   pending_count: number;
   funnel: FunnelStep[];
   care_pool_count: number;
+  kpi: KpiBreakdown;
+  kpi_previous: KpiBreakdown | null;
 }
 
 /** GET /dashboard/performance — Mục 8, docs/13-api-design.md. */
 export interface SalePerformance {
   account_id: string;
   full_name: string;
+  avatar_url: string | null;
+  team_id: string | null;
   calls: number;
   potential_leads: number;
   interview_count: number;
   employed_count: number;
+  kpi: KpiBreakdown;
 }
 
 /** GET /dashboard/by-team — Mục 8, docs/13-api-design.md. */
@@ -289,6 +330,7 @@ export interface TeamSummary {
   lead_count: number;
   conversion_rate: number;
   care_pool_count: number;
+  kpi: KpiBreakdown;
 }
 
 /** GET /report/by-source — Mục 8, docs/13-api-design.md. */
@@ -298,6 +340,140 @@ export interface BySourceReport {
   lead_count: number;
   potential_rate: number;
   employed_rate: number;
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
+ * docs/09-13 — module mới): Báo cáo hằng ngày — thay thế nội dung trang
+ * "Báo cáo" cũ (FunnelStep/BySourceReport ở trên GIỮ NGUYÊN, vẫn dùng cho
+ * Dashboard).
+ */
+export interface DailyReportRow {
+  date: string;
+  account: { id: string; name: string; avatar_url: string | null; role: AccountRole };
+  team: { id: string; name: string } | null;
+  report_id: string | null;
+  calls: number;
+  old_data: number;
+  no_answer: number;
+  interested: number;
+  interview_scheduled: number;
+  interview_passed: number;
+  employed: number;
+  /** Luôn tính trực tiếp từ Data lao động (ngày lên số) — không nhập tay được. */
+  new_leads: number;
+  status: "reported" | "not_reported";
+  created_at: string | null;
+  updated_at: string | null;
+  created_by: NamedRefWithRole | null;
+  updated_by: NamedRefWithRole | null;
+}
+
+export interface DailyReportTotals {
+  calls: number;
+  old_data: number;
+  no_answer: number;
+  interested: number;
+  interview_scheduled: number;
+  interview_passed: number;
+  employed: number;
+  new_leads: number;
+}
+
+export interface DailyReportTeamSummary extends DailyReportTotals {
+  team_id: string;
+  team_name: string;
+  reported_count: number;
+  not_reported_count: number;
+}
+
+export interface DailyReportSummary {
+  totals: DailyReportTotals;
+  by_team: DailyReportTeamSummary[];
+}
+
+/** Body của POST/PUT /daily-report — 7 trường nhập tay, "Data mới" không có ở đây (không cho nhập tay). */
+export interface UpsertDailyReportPayload {
+  calls: number;
+  old_data: number;
+  no_answer: number;
+  interested: number;
+  interview_scheduled: number;
+  interview_passed: number;
+  employed: number;
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
+ * docs/09-13 — module hoàn toàn mới): "Chấm công thủ công". Không có field
+ * "vị trí/chức vụ" riêng — cột "Vị trí" hiện bằng ACCOUNT_ROLE_LABEL[role]
+ * giống mọi trang khác, không phát minh field mới.
+ */
+export type AttendanceStatus = "present" | "half" | "paid_leave" | "unpaid_leave" | "holiday" | "compensatory_leave";
+
+export interface AttendanceEmployee {
+  account_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: AccountRole;
+  /** Chức vụ tùy chỉnh, sửa tay được — null = chưa đặt, cột "Vị trí" hiện nhãn vai trò mặc định (ACCOUNT_ROLE_LABEL[role]). */
+  position: string | null;
+  team_id: string | null;
+  team_name: string | null;
+  status: AccountStatus;
+  /**
+   * 5 field hồ sơ nhân sự (2026-07-15, yêu cầu trực tiếp người dùng) — chỉ
+   * đọc ở modal "Thông tin nhân viên", sửa qua trang Quản lý tài khoản.
+   */
+  date_of_birth: string | null;
+  hire_date: string | null;
+  personal_phone: string | null;
+  personal_email: string | null;
+  remaining_leave_days: number | null;
+}
+
+export interface AttendanceDay {
+  /** "YYYY-MM-DD" */
+  date: string;
+  day: number;
+  /** "CN"/"T2".."T7" */
+  weekday_label: string;
+  is_sunday: boolean;
+}
+
+export interface AttendanceCell {
+  account_id: string;
+  /** "YYYY-MM-DD" */
+  date: string;
+  status: AttendanceStatus;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface AttendanceGrid {
+  year: number;
+  month: number;
+  days: AttendanceDay[];
+  employees: AttendanceEmployee[];
+  records: AttendanceCell[];
+  can_edit: boolean;
+}
+
+export interface AttendanceUpsertCell {
+  account_id: string;
+  date: string;
+  status: AttendanceStatus;
+  note?: string;
+}
+
+export interface AttendanceDeleteCell {
+  account_id: string;
+  date: string;
+}
+
+export interface AttendanceBulkSavePayload {
+  upserts: AttendanceUpsertCell[];
+  deletes: AttendanceDeleteCell[];
 }
 
 // ── Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết ──────────

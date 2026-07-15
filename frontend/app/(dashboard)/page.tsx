@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import type { DashboardSummary, PaginatedResult, SalePerformance, Team, TeamSummary } from "@/lib/types";
+import type { DashboardSummary, LeadSource, PaginatedResult, SalePerformance, Team, TeamSummary } from "@/lib/types";
 import { DashboardClient } from "./dashboard-client";
 
 /**
@@ -28,7 +28,7 @@ export default async function HomePage() {
     date_to: endOfToday.toISOString(),
   });
 
-  const [summary, performance, byTeam, teamsResult] = await Promise.all([
+  const [summary, performance, byTeam, teamsResult, sources] = await Promise.all([
     serverApi<DashboardSummary>(`/dashboard/summary?${dateQuery.toString()}`),
     canViewPerformance
       ? serverApi<SalePerformance[]>(`/dashboard/performance?${dateQuery.toString()}`)
@@ -39,6 +39,7 @@ export default async function HomePage() {
     canFilterByTeam
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
+    serverApi<LeadSource[]>("/lead-source"),
   ]);
 
   return (
@@ -49,6 +50,7 @@ export default async function HomePage() {
       canViewByTeam={canViewByTeam}
       canFilterByTeam={canFilterByTeam}
       teams={teamsResult.items}
+      sources={sources}
       initialSummary={summary}
       initialPerformance={performance}
       initialByTeam={byTeam}

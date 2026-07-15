@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
-import { PageHeader } from "@/components/ui/page-header";
+import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 /** Tên hiển thị thân thiện cho từng tham số đã biết — Mục 9.2, docs/12-ui-design.md. */
@@ -23,6 +23,7 @@ function formatDateTime(value: string): string {
 }
 
 export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfig[] }) {
+  useSetPageTitle("Cấu hình vận hành", "Tham số vận hành toàn hệ thống — chỉ Admin xem/sửa được.");
   const router = useRouter();
   const [configs, setConfigs] = useState(initialConfigs);
   const [editing, setEditing] = useState<SystemConfig | null>(null);
@@ -36,11 +37,6 @@ export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfi
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        title="Cấu hình vận hành"
-        description="Tham số vận hành toàn hệ thống — chỉ Admin xem/sửa được."
-      />
-
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">

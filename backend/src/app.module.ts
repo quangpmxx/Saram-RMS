@@ -22,6 +22,9 @@ import { PermissionModule } from './permission/permission.module';
 import { ColumnWidthModule } from './column-width/column-width.module';
 import { ShuttleModule } from './shuttle/shuttle.module';
 import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
+import { DailyReportsModule } from './daily-reports/daily-reports.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { LeaveAccrualModule } from './leave-accrual/leave-accrual.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -49,6 +52,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     ColumnWidthModule,
     ShuttleModule,
     SaleReminderModule,
+    DailyReportsModule,
+    AttendanceModule,
+    LeaveAccrualModule,
   ],
   controllers: [AppController],
   providers: [

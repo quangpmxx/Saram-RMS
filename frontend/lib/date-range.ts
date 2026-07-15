@@ -32,6 +32,7 @@ export type DatePreset =
   | "last_week"
   | "this_month"
   | "last_month"
+  | "all_time"
   | "custom";
 
 export interface DateRangeValue {
@@ -54,6 +55,7 @@ export const DATE_PRESET_OPTIONS: Array<{ value: DatePreset; label: string }> = 
   { value: "last_week", label: "Tuần trước" },
   { value: "this_month", label: "Tháng này" },
   { value: "last_month", label: "Tháng trước" },
+  { value: "all_time", label: "Tối đa" },
 ];
 
 export const EMPTY_DATE_RANGE: DateRangeValue = { preset: "custom", from: "", to: "" };
@@ -134,6 +136,17 @@ export function computeDateRange(preset: DatePreset): { from: string; to: string
       const end = new Date(today.getFullYear(), today.getMonth(), 0);
       return { from: toDateOnly(start), to: toDateOnly(end) };
     }
+    /**
+     * "Tối đa" — yêu cầu trực tiếp người dùng (2026-07-14, phát hiện khi đối
+     * chiếu tổng Đưa đón với KPI Dashboard: KPI đang lọc theo khoảng ngày
+     * mặc định nên chỉ thấy 1 phần, cần cách xem TOÀN BỘ không giới hạn
+     * ngày). Trả về from/to RỖNG — khớp đúng quy ước "không truyền
+     * date_from/date_to = không lọc ngày" đã có sẵn ở mọi API (vd
+     * buildDateWhere() phía backend), không cần hardcode 1 mốc ngày bắt đầu
+     * tùy tiện.
+     */
+    case "all_time":
+      return { from: "", to: "" };
     case "custom":
       return { from: "", to: "" };
   }

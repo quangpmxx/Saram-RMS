@@ -145,6 +145,21 @@ export class AccountsService {
         fullName: dto.full_name,
         teamId: dto.team_id === undefined ? undefined : dto.team_id,
         status: dto.status,
+        dateOfBirth:
+          dto.date_of_birth === undefined
+            ? undefined
+            : dto.date_of_birth === null
+              ? null
+              : new Date(dto.date_of_birth),
+        hireDate:
+          dto.hire_date === undefined
+            ? undefined
+            : dto.hire_date === null
+              ? null
+              : new Date(dto.hire_date),
+        personalPhone: dto.personal_phone,
+        personalEmail: dto.personal_email,
+        remainingLeaveDays: dto.remaining_leave_days,
       },
       include: { team: { select: TEAM_SELECT } },
     });
@@ -303,7 +318,16 @@ export class AccountsService {
   private async logFieldChanges(
     actorId: string,
     entityId: string,
-    before: { fullName: string; teamId: string | null; status: string },
+    before: {
+      fullName: string;
+      teamId: string | null;
+      status: string;
+      dateOfBirth: Date | null;
+      hireDate: Date | null;
+      personalPhone: string | null;
+      personalEmail: string | null;
+      remainingLeaveDays: number | null;
+    },
     dto: UpdateAccountDto,
   ): Promise<void> {
     const changes: Array<{
@@ -331,6 +355,58 @@ export class AccountsService {
         field: 'status',
         oldValue: before.status,
         newValue: dto.status,
+      });
+    }
+    const beforeDob = before.dateOfBirth?.toISOString().slice(0, 10) ?? null;
+    if (dto.date_of_birth !== undefined && dto.date_of_birth !== beforeDob) {
+      changes.push({
+        field: 'date_of_birth',
+        oldValue: beforeDob,
+        newValue: dto.date_of_birth,
+      });
+    }
+    const beforeHireDate = before.hireDate?.toISOString().slice(0, 10) ?? null;
+    if (dto.hire_date !== undefined && dto.hire_date !== beforeHireDate) {
+      changes.push({
+        field: 'hire_date',
+        oldValue: beforeHireDate,
+        newValue: dto.hire_date,
+      });
+    }
+    if (
+      dto.personal_phone !== undefined &&
+      dto.personal_phone !== before.personalPhone
+    ) {
+      changes.push({
+        field: 'personal_phone',
+        oldValue: before.personalPhone,
+        newValue: dto.personal_phone,
+      });
+    }
+    if (
+      dto.personal_email !== undefined &&
+      dto.personal_email !== before.personalEmail
+    ) {
+      changes.push({
+        field: 'personal_email',
+        oldValue: before.personalEmail,
+        newValue: dto.personal_email,
+      });
+    }
+    if (
+      dto.remaining_leave_days !== undefined &&
+      dto.remaining_leave_days !== before.remainingLeaveDays
+    ) {
+      changes.push({
+        field: 'remaining_leave_days',
+        oldValue:
+          before.remainingLeaveDays === null
+            ? null
+            : String(before.remainingLeaveDays),
+        newValue:
+          dto.remaining_leave_days === null
+            ? null
+            : String(dto.remaining_leave_days),
       });
     }
 

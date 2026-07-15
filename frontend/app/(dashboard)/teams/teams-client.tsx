@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
-import { PageHeader } from "@/components/ui/page-header";
+import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; team: Team };
@@ -23,6 +23,7 @@ export function TeamsClient({
   initialTeams: Team[];
   leaders: Account[];
 }) {
+  useSetPageTitle("Quản lý nhóm", "Tổ chức nhóm và phân công Leader phụ trách.");
   const router = useRouter();
   const [teams, setTeams] = useState(initialTeams);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
@@ -36,16 +37,12 @@ export function TeamsClient({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        title="Quản lý nhóm"
-        description="Tổ chức nhóm và phân công Leader phụ trách."
-        actions={
-          <Button type="button" onClick={() => setModal({ mode: "create" })}>
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-            Thêm nhóm mới
-          </Button>
-        }
-      />
+      <div className="mb-4 flex justify-end">
+        <Button type="button" onClick={() => setModal({ mode: "create" })}>
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          Thêm nhóm mới
+        </Button>
+      </div>
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

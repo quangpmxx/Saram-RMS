@@ -4,16 +4,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, CalendarDays, Search } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { CalendarEvent, Candidate, PaginatedResult } from "@/lib/types";
+import type { CalendarEvent, Candidate, PaginatedResult, TeamMember } from "@/lib/types";
+import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal } from "@/components/ui/modal";
-import { PageHeader } from "@/components/ui/page-header";
 import { type DateRangeValue } from "@/lib/date-range";
+import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 function formatDateTime(value: string): string {
@@ -45,11 +46,17 @@ export function CalendarClient({
   initialEvents,
   initialDateFrom,
   initialDateTo,
+  canFilterBySale,
+  saleMembers,
 }: {
   initialEvents: CalendarEvent[];
   initialDateFrom: string;
   initialDateTo: string;
+  /** Dự án phụ — nâng cấp toàn diện: chỉ Admin/Quản lý/Leader mới cần chọn Sale (Sale role đã bị khóa chỉ thấy lịch của mình). */
+  canFilterBySale: boolean;
+  saleMembers: TeamMember[];
 }) {
+  useSetPageTitle("Lịch hẹn", "Lịch hẹn phỏng vấn và lịch gọi lại — theo phạm vi quyền của bạn.");
   const [events, setEvents] = useState(initialEvents);
   /**
    * Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng
@@ -63,6 +70,9 @@ export function CalendarClient({
     from: initialDateFrom,
     to: initialDateTo,
   });
+  /** Dự án phụ — nâng cấp toàn diện (2026-07-14, yêu cầu trực tiếp người dùng): lọc theo Sale ĐÃ HẸN + loại lịch (Phỏng vấn/Gọi lại). */
+  const [createdById, setCreatedById] = useState("");
+  const [eventType, setEventType] = useState<"" | "interview" | "callback">("");
   const toast = useToast();
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
@@ -70,26 +80,43 @@ export function CalendarClient({
 
   async function refresh() {
     const query = new URLSearchParams({ date_from: dateRange.from, date_to: dateRange.to });
+    if (createdById) query.set("created_by_id", createdById);
+    if (eventType) query.set("type", eventType);
     const result = await clientApi<CalendarEvent[]>(`/calendar?${query.toString()}`);
     setEvents(result);
   }
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        title="Lịch hẹn"
-        description="Lịch hẹn phỏng vấn và lịch gọi lại — theo phạm vi quyền của bạn."
-        actions={
-          <Button type="button" onClick={() => setIsScheduleModalOpen(true)}>
-            <CalendarPlus className="h-4 w-4" strokeWidth={2} />
-            Đặt lịch hẹn PV mới
-          </Button>
-        }
-      />
+      <div className="mb-4 flex justify-end">
+        <Button type="button" onClick={() => setIsScheduleModalOpen(true)}>
+          <CalendarPlus className="h-4 w-4" strokeWidth={2} />
+          Đặt lịch hẹn PV mới
+        </Button>
+      </div>
 
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
         <Field label="Khoảng thời gian" className="w-44">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
+        </Field>
+        {canFilterBySale && (
+          <Field label="Nhân viên" className="w-44">
+            <Select value={createdById} onChange={(event) => setCreatedById(event.target.value)}>
+              <option value="">Tất cả nhân viên</option>
+              {saleMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.full_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        <Field label="Loại lịch" className="w-40">
+          <Select value={eventType} onChange={(event) => setEventType(event.target.value as "" | "interview" | "callback")}>
+            <option value="">Tất cả</option>
+            <option value="interview">Phỏng vấn</option>
+            <option value="callback">Gọi lại</option>
+          </Select>
         </Field>
         <Button type="button" variant="outline" onClick={() => void refresh()}>
           <Search className="h-4 w-4" strokeWidth={2} />
@@ -127,7 +154,12 @@ export function CalendarClient({
                           <p className="text-xs text-slate-500">{event.candidate.phone_number}</p>
                         </div>
                       </div>
-                      <span className="text-sm text-slate-600">{formatDateTime(event.scheduled_at)}</span>
+                      <div className="text-right">
+                        <p className="text-sm text-slate-600">{formatDateTime(event.scheduled_at)}</p>
+                        <p className="text-xs text-slate-400">
+                          Sale hẹn: <NameWithRoleHint account={event.created_by} className="font-medium text-slate-500" />
+                        </p>
+                      </div>
                     </Link>
                   </li>
                 ))}

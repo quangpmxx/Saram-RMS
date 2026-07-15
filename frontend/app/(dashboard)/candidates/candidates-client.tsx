@@ -62,6 +62,8 @@ import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
 
 const PAGE_SIZE = 50;
+/** Dự án phụ — nâng cấp toàn diện: cho chọn số dòng/trang, y hệt trang Đưa đón (yêu cầu trực tiếp người dùng). */
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 /** Dự án phụ — nâng cấp toàn diện: mức thu phóng bảng, y hệt danh sách % của Google Sheet (yêu cầu trực tiếp người dùng). */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
 /** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia (cho người khác)/chuyển lead. */
@@ -156,6 +158,7 @@ export function CandidatesClient({
   const [candidates, setCandidates] = useState(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? "all");
   const [filters, setFilters] = useState<Filters>(
     initialFilters ?? {
@@ -251,8 +254,8 @@ export function CandidatesClient({
     return false;
   }
 
-  async function refresh(targetPage = page, mode: ViewMode = viewMode) {
-    const query = new URLSearchParams({ page: String(targetPage), page_size: String(PAGE_SIZE) });
+  async function refresh(targetPage = page, mode: ViewMode = viewMode, targetPageSize = pageSize) {
+    const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
     if (filters.source_id) query.set("source_id", filters.source_id);
 
     let result: PaginatedResult<Candidate>;
@@ -261,7 +264,7 @@ export function CandidatesClient({
     } else if (mode === "care_pool") {
       // Mục 5, docs/13: GET /care-pool không nhận cùng bộ filter với /candidate
       // (chỉ page/page_size/team_id) — dùng query riêng, không lẫn filters hiện tại.
-      const carePoolQuery = new URLSearchParams({ page: String(targetPage), page_size: String(PAGE_SIZE) });
+      const carePoolQuery = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
       result = await clientApi<PaginatedResult<Candidate>>(`/care-pool?${carePoolQuery.toString()}`);
     } else {
       if (filters.keyword) query.set("keyword", filters.keyword);
@@ -283,8 +286,13 @@ export function CandidatesClient({
     setCandidates(result.items);
     setTotal(result.total);
     setPage(targetPage);
+    setPageSize(targetPageSize);
     setSelectedIds(new Set());
     router.refresh();
+  }
+
+  async function handlePageSizeChange(nextSize: (typeof PAGE_SIZE_OPTIONS)[number]) {
+    await refresh(1, viewMode, nextSize);
   }
 
   async function refreshTeamMembers(teamId: string) {
@@ -842,21 +850,38 @@ export function CandidatesClient({
         <span>
           Trang {page} — hiển thị {candidates.length} / {total} lao động
         </span>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => void refresh(page - 1)}>
-            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
-            Trước
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={page * PAGE_SIZE >= total}
-            onClick={() => void refresh(page + 1)}
-          >
-            Sau
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-          </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <span className="text-xs whitespace-nowrap">Số dòng/trang</span>
+            <Select
+              uiSize="xs"
+              className="w-16"
+              value={String(pageSize)}
+              onChange={(event) => void handlePageSizeChange(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => void refresh(page - 1)}>
+              <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
+              Trước
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page * pageSize >= total}
+              onClick={() => void refresh(page + 1)}
+            >
+              Sau
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </Button>
+          </div>
         </div>
       </div>
 

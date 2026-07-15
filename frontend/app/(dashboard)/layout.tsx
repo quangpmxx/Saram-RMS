@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { type AccountRole } from "@/lib/types";
@@ -7,6 +8,7 @@ import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
 import { UserMenu } from "@/components/user-menu";
 import { NotificationBell } from "@/components/notification-bell";
 import { SendNotificationButton } from "@/components/send-notification-button";
+import { ClockInButton } from "@/components/clock-in-button";
 import { PageTitleProvider, PageTitleSlot } from "@/lib/page-title-context";
 import { ToastProvider, ToastSlot } from "@/lib/toast-context";
 
@@ -14,7 +16,7 @@ const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
   { href: "/", label: "Trang chủ", icon: "home", roles: ["admin", "manager", "leader", "mkt", "sale"] },
   { href: "/candidates", label: "Data lao động", icon: "candidates", roles: ["admin", "manager", "mkt", "leader", "sale"] },
   { href: "/calendar", label: "Lịch hẹn", icon: "calendar", roles: ["admin", "manager", "leader", "sale"] },
-  { href: "/reports", label: "Báo cáo", icon: "reports", roles: ["admin", "manager", "leader"] },
+  { href: "/reports", label: "Báo cáo", icon: "reports", roles: ["admin", "manager", "leader", "sale"] },
   {
     href: "/duplicates",
     label: "Trùng lặp",
@@ -25,6 +27,26 @@ const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
     href: "/shuttle",
     label: "Danh sách đưa đón",
     icon: "shuttle",
+    roles: ["admin", "manager", "leader", "mkt", "sale"],
+  },
+  // Dự án phụ — nâng cấp toàn diện: module Kế toán — CHỈ khung sườn (icon +
+  // trang "sắp ra mắt"), chưa có nghiệp vụ gì. Yêu cầu trực tiếp người dùng
+  // (2026-07-14): "hiện tại thì để nó ở tài khoản admin thôi đã" — chỉ Admin
+  // thấy được, mở rộng thêm vai trò khác sau khi có nghiệp vụ thật.
+  {
+    href: "/accounting",
+    label: "Kế toán",
+    icon: "accounting",
+    roles: ["admin"],
+  },
+  // Dự án phụ — nâng cấp toàn diện: module "Chấm công thủ công" (2026-07-14,
+  // yêu cầu trực tiếp người dùng) — Admin/Quản lý/Leader xem+chỉnh theo
+  // phạm vi, Nhân viên (MKT/Sale) chỉ xem chấm công của chính mình (RBAC
+  // chi tiết nằm ở attendance.service.ts, khớp Mục 8 bản đặc tả).
+  {
+    href: "/attendance",
+    label: "Chấm công",
+    icon: "attendance",
     roles: ["admin", "manager", "leader", "mkt", "sale"],
   },
   { href: "/audit-log", label: "Nhật ký", icon: "auditLog", roles: ["admin", "manager"] },
@@ -81,6 +103,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 </div>
                 <div className="ml-auto flex items-center gap-3">
                   {user.role === "admin" && <SendNotificationButton />}
+                  {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
+                  {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
                   <NotificationBell userId={user.id} />
                   <UserMenu user={user} />
                 </div>
@@ -89,7 +113,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <SidebarNav items={navItems} variant="horizontal" />
               </div>
             </header>
-            <main className="flex-1 p-4 md:p-6">{children}</main>
+            <main className="relative flex-1 p-4 md:p-6">
+              {/* Nền mờ logo công ty — yêu cầu trực tiếp người dùng (2026-07-14):
+                  đã áp dụng riêng cho Dashboard trước, nay chuyển lên layout dùng
+                  chung để áp dụng cho MỌI trang module ("áp dụng nền logo này cho
+                  tất cả các trang module khác đi"). Đã tách nền trắng khỏi
+                  public/saram-logo.jpg (xem public/saram-logo-transparent.png).
+                  "sticky top-0 h-screen" + "-mb-[100vh]" để logo luôn dính giữa
+                  khung nhìn hiện tại kể cả khi cuộn (absolute inset-0 sẽ canh
+                  giữa theo toàn bộ chiều cao nội dung — với trang dài sẽ bị đẩy
+                  xuống dưới màn hình đầu, lỗi thực tế đã gặp). z-0 để luôn nằm
+                  dưới nội dung mọi trang (z-10) — mọi trang PHẢI đặt nội dung
+                  trong khối z-10 để logo không đè lên (đã bọc sẵn bên dưới). */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none sticky top-0 z-0 -mb-[100vh] flex h-screen items-center justify-center overflow-hidden"
+              >
+                <Image
+                  src="/saram-logo-transparent.png"
+                  alt=""
+                  width={584}
+                  height={733}
+                  priority
+                  className="w-[380px] opacity-[0.07] select-none sm:w-[460px]"
+                />
+              </div>
+              <div className="relative z-10">{children}</div>
+            </main>
           </div>
         </div>
       </ToastProvider>

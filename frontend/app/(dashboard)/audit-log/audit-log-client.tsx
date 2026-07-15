@@ -11,7 +11,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal } from "@/components/ui/modal";
-import { PageHeader } from "@/components/ui/page-header";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 
@@ -102,8 +101,6 @@ export function AuditLogClient({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Nhật ký" description="Lịch sử truy cập/thao tác toàn hệ thống — chỉ Admin/Quản lý xem được." />
-
       <Card className="mb-4 p-4">
         <form
           className="flex flex-wrap items-end gap-3"

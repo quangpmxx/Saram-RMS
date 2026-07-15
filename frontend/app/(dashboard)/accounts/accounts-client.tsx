@@ -18,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox, Field, Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
-import { PageHeader } from "@/components/ui/page-header";
+import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
@@ -38,6 +38,7 @@ export function AccountsClient({
   initialAccounts: Account[];
   teams: Team[];
 }) {
+  useSetPageTitle("Quản lý tài khoản", "Tạo và phân quyền tài khoản nhân viên trong hệ thống.");
   const router = useRouter();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
@@ -93,16 +94,12 @@ export function AccountsClient({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader
-        title="Quản lý tài khoản"
-        description="Tạo và phân quyền tài khoản nhân viên trong hệ thống."
-        actions={
-          <Button type="button" onClick={() => setModal({ mode: "create" })}>
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-            Thêm tài khoản mới
-          </Button>
-        }
-      />
+      <div className="mb-4 flex justify-end">
+        <Button type="button" onClick={() => setModal({ mode: "create" })}>
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          Thêm tài khoản mới
+        </Button>
+      </div>
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -218,7 +215,15 @@ export function AccountsClient({
           onSubmit={async (payload) => {
             await clientApi(`/account/${modal.account.id}`, {
               method: "PUT",
-              body: JSON.stringify({ full_name: payload.full_name, team_id: payload.team_id ?? null }),
+              body: JSON.stringify({
+                full_name: payload.full_name,
+                team_id: payload.team_id ?? null,
+                date_of_birth: payload.date_of_birth ?? null,
+                hire_date: payload.hire_date ?? null,
+                personal_phone: payload.personal_phone ?? null,
+                personal_email: payload.personal_email ?? null,
+                remaining_leave_days: payload.remaining_leave_days ?? null,
+              }),
             });
             setModal({ mode: "none" });
             await refresh();
@@ -374,6 +379,18 @@ interface AccountFormPayload {
   username: string;
   role: AccountRole;
   team_id?: string;
+  /**
+   * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+   * docs/09-13, yêu cầu trực tiếp người dùng): 5 field hồ sơ nhân sự — CHỈ
+   * hiện khi sửa tài khoản đã có (isEdit), không có ở form tạo mới. `null`
+   * = xóa về trống (khác `undefined` = không đụng tới) — khớp cách
+   * accounts.service.ts phân biệt 2 giá trị này.
+   */
+  date_of_birth?: string | null;
+  hire_date?: string | null;
+  personal_phone?: string | null;
+  personal_email?: string | null;
+  remaining_leave_days?: number | null;
 }
 
 function AccountModal({
@@ -394,6 +411,15 @@ function AccountModal({
   const [username, setUsername] = useState(initialAccount?.username ?? "");
   const [role, setRole] = useState<AccountRole>(initialAccount?.role ?? "sale");
   const [teamId, setTeamId] = useState(initialAccount?.team_id ?? "");
+  // 5 field hồ sơ nhân sự (yêu cầu trực tiếp người dùng, 2026-07-15) — chỉ
+  // dùng khi sửa tài khoản đã có, xem AccountFormPayload.
+  const [dateOfBirth, setDateOfBirth] = useState(initialAccount?.date_of_birth ?? "");
+  const [hireDate, setHireDate] = useState(initialAccount?.hire_date ?? "");
+  const [personalPhone, setPersonalPhone] = useState(initialAccount?.personal_phone ?? "");
+  const [personalEmail, setPersonalEmail] = useState(initialAccount?.personal_email ?? "");
+  const [remainingLeaveDays, setRemainingLeaveDays] = useState(
+    initialAccount?.remaining_leave_days != null ? String(initialAccount.remaining_leave_days) : "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -407,6 +433,16 @@ function AccountModal({
       return;
     }
 
+    let parsedLeaveDays: number | null = null;
+    if (isEdit && remainingLeaveDays.trim()) {
+      const parsed = Number(remainingLeaveDays);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        setError("Số ngày phép còn lại phải là số không âm");
+        return;
+      }
+      parsedLeaveDays = parsed;
+    }
+
     setIsSubmitting(true);
     try {
       await onSubmit({
@@ -414,6 +450,13 @@ function AccountModal({
         username,
         role,
         team_id: teamId || undefined,
+        ...(isEdit && {
+          date_of_birth: dateOfBirth.trim() || null,
+          hire_date: hireDate.trim() || null,
+          personal_phone: personalPhone.trim() || null,
+          personal_email: personalEmail.trim() || null,
+          remaining_leave_days: parsedLeaveDays,
+        }),
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
@@ -468,6 +511,35 @@ function AccountModal({
               ))}
             </Select>
           </Field>
+        )}
+
+        {/* 5 field hồ sơ nhân sự (yêu cầu trực tiếp người dùng, 2026-07-15)
+            — chỉ Admin sửa được, chỉ hiện khi sửa tài khoản đã có. Nhân
+            viên/Leader chỉ xem 5 field này ở trang "Cài đặt tài khoản". */}
+        {isEdit && (
+          <>
+            <Field label="Ngày sinh (không bắt buộc)">
+              <Input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+            </Field>
+            <Field label="Ngày bắt đầu làm việc (không bắt buộc)">
+              <Input type="date" value={hireDate} onChange={(event) => setHireDate(event.target.value)} />
+            </Field>
+            <Field label="Số điện thoại cá nhân (không bắt buộc)">
+              <Input type="tel" value={personalPhone} onChange={(event) => setPersonalPhone(event.target.value)} />
+            </Field>
+            <Field label="Email cá nhân (không bắt buộc)">
+              <Input type="email" value={personalEmail} onChange={(event) => setPersonalEmail(event.target.value)} />
+            </Field>
+            <Field label="Số ngày phép còn lại (không bắt buộc)">
+              <Input
+                type="number"
+                min={0}
+                step={0.5}
+                value={remainingLeaveDays}
+                onChange={(event) => setRemainingLeaveDays(event.target.value)}
+              />
+            </Field>
+          </>
         )}
 
         {error && (

@@ -203,6 +203,75 @@ describe('AccountsService', () => {
         }),
       );
     });
+
+    it('cập nhật đúng 5 field hồ sơ nhân sự mới, ghi audit log cho từng field đổi', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      prisma.account.update.mockResolvedValue({
+        ...baseAccount,
+        dateOfBirth: new Date('1995-05-20'),
+        hireDate: new Date('2024-01-10'),
+        personalPhone: '0900000000',
+        personalEmail: 'personal@example.com',
+        remainingLeaveDays: 8.5,
+      });
+
+      await service.update(
+        'acc-1',
+        {
+          date_of_birth: '1995-05-20',
+          hire_date: '2024-01-10',
+          personal_phone: '0900000000',
+          personal_email: 'personal@example.com',
+          remaining_leave_days: 8.5,
+        },
+        'admin-1',
+      );
+
+      expect(prisma.account.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            dateOfBirth: new Date('1995-05-20'),
+            hireDate: new Date('2024-01-10'),
+            personalPhone: '0900000000',
+            personalEmail: 'personal@example.com',
+            remainingLeaveDays: 8.5,
+          }),
+        }),
+      );
+      expect(auditLog.log).toHaveBeenCalledTimes(5);
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldChanged: 'remaining_leave_days',
+          newValue: '8.5',
+        }),
+      );
+    });
+
+    it('gửi null cho 1 field hồ sơ nhân sự → xóa về trống (không phát sinh lỗi validate)', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        ...baseAccount,
+        personalPhone: '0900000000',
+      });
+      prisma.account.update.mockResolvedValue({
+        ...baseAccount,
+        personalPhone: null,
+      });
+
+      await service.update('acc-1', { personal_phone: null }, 'admin-1');
+
+      expect(prisma.account.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ personalPhone: null }),
+        }),
+      );
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldChanged: 'personal_phone',
+          oldValue: '0900000000',
+          newValue: undefined,
+        }),
+      );
+    });
   });
 
   describe('deactivate', () => {

@@ -255,7 +255,12 @@ export function DateRangePicker({
                   <Button type="button" variant="outline" size="xs" onClick={() => setIsOpen(false)}>
                     Hủy
                   </Button>
-                  <Button type="button" size="xs" onClick={confirm} disabled={!pending.from && !allowClear}>
+                  <Button
+                    type="button"
+                    size="xs"
+                    onClick={confirm}
+                    disabled={!pending.from && !allowClear && pending.preset !== "all_time"}
+                  >
                     Cập nhật
                   </Button>
                 </div>

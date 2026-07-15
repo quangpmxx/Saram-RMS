@@ -8,6 +8,13 @@ export interface CalendarEventDto {
   id: string;
   scheduled_at: string;
   candidate: { id: string; full_name: string; phone_number: string };
+  /**
+   * Dự án phụ — nâng cấp toàn diện (yêu cầu trực tiếp người dùng
+   * 2026-07-14): Admin cần biết Sale nào đã đặt lịch hẹn này — người tạo
+   * lịch hẹn PV/lịch gọi lại, khớp đúng field "created_by" đã có sẵn ở
+   * Note/Interview/Callback (dùng chung NameWithRoleHint ở frontend).
+   */
+  created_by: { id: string; name: string; role: string };
 }
 
 /** Mục 2.6 & 8, docs/09: Admin/Quản lý/MKT xem toàn bộ, không giới hạn nhóm. */
@@ -31,43 +38,67 @@ export class CalendarService {
       gte: query.date_from ? new Date(query.date_from) : undefined,
       lte: query.date_to ? new Date(query.date_to) : undefined,
     };
+    const createdByWhere = query.created_by_id
+      ? { createdById: query.created_by_id }
+      : {};
 
+    // "Loại lịch" (type) lọc SAU khi gộp 2 danh sách (bên dưới) thay vì bỏ
+    // hẳn 1 trong 2 truy vấn — tránh nhánh rẽ điều kiện ngay trong
+    // Promise.all() làm TypeScript suy luận sai kiểu trả về (2 nhánh khác
+    // kiểu khiến cả mảng bị suy ra `any`) — phí 1 truy vấn không dùng tới
+    // khi có lọc type, không đáng kể với quy mô dữ liệu bảng này.
     const [interviews, callbacks] = await Promise.all([
       this.prisma.interviewAppointment.findMany({
-        where: { scheduledAt, lead: leadWhere },
+        where: { scheduledAt, lead: leadWhere, ...createdByWhere },
         include: {
           lead: { select: { id: true, fullName: true, phoneNumber: true } },
+          createdBy: { select: { id: true, fullName: true, role: true } },
         },
       }),
       this.prisma.callbackSchedule.findMany({
-        where: { scheduledAt, lead: leadWhere },
+        where: { scheduledAt, lead: leadWhere, ...createdByWhere },
         include: {
           lead: { select: { id: true, fullName: true, phoneNumber: true } },
+          createdBy: { select: { id: true, fullName: true, role: true } },
         },
       }),
     ]);
 
     const events: CalendarEventDto[] = [
-      ...interviews.map((interview) => ({
-        type: 'interview' as const,
-        id: interview.id,
-        scheduled_at: interview.scheduledAt.toISOString(),
-        candidate: {
-          id: interview.lead.id,
-          full_name: interview.lead.fullName,
-          phone_number: interview.lead.phoneNumber,
-        },
-      })),
-      ...callbacks.map((callback) => ({
-        type: 'callback' as const,
-        id: callback.id,
-        scheduled_at: callback.scheduledAt.toISOString(),
-        candidate: {
-          id: callback.lead.id,
-          full_name: callback.lead.fullName,
-          phone_number: callback.lead.phoneNumber,
-        },
-      })),
+      ...(query.type === 'callback'
+        ? []
+        : interviews.map((interview) => ({
+            type: 'interview' as const,
+            id: interview.id,
+            scheduled_at: interview.scheduledAt.toISOString(),
+            candidate: {
+              id: interview.lead.id,
+              full_name: interview.lead.fullName,
+              phone_number: interview.lead.phoneNumber,
+            },
+            created_by: {
+              id: interview.createdBy.id,
+              name: interview.createdBy.fullName,
+              role: interview.createdBy.role,
+            },
+          }))),
+      ...(query.type === 'interview'
+        ? []
+        : callbacks.map((callback) => ({
+            type: 'callback' as const,
+            id: callback.id,
+            scheduled_at: callback.scheduledAt.toISOString(),
+            candidate: {
+              id: callback.lead.id,
+              full_name: callback.lead.fullName,
+              phone_number: callback.lead.phoneNumber,
+            },
+            created_by: {
+              id: callback.createdBy.id,
+              name: callback.createdBy.fullName,
+              role: callback.createdBy.role,
+            },
+          }))),
     ];
 
     return events.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
