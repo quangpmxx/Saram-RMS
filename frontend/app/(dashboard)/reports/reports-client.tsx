@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import type {
   AccountRole,
   DailyReportRow,
@@ -35,6 +36,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { CheckPenaltyPanel } from "./check-penalty-panel";
 
 type MetricKey = keyof DailyReportTotals;
 
@@ -234,6 +236,15 @@ export function ReportsClient({
 }) {
   useSetPageTitle("Báo cáo hằng ngày", "Theo dõi hiệu suất từng nhóm và từng nhân viên theo ngày.");
 
+  /**
+   * Tab "Check phạt" (2026-07-15, yêu cầu trực tiếp người dùng, Mục 1):
+   * "Thêm tab/menu con 'Check phạt' trong module Báo cáo... Không tạo
+   * module độc lập ngoài sidebar. Giữ nguyên trang Báo cáo hằng ngày hiện
+   * tại." — thêm 1 tab bên cạnh nội dung Báo cáo hằng ngày hiện có, y hệt
+   * cách tab "Check in GPS" đã làm trong module Chấm công.
+   */
+  const [activeTab, setActiveTab] = useState<"daily" | "penalty">("daily");
+
   const [dateRange, setDateRange] = useState<DateRangeValue>({
     preset: "today",
     from: initialDateFrom,
@@ -307,6 +318,40 @@ export function ReportsClient({
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setActiveTab("daily")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "daily" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Báo cáo hằng ngày
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("penalty")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "penalty" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Check phạt
+        </button>
+      </div>
+
+      {activeTab === "penalty" && (
+        <CheckPenaltyPanel
+          currentUserRole={currentUserRole}
+          canFilterByTeam={canFilterByTeam}
+          canFilterBySale={canFilterBySale}
+          teams={teams}
+          saleMembers={saleMembers}
+        />
+      )}
+
+      <div className={activeTab === "daily" ? "space-y-5" : "hidden"}>
       <Card className="p-3">
         <div className="flex flex-wrap items-end gap-2.5">
           <Field label="Khoảng thời gian" uiSize="sm" className="w-36">
@@ -509,6 +554,7 @@ export function ReportsClient({
         <DailyReportEntryModal row={entryTarget} onClose={() => setEntryTarget(null)} onSaved={handleSaved} />
       )}
       {detailTarget && <DailyReportDetailModal row={detailTarget} onClose={() => setDetailTarget(null)} />}
+      </div>
     </div>
   );
 }

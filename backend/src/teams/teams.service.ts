@@ -129,6 +129,55 @@ export class TeamsService {
   }
 
   /**
+   * Xóa nhóm (yêu cầu trực tiếp người dùng, 2026-07-15) — cho xóa NGAY CẢ
+   * KHI nhóm còn thành viên: tự gỡ mọi thành viên (Account.teamId = null),
+   * gỡ tham chiếu nhóm khỏi Báo cáo hằng ngày đã có (DailyReport.teamId =
+   * null, giữ nguyên nội dung báo cáo — chỉ mất nhãn "thuộc nhóm nào"), xóa
+   * cấu hình tự động phân chia gắn với nhóm này (DistributionRule, ràng
+   * buộc 1-1 bắt buộc có nhóm, không thể giữ lại mồ côi). Gộp 1
+   * $transaction để không xóa dở dang nếu có bước nào lỗi.
+   */
+  async delete(id: string, actorId: string): Promise<void> {
+    const existing = await this.prisma.team.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy nhóm');
+    }
+
+    try {
+      await this.prisma.$transaction([
+        this.prisma.account.updateMany({
+          where: { teamId: id },
+          data: { teamId: null },
+        }),
+        this.prisma.dailyReport.updateMany({
+          where: { teamId: id },
+          data: { teamId: null },
+        }),
+        this.prisma.distributionRule.deleteMany({ where: { teamId: id } }),
+        this.prisma.team.delete({ where: { id } }),
+      ]);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'Không thể xóa nhóm — vẫn còn dữ liệu khác tham chiếu tới nhóm này.',
+        );
+      }
+      throw error;
+    }
+
+    await this.auditLog.log({
+      accountId: actorId,
+      actionType: 'delete',
+      entityType: 'team',
+      entityId: id,
+      oldValue: existing.name,
+    });
+  }
+
+  /**
    * Mục 3, docs/13: danh sách nhân viên (Sale) trong nhóm kèm khối lượng lead
    * đang phụ trách. `assigned_count` có dữ liệu thật từ Phase 2 (đếm số
    * `leads.assigned_to` chưa xóa mềm); `care_pool_count` luôn 0 tới khi

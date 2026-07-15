@@ -138,7 +138,11 @@ export function CarePoolTable({
                 <td className="border-r border-slate-100 px-1 py-3">
                   {candidate.assigned_to ? (
                     <div className="flex flex-col items-center gap-0.5 text-center">
-                      <Avatar fullName={candidate.assigned_to.name} className="h-6 w-6 shrink-0 text-[10px]" />
+                      <Avatar
+                        fullName={candidate.assigned_to.name}
+                        avatarUrl={candidate.assigned_to.avatar_url}
+                        className="h-6 w-6 shrink-0 text-[10px]"
+                      />
                       <div className="min-w-0 w-full leading-tight">
                         <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
                           <NameWithRoleHint account={candidate.assigned_to} />

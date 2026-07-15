@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { CheckinLocationSettings } from "./checkin-location-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB — khớp đúng giới hạn backend (POST /me/avatar)
@@ -193,8 +194,28 @@ export function AccountSettingsClient({ user }: { user: Account }) {
               <Field label="Số ngày phép còn lại">
                 <Input value={user.remaining_leave_days != null ? String(user.remaining_leave_days) : "—"} disabled readOnly />
               </Field>
+              <Field label="Số CCCD">
+                <Input value={user.citizen_id ?? "—"} disabled readOnly />
+              </Field>
+              <Field label="Số tài khoản ngân hàng">
+                <Input value={user.bank_account_number ?? "—"} disabled readOnly />
+              </Field>
             </div>
           </section>
+
+          {/* Cài đặt Check in — Mục 7, yêu cầu trực tiếp người dùng
+              (2026-07-15): "Trong phần Cài đặt tài khoản dành cho Admin,
+              thêm mục 'Cài đặt Check in'" — CHỈ hiện với Admin, backend
+              (checkin.service.ts) kiểm tra quyền lại lần nữa. */}
+          {user.role === "admin" && (
+            <section>
+              <h3 className="text-sm font-semibold text-slate-900">Cài đặt Check in</h3>
+              <p className="mt-1 text-xs text-slate-500">Vị trí công ty dùng để xác định nhân viên Check in trong/ngoài phạm vi.</p>
+              <div className="mt-3">
+                <CheckinLocationSettings />
+              </div>
+            </section>
+          )}
 
           {/* Đổi mật khẩu */}
           <section>

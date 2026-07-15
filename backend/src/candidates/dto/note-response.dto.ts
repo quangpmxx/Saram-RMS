@@ -24,7 +24,7 @@ export interface NoteResponseDto {
 }
 
 type NoteWithRelations = LeadNote & {
-  createdBy: Pick<Account, 'id' | 'fullName' | 'role'>;
+  createdBy: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>;
   callStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
   callResult?: Pick<StatusCatalog, 'id' | 'name'> | null;
   zaloFriendStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
@@ -38,6 +38,7 @@ export function toNoteResponse(note: NoteWithRelations): NoteResponseDto {
       id: note.createdBy.id,
       name: note.createdBy.fullName,
       role: note.createdBy.role,
+      avatar_url: note.createdBy.avatarUrl,
     },
     content: note.content,
     call_status: note.callStatus
@@ -55,7 +56,9 @@ export function toNoteResponse(note: NoteWithRelations): NoteResponseDto {
 }
 
 export const NOTE_INCLUDE = {
-  createdBy: { select: { id: true, fullName: true, role: true } },
+  createdBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
   callStatus: { select: { id: true, name: true } },
   callResult: { select: { id: true, name: true } },
   zaloFriendStatus: { select: { id: true, name: true } },

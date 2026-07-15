@@ -25,6 +25,8 @@ import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
 import { DailyReportsModule } from './daily-reports/daily-reports.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveAccrualModule } from './leave-accrual/leave-accrual.module';
+import { CheckinModule } from './checkin/checkin.module';
+import { ReportPenaltyModule } from './report-penalty/report-penalty.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -55,6 +57,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     DailyReportsModule,
     AttendanceModule,
     LeaveAccrualModule,
+    CheckinModule,
+    ReportPenaltyModule,
   ],
   controllers: [AppController],
   providers: [

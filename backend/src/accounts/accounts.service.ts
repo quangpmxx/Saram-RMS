@@ -160,6 +160,8 @@ export class AccountsService {
         personalPhone: dto.personal_phone,
         personalEmail: dto.personal_email,
         remainingLeaveDays: dto.remaining_leave_days,
+        citizenId: dto.citizen_id,
+        bankAccountNumber: dto.bank_account_number,
       },
       include: { team: { select: TEAM_SELECT } },
     });
@@ -189,6 +191,45 @@ export class AccountsService {
       fieldChanged: 'status',
       oldValue: existing.status,
       newValue: 'inactive',
+    });
+  }
+
+  /**
+   * Xóa vĩnh viễn (yêu cầu trực tiếp người dùng, 2026-07-15) — KHÁC
+   * deactivate() ở trên: xóa hẳn khỏi database, không phải khóa tài khoản.
+   * CHỈ cho phép khi tài khoản CHƯA có bất kỳ dữ liệu liên quan nào (chấm
+   * công, báo cáo, data ứng viên, nhật ký...) — dựa thẳng vào ràng buộc
+   * khóa ngoại thật của DB (bắt lỗi P2003) thay vì tự liệt kê từng bảng một
+   * (Account có > 20 quan hệ khác nhau trong toàn hệ thống, dễ sót nếu tự
+   * kiểm — để chính DB làm nguồn xác thực). Nếu bị chặn, hướng dẫn dùng
+   * "Vô hiệu hóa" thay thế (không mất lịch sử thật).
+   */
+  async deletePermanently(id: string, actorId: string): Promise<void> {
+    const existing = await this.prisma.account.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+
+    try {
+      await this.prisma.account.delete({ where: { id } });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'Không thể xóa vĩnh viễn — tài khoản này đã có dữ liệu liên quan trong hệ thống (chấm công, báo cáo, data ứng viên, nhật ký...). Vui lòng dùng chức năng "Vô hiệu hóa" thay thế.',
+        );
+      }
+      throw error;
+    }
+
+    await this.auditLog.log({
+      accountId: actorId,
+      actionType: 'delete',
+      entityType: 'account',
+      entityId: id,
+      oldValue: `${existing.username} (${existing.fullName}) — xóa vĩnh viễn`,
     });
   }
 
@@ -327,6 +368,8 @@ export class AccountsService {
       personalPhone: string | null;
       personalEmail: string | null;
       remainingLeaveDays: number | null;
+      citizenId: string | null;
+      bankAccountNumber: string | null;
     },
     dto: UpdateAccountDto,
   ): Promise<void> {
@@ -407,6 +450,23 @@ export class AccountsService {
           dto.remaining_leave_days === null
             ? null
             : String(dto.remaining_leave_days),
+      });
+    }
+    if (dto.citizen_id !== undefined && dto.citizen_id !== before.citizenId) {
+      changes.push({
+        field: 'citizen_id',
+        oldValue: before.citizenId,
+        newValue: dto.citizen_id,
+      });
+    }
+    if (
+      dto.bank_account_number !== undefined &&
+      dto.bank_account_number !== before.bankAccountNumber
+    ) {
+      changes.push({
+        field: 'bank_account_number',
+        oldValue: before.bankAccountNumber,
+        newValue: dto.bank_account_number,
       });
     }
 

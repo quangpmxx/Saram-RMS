@@ -37,6 +37,9 @@ export interface AttendanceEmployeeDto {
   personal_phone: string | null;
   personal_email: string | null;
   remaining_leave_days: number | null;
+  /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK — cùng quy tắc chỉ đọc như 5 field trên. */
+  citizen_id: string | null;
+  bank_account_number: string | null;
 }
 
 /** 1 cột ngày trong tháng đang xem. */

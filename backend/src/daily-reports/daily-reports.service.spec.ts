@@ -7,6 +7,7 @@ import { Test } from '@nestjs/testing';
 import { DailyReportsService } from './daily-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { ReportPenaltyService } from '../report-penalty/report-penalty.service';
 
 describe('DailyReportsService', () => {
   let service: DailyReportsService;
@@ -70,12 +71,16 @@ describe('DailyReportsService', () => {
       },
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    const reportPenaltyService = {
+      markSupplementedIfPending: jest.fn().mockResolvedValue(undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         DailyReportsService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: ReportPenaltyService, useValue: reportPenaltyService },
       ],
     }).compile();
 

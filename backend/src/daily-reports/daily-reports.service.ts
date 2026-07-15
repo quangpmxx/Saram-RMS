@@ -7,6 +7,7 @@ import {
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { ReportPenaltyService } from '../report-penalty/report-penalty.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ListDailyReportQueryDto } from './dto/list-daily-report-query.dto';
 import { UpsertDailyReportDto } from './dto/upsert-daily-report.dto';
@@ -105,6 +106,7 @@ export class DailyReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly reportPenaltyService: ReportPenaltyService,
   ) {}
 
   /**
@@ -267,6 +269,16 @@ export class DailyReportsService {
       entityId: report.id,
       newValue: `Gọi=${dto.calls}, Data cũ=${dto.old_data}, Không nghe=${dto.no_answer}, Quan tâm=${dto.interested}, Hẹn PV=${dto.interview_scheduled}, Đỗ PV=${dto.interview_passed}, Đi làm=${dto.employed}`,
     });
+
+    // "Check phạt" (Mục 4, yêu cầu người dùng): nếu ngày này từng bị ghi
+    // nhận "Không nộp báo cáo" (job Check phạt chạy trước khi Sale kịp
+    // nộp trong cùng ngày), tự chuyển vi phạm đó thành "Đã nộp bổ sung" —
+    // KHÔNG xóa lịch sử vi phạm, KHÔNG đổi cách nhập báo cáo ở trên.
+    await this.reportPenaltyService.markSupplementedIfPending(
+      currentUser.id,
+      today,
+      report.createdAt,
+    );
 
     const newLeads = await this.countNewLeadsForOne(currentUser.id, today);
     return this.toRow(report, account, newLeads);

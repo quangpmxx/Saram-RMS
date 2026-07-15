@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Pencil, Plus, Power, PowerOff, ShieldCheck } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, PowerOff, ShieldCheck, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { adminGoldBadgeStyle } from "@/lib/admin-gold";
 import {
@@ -20,6 +20,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { TeamsClient } from "../teams/teams-client";
+import { cn } from "@/lib/cn";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
 /** Mục 9.1, docs/12-ui-design.md: "Cấu hình quyền chi tiết" chỉ áp dụng cho Quản lý/Leader. */
@@ -44,6 +46,17 @@ export function AccountsClient({
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const toast = useToast();
+
+  /**
+   * Tab "Quản lý nhóm" (2026-07-15, yêu cầu trực tiếp người dùng): "Gộp
+   * quản lý nhóm vào trong quản lý tài khoản... sẽ có 2 phần: Quản lý tài
+   * khoản và Quản lý nhóm" — gộp thẳng TeamsClient vào đây làm tab thứ 2,
+   * bỏ "Quản lý nhóm" khỏi menu sidebar (xem layout.tsx). TeamsClient đã bỏ
+   * useSetPageTitle riêng (chỉ AccountsClient set tiêu đề, tránh đè lẫn
+   * nhau khi cả 2 cùng mount).
+   */
+  const [activeTab, setActiveTab] = useState<"accounts" | "teams">("accounts");
+  const leaders = accounts.filter((a) => a.role === "leader");
 
   async function refresh() {
     const result = await clientApi<{ items: Account[] }>("/account?page=1&page_size=100");
@@ -80,6 +93,32 @@ export function AccountsClient({
     }
   }
 
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-15): xóa vĩnh viễn tài khoản —
+   * KHÁC handleDeactivate() ở trên (chỉ khóa tài khoản). Backend chỉ cho
+   * xóa khi tài khoản CHƯA có dữ liệu liên quan (chấm công, báo cáo,...),
+   * ngược lại trả lỗi gợi ý dùng "Vô hiệu hóa" — hiển thị nguyên message đó.
+   */
+  async function handleDeletePermanently(account: Account) {
+    if (
+      !window.confirm(
+        `Xóa VĨNH VIỄN tài khoản "${account.username}"? Hành động này không thể hoàn tác và chỉ thực hiện được khi tài khoản chưa có dữ liệu liên quan trong hệ thống.`,
+      )
+    ) {
+      return;
+    }
+    setPendingId(account.id);
+    try {
+      await clientApi(`/account/${account.id}/permanent`, { method: "DELETE" });
+      await refresh();
+      toast.success(`Đã xóa vĩnh viễn tài khoản "${account.username}"`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function handleResetPassword(account: Account) {
     setPendingId(account.id);
     try {
@@ -94,6 +133,32 @@ export function AccountsClient({
 
   return (
     <div className="mx-auto max-w-5xl">
+      <div className="mb-4 flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setActiveTab("accounts")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "accounts" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Quản lý tài khoản
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("teams")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "teams" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Quản lý nhóm
+        </button>
+      </div>
+
+      {activeTab === "teams" && <TeamsClient initialTeams={teams} leaders={leaders} />}
+
+      <div className={activeTab === "accounts" ? "" : "hidden"}>
       <div className="mb-4 flex justify-end">
         <Button type="button" onClick={() => setModal({ mode: "create" })}>
           <Plus className="h-4 w-4" strokeWidth={2.5} />
@@ -182,6 +247,17 @@ export function AccountsClient({
                           Cấu hình quyền
                         </Button>
                       )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        disabled={pendingId === account.id}
+                        onClick={() => void handleDeletePermanently(account)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                        Xóa
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -191,6 +267,7 @@ export function AccountsClient({
         </div>
         {accounts.length === 0 && <EmptyState title="Chưa có tài khoản nào" />}
       </Card>
+      </div>
 
       {modal.mode === "create" && (
         <AccountModal
@@ -223,6 +300,8 @@ export function AccountsClient({
                 personal_phone: payload.personal_phone ?? null,
                 personal_email: payload.personal_email ?? null,
                 remaining_leave_days: payload.remaining_leave_days ?? null,
+                citizen_id: payload.citizen_id ?? null,
+                bank_account_number: payload.bank_account_number ?? null,
               }),
             });
             setModal({ mode: "none" });
@@ -391,6 +470,9 @@ interface AccountFormPayload {
   personal_phone?: string | null;
   personal_email?: string | null;
   remaining_leave_days?: number | null;
+  /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK — cùng quy tắc như 5 field phía trên. */
+  citizen_id?: string | null;
+  bank_account_number?: string | null;
 }
 
 function AccountModal({
@@ -420,6 +502,8 @@ function AccountModal({
   const [remainingLeaveDays, setRemainingLeaveDays] = useState(
     initialAccount?.remaining_leave_days != null ? String(initialAccount.remaining_leave_days) : "",
   );
+  const [citizenId, setCitizenId] = useState(initialAccount?.citizen_id ?? "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(initialAccount?.bank_account_number ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -456,6 +540,8 @@ function AccountModal({
           personal_phone: personalPhone.trim() || null,
           personal_email: personalEmail.trim() || null,
           remaining_leave_days: parsedLeaveDays,
+          citizen_id: citizenId.trim() || null,
+          bank_account_number: bankAccountNumber.trim() || null,
         }),
       });
     } catch (err) {
@@ -538,6 +624,12 @@ function AccountModal({
                 value={remainingLeaveDays}
                 onChange={(event) => setRemainingLeaveDays(event.target.value)}
               />
+            </Field>
+            <Field label="Số CCCD (không bắt buộc)">
+              <Input value={citizenId} onChange={(event) => setCitizenId(event.target.value)} />
+            </Field>
+            <Field label="Số tài khoản ngân hàng (không bắt buộc)">
+              <Input value={bankAccountNumber} onChange={(event) => setBankAccountNumber(event.target.value)} />
             </Field>
           </>
         )}

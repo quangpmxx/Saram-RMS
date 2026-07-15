@@ -84,6 +84,10 @@ const ACCOUNT_SELECT = {
   personalPhone: true,
   personalEmail: true,
   remainingLeaveDays: true,
+  // Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): nối CCCD + STK sang
+  // modal "Thông tin nhân viên" — cùng quy tắc chỉ ĐỌC như 5 field trên.
+  citizenId: true,
+  bankAccountNumber: true,
 } satisfies Prisma.AccountSelect;
 
 /** "YYYY-MM-DD" -> Date UTC-midnight — khớp cách ShuttleRecord/DailyReport.date được lưu (cột @db.Date). */
@@ -158,6 +162,8 @@ export class AttendanceService {
         personal_phone: e.personalPhone,
         personal_email: e.personalEmail,
         remaining_leave_days: e.remainingLeaveDays,
+        citizen_id: e.citizenId,
+        bank_account_number: e.bankAccountNumber,
       })),
       records: records.map((r) => ({
         account_id: r.accountId,

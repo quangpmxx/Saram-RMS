@@ -63,6 +63,17 @@ export class AccountsController {
     return { message: 'Đã vô hiệu hóa tài khoản' };
   }
 
+  /** Yêu cầu trực tiếp người dùng (2026-07-15): xóa vĩnh viễn — KHÁC deactivate() ở trên (khóa tài khoản). */
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.OK)
+  async deletePermanently(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.accountsService.deletePermanently(id, user.id);
+    return { message: 'Đã xóa vĩnh viễn tài khoản' };
+  }
+
   @Post(':id/reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(

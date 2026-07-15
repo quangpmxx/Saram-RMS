@@ -22,7 +22,7 @@ export interface InterviewResponseDto {
 type InterviewWithRelations = InterviewAppointment & {
   status: Pick<StatusCatalog, 'id' | 'name'>;
   employmentStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
-  createdBy: Pick<Account, 'id' | 'fullName' | 'role'>;
+  createdBy: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>;
 };
 
 export function toInterviewResponse(
@@ -46,6 +46,7 @@ export function toInterviewResponse(
       id: interview.createdBy.id,
       name: interview.createdBy.fullName,
       role: interview.createdBy.role,
+      avatar_url: interview.createdBy.avatarUrl,
     },
     created_at: interview.createdAt.toISOString(),
   };
@@ -54,5 +55,7 @@ export function toInterviewResponse(
 export const INTERVIEW_INCLUDE = {
   status: { select: { id: true, name: true } },
   employmentStatus: { select: { id: true, name: true } },
-  createdBy: { select: { id: true, fullName: true, role: true } },
+  createdBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
 } as const;

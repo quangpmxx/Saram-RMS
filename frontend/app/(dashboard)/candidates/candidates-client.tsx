@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   MapPin,
   Pencil,
   Phone,
@@ -452,18 +453,28 @@ export function CandidatesClient({
             </div>
           )}
 
-          {(currentUserRole === "mkt" || currentUserRole === "admin") && (
-            <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "import" })}>
-                <Upload className="h-4 w-4" strokeWidth={2} />
-                Nhập từ Excel
-              </Button>
-              <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
-                <Plus className="h-4 w-4" strokeWidth={2.5} />
-                Thêm lao động mới
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            {/* Yêu cầu trực tiếp người dùng (2026-07-15): bỏ "Trùng lặp"
+                khỏi menu sidebar, thay bằng 1 nút ngay trong trang Data lao
+                động — vẫn cùng route /duplicates, cùng phạm vi vai trò như
+                mục nav cũ (mọi vai trò đều xem được). */}
+            <Button type="button" size="sm" variant="outline" onClick={() => router.push("/duplicates")}>
+              <Copy className="h-4 w-4" strokeWidth={2} />
+              Trùng lặp
+            </Button>
+            {(currentUserRole === "mkt" || currentUserRole === "admin") && (
+              <>
+                <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "import" })}>
+                  <Upload className="h-4 w-4" strokeWidth={2} />
+                  Nhập từ Excel
+                </Button>
+                <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                  Thêm lao động mới
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -696,7 +707,11 @@ export function CandidatesClient({
                         // thêm ~30% nên tên/nhóm đổi từ truncate (1 dòng) sang line-clamp-2
                         // (xuống dòng tối đa 2 dòng rồi ellipsis) để không cắt cụt quá sớm.
                         <div className="flex flex-col items-center gap-0.5 text-center">
-                          <Avatar fullName={candidate.assigned_to.name} className="h-6 w-6 shrink-0 text-[10px]" />
+                          <Avatar
+                            fullName={candidate.assigned_to.name}
+                            avatarUrl={candidate.assigned_to.avatar_url}
+                            className="h-6 w-6 shrink-0 text-[10px]"
+                          />
                           <div className="min-w-0 w-full leading-tight">
                             <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
                               <NameWithRoleHint account={candidate.assigned_to} />

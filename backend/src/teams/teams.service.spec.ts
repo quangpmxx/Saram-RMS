@@ -17,10 +17,17 @@ describe('TeamsService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
       findMany: jest.Mock;
     };
-    account: { findUnique: jest.Mock; findMany: jest.Mock };
+    account: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      updateMany: jest.Mock;
+    };
+    dailyReport: { updateMany: jest.Mock };
+    distributionRule: { deleteMany: jest.Mock };
     lead: { groupBy: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -41,10 +48,17 @@ describe('TeamsService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
         findMany: jest.fn(),
       },
-      account: { findUnique: jest.fn(), findMany: jest.fn() },
+      account: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      dailyReport: { updateMany: jest.fn() },
+      distributionRule: { deleteMany: jest.fn() },
       lead: { groupBy: jest.fn() },
       $transaction: jest.fn(),
     };
@@ -130,6 +144,56 @@ describe('TeamsService', () => {
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'create', entityType: 'team' }),
       );
+    });
+  });
+
+  describe('delete', () => {
+    it('ném NotFoundException nếu nhóm không tồn tại', async () => {
+      prisma.team.findUnique.mockResolvedValue(null);
+
+      await expect(service.delete('missing', 'admin-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('xóa nhóm, gỡ thành viên/báo cáo, xóa cấu hình phân chia, ghi audit log', async () => {
+      prisma.team.findUnique.mockResolvedValue(team);
+      prisma.$transaction.mockResolvedValue([]);
+
+      await service.delete('team-1', 'admin-1');
+
+      expect(prisma.account.updateMany).toHaveBeenCalledWith({
+        where: { teamId: 'team-1' },
+        data: { teamId: null },
+      });
+      expect(prisma.dailyReport.updateMany).toHaveBeenCalledWith({
+        where: { teamId: 'team-1' },
+        data: { teamId: null },
+      });
+      expect(prisma.distributionRule.deleteMany).toHaveBeenCalledWith({
+        where: { teamId: 'team-1' },
+      });
+      expect(prisma.team.delete).toHaveBeenCalledWith({
+        where: { id: 'team-1' },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({ actionType: 'delete', entityType: 'team' }),
+      );
+    });
+
+    it('vẫn còn dữ liệu khác tham chiếu (P2003) -> ConflictException, không ghi audit log', async () => {
+      prisma.team.findUnique.mockResolvedValue(team);
+      const prismaError = new Prisma.PrismaClientKnownRequestError(
+        'fk violation',
+        { code: 'P2003', clientVersion: 'test' },
+      );
+      prisma.$transaction.mockRejectedValue(prismaError);
+
+      await expect(service.delete('team-1', 'admin-1')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(auditLog.log).not.toHaveBeenCalled();
     });
   });
 

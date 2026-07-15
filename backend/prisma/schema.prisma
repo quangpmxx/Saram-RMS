@@ -125,6 +125,10 @@ enum AuditActionType {
   login
   logout
   reset_password
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-15, module Check in GPS, Phase
+  /// 4, Mục 9, yêu cầu người dùng: "Check in bị từ chối do đã có bản ghi"
+  /// phải được ghi log riêng biệt với "Check in thành công" (create).
+  reject
 
   @@map("audit_action_type")
 }
@@ -178,6 +182,12 @@ model Account {
   hireDate           DateTime? @map("hire_date") @db.Date
   personalPhone      String?   @map("personal_phone") @db.VarChar(20)
   personalEmail      String?   @map("personal_email") @db.VarChar(255)
+  /// Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng: "lúc trước bổ sung
+  /// rồi mà còn thiếu") — CCCD (số căn cước công dân) + STK (số tài khoản
+  /// ngân hàng nhận lương), cùng quy tắc CHỈ Admin sửa/Nhân viên chỉ xem
+  /// như 4 field hồ sơ nhân sự phía trên.
+  citizenId          String?   @map("citizen_id") @db.VarChar(20)
+  bankAccountNumber  String?   @map("bank_account_number") @db.VarChar(30)
   /// Số ngày phép còn lại. Admin đặt số ban đầu (trang Quản lý tài khoản).
   /// Từ 2026-07-15 (yêu cầu trực tiếp người dùng): TỰ ĐỘNG +1 mỗi khi sang
   /// tháng mới (xem leave-accrual.service.ts), và TỰ ĐỘNG trừ 1 khi tick
@@ -249,6 +259,19 @@ model Account {
   attendanceRecords        AttendanceRecord[] @relation("AttendanceRecordAccount")
   createdAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordCreatedBy")
   updatedAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordUpdatedBy")
+
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ CheckinRecord (Check in GPS, Phase 1)
+  checkinRecords CheckinRecord[] @relation("CheckinRecordAccount")
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược Admin đã Reset (Check in GPS, Phase 4)
+  voidedCheckinRecords CheckinRecord[] @relation("CheckinRecordVoidedBy")
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ CompanyLocationConfig (Check in GPS, Phase 2)
+  updatedCompanyLocationConfigs CompanyLocationConfig[]
+
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ReportViolation (Check phạt)
+  reportViolations         ReportViolation[] @relation("ReportViolationAccount")
+  resolvedReportViolations ReportViolation[] @relation("ReportViolationResolvedBy")
+  // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ReportDeadlineConfig (Check phạt)
+  updatedReportDeadlineConfigs ReportDeadlineConfig[]
 
   @@map("accounts")
 }
@@ -830,6 +853,82 @@ model DailyReport {
   @@map("daily_reports")
 }
 
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+ * docs/09-13, yêu cầu trực tiếp người dùng): "Check phạt" — trang con trong
+ * module Báo cáo, tự động ghi nhận Sale nộp Báo cáo hằng ngày muộn/không
+ * nộp. Mục 9: PHẢI lưu `deadlineSnapshot` tại thời điểm phát sinh — Admin
+ * đổi hạn sau này KHÔNG được làm thay đổi lịch sử vi phạm cũ.
+ */
+enum ReportViolationType {
+  late_submission
+  no_submission
+
+  @@map("report_violation_type")
+}
+
+enum ReportViolationStatus {
+  pending
+  confirmed
+  waived
+  supplemented
+
+  @@map("report_violation_status")
+}
+
+model ReportViolation {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  /// Ngày báo cáo bị vi phạm — DÙNG NGÀY BÁO CÁO làm chuẩn (Mục 2, yêu cầu
+  /// người dùng: "không dùng ngày cập nhật cuối cùng để xác định đã nộp
+  /// hay chưa").
+  reportDate DateTime @map("report_date") @db.Date
+  /// Snapshot đầy đủ thời điểm hạn chót TẠI THỜI ĐIỂM phát sinh vi phạm —
+  /// không tính lại khi Admin đổi cấu hình hạn sau này (Mục 9).
+  deadlineSnapshot DateTime @map("deadline_snapshot")
+  /// Thời điểm nộp báo cáo thật (DailyReport.createdAt) — null nếu chưa
+  /// từng nộp. Mục 10: "Không dùng updatedAt của báo cáo... nếu hệ thống
+  /// đã có createdAt/submittedAt" — luôn lấy từ createdAt.
+  actualSubmittedAt DateTime? @map("actual_submitted_at")
+  violationType     ReportViolationType @map("violation_type")
+  status            ReportViolationStatus @default(pending)
+  note              String?  @db.VarChar(500)
+  resolvedById      String?  @map("resolved_by") @db.Uuid
+  resolvedAt        DateTime? @map("resolved_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  account    Account  @relation("ReportViolationAccount", fields: [accountId], references: [id])
+  resolvedBy Account? @relation("ReportViolationResolvedBy", fields: [resolvedById], references: [id])
+
+  /// Mục 3, yêu cầu người dùng: "Có cơ chế chống tạo trùng vi phạm cho cùng
+  /// nhân viên/ngày báo cáo/loại vi phạm" — chạy job lại nhiều lần không
+  /// được sinh thêm bản ghi trùng.
+  @@unique([accountId, reportDate, violationType])
+  @@index([reportDate])
+  @@index([accountId])
+  @@map("report_violations")
+}
+
+/**
+ * Cấu hình hạn nộp Báo cáo hằng ngày — Mục 5: "Chỉ Admin được thay đổi".
+ * Singleton (giống CompanyLocationConfig ở module Check in GPS) — KHÔNG
+ * dùng bảng system_configs key-value chung để tránh lộ ra trang "Cấu hình
+ * vận hành" chung (nơi liệt kê MỌI SystemConfig, không thuộc phạm vi trang
+ * Check phạt).
+ */
+model ReportDeadlineConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  hour        Int
+  minute      Int
+  updatedById String   @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  updatedBy Account @relation(fields: [updatedById], references: [id])
+
+  @@map("report_deadline_configs")
+}
+
 /// Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
 /// docs/09-13 — module hoàn toàn mới, yêu cầu trực tiếp người dùng): "Chấm
 /// công thủ công". 1 bản ghi / (nhân viên, ngày thực tế) — "ô trống = chưa
@@ -859,4 +958,118 @@ model AttendanceRecord {
   @@index([date])
   @@index([accountId])
   @@map("attendance_records")
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+ * docs/09-13, yêu cầu trực tiếp người dùng): "Check in GPS" trong module
+ * Chấm công. Triển khai theo 4 Phase (yêu cầu trực tiếp người dùng, để giảm
+ * rủi ro/dễ kiểm thử) — Phase 1: check-in 1 lần/ngày + giờ server. PHASE 2
+ * (bổ sung ở đây): GPS + khoảng cách tới công ty + phân loại trạng thái.
+ * IP/thiết bị/trình duyệt (Phase 3), voided/reset (Phase 4) vẫn để migration
+ * riêng sau, chưa thêm ở đây.
+ */
+model CheckinRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  /// Ngày chấm công theo timezone hệ thống (Asia/Ho_Chi_Minh) — tính ở
+  /// service, KHÔNG nhận từ client (Mục 6, yêu cầu người dùng).
+  attendanceDate DateTime @map("attendance_date") @db.Date
+  /// Thời điểm Check in thật — LUÔN lấy `new Date()` phía server tại lúc
+  /// ghi record, không nhận giá trị thời gian nào từ request.
+  checkedInAt    DateTime @map("checked_in_at")
+
+  /// Phase 2 — GPS do trình duyệt người dùng cung cấp (Mục 3). Backend
+  /// không thể xác thực đây có phải GPS thật hay không (Mục 9, lưu ý của
+  /// người dùng: "không được tuyên bố hệ thống có thể chặn hoàn toàn vị trí
+  /// giả") — chỉ lưu lại + tự tính khoảng cách/trạng thái từ giá trị này.
+  latitude  Float
+  longitude Float
+  accuracy  Float
+  /// Địa chỉ dễ đọc từ reverse geocoding (Mục 3) — chỉ mang tính hiển thị,
+  /// KHÔNG dùng để tính trạng thái hợp lệ (dùng latitude/longitude/khoảng
+  /// cách thật). Có thể null nếu reverse geocoding lỗi/không phản hồi kịp.
+  resolvedAddress String? @map("resolved_address") @db.VarChar(500)
+
+  /// Snapshot cấu hình công ty TẠI THỜI ĐIỂM Check in (Mục 6, yêu cầu
+  /// người dùng: "Admin đổi cấu hình sau không làm thay đổi kết quả cũ").
+  companyLatitude     Float @map("company_latitude")
+  companyLongitude    Float @map("company_longitude")
+  allowedRadius       Int   @map("allowed_radius_meters")
+  distanceFromCompany Float @map("distance_from_company_meters")
+
+  /// HỢP_LỆ / NGOÀI_CÔNG_TY / CẦN_XÁC_MINH (Mục 4) — CẦN_XÁC_MINH được ưu
+  /// tiên hơn (ghi đè) khi accuracy > 100m HOẶC thiếu thông tin thiết bị
+  /// (Mục 9), tính ở checkin.service.ts, không tính lại ở nơi khác.
+  status CheckinStatus
+
+  /// Phase 3 — IP/thiết bị/trình duyệt (Mục 5). IP lấy từ REQUEST phía
+  /// server (KHÔNG tin IP frontend tự gửi) — xem checkin.service.ts +
+  /// `app.set('trust proxy', ...)` ở main.ts. Nullable vì đây là dữ liệu
+  /// suy ra từ header, có thể thiếu/parse thất bại mà không nên chặn cả
+  /// lượt Check in (Mục 9: thiếu thì gắn "Cần xác minh", không chặn).
+  ipAddress       String? @map("ip_address") @db.VarChar(64)
+  userAgent       String? @map("user_agent") @db.VarChar(500)
+  device          String? @db.VarChar(50)
+  operatingSystem String? @map("operating_system") @db.VarChar(50)
+  browser         String? @db.VarChar(50)
+
+  /// Phase 4, Mục 8 — Admin Reset: "Không xóa cứng bản ghi và không làm mất
+  /// lịch sử. Đánh dấu bản ghi cũ đã bị vô hiệu hóa/reset." isVoided=true
+  /// nghĩa là bản ghi này không còn được tính là "đã Check in hôm nay" —
+  /// nhân viên Check in lại sẽ tạo bản ghi MỚI cho CÙNG (accountId,
+  /// attendanceDate), bản ghi cũ vẫn nằm nguyên trong DB làm lịch sử.
+  isVoided   Boolean   @default(false) @map("is_voided")
+  voidedAt   DateTime? @map("voided_at")
+  voidedById String?   @map("voided_by") @db.Uuid
+  voidReason String?   @map("void_reason") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account  Account  @relation("CheckinRecordAccount", fields: [accountId], references: [id])
+  voidedBy Account? @relation("CheckinRecordVoidedBy", fields: [voidedById], references: [id])
+
+  /// Phase 4: KHÔNG còn `@@unique([accountId, attendanceDate])` toàn cục —
+  /// Prisma schema DSL không hỗ trợ khai báo unique index CÓ ĐIỀU KIỆN
+  /// (partial index). Constraint thật "mỗi người/ngày chỉ 1 bản ghi ĐANG
+  /// HOẠT ĐỘNG" được tạo bằng SQL tay trong migration Phase 4
+  /// (`CREATE UNIQUE INDEX ... WHERE is_voided = false`) — service tự
+  /// kiểm tra trước bằng findFirst({isVoided:false}) + bắt lỗi P2002 làm
+  /// lớp chặn cuối, xem checkin.service.ts.
+  @@index([accountId, attendanceDate])
+  @@index([attendanceDate])
+  @@index([accountId])
+  @@map("checkin_records")
+}
+
+enum CheckinStatus {
+  valid
+  outside_company
+  needs_verification
+
+  @@map("checkin_status")
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+ * docs/09-13, yêu cầu trực tiếp người dùng): "Check in GPS" — PHASE 2. Cấu
+ * hình vị trí công ty — Mục 7: "Chỉ Admin được xem và thay đổi cấu hình
+ * này". Thiết kế SINGLETON (luôn chỉ 1 bản ghi — service tự update bản ghi
+ * hiện có thay vì tạo thêm) — KHÔNG dùng bảng system_configs key-value có
+ * sẵn để tránh 4 khóa cấu hình này lộ ra ở trang "Cấu hình vận hành" chung
+ * (nơi liệt kê MỌI SystemConfig) — trang đó không nằm trong phạm vi module
+ * Check in nên không được đụng tới.
+ */
+model CompanyLocationConfig {
+  id            String   @id @default(uuid()) @db.Uuid
+  address       String   @db.VarChar(500)
+  latitude      Float
+  longitude     Float
+  allowedRadius Int      @default(100) @map("allowed_radius_meters")
+  updatedById   String   @map("updated_by") @db.Uuid
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  updatedBy Account @relation(fields: [updatedById], references: [id])
+
+  @@map("company_location_configs")
 }

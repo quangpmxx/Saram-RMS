@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Users } from "lucide-react";
+import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account, Team } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
-import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
 type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; team: Team };
@@ -23,16 +22,41 @@ export function TeamsClient({
   initialTeams: Team[];
   leaders: Account[];
 }) {
-  useSetPageTitle("Quản lý nhóm", "Tổ chức nhóm và phân công Leader phụ trách.");
   const router = useRouter();
   const [teams, setTeams] = useState(initialTeams);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const toast = useToast();
 
   async function refresh() {
     const result = await clientApi<{ items: Team[] }>("/team?page=1&page_size=100");
     setTeams(result.items);
     router.refresh();
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-15): cho xóa nhóm NGAY CẢ KHI còn
+   * thành viên — backend tự gỡ (Account.teamId = null). Cảnh báo rõ trong
+   * xác nhận nếu nhóm còn thành viên để Admin không xóa nhầm.
+   */
+  async function handleDelete(team: Team) {
+    const memberWarning =
+      team.member_count > 0
+        ? ` Nhóm hiện có ${team.member_count} thành viên — các thành viên này sẽ tự động chuyển về trạng thái "chưa có nhóm".`
+        : "";
+    if (!window.confirm(`Xóa nhóm "${team.name}"? Hành động này không thể hoàn tác.${memberWarning}`)) {
+      return;
+    }
+    setPendingId(team.id);
+    try {
+      await clientApi(`/team/${team.id}`, { method: "DELETE" });
+      await refresh();
+      toast.success(`Đã xóa nhóm "${team.name}"`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setPendingId(null);
+    }
   }
 
   return (
@@ -50,9 +74,9 @@ export function TeamsClient({
           <table className="w-full table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[220px]" />
-              <col className="w-[200px]" />
-              <col className="w-[160px]" />
+              <col className="w-[180px]" />
               <col className="w-[120px]" />
+              <col className="w-[180px]" />
             </colgroup>
             <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
@@ -74,10 +98,23 @@ export function TeamsClient({
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setModal({ mode: "edit", team })}>
-                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                      Sửa
-                    </Button>
+                    <div className="flex flex-wrap gap-1">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setModal({ mode: "edit", team })}>
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                        Sửa
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        disabled={pendingId === team.id}
+                        onClick={() => void handleDelete(team)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                        Xóa
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

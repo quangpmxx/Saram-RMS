@@ -14,6 +14,14 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
+  // Dự án phụ — nâng cấp toàn diện (2026-07-15, module Check in GPS — Phase
+  // 3, Mục 5, yêu cầu người dùng: "Backend phải lấy IP từ request và xử lý
+  // đúng trường hợp proxy"): tin CHỈ 1 hop proxy phía trước (an toàn mặc
+  // định cho triển khai sau 1 reverse proxy như nginx) — `req.ip` khi đó ưu
+  // tiên header X-Forwarded-For do proxy đó set, không tin chuỗi
+  // X-Forwarded-For client tự gửi vô hạn hop như "trust proxy: true".
+  app.set('trust proxy', 1);
+
   // Dự án phụ — ảnh đại diện tự upload (POST /me/avatar). Đảm bảo thư mục
   // tồn tại trước khi multer ghi file vào đó, rồi phục vụ tĩnh qua "/uploads".
   const avatarsDir = join(process.cwd(), 'uploads', 'avatars');

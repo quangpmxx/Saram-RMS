@@ -58,4 +58,15 @@ export class UpdateAccountDto {
   @IsNumber()
   @Min(0)
   remaining_leave_days?: number | null;
+
+  /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  citizen_id?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  bank_account_number?: string | null;
 }

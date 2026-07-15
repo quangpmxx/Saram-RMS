@@ -727,7 +727,11 @@ export function CandidateDetailClient({
                   <div className="rounded-lg bg-slate-50 px-3 py-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Avatar fullName={note.created_by.name} className="h-6 w-6 text-[10px]" />
+                        <Avatar
+                          fullName={note.created_by.name}
+                          avatarUrl={note.created_by.avatar_url}
+                          className="h-6 w-6 text-[10px]"
+                        />
                         <NameWithRoleHint account={note.created_by} className="text-xs font-medium text-slate-700" />
                         <span className="text-xs text-slate-400">{formatDateTime(note.created_at)}</span>
                         {note.call_status && (

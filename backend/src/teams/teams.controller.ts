@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -48,6 +51,18 @@ export class TeamsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.teamsService.update(id, dto, user.id);
+  }
+
+  /** Yêu cầu trực tiếp người dùng (2026-07-15): xóa nhóm — cho xóa kể cả còn thành viên (tự gỡ). */
+  @Delete(':id')
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.teamsService.delete(id, user.id);
+    return { message: 'Đã xóa nhóm' };
   }
 
   @Get(':id/member')

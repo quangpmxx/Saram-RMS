@@ -12,7 +12,7 @@ export interface CallbackResponseDto {
 }
 
 type CallbackWithRelations = CallbackSchedule & {
-  createdBy: Pick<Account, 'id' | 'fullName' | 'role'>;
+  createdBy: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>;
 };
 
 export function toCallbackResponse(
@@ -27,11 +27,14 @@ export function toCallbackResponse(
       id: callback.createdBy.id,
       name: callback.createdBy.fullName,
       role: callback.createdBy.role,
+      avatar_url: callback.createdBy.avatarUrl,
     },
     created_at: callback.createdAt.toISOString(),
   };
 }
 
 export const CALLBACK_INCLUDE = {
-  createdBy: { select: { id: true, fullName: true, role: true } },
+  createdBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
 } as const;

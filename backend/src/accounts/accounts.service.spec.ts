@@ -17,6 +17,7 @@ describe('AccountsService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
       findMany: jest.Mock;
     };
@@ -51,6 +52,7 @@ describe('AccountsService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
         findMany: jest.fn(),
       },
@@ -247,6 +249,43 @@ describe('AccountsService', () => {
       );
     });
 
+    it('cập nhật CCCD + STK (bổ sung 2026-07-15), ghi audit log cho từng field đổi', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      prisma.account.update.mockResolvedValue({
+        ...baseAccount,
+        citizenId: '001099012345',
+        bankAccountNumber: '19012345678',
+      });
+
+      await service.update(
+        'acc-1',
+        { citizen_id: '001099012345', bank_account_number: '19012345678' },
+        'admin-1',
+      );
+
+      expect(prisma.account.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            citizenId: '001099012345',
+            bankAccountNumber: '19012345678',
+          }),
+        }),
+      );
+      expect(auditLog.log).toHaveBeenCalledTimes(2);
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldChanged: 'citizen_id',
+          newValue: '001099012345',
+        }),
+      );
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldChanged: 'bank_account_number',
+          newValue: '19012345678',
+        }),
+      );
+    });
+
     it('gửi null cho 1 field hồ sơ nhân sự → xóa về trống (không phát sinh lỗi validate)', async () => {
       prisma.account.findUnique.mockResolvedValue({
         ...baseAccount,
@@ -291,6 +330,49 @@ describe('AccountsService', () => {
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'delete' }),
       );
+    });
+  });
+
+  describe('deletePermanently', () => {
+    it('xóa hẳn tài khoản chưa có dữ liệu liên quan, ghi audit log', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      prisma.account.delete.mockResolvedValue(baseAccount);
+
+      await service.deletePermanently('acc-1', 'admin-1');
+
+      expect(prisma.account.delete).toHaveBeenCalledWith({
+        where: { id: 'acc-1' },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'delete',
+          entityType: 'account',
+        }),
+      );
+    });
+
+    it('tài khoản đã có dữ liệu liên quan (vi phạm khóa ngoại P2003) -> ConflictException, không ghi audit log', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      const prismaError = new Prisma.PrismaClientKnownRequestError(
+        'fk violation',
+        {
+          code: 'P2003',
+          clientVersion: 'test',
+        },
+      );
+      prisma.account.delete.mockRejectedValue(prismaError);
+
+      await expect(
+        service.deletePermanently('acc-1', 'admin-1'),
+      ).rejects.toThrow(ConflictException);
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('không tìm thấy tài khoản -> NotFoundException', async () => {
+      prisma.account.findUnique.mockResolvedValue(null);
+      await expect(
+        service.deletePermanently('missing', 'admin-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

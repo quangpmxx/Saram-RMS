@@ -18,12 +18,6 @@ const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
   { href: "/calendar", label: "Lịch hẹn", icon: "calendar", roles: ["admin", "manager", "leader", "sale"] },
   { href: "/reports", label: "Báo cáo", icon: "reports", roles: ["admin", "manager", "leader", "sale"] },
   {
-    href: "/duplicates",
-    label: "Trùng lặp",
-    icon: "duplicates",
-    roles: ["admin", "manager", "leader", "mkt", "sale"],
-  },
-  {
     href: "/shuttle",
     label: "Danh sách đưa đón",
     icon: "shuttle",
@@ -51,7 +45,6 @@ const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
   },
   { href: "/audit-log", label: "Nhật ký", icon: "auditLog", roles: ["admin", "manager"] },
   { href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", roles: ["admin"] },
-  { href: "/teams", label: "Quản lý nhóm", icon: "teams", roles: ["admin"] },
   { href: "/settings", label: "Cấu hình vận hành", icon: "settings", roles: ["admin"] },
 ];
 

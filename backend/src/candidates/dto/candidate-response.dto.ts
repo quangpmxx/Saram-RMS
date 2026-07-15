@@ -19,6 +19,7 @@ export interface NamedRefWithRole {
   id: string;
   name: string;
   role: AccountRole;
+  avatar_url: string | null;
 }
 
 /** Đối tượng "Candidate" dùng chung — Mục 0.1, docs/13-api-design.md. */
@@ -58,10 +59,13 @@ export interface CandidateResponseDto {
 
 type LeadWithRelations = Lead & {
   source: Pick<LeadSource, 'id' | 'name'>;
-  uploadedBy: Pick<Account, 'id' | 'fullName' | 'role'>;
-  assignedTo?: Pick<Account, 'id' | 'fullName' | 'role'> | null;
-  heldBy?: Pick<Account, 'id' | 'fullName' | 'role'> | null;
-  carePoolLockedBy?: Pick<Account, 'id' | 'fullName' | 'role'> | null;
+  uploadedBy: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>;
+  assignedTo?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
+  heldBy?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
+  carePoolLockedBy?: Pick<
+    Account,
+    'id' | 'fullName' | 'role' | 'avatarUrl'
+  > | null;
   callStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
   callResult?: Pick<StatusCatalog, 'id' | 'name'> | null;
   zaloStatus?: Pick<StatusCatalog, 'id' | 'name'> | null;
@@ -86,6 +90,7 @@ export function toCandidateResponse(
       id: lead.uploadedBy.id,
       name: lead.uploadedBy.fullName,
       role: lead.uploadedBy.role,
+      avatar_url: lead.uploadedBy.avatarUrl,
     },
     uploaded_at: lead.uploadedAt.toISOString(),
     assigned_to: lead.assignedTo
@@ -93,6 +98,7 @@ export function toCandidateResponse(
           id: lead.assignedTo.id,
           name: lead.assignedTo.fullName,
           role: lead.assignedTo.role,
+          avatar_url: lead.assignedTo.avatarUrl,
         }
       : null,
     assigned_team_id: lead.assignedTeamId,
@@ -130,6 +136,7 @@ export function toCandidateResponse(
           id: lead.heldBy.id,
           name: lead.heldBy.fullName,
           role: lead.heldBy.role,
+          avatar_url: lead.heldBy.avatarUrl,
         }
       : null,
     held_at: lead.heldAt?.toISOString() ?? null,
@@ -140,6 +147,7 @@ export function toCandidateResponse(
           id: lead.carePoolLockedBy.id,
           name: lead.carePoolLockedBy.fullName,
           role: lead.carePoolLockedBy.role,
+          avatar_url: lead.carePoolLockedBy.avatarUrl,
         }
       : null,
     is_duplicate_flagged: lead.isDuplicateFlagged,
@@ -151,10 +159,16 @@ export function toCandidateResponse(
 /** Cụm quan hệ dùng chung khi truy vấn Lead, khớp đúng shape trên. */
 export const CANDIDATE_INCLUDE = {
   source: { select: { id: true, name: true } },
-  uploadedBy: { select: { id: true, fullName: true, role: true } },
-  assignedTo: { select: { id: true, fullName: true, role: true } },
-  heldBy: { select: { id: true, fullName: true, role: true } },
-  carePoolLockedBy: { select: { id: true, fullName: true, role: true } },
+  uploadedBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
+  assignedTo: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
+  heldBy: { select: { id: true, fullName: true, role: true, avatarUrl: true } },
+  carePoolLockedBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
   callStatus: { select: { id: true, name: true } },
   callResult: { select: { id: true, name: true } },
   zaloStatus: { select: { id: true, name: true } },

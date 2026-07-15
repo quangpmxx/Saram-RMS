@@ -21,6 +21,8 @@ export interface Account {
   status: AccountStatus;
   /** Dự án phụ — nâng cấp toàn diện: đường dẫn tương đối ảnh đại diện tự upload, null nếu chưa có. */
   avatar_url: string | null;
+  /** Dự án phụ — nâng cấp toàn diện (2026-07-15, module Check in GPS): chức vụ tùy chỉnh — null = chưa đặt, dùng nhãn vai trò mặc định (ACCOUNT_ROLE_LABEL). */
+  position: string | null;
   /**
    * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
    * docs/09-13, yêu cầu trực tiếp người dùng): 5 field hồ sơ nhân sự — CHỈ
@@ -32,6 +34,9 @@ export interface Account {
   personal_phone: string | null;
   personal_email: string | null;
   remaining_leave_days: number | null;
+  /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK — cùng quy tắc CHỈ Admin sửa/Nhân viên chỉ xem như 4 field phía trên. */
+  citizen_id: string | null;
+  bank_account_number: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,6 +83,7 @@ interface NamedRef {
  */
 export interface NamedRefWithRole extends NamedRef {
   role: AccountRole;
+  avatar_url: string | null;
 }
 
 /** Đối tượng "Candidate" — Mục 0.1, docs/13-api-design.md. */
@@ -404,6 +410,43 @@ export interface UpsertDailyReportPayload {
 }
 
 /**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+ * docs/09-13, yêu cầu trực tiếp người dùng): "Check phạt" — trang con
+ * trong module Báo cáo, tự động ghi nhận Sale nộp Báo cáo hằng ngày
+ * muộn/không nộp.
+ */
+export type ReportViolationType = "late_submission" | "no_submission";
+export type ReportViolationStatus = "pending" | "confirmed" | "waived" | "supplemented";
+
+export interface ReportViolation {
+  id: string;
+  account_id: string;
+  account_name: string;
+  account_avatar_url: string | null;
+  team_id: string | null;
+  team_name: string | null;
+  /** "YYYY-MM-DD" */
+  report_date: string;
+  /** ISO — snapshot hạn chót tại thời điểm phát sinh vi phạm, không đổi dù Admin sửa cấu hình sau. */
+  deadline_snapshot: string;
+  actual_submitted_at: string | null;
+  violation_type: ReportViolationType;
+  status: ReportViolationStatus;
+  note: string | null;
+  resolved_by_name: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportDeadline {
+  hour: number;
+  minute: number;
+  updated_at: string | null;
+  updated_by_name: string | null;
+}
+
+/**
  * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
  * docs/09-13 — module hoàn toàn mới): "Chấm công thủ công". Không có field
  * "vị trí/chức vụ" riêng — cột "Vị trí" hiện bằng ACCOUNT_ROLE_LABEL[role]
@@ -430,6 +473,9 @@ export interface AttendanceEmployee {
   personal_phone: string | null;
   personal_email: string | null;
   remaining_leave_days: number | null;
+  /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK. */
+  citizen_id: string | null;
+  bank_account_number: string | null;
 }
 
 export interface AttendanceDay {
@@ -464,6 +510,93 @@ export interface AttendanceUpsertCell {
   date: string;
   status: AttendanceStatus;
   note?: string;
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
+ * docs/09-13, yêu cầu trực tiếp người dùng): "Check in GPS" — PHASE 1+2+3
+ * (triển khai theo 4 Phase, yêu cầu trực tiếp người dùng). Reset (Phase 4)
+ * sẽ bổ sung vào ĐÚNG interface này.
+ */
+export type CheckinRecordStatus = "valid" | "outside_company" | "needs_verification";
+
+/**
+ * Field GPS/IP/thiết bị khai báo `| null` — bản ghi TỰ Check in luôn có giá
+ * trị thật, nhưng danh sách quản lý (CheckinListEmployee) sẽ trả null khi
+ * Leader xem bản ghi của NGƯỜI KHÁC (Mục 10: chỉ Admin/Quản lý xem chi tiết
+ * GPS/IP/thiết bị của người khác — xem checkin.service.ts, redactRecordResponse()).
+ */
+export interface CheckinRecord {
+  id: string;
+  account_id: string;
+  /** "YYYY-MM-DD" */
+  attendance_date: string;
+  /** ISO — lấy từ đồng hồ server. */
+  checked_in_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+  resolved_address: string | null;
+  company_latitude: number | null;
+  company_longitude: number | null;
+  allowed_radius_meters: number;
+  distance_from_company_meters: number;
+  status: CheckinRecordStatus;
+  ip_address: string | null;
+  user_agent: string | null;
+  device: string | null;
+  operating_system: string | null;
+  browser: string | null;
+  created_at: string;
+}
+
+export interface CheckinStatus {
+  checked_in_today: boolean;
+  today_record: CheckinRecord | null;
+  /** ISO — giờ server hiện tại, dùng để đồng bộ đồng hồ hiển thị (không tin giờ thiết bị). */
+  server_time: string;
+  company_location_configured: boolean;
+  /** Preview IP/thiết bị/trình duyệt SẼ được lưu nếu Check in ngay bây giờ. */
+  ip_address: string | null;
+  device: string;
+  operating_system: string;
+  browser: string;
+}
+
+export interface CheckinPreview {
+  company_location_configured: boolean;
+  distance_from_company_meters: number | null;
+  status: CheckinRecordStatus | null;
+  location_label: string | null;
+}
+
+/** Mục 11: 1 dòng trong "trang quản lý Check in" — 1 nhân viên + bản ghi Check in của họ (null nếu chưa Check in ngày đang xem). */
+export interface CheckinListEmployee {
+  account_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: AccountRole;
+  position: string | null;
+  team_id: string | null;
+  team_name: string | null;
+  checkin: CheckinRecord | null;
+}
+
+export interface CheckinListResult {
+  /** "YYYY-MM-DD" */
+  date: string;
+  employees: CheckinListEmployee[];
+}
+
+export type CheckinStatusFilter = "all" | "checked_in" | "not_checked_in" | CheckinRecordStatus;
+
+export interface CompanyLocation {
+  address: string;
+  latitude: number;
+  longitude: number;
+  allowed_radius_meters: number;
+  updated_at: string;
+  updated_by_name: string;
 }
 
 export interface AttendanceDeleteCell {

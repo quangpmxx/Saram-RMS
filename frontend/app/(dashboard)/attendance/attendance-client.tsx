@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Download, Loader2, Pencil, RotateCcw, Save } from "lucide-react";
+import { CheckCircle2, Download, Loader2, Pencil, RotateCcw, Save, StickyNote } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
@@ -21,6 +21,7 @@ import { Modal } from "@/components/ui/modal";
 import { Checkbox, Field, Select } from "@/components/ui/form";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { CheckinManagementPanel } from "./checkin-management-panel";
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
@@ -132,18 +133,39 @@ interface MenuState {
   date: string;
 }
 
+/**
+ * Popup ghi chú tự do cho 1 ô (yêu cầu trực tiếp người dùng, 2026-07-15):
+ * "cho phép sửa ghi chú... giống như Google Sheet" — thay tooltip hover
+ * (gây khó chịu, hiện ngay cả khi không cần) bằng: 1 tam giác nhỏ báo hiệu
+ * ô đang có ghi chú (góc trên-phải), mở popup nhập tự do qua menu chuột
+ * phải/menu trạng thái. Chỉ áp dụng cho 1 ô cụ thể (accountId khác null) —
+ * ô phải có sẵn trạng thái vì `note` gắn liền `status` ở backend
+ * (attendance_records.status NOT NULL).
+ */
+interface NoteEditorState {
+  anchorRect: DOMRect;
+  accountId: string;
+  date: string;
+  initialValue: string;
+}
+
 function StatusMenu({
   state,
   npDisabled,
+  hasStatus,
   onPick,
   onClear,
+  onEditNote,
   onClose,
 }: {
   state: MenuState;
   /** Yêu cầu trực tiếp người dùng (2026-07-15): hết ngày phép thì không tick được NP nữa — làm mờ + khóa nút này. */
   npDisabled: boolean;
+  /** Ô đã có trạng thái chưa — "Ghi chú" chỉ dùng được khi có, vì note gắn liền status ở backend. */
+  hasStatus: boolean;
   onPick: (status: AttendanceStatus) => void;
   onClear: () => void;
+  onEditNote: () => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -210,6 +232,96 @@ function StatusMenu({
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-300">—</span>
         Xóa trạng thái
       </button>
+      {state.accountId !== null && (
+        <button
+          type="button"
+          disabled={!hasStatus}
+          title={!hasStatus ? "Chọn trạng thái cho ô này trước khi thêm ghi chú" : undefined}
+          onClick={onEditNote}
+          className={cn(
+            "flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50",
+            !hasStatus && "cursor-not-allowed opacity-40 hover:bg-transparent",
+          )}
+        >
+          <StickyNote className="h-4 w-4 shrink-0 text-amber-500" strokeWidth={2} />
+          Ghi chú...
+        </button>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * Popup nhập ghi chú tự do (yêu cầu trực tiếp người dùng, 2026-07-15) —
+ * "giống như Google Sheet": textarea nhỏ neo cạnh ô, gõ xong bấm ra ngoài
+ * để lưu (auto-save khi blur, giống Sheets), Escape để hủy không lưu.
+ */
+function NoteEditorPopover({
+  anchorRect,
+  initialValue,
+  onSave,
+  onClose,
+}: {
+  anchorRect: DOMRect;
+  initialValue: string;
+  onSave: (note: string) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const ref = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+    textareaRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) onSave(value);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [value, onSave, onClose]);
+
+  const top = Math.min(anchorRect.bottom + 4, window.innerHeight - 140);
+  const left = Math.min(anchorRect.left, window.innerWidth - 224);
+
+  return createPortal(
+    <div
+      ref={ref}
+      style={{ top, left }}
+      className="fixed z-30 w-56 rounded-lg border border-amber-300 bg-amber-50 p-2 shadow-lg shadow-slate-900/10"
+    >
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Nhập ghi chú cho ngày này..."
+        rows={3}
+        maxLength={255}
+        className="w-full resize-y rounded border border-amber-200 bg-white p-1.5 text-xs text-slate-700 outline-none focus:border-amber-400"
+      />
+      <div className="mt-1 flex items-center justify-between">
+        <span className="text-[10px] text-slate-400">Bấm ra ngoài để lưu</span>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onSave("")}
+            className="text-[10px] font-medium text-red-500 hover:text-red-600"
+          >
+            Xóa ghi chú
+          </button>
+        )}
+      </div>
     </div>,
     document.body,
   );
@@ -288,26 +400,31 @@ function AttendanceCellButton({
       ref={buttonRef}
       type="button"
       disabled={!canEdit}
-      title={
-        meta
-          ? `${meta.label}${cell?.note ? ` — ${cell.note}` : ""} — đúp chuột để xóa`
-          : "Chưa chấm — bấm để chấm Có công"
-      }
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       className={cn(
-        "flex h-9 w-12 items-center justify-center border-r border-b border-slate-200 text-[11px] font-bold transition-colors",
+        "relative flex h-9 w-12 items-center justify-center border-r border-b border-slate-200 text-[11px] font-bold transition-colors",
         meta ? `${meta.bg} ${meta.text}` : isSunday ? "bg-red-50/60 hover:bg-red-100/70" : "bg-white hover:bg-slate-50",
         canEdit ? "cursor-pointer" : "cursor-default",
       )}
     >
       {meta?.symbol ?? ""}
+      {/* Tam giác báo hiệu ô có ghi chú, giống Google Sheets/Excel — chỉ hover
+          đúng góc này mới hiện tooltip nội dung ghi chú (yêu cầu trực tiếp
+          người dùng, 2026-07-15: bỏ tooltip hiện trên toàn ô). */}
+      {cell?.note && (
+        <span
+          title={cell.note}
+          className="absolute top-0 right-0 h-0 w-0 border-t-[7px] border-l-[7px] border-t-red-500 border-l-transparent"
+        />
+      )}
     </button>
   );
 }
 
 export function AttendanceClient({
+  currentUserRole,
   canFilterByTeam,
   canFilterByAccount,
   teams,
@@ -326,11 +443,17 @@ export function AttendanceClient({
   initialMonth: number;
   initialGrid: AttendanceGrid;
 }) {
-  useSetPageTitle(
-    "Chấm công nhân viên",
-    "Click để chấm công, click lần 2 hoặc chuột phải để chọn trạng thái khác, đúp chuột để xóa.",
-  );
+  useSetPageTitle("Chấm công nhân viên");
   const toast = useToast();
+
+  /**
+   * Tab "Check in GPS" (2026-07-15, yêu cầu trực tiếp người dùng, Mục 11):
+   * "trang quản lý Check in" nằm TRONG module Chấm công hiện có — thêm 1 tab
+   * bên cạnh bảng chấm công thủ công thay vì route riêng, để không đụng vào
+   * chức năng chấm công thủ công (Mục 12: "Không sửa chức năng chấm công
+   * thủ công hiện tại"). Tab "manual" giữ nguyên state/logic cũ y hệt.
+   */
+  const [activeTab, setActiveTab] = useState<"manual" | "checkin">("manual");
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -343,6 +466,7 @@ export function AttendanceClient({
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [noteEditor, setNoteEditor] = useState<NoteEditorState | null>(null);
   /**
    * Yêu cầu trực tiếp người dùng (2026-07-15): bấm tên nhân viên TRƯỚC ĐÂY
    * tự chấm công cả tháng (Mục 4, bản đặc tả gốc) — nay đổi thành mở bảng
@@ -555,9 +679,22 @@ export function AttendanceClient({
   }
 
   function setCellLocal(accountId: string, date: string, status: AttendanceStatus) {
+    // Giữ nguyên ghi chú đã có khi chỉ đổi trạng thái — tránh mất ghi chú
+    // vừa nhập chỉ vì đổi ý trạng thái (yêu cầu trực tiếp người dùng, 2026-07-15).
+    const existingNote = effectiveCell(accountId, date)?.note;
     setPending((prev) => {
       const next = new Map(prev);
-      next.set(cellKey(accountId, date), { status });
+      next.set(cellKey(accountId, date), { status, note: existingNote });
+      return next;
+    });
+  }
+
+  function setCellNoteLocal(accountId: string, date: string, note: string) {
+    const current = effectiveCell(accountId, date);
+    if (!current) return;
+    setPending((prev) => {
+      const next = new Map(prev);
+      next.set(cellKey(accountId, date), { status: current.status, note: note.trim() ? note.trim() : undefined });
       return next;
     });
   }
@@ -624,6 +761,25 @@ export function AttendanceClient({
       }
     }
     setMenu(null);
+  }
+
+  function openNoteEditorFromMenu() {
+    if (!menu || !menu.accountId) return;
+    const current = effectiveCell(menu.accountId, menu.date);
+    if (!current) return;
+    setNoteEditor({
+      anchorRect: menu.anchorRect,
+      accountId: menu.accountId,
+      date: menu.date,
+      initialValue: current.note ?? "",
+    });
+    setMenu(null);
+  }
+
+  function handleNoteSave(note: string) {
+    if (!noteEditor) return;
+    setCellNoteLocal(noteEditor.accountId, noteEditor.date, note);
+    setNoteEditor(null);
   }
 
   function handleDiscardPending() {
@@ -736,7 +892,40 @@ export function AttendanceClient({
     STT_COL_WIDTH + NAME_COL_WIDTH + POSITION_COL_WIDTH + grid.days.length * DAY_COL_WIDTH + TOTAL_COL_WIDTH;
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4">
+    <div className="relative -top-3 mx-auto max-w-[1600px] space-y-4 md:-top-5">
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setActiveTab("manual")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "manual" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Chấm công thủ công
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("checkin")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "checkin" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Check in GPS
+        </button>
+      </div>
+
+      {activeTab === "checkin" && (
+        <CheckinManagementPanel
+          canFilterByTeam={canFilterByTeam}
+          teams={teams}
+          accountOptions={accountOptions}
+          currentUserRole={currentUserRole}
+        />
+      )}
+
+      <div className={activeTab === "manual" ? "space-y-4" : "hidden"}>
       <div ref={filterBarRef}>
       <Card className="p-2">
         <div className="flex flex-wrap items-end gap-2">
@@ -819,17 +1008,6 @@ export function AttendanceClient({
                   }}
                 >
                   Tháng hiện tại
-                </Button>
-                {/* Nút "Check in" (yêu cầu trực tiếp người dùng, 2026-07-15):
-                    mở trang mới ở tab trình duyệt mới, nội dung sẽ được
-                    phổ biến sau — hiện chỉ điều hướng sang trang khung sườn. */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => window.open("/attendance/checkin", "_blank")}
-                >
-                  Check in
                 </Button>
                 {/* Màu xanh lá đặc trưng của Excel (yêu cầu trực tiếp người
                     dùng) — viết nút riêng thay vì dùng variant có sẵn của
@@ -1109,9 +1287,20 @@ export function AttendanceClient({
               ? !canPickNP(menu.accountId, menu.date)
               : grid.employees.every((e) => !canPickNP(e.account_id, menu.date))
           }
+          hasStatus={Boolean(menu.accountId && effectiveCell(menu.accountId, menu.date))}
           onPick={handleMenuPick}
           onClear={handleMenuClear}
+          onEditNote={openNoteEditorFromMenu}
           onClose={() => setMenu(null)}
+        />
+      )}
+
+      {noteEditor && (
+        <NoteEditorPopover
+          anchorRect={noteEditor.anchorRect}
+          initialValue={noteEditor.initialValue}
+          onSave={handleNoteSave}
+          onClose={() => setNoteEditor(null)}
         />
       )}
 
@@ -1185,10 +1374,19 @@ export function AttendanceClient({
                   )}
                 </dd>
               </div>
+              <div>
+                <dt className="text-xs text-slate-500">Số CCCD</dt>
+                <dd className="font-medium text-slate-800">{infoModalEmployee.citizen_id ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Số tài khoản ngân hàng</dt>
+                <dd className="font-medium text-slate-800">{infoModalEmployee.bank_account_number ?? "—"}</dd>
+              </div>
             </dl>
           </div>
         </Modal>
       )}
+      </div>
     </div>
   );
 }
