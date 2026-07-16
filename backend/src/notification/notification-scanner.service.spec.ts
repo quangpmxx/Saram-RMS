@@ -3,6 +3,7 @@ import { NotificationScannerService } from './notification-scanner.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { ZaloClientService } from './zalo-client.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 describe('NotificationScannerService', () => {
   let service: NotificationScannerService;
@@ -21,13 +22,30 @@ describe('NotificationScannerService', () => {
 
   const LEAD_MINUTES = 15;
 
+  /** Khớp đủ field toNotificationResponse() cần — mặc định cho notification.create(), tránh crash lúc phát realtime (Mục 3, mở rộng realtime — Thông báo). */
+  const fullNotification = {
+    id: 'notification-1',
+    accountId: 'sale-1',
+    leadId: 'lead-1',
+    leaveRequestId: null,
+    type: 'callback_reminder',
+    channel: 'zalo',
+    content: null,
+    senderId: null,
+    scheduledAt: new Date('2026-07-16T10:00:00.000Z'),
+    sentAt: null,
+    status: 'pending',
+  };
+
+  let realtimeService: { emitNotificationCreated: jest.Mock };
+
   beforeEach(async () => {
     prisma = {
       callbackSchedule: { findMany: jest.fn().mockResolvedValue([]) },
       interviewAppointment: { findMany: jest.fn().mockResolvedValue([]) },
       notification: {
         findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue(fullNotification),
         update: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -36,6 +54,7 @@ describe('NotificationScannerService', () => {
       getNotificationLeadMinutes: jest.fn().mockResolvedValue(LEAD_MINUTES),
     };
     zaloClient = { send: jest.fn().mockResolvedValue(undefined) };
+    realtimeService = { emitNotificationCreated: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -43,6 +62,7 @@ describe('NotificationScannerService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: SystemConfigService, useValue: systemConfigService },
         { provide: ZaloClientService, useValue: zaloClient },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 

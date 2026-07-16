@@ -6,7 +6,15 @@ import { Check, ChevronDown, Pencil, Plus, Search, Trash2, X } from "lucide-reac
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { SHUTTLE_OPTION_COLORS, shuttleColorStyle } from "@/lib/shuttle-colors";
-import type { PaginatedResult, SaleAccountItem, ShuttleOptionItem, ShuttleOptions, ShuttleRecord } from "@/lib/types";
+import type {
+  AppRealtimeEvent,
+  PaginatedResult,
+  SaleAccountItem,
+  ShuttleOptionItem,
+  ShuttleOptions,
+  ShuttleRecord,
+} from "@/lib/types";
+import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { useToast } from "@/lib/toast-context";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { Button } from "@/components/ui/button";
@@ -941,7 +949,7 @@ export function ShuttleClient({
   const FIXED_SPACING = 8 + 12 + 2;
   const tableBoxHeight = `calc(100vh - ${headerHeight + filterHeight + footerHeight + FIXED_SPACING}px)`;
 
-  async function refresh(targetPage: number, targetPageSize: number, activeFilters: Filters) {
+  function buildShuttleQuery(targetPage: number, targetPageSize: number, activeFilters: Filters): URLSearchParams {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
     if (activeFilters.date.from) query.set("date_from", activeFilters.date.from);
@@ -952,7 +960,11 @@ export function ShuttleClient({
     if (activeFilters.driver) query.set("driver", activeFilters.driver);
     if (activeFilters.status) query.set("status", activeFilters.status);
     if (activeFilters.interview_result) query.set("interview_result", activeFilters.interview_result);
+    return query;
+  }
 
+  async function refresh(targetPage: number, targetPageSize: number, activeFilters: Filters) {
+    const query = buildShuttleQuery(targetPage, targetPageSize, activeFilters);
     const result = await clientApi<PaginatedResult<ShuttleRecord>>(`/shuttle?${query.toString()}`);
     setRecords(result.items);
     setRowDrafts(buildRowDrafts(result.items));
@@ -960,6 +972,108 @@ export function ShuttleClient({
     setPage(result.page);
     setPageSize(result.page_size);
   }
+
+  /**
+   * Yêu cầu người dùng (Mục 1, 7) — refetch nền cho realtime khi có dòng
+   * MỚI xuất hiện, nhưng KHÔNG được ghi đè draft đang gõ dở của người dùng
+   * (mọi ô ở trang này đều "luôn nhập được ngay", không có nút Sửa riêng —
+   * xem comment "Mọi dòng dữ liệu đã có đều ở dạng nhập được ngay" phía
+   * dưới) — so khớp draft hiện có với dữ liệu record CŨ (trước khi refetch)
+   * để biết dòng nào đang dở dang, giữ nguyên draft đó thay vì ghi đè.
+   */
+  async function silentRefreshPreservingDrafts() {
+    try {
+      const query = buildShuttleQuery(page, pageSize, filters);
+      const result = await clientApi<PaginatedResult<ShuttleRecord>>(`/shuttle?${query.toString()}`);
+      const priorRecordById = new Map(records.map((r) => [r.id, r]));
+      setRecords(result.items);
+      setTotal(result.total);
+      setRowDrafts((prev) => {
+        const next: Record<string, ShuttleFormValue> = {};
+        for (const record of result.items) {
+          const priorDraft = prev[record.id];
+          const priorRecord = priorRecordById.get(record.id);
+          const isDirty = priorDraft && priorRecord && !sameFormValue(priorDraft, formValueFromRecord(priorRecord));
+          next[record.id] = isDirty ? priorDraft! : formValueFromRecord(record);
+        }
+        return next;
+      });
+    } catch {
+      // bỏ qua lỗi tải nền — dữ liệu cũ vẫn hiển thị.
+    }
+  }
+
+  /**
+   * Mục 7, yêu cầu người dùng — "không tự ghi đè modal/form người dùng
+   * đang nhập dở... hiển thị cảnh báo nhỏ". Đánh dấu dòng đang có xung đột
+   * (người khác vừa cập nhật trong lúc mình đang gõ dở) — xem badge cảnh
+   * báo ở phần render bảng bên dưới.
+   */
+  const [conflictRowIds, setConflictRowIds] = useState<Set<string>>(new Set());
+
+  function handleReloadConflictedRow(record: ShuttleRecord) {
+    setRowDrafts((prev) => ({ ...prev, [record.id]: formValueFromRecord(record) }));
+    setConflictRowIds((prev) => {
+      if (!prev.has(record.id)) return prev;
+      const next = new Set(prev);
+      next.delete(record.id);
+      return next;
+    });
+  }
+
+  /**
+   * Mục 1, 3, 4, 7 — đồng bộ realtime Danh sách đưa đón. Module này KHÔNG
+   * có giới hạn RBAC theo bản ghi (mọi vai trò xem/sửa tự do — xem
+   * shuttle.controller.ts), nên MỌI kết nối đều nhận event này; frontend
+   * chỉ cần lọc đúng `module`.
+   */
+  function handleAppRealtimeEvent(event: AppRealtimeEvent) {
+    if (event.module !== "transportation") return;
+
+    if (event.action === "deleted") {
+      const id = event.entity_id;
+      if (!id) return;
+      const wasShown = records.some((r) => r.id === id);
+      if (!wasShown) return;
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      setRowDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setTotal((t) => Math.max(0, t - 1));
+      setConflictRowIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      return;
+    }
+
+    const updated = event.payload as ShuttleRecord | undefined;
+    if (!updated) return;
+
+    const existing = records.find((r) => r.id === updated.id);
+    if (existing) {
+      setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      const localDraft = rowDrafts[updated.id];
+      const isDirty = localDraft ? !sameFormValue(localDraft, formValueFromRecord(existing)) : false;
+      if (isDirty) {
+        setConflictRowIds((prev) => new Set(prev).add(updated.id));
+      } else {
+        setRowDrafts((prev) => ({ ...prev, [updated.id]: formValueFromRecord(updated) }));
+      }
+      return;
+    }
+
+    if (event.action === "created") {
+      void silentRefreshPreservingDrafts();
+    }
+  }
+
+  useAppRealtime(handleAppRealtimeEvent);
+  useRealtimeReconnect(() => void silentRefreshPreservingDrafts());
 
   async function refreshOptions() {
     const result = await clientApi<ShuttleOptions>("/shuttle/options");
@@ -1312,8 +1426,15 @@ export function ShuttleClient({
               {/* Mọi dòng dữ liệu đã có đều ở dạng nhập được ngay — không cần bấm "Sửa". */}
               {records.map((record) => {
                 const value = rowDrafts[record.id] ?? formValueFromRecord(record);
+                const hasConflict = conflictRowIds.has(record.id);
                 return (
-                  <tr key={record.id} className="align-top transition-colors hover:bg-slate-50">
+                  <tr
+                    key={record.id}
+                    className={cn(
+                      "align-top transition-colors hover:bg-slate-50",
+                      hasConflict && "bg-amber-50 hover:bg-amber-100",
+                    )}
+                  >
                     <ShuttleRowFormCells
                       value={value}
                       onChange={(next) => setRowDrafts((prev) => ({ ...prev, [record.id]: next }))}
@@ -1325,16 +1446,28 @@ export function ShuttleClient({
                       onManageSaleColors={() => setIsManagingSaleColors(true)}
                     />
                     <td className="px-2 py-1 align-middle">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={pendingId === record.id}
-                        onClick={() => void handleDelete(record)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                        Xóa
-                      </Button>
+                      <div className="flex flex-col items-start gap-1">
+                        {hasConflict && (
+                          <button
+                            type="button"
+                            title="Dữ liệu này vừa được cập nhật bởi người khác — bấm để tải lại"
+                            onClick={() => handleReloadConflictedRow(record)}
+                            className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-amber-800 hover:bg-amber-200"
+                          >
+                            Vừa cập nhật — Tải lại
+                          </button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={pendingId === record.id}
+                          onClick={() => void handleDelete(record)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                          Xóa
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );

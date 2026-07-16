@@ -10,9 +10,11 @@ import {
   CalendarCheck,
   CalendarDays,
   Copy,
+  Handshake,
   History,
   LayoutDashboard,
   Settings2,
+  TrendingUp,
   UserCog,
   Users,
   type LucideIcon,
@@ -32,6 +34,8 @@ const ICONS = {
   shuttle: Bus,
   accounting: Calculator,
   attendance: CalendarCheck,
+  salesEntry: TrendingUp,
+  orderManagement: Handshake,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

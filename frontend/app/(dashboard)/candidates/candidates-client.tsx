@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
   Cake,
@@ -13,6 +13,7 @@ import {
   MapPin,
   Pencil,
   Phone,
+  PhoneCall,
   Plus,
   RefreshCw,
   Search,
@@ -24,6 +25,7 @@ import {
   Users,
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
+import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { callStatusVariant } from "@/lib/call-status-variant";
 import { noteColorBgHex } from "@/lib/note-colors";
@@ -35,13 +37,16 @@ import type {
   CreateCandidateResult,
   DuplicateWarning,
   ImportJobStatus,
+  LeadRealtimeEvent,
   LeadSource,
   Note,
   PaginatedResult,
+  RemindTarget,
   StatusCatalogItem,
   Team,
   TeamMember,
 } from "@/lib/types";
+import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Button } from "@/components/ui/button";
@@ -65,6 +70,16 @@ import { DistributionRuleModal } from "./distribution-rule-modal";
 const PAGE_SIZE = 50;
 /** Dự án phụ — nâng cấp toàn diện: cho chọn số dòng/trang, y hệt trang Đưa đón (yêu cầu trực tiếp người dùng). */
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+/**
+ * Yêu cầu trực tiếp người dùng: "xử lý xong 1 data, ấn Lưu hoặc Quay lại thì
+ * quay lại ĐÚNG trang/vị trí cuộn lúc trước" — lưu tạm trạng thái danh sách
+ * (trang, số dòng/trang, tab, bộ lọc, vị trí cuộn) vào sessionStorage NGAY
+ * TRƯỚC khi điều hướng sang trang Chi tiết, khôi phục lại khi quay về trang
+ * Ứng viên. Dùng sessionStorage (không phải localStorage) — chỉ tồn tại
+ * trong phiên tab hiện tại, tự dọn khi đóng tab, không rò rỉ giữa các phiên
+ * đăng nhập khác nhau trên cùng máy.
+ */
+const LIST_STATE_SESSION_KEY = "saram_rms_candidates_list_state";
 /** Dự án phụ — nâng cấp toàn diện: mức thu phóng bảng, y hệt danh sách % của Google Sheet (yêu cầu trực tiếp người dùng). */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
 /** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia (cho người khác)/chuyển lead. */
@@ -84,7 +99,8 @@ type ModalState =
   | { mode: "edit"; candidate: Candidate }
   | { mode: "import" }
   | { mode: "assign"; candidateIds: string[] }
-  | { mode: "transfer"; candidate: Candidate };
+  | { mode: "transfer"; candidate: Candidate }
+  | { mode: "remind"; candidate: Candidate };
 
 type ViewMode = "all" | "pending" | "care_pool" | "mine";
 
@@ -94,6 +110,14 @@ interface Filters {
   team_sale: TeamSaleValue | null;
   /** Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng chung (xem components/ui/date-range-picker.tsx). */
   date: DateRangeValue;
+}
+
+interface SavedListState {
+  page: number;
+  pageSize: (typeof PAGE_SIZE_OPTIONS)[number];
+  viewMode: ViewMode;
+  filters: Filters;
+  scrollTop: number;
 }
 
 function callResultVariant(name: string): "success" | "warning" | "neutral" {
@@ -156,6 +180,7 @@ export function CandidatesClient({
 }) {
   const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [candidates, setCandidates] = useState(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
@@ -177,6 +202,7 @@ export function CandidatesClient({
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
   const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useSetPageTitle("Data lao động", "Thu thập, tìm kiếm và quản lý dữ liệu lao động.");
 
@@ -255,35 +281,124 @@ export function CandidatesClient({
     return false;
   }
 
-  async function refresh(targetPage = page, mode: ViewMode = viewMode, targetPageSize = pageSize) {
+  /**
+   * Tách riêng phần gọi API khỏi refresh() để tái dùng cho realtime (Mục 3,
+   * yêu cầu người dùng — "refetch nhẹ trang hiện tại", KHÔNG được reset
+   * selectedIds/gọi router.refresh() như refresh() gốc vốn làm cho các thao
+   * tác chủ động của người dùng, vd chuyển trang/lọc).
+   */
+  async function fetchPage(
+    targetPage: number,
+    mode: ViewMode,
+    targetPageSize: number,
+    // Yêu cầu người dùng — khôi phục trạng thái danh sách khi quay lại từ
+    // trang Chi tiết: cho phép truyền thẳng bộ lọc đã lưu thay vì đọc từ
+    // closure `filters` (state chưa kịp cập nhật ngay sau setFilters()).
+    activeFilters: Filters = filters,
+  ): Promise<PaginatedResult<Candidate>> {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
-    if (filters.source_id) query.set("source_id", filters.source_id);
+    if (activeFilters.source_id) query.set("source_id", activeFilters.source_id);
 
-    let result: PaginatedResult<Candidate>;
     if (mode === "pending") {
-      result = await clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
-    } else if (mode === "care_pool") {
+      return clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
+    }
+    if (mode === "care_pool") {
       // Mục 5, docs/13: GET /care-pool không nhận cùng bộ filter với /candidate
       // (chỉ page/page_size/team_id) — dùng query riêng, không lẫn filters hiện tại.
       const carePoolQuery = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
-      result = await clientApi<PaginatedResult<Candidate>>(`/care-pool?${carePoolQuery.toString()}`);
-    } else {
-      if (filters.keyword) query.set("keyword", filters.keyword);
-      if (filters.team_sale?.type === "team") query.set("team_id", filters.team_sale.id);
-      if (filters.team_sale?.type === "sale") query.set("assigned_to", filters.team_sale.id);
-      // DateRangePicker đã tự quy đổi preset ("7 ngày qua"...) thành from/to cụ
-      // thể ngay lúc bấm "Cập nhật" — ở đây chỉ còn việc quy đổi sang mốc ISO
-      // đầu/cuối ngày (giờ địa phương) như hành vi gốc, không cần phân biệt
-      // preset/tùy chỉnh nữa.
-      if (filters.date.from) query.set("date_from", new Date(filters.date.from).toISOString());
-      if (filters.date.to) query.set("date_to", new Date(`${filters.date.to}T23:59:59.999`).toISOString());
-      // Dự án phụ — nâng cấp toàn diện: tab "Cá nhân" (chỉ Sale) — thu hẹp
-      // "Tất cả" (nay đã theo phạm vi cả nhóm) về đúng lead đang gán cho
-      // chính mình, dùng lại đúng filter assigned_to=me backend đã hỗ trợ.
-      if (mode === "mine") query.set("assigned_to", "me");
-      result = await clientApi<PaginatedResult<Candidate>>(`/candidate?${query.toString()}`);
+      return clientApi<PaginatedResult<Candidate>>(`/care-pool?${carePoolQuery.toString()}`);
     }
 
+    if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
+    if (activeFilters.team_sale?.type === "team") query.set("team_id", activeFilters.team_sale.id);
+    if (activeFilters.team_sale?.type === "sale") query.set("assigned_to", activeFilters.team_sale.id);
+    // DateRangePicker đã tự quy đổi preset ("7 ngày qua"...) thành from/to cụ
+    // thể ngay lúc bấm "Cập nhật" — ở đây chỉ còn việc quy đổi sang mốc ISO
+    // đầu/cuối ngày (giờ địa phương) như hành vi gốc, không cần phân biệt
+    // preset/tùy chỉnh nữa.
+    if (activeFilters.date.from) query.set("date_from", new Date(activeFilters.date.from).toISOString());
+    if (activeFilters.date.to) query.set("date_to", new Date(`${activeFilters.date.to}T23:59:59.999`).toISOString());
+    // Dự án phụ — nâng cấp toàn diện: tab "Cá nhân" (chỉ Sale) — thu hẹp
+    // "Tất cả" (nay đã theo phạm vi cả nhóm) về đúng lead đang gán cho
+    // chính mình, dùng lại đúng filter assigned_to=me backend đã hỗ trợ.
+    if (mode === "mine") query.set("assigned_to", "me");
+    return clientApi<PaginatedResult<Candidate>>(`/candidate?${query.toString()}`);
+  }
+
+  /** Yêu cầu người dùng — lưu tạm trạng thái danh sách NGAY TRƯỚC khi mở trang Chi tiết ứng viên, để khôi phục lại khi quay về. */
+  function saveListStateForReturn() {
+    try {
+      const state: SavedListState = {
+        page,
+        pageSize,
+        viewMode,
+        filters,
+        scrollTop: scrollContainerRef.current?.scrollTop ?? 0,
+      };
+      sessionStorage.setItem(LIST_STATE_SESSION_KEY, JSON.stringify(state));
+    } catch {
+      // sessionStorage không khả dụng (chế độ ẩn danh chặn...) — bỏ qua, không chặn điều hướng.
+    }
+  }
+
+  /**
+   * Khôi phục đúng trang/bộ lọc/tab/vị trí cuộn đã lưu — CHỈ khi vào trang
+   * bằng đường mặc định, KHÔNG có query string lọc sẵn nào (vd bấm từ 1 con
+   * số breakdown ở Dashboard/Báo cáo — Phase 7, docs/12) — trường hợp đó ưu
+   * tiên đúng bộ lọc được yêu cầu hơn trạng thái cũ đã lưu. LƯU Ý: page.tsx
+   * (server) LUÔN tính sẵn initialViewMode/initialFilters với giá trị mặc
+   * định ("all"/rỗng) dù URL không có query string nào — không thể dùng 2
+   * prop đó để phân biệt, phải tự kiểm tra thẳng URLSearchParams hiện tại.
+   */
+  useEffect(() => {
+    const hasExplicitFilterParams = [
+      "view",
+      "source_id",
+      "date_from",
+      "date_to",
+      "team_id",
+      "assigned_to",
+      "keyword",
+    ].some((key) => searchParams.has(key));
+    if (hasExplicitFilterParams) return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(LIST_STATE_SESSION_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+
+    let saved: SavedListState;
+    try {
+      saved = JSON.parse(raw) as SavedListState;
+    } catch {
+      return;
+    }
+
+    void (async () => {
+      try {
+        const result = await fetchPage(saved.page, saved.viewMode, saved.pageSize, saved.filters);
+        setCandidates(result.items);
+        setTotal(result.total);
+        setPage(saved.page);
+        setPageSize(saved.pageSize);
+        setViewMode(saved.viewMode);
+        setFilters(saved.filters);
+        // Đợi 1 khung hình để bảng render đủ dữ liệu mới (đủ chiều cao để
+        // cuộn tới đúng vị trí) rồi mới đặt lại scrollTop.
+        requestAnimationFrame(() => {
+          scrollContainerRef.current?.scrollTo({ top: saved.scrollTop });
+        });
+      } catch {
+        // Không khôi phục được (trang/bộ lọc đã lưu không còn hợp lệ...) — giữ nguyên dữ liệu SSR trang 1 mặc định.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function refresh(targetPage = page, mode: ViewMode = viewMode, targetPageSize = pageSize) {
+    const result = await fetchPage(targetPage, mode, targetPageSize);
     setCandidates(result.items);
     setTotal(result.total);
     setPage(targetPage);
@@ -291,6 +406,96 @@ export function CandidatesClient({
     setSelectedIds(new Set());
     router.refresh();
   }
+
+  /**
+   * Yêu cầu người dùng (Mục 3, 4, 6) — cập nhật nền, KHÔNG reset lựa chọn,
+   * KHÔNG router.refresh() (tránh giật/nhấp nháy). Dùng cho: (a) record mới
+   * khớp bộ lọc trang hiện tại xuất hiện qua realtime, (b) refetch 1 lần sau
+   * khi kết nối lại (Mục 6). Lỗi mạng tạm thời thì bỏ qua lặng lẽ — dữ liệu
+   * cũ vẫn hiển thị, sự kiện tiếp theo hoặc lần refetch sau sẽ tự sửa.
+   */
+  async function silentRefetchCurrentPage() {
+    try {
+      const result = await fetchPage(page, viewMode, pageSize);
+      setCandidates(result.items);
+      setTotal(result.total);
+    } catch {
+      // bỏ qua lỗi tải nền
+    }
+  }
+
+  /**
+   * Yêu cầu người dùng — đồng bộ realtime cho danh sách Data lao động (không
+   * F5, không polling, không reload toàn trang). Chiến lược: nếu dòng đang
+   * hiển thị trong trang hiện tại thì vá (patch) trực tiếp trong state hiện
+   * có (giữ nguyên vị trí cuộn/trang/bộ lọc); nếu dòng không còn khớp điều
+   * kiện của viewMode đang xem (vd bị người khác nhận ở tab "Chờ phân chia")
+   * thì loại khỏi danh sách; nếu là dòng MỚI có thể khớp trang hiện tại
+   * (tạo mới/mới vào kho chăm sóc) thì refetch nhẹ thay vì tự đoán vị trí
+   * chèn (Mục 4 cho phép "thêm đúng vị trí HOẶC refetch nhẹ"). Với tab "Tất
+   * cả": không lọc lại theo từ khóa/khoảng ngày phía client (đủ điều kiện
+   * phòng Socket.IO đã đảm bảo đúng quyền xem — việc 1 dòng tạm thời không
+   * khớp từ khóa tìm kiếm sau khi sửa là sai lệch nhỏ về UX, không phải lỗ
+   * hổng phân quyền).
+   */
+  function handleRealtimeEvent(event: LeadRealtimeEvent) {
+    if (event.note) {
+      const note = event.note;
+      setNotesByLeadId((prev) => {
+        if (!prev.has(event.lead_id)) return prev;
+        const next = new Map(prev);
+        const list = next.get(event.lead_id) ?? [];
+        if (event.change_type === "note_deleted") {
+          next.set(event.lead_id, list.filter((n) => n.id !== note.id));
+        } else {
+          const existingIndex = list.findIndex((n) => n.id === note.id);
+          next.set(
+            event.lead_id,
+            existingIndex === -1 ? [...list, note] : list.map((n, i) => (i === existingIndex ? note : n)),
+          );
+        }
+        return next;
+      });
+    }
+
+    const wasShown = candidates.some((c) => c.id === event.lead_id);
+
+    if (event.change_type === "deleted") {
+      if (!wasShown) return;
+      setCandidates((prev) => prev.filter((c) => c.id !== event.lead_id));
+      setTotal((t) => Math.max(0, t - 1));
+      return;
+    }
+
+    if (!event.candidate) return;
+    const updated = event.candidate;
+
+    const stillEligible =
+      viewMode === "pending"
+        ? updated.assigned_to === null
+        : viewMode === "mine"
+          ? updated.assigned_to?.id === currentUserId
+          : viewMode === "care_pool"
+            ? event.change_type !== "care_pool_removed"
+            : true;
+
+    if (wasShown) {
+      if (stillEligible) {
+        setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      } else {
+        setCandidates((prev) => prev.filter((c) => c.id !== updated.id));
+        setTotal((t) => Math.max(0, t - 1));
+      }
+      return;
+    }
+
+    if (event.change_type === "created" || event.change_type === "care_pool_entered") {
+      void silentRefetchCurrentPage();
+    }
+  }
+
+  useLeadRealtime(handleRealtimeEvent);
+  useRealtimeReconnect(() => void silentRefetchCurrentPage());
 
   async function handlePageSizeChange(nextSize: (typeof PAGE_SIZE_OPTIONS)[number]) {
     await refresh(1, viewMode, nextSize);
@@ -570,7 +775,7 @@ export function CandidatesClient({
             onBanner={(b) => (b.type === "success" ? toast.success(b.text) : toast.error(b.text))}
           />
         ) : (
-        <div className="max-h-[calc(100vh-180px)] overflow-auto">
+        <div ref={scrollContainerRef} className="max-h-[calc(100vh-180px)] overflow-auto">
           {/* Dự án phụ — nâng cấp toàn diện: bọc riêng <table> trong 1 div có
               "zoom" (không phải transform: scale) — zoom tính lại layout thật
               theo tỉ lệ mới nên thu nhỏ hiện được nhiều dòng hơn, không để lại
@@ -643,6 +848,7 @@ export function CandidatesClient({
                         // hướng 2 lần chồng lên nhau.
                         const target = event.target as HTMLElement;
                         if (target.closest("a, [role='button']")) return;
+                        saveListStateForReturn();
                         router.push(`/candidates/${candidate.id}`);
                       }}
                     >
@@ -658,6 +864,7 @@ export function CandidatesClient({
                           <Link
                             href={`/candidates/${candidate.id}`}
                             title={candidate.full_name}
+                            onClick={saveListStateForReturn}
                             className={cn(
                               "line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline",
                               candidate.is_held && "bg-orange-200",
@@ -728,6 +935,15 @@ export function CandidatesClient({
                           <Badge variant="neutral" className="text-[10px] px-2 py-0">
                             Chờ phân chia
                           </Badge>
+                          {/* Yêu cầu trực tiếp người dùng (2026-07-16): MKT bắt buộc chọn nhóm
+                              khi up data, nhưng Admin chưa thấy data "Chờ phân chia" thuộc
+                              nhóm nào — bổ sung tên nhóm ngay dưới badge, khớp đúng cách hiện
+                              teamName ở nhánh assigned_to bên trên. */}
+                          {teamName && (
+                            <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
+                              {teamName}
+                            </p>
+                          )}
                           {canClaim && (
                             <Button
                               type="button"
@@ -832,6 +1048,13 @@ export function CandidatesClient({
                             icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
                             title="Chuyển"
                             onClick={() => setModal({ mode: "transfer", candidate })}
+                          />
+                        )}
+                        {canAssign && candidate.assigned_team_id && (
+                          <ActionLink
+                            icon={<PhoneCall className="h-3.5 w-3.5" strokeWidth={2} />}
+                            title="Nhắc gọi lại"
+                            onClick={() => setModal({ mode: "remind", candidate })}
                           />
                         )}
                         {canDelete(candidate) && (
@@ -972,6 +1195,17 @@ export function CandidatesClient({
             await refresh();
             if (currentUserTeamId) await refreshTeamMembers(currentUserTeamId);
             toast.success("Đã chuyển lao động sang Sale khác");
+          }}
+        />
+      )}
+
+      {modal.mode === "remind" && (
+        <RemindModal
+          candidate={modal.candidate}
+          onClose={() => setModal({ mode: "none" })}
+          onSent={(fullName) => {
+            setModal({ mode: "none" });
+            toast.success(`Đã nhắc "${fullName}" xử lý cuộc gọi cho lao động này`);
           }}
         />
       )}
@@ -1486,6 +1720,99 @@ function TransferModal({
         {(error || loadError || missingTeamError) && (
           <p role="alert" className="text-sm text-red-600">
             {error ?? loadError ?? missingTeamError}
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-16): "nút Nhắc gọi lại ở cột HĐ —
+ * Leader/Admin/Quản lý ấn vào hiện danh sách nhân viên TRONG NHÓM đang phụ
+ * trách data đó (kể cả Leader), chọn 1 người để nhắc xử lý — người được
+ * chọn nhận thông báo nổi + chuông + âm thanh." Tái dùng đúng NotificationBell
+ * đã có sẵn (GET /candidate/:id/remind-target liệt kê người có thể nhắc,
+ * POST /candidate/:id/remind gửi thông báo).
+ */
+function RemindModal({
+  candidate,
+  onClose,
+  onSent,
+}: {
+  candidate: Candidate;
+  onClose: () => void;
+  onSent: (fullName: string) => void;
+}) {
+  const [targets, setTargets] = useState<RemindTarget[] | null>(null);
+  const [accountId, setAccountId] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    clientApi<RemindTarget[]>(`/candidate/${candidate.id}/remind-target`)
+      .then((result) => setTargets(result))
+      .catch((err: unknown) => setLoadError(err instanceof ApiError ? err.message : "Không tải được danh sách thành viên nhóm"))
+      .finally(() => setIsLoading(false));
+  }, [candidate.id]);
+
+  async function handleSubmit() {
+    if (!accountId) {
+      setError("Vui lòng chọn thành viên cần nhắc");
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await clientApi(`/candidate/${candidate.id}/remind`, {
+        method: "POST",
+        body: JSON.stringify({ account_id: accountId }),
+      });
+      const target = targets?.find((t) => t.id === accountId);
+      onSent(target?.full_name ?? "thành viên");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Nhắc gọi lại — "${candidate.full_name}"`}
+      description={`SĐT: ${candidate.phone_number}`}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="button" disabled={isSubmitting || !accountId} onClick={() => void handleSubmit()}>
+            {isSubmitting ? "Đang gửi..." : "Gửi nhắc nhở"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Nhắc thành viên" hint={isLoading ? "Đang tải danh sách thành viên..." : undefined}>
+          <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+            <option value="">— Chọn thành viên —</option>
+            {targets?.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.full_name} ({ACCOUNT_ROLE_LABEL[target.role]})
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {!isLoading && targets?.length === 0 && (
+          <p className="text-sm text-slate-500">Nhóm này chưa có thành viên nào khác để nhắc.</p>
+        )}
+
+        {(error || loadError) && (
+          <p role="alert" className="text-sm text-red-600">
+            {error ?? loadError}
           </p>
         )}
       </div>

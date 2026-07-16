@@ -1,14 +1,30 @@
 // Kiểu dữ liệu khớp với "Đối tượng dữ liệu dùng chung" — Mục 0.1, docs/13-api-design.md.
 
-export type AccountRole = "admin" | "manager" | "leader" | "mkt" | "sale";
+// Yêu cầu trực tiếp người dùng (2026-07-16): thêm 3 vai trò mới — accounting
+// (Kế toán), order_staff (NV QL Đơn hàng), shuttle_staff (NV Đưa đón). CHƯA
+// gắn quyền truy cập trang/tính năng nào cho 3 vai trò này (không thêm vào
+// bất kỳ mảng roles nào ở ALL_NAV_ITEMS layout.tsx, VIEW_ROLES backend...) —
+// người dùng sẽ thống kê và thành lập bộ quyền cụ thể sau.
+export type AccountRole =
+  | "admin"
+  | "manager"
+  | "leader"
+  | "mkt"
+  | "sale"
+  | "accounting"
+  | "order_staff"
+  | "shuttle_staff";
 export type AccountStatus = "active" | "inactive";
 
 export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   admin: "Admin",
-  manager: "Quản lý",
+  manager: "Manager",
   leader: "Leader",
-  mkt: "MKT",
-  sale: "Sale",
+  mkt: "NV MKT",
+  sale: "NV Sale",
+  accounting: "Kế toán",
+  order_staff: "NV QL Đơn hàng",
+  shuttle_staff: "NV Đưa đón",
 };
 
 export interface Account {
@@ -39,6 +55,28 @@ export interface Account {
   bank_account_number: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-16): "Giao diện chúc mừng sinh nhật
+ * nhân viên" — Mục 6: KHÔNG có ngày sinh/năm sinh/tuổi trong payload này,
+ * chỉ tên/avatar/nhóm/chức vụ. Khớp BirthdayEmployeeDto/BirthdayTodayResponseDto
+ * ở backend (birthday/dto/birthday-response.dto.ts).
+ */
+export interface BirthdayEmployee {
+  account_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: AccountRole;
+  position: string | null;
+  team_name: string | null;
+}
+
+export interface BirthdayToday {
+  /** "MM-DD" đang dùng để so khớp — ngày thật, hoặc ngày giả lập nếu đang xem thử (Mục 11). */
+  date: string;
+  is_preview: boolean;
+  employees: BirthdayEmployee[];
 }
 
 export interface Team {
@@ -182,6 +220,14 @@ export interface AssignBulkResult {
   assigned_count: number;
 }
 
+/** Yêu cầu trực tiếp người dùng (2026-07-16) — GET /candidate/:id/remind-target (danh sách chọn khi "Nhắc gọi lại"). */
+export interface RemindTarget {
+  id: string;
+  full_name: string;
+  role: AccountRole;
+  avatar_url: string | null;
+}
+
 // ── Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú ────────────────────────
 
 export type StatusCategory =
@@ -212,6 +258,58 @@ export interface Note {
   zalo_friend_status: NamedRef | null;
   created_at: string;
   is_deleted: boolean;
+}
+
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-16) — "Sửa chức năng cập nhật dữ
+ * liệu realtime trong module Data lao động": payload WebSocket sự kiện
+ * `leads:update`, khớp đúng LeadRealtimeEvent ở backend
+ * (realtime-event.interface.ts).
+ */
+export type LeadChangeType =
+  | "created"
+  | "updated"
+  | "deleted"
+  | "assigned"
+  | "transferred"
+  | "held"
+  | "unheld"
+  | "note_created"
+  | "note_updated"
+  | "note_deleted"
+  | "care_pool_locked"
+  | "care_pool_released"
+  | "care_pool_removed"
+  | "care_pool_entered";
+
+export interface LeadRealtimeEvent {
+  lead_id: string;
+  change_type: LeadChangeType;
+  candidate?: Candidate;
+  note?: Note;
+  updated_at: string;
+  actor: { id: string; role: AccountRole } | null;
+}
+
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-16) — "Mở rộng cơ chế đồng bộ
+ * realtime sang Đưa đón/Báo cáo/Check phạt/Thông báo/Dashboard": contract
+ * TỔNG QUÁT dùng chung cho 4 module này, khớp đúng backend
+ * app-event.interface.ts — KHÁC hẳn LeadRealtimeEvent ở trên (module Data
+ * lao động giữ nguyên, không đụng), phát trên kênh Socket.IO riêng
+ * (`app:event`, xem lib/realtime.ts).
+ */
+export type AppRealtimeModule = "transportation" | "daily-report" | "penalty" | "notification" | "dashboard";
+export type AppRealtimeAction = "created" | "updated" | "deleted" | "invalidate";
+
+export interface AppRealtimeEvent<TPayload = unknown> {
+  module: AppRealtimeModule;
+  entity: string;
+  action: AppRealtimeAction;
+  entity_id: string | null;
+  updated_at: string;
+  actor: { id: string; role: AccountRole } | null;
+  payload?: TPayload;
 }
 
 // ── Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar ────────────────────
@@ -547,6 +645,8 @@ export interface CheckinRecord {
   device: string | null;
   operating_system: string | null;
   browser: string | null;
+  /** Yêu cầu trực tiếp người dùng (2026-07-16): cột "Ghi chú" ở trang quản lý Check in GPS. */
+  note: string | null;
   created_at: string;
 }
 
@@ -650,7 +750,17 @@ export interface AppNotification {
   id: string;
   account_id: string;
   lead_id: string | null;
-  type: "callback_reminder" | "interview_reminder" | "admin_message";
+  /** Dự án phụ — nâng cấp toàn diện (2026-07-16, module "Tạo đơn"): gắn với 1 Đơn xin nghỉ phép cụ thể — khớp vai trò lead_id. */
+  leave_request_id: string | null;
+  type:
+    | "callback_reminder"
+    | "interview_reminder"
+    | "admin_message"
+    | "new_data_uploaded"
+    | "manual_callback_reminder"
+    | "leave_request_pending_leader"
+    | "leave_request_pending_admin"
+    | "leave_request_decided";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;
@@ -659,6 +769,43 @@ export interface AppNotification {
   scheduled_at: string;
   sent_at: string | null;
   status: "pending" | "sent" | "failed";
+}
+
+// ── Dự án phụ — nâng cấp toàn diện: Tạo đơn — Đơn xin nghỉ phép ─────────
+
+export interface LeaveRequestPerson {
+  id: string;
+  full_name: string;
+  role: AccountRole;
+  avatar_url: string | null;
+}
+
+export type LeaveRequestStatus = "pending_leader" | "pending_admin" | "approved" | "rejected";
+export type LeaveDecision = "approved" | "rejected";
+
+/** Yêu cầu trực tiếp người dùng (2026-07-16) — "Đơn xin nghỉ phép" mẫu y hệt file đính kèm. */
+export interface LeaveRequest {
+  id: string;
+  account: LeaveRequestPerson;
+  employee_position: string | null;
+  employee_department: string | null;
+  recipient_text: string | null;
+  start_date: string;
+  end_date: string;
+  days_count: number;
+  reason: string;
+  handover_to: string | null;
+  status: LeaveRequestStatus;
+  leader_decision_by: LeaveRequestPerson | null;
+  leader_decision_at: string | null;
+  leader_decision: LeaveDecision | null;
+  leader_note: string | null;
+  admin_decision_by: LeaveRequestPerson | null;
+  admin_decision_at: string | null;
+  admin_decision: LeaveDecision | null;
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Dự án phụ — nâng cấp toàn diện: Danh sách đưa đón ──────────────────

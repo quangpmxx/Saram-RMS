@@ -8,6 +8,7 @@ import { DailyReportsService } from './daily-reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ReportPenaltyService } from '../report-penalty/report-penalty.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 describe('DailyReportsService', () => {
   let service: DailyReportsService;
@@ -74,6 +75,7 @@ describe('DailyReportsService', () => {
     const reportPenaltyService = {
       markSupplementedIfPending: jest.fn().mockResolvedValue(undefined),
     };
+    const realtimeService = { emitDailyReportChange: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -81,6 +83,7 @@ describe('DailyReportsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
         { provide: ReportPenaltyService, useValue: reportPenaltyService },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 

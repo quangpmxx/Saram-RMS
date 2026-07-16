@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -23,12 +24,19 @@ import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
+import { RemindCallbackDto } from './dto/remind-callback.dto';
+import {
+  RemindTargetResponseDto,
+  toRemindTargetResponse,
+} from './dto/remind-target-response.dto';
 import { DuplicateWarning } from './dto/duplicate-warning.dto';
 import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
 import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { DuplicateGroupDto } from './dto/duplicate-group.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
+import { toNotificationResponse } from '../notification/dto/notification-response.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 /** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia (cho người khác)/chuyển lead. */
 const ASSIGNMENT_ROLES = new Set(['admin', 'manager', 'leader']);
@@ -55,11 +63,14 @@ const FULL_ACCESS_ROLES = new Set(['admin', 'manager', 'mkt']);
 
 @Injectable()
 export class CandidatesService {
+  private readonly logger = new Logger(CandidatesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly duplicateService: LeadDuplicateService,
     private readonly distributionRuleService: DistributionRuleService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(
@@ -141,12 +152,11 @@ export class CandidatesService {
       this.prisma.lead.findMany({
         where,
         include: CANDIDATE_INCLUDE,
-        // Dự án phụ — nâng cấp toàn diện: ưu tiên hiện lead CHƯA được phân
-        // chia lên đầu, kế đến là lead chưa xử lý (chưa có ghi chú nào), còn
-        // lại xếp theo ngày lên số mới nhất — đúng thứ tự người dùng yêu cầu.
+        // Yêu cầu trực tiếp người dùng (2026-07-16): ưu tiên hiện lead CHƯA
+        // được phân chia lên đầu, còn lại xếp theo ngày giờ lên số — đúng 2
+        // tiêu chí, không thêm tiêu chí nào khác.
         orderBy: [
           { assignedToId: { sort: 'asc', nulls: 'first' } },
-          { notes: { _count: 'asc' } },
           { uploadedAt: 'desc' },
         ],
         skip: (query.page - 1) * query.page_size,
@@ -361,6 +371,13 @@ export class CandidatesService {
     // tự động phân chia CỦA ĐÚNG NHÓM data này, không lấy quy tắc nhóm khác).
     await this.distributionRuleService.tryAutoAssign(created);
 
+    // Dự án phụ — nâng cấp toàn diện (2026-07-16, ngoài phạm vi Design
+    // Freeze docs/09-13, yêu cầu trực tiếp người dùng): "Khi có 1 data mới
+    // được up lên nhóm, tất cả thành viên trong nhóm (cả leader) nhận được
+    // thông báo nổi + chuông" — báo TOÀN BỘ tài khoản đang active thuộc
+    // đúng nhóm vừa nhận data này, bất kể vai trò (Leader/Sale...).
+    await this.notifyTeamOfNewData(created, currentUser);
+
     const matches = await this.duplicateService.syncDuplicateFlags(
       created.phoneNumber,
     );
@@ -378,9 +395,11 @@ export class CandidatesService {
       where: { id: created.id },
       include: CANDIDATE_INCLUDE,
     });
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange('created', finalResponse, currentUser);
 
     return {
-      candidate: toCandidateResponse(final),
+      candidate: finalResponse,
       duplicate_warning: await this.buildDuplicateWarning(
         created.phoneNumber,
         otherMatches,
@@ -441,7 +460,9 @@ export class CandidatesService {
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange('updated', finalResponse, currentUser);
+    return finalResponse;
   }
 
   /**
@@ -530,7 +551,9 @@ export class CandidatesService {
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange('updated', finalResponse, currentUser);
+    return finalResponse;
   }
 
   /** Mục 6, docs/13: POST /candidate/:id/hold — Sale (chỉ với lead của mình). */
@@ -620,7 +643,13 @@ export class CandidatesService {
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange(
+      isHeld ? 'held' : 'unheld',
+      finalResponse,
+      currentUser,
+    );
+    return finalResponse;
   }
 
   async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {
@@ -647,6 +676,21 @@ export class CandidatesService {
       entityType: 'lead',
       entityId: id,
     });
+
+    // Yêu cầu trực tiếp người dùng (2026-07-16): record bị xóa phải "loại
+    // khỏi danh sách" ngay ở các trình duyệt khác đang mở — dùng dữ liệu
+    // `existing` (Lead TRƯỚC KHI xóa) để tính đối tượng nhận, vì bản ghi đã
+    // xóa mềm không còn xuất hiện trong CandidateResponseDto bình thường.
+    this.realtime.emitLeadDeleted(
+      id,
+      {
+        assignedTeamId: existing.assignedTeamId,
+        assignedToId: existing.assignedToId,
+        carePoolLockedById: existing.carePoolLockedById,
+        visibleToAllLeaderSale: existing.assignedTeamId === null,
+      },
+      currentUser,
+    );
   }
 
   /** Mục 4, docs/13: GET /candidate/pending — MKT, Leader, Quản lý, Admin. */
@@ -691,10 +735,10 @@ export class CandidatesService {
       this.prisma.lead.findMany({
         where,
         include: CANDIDATE_INCLUDE,
-        // Dự án phụ — nâng cấp toàn diện: toàn bộ danh sách này đã là "chờ
-        // phân chia" (assignedToId=null) nên chỉ còn ưu tiên thứ 2 — lead
-        // chưa xử lý (chưa có ghi chú) lên trước.
-        orderBy: [{ notes: { _count: 'asc' } }, { uploadedAt: 'desc' }],
+        // Yêu cầu trực tiếp người dùng (2026-07-16): toàn bộ danh sách này
+        // đã là "chưa chia" (assignedToId=null) nên chỉ còn xếp theo ngày
+        // giờ lên số — không thêm tiêu chí nào khác.
+        orderBy: [{ uploadedAt: 'desc' }],
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),
@@ -751,7 +795,9 @@ export class CandidatesService {
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange('assigned', finalResponse, currentUser);
+    return finalResponse;
   }
 
   /** Mục 5, docs/13: POST /candidate/assign-bulk — Leader (nhóm mình)/Quản lý/Admin. */
@@ -794,6 +840,21 @@ export class CandidatesService {
         entityId: lead.id,
         newValue: target.id,
       });
+    }
+
+    // Yêu cầu trực tiếp người dùng (2026-07-16): mỗi lead vừa gán hàng loạt
+    // cũng phải đồng bộ realtime như gán từng cái — 1 truy vấn duy nhất lấy
+    // đủ CANDIDATE_INCLUDE cho toàn bộ lead vừa đổi, tránh N+1.
+    const updatedLeads = await this.prisma.lead.findMany({
+      where: { id: { in: eligible.map((lead) => lead.id) } },
+      include: CANDIDATE_INCLUDE,
+    });
+    for (const lead of updatedLeads) {
+      this.realtime.emitCandidateChange(
+        'assigned',
+        toCandidateResponse(lead),
+        currentUser,
+      );
     }
 
     return { assigned_count: eligible.length };
@@ -864,7 +925,137 @@ export class CandidatesService {
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange(
+      'transferred',
+      finalResponse,
+      currentUser,
+    );
+    return finalResponse;
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): "nút Nhắc gọi lại ở cột HĐ,
+   * trang data lao động — Leader/Admin/Quản lý ấn vào hiện danh sách nhân
+   * viên TRONG NHÓM đang phụ trách data đó (không phải nhóm khác)". Trả về
+   * TOÀN BỘ thành viên đang active (kể cả Leader) của đúng nhóm đang phụ
+   * trách lead này, TRỪ chính người đang xem (không tự nhắc chính mình).
+   */
+  async getRemindTargets(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<RemindTargetResponseDto[]> {
+    const lead = await this.assertRemindEligible(id, currentUser);
+
+    const members = await this.prisma.account.findMany({
+      where: {
+        teamId: lead.assignedTeamId!,
+        status: 'active',
+        id: { not: currentUser.id },
+      },
+      select: { id: true, fullName: true, role: true, avatarUrl: true },
+      orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+    });
+
+    return members.map(toRemindTargetResponse);
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): "Người được nhận nhiệm vụ
+   * nhắc nhở gọi lại sẽ nhận được thông báo nổi, chuông thông báo, âm thanh"
+   * — tái dùng đúng hạ tầng Notification (NotificationBell tự polling/toast/
+   * chuông/âm thanh, không cần đổi gì frontend ngoài khai báo type mới),
+   * khớp đúng cách notifyTeamOfNewData() ở create() đã làm.
+   */
+  async remindCallback(
+    id: string,
+    dto: RemindCallbackDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ success: true }> {
+    const lead = await this.assertRemindEligible(id, currentUser);
+
+    const target = await this.prisma.account.findUnique({
+      where: { id: dto.account_id },
+    });
+    if (!target || target.status !== 'active') {
+      throw new NotFoundException('Không tìm thấy tài khoản hợp lệ để nhắc');
+    }
+    if (target.teamId !== lead.assignedTeamId) {
+      throw new ForbiddenException(
+        'Chỉ được nhắc thành viên trong đúng nhóm đang phụ trách ứng viên này',
+      );
+    }
+    if (target.id === currentUser.id) {
+      throw new BadRequestException('Không thể tự nhắc chính mình');
+    }
+
+    const now = new Date();
+    const notification = await this.prisma.notification.create({
+      data: {
+        accountId: target.id,
+        leadId: lead.id,
+        type: 'manual_callback_reminder',
+        channel: 'in_app',
+        content: `Nhắc xử lý data lao động "${lead.fullName}" (${lead.phoneNumber})`,
+        senderId: currentUser.id,
+        scheduledAt: now,
+        sentAt: now,
+        status: 'sent',
+      },
+      include: {
+        sender: {
+          select: { id: true, fullName: true, role: true, avatarUrl: true },
+        },
+      },
+    });
+    this.realtime.emitNotificationCreated(
+      toNotificationResponse(notification),
+      currentUser,
+    );
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'create',
+      entityType: 'notification',
+      entityId: id,
+      newValue: `manual_callback_reminder -> ${target.id}`,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Điều kiện dùng chung cho getRemindTargets()/remindCallback(): lead phải
+   * tồn tại, chưa xóa mềm, ĐÃ có nhóm phụ trách (assignedTeamId — data chưa
+   * gán nhóm thì không có "nhóm" nào để nhắc); người thao tác phải là
+   * Admin/Quản lý/Leader (ASSIGNMENT_ROLES), Leader thì bắt buộc đúng nhóm
+   * mình đang phụ trách lead này (khớp assertValidAssignTarget()/transfer()).
+   */
+  private async assertRemindEligible(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<Lead> {
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Không tìm thấy ứng viên');
+    }
+    if (!lead.assignedTeamId) {
+      throw new BadRequestException(
+        'Ứng viên chưa thuộc nhóm nào — không thể nhắc gọi lại',
+      );
+    }
+    if (!ASSIGNMENT_ROLES.has(currentUser.role)) {
+      throw new ForbiddenException('Bạn không có quyền nhắc gọi lại');
+    }
+    if (currentUser.role === 'leader') {
+      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      if (!ownTeamId || lead.assignedTeamId !== ownTeamId) {
+        throw new ForbiddenException(
+          'Bạn chỉ được nhắc gọi lại cho ứng viên trong nhóm mình',
+        );
+      }
+    }
+    return lead;
   }
 
   /**
@@ -1128,6 +1319,68 @@ export class CandidatesService {
     if (!team) {
       throw new NotFoundException(
         'Không tìm thấy nhóm (team_id không tồn tại)',
+      );
+    }
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): "Khi có 1 data mới được up
+   * lên nhóm. Tất cả những thành viên trong nhóm (cả leader) sẽ nhận được
+   * thông báo nổi, chuông thông báo" — tạo 1 Notification/thành viên, kênh
+   * `in_app` (NotificationBell tự polling + hiện toast nổi + chuông, không
+   * cần đổi gì ở frontend ngoài khai báo type mới). Không chặn luồng tạo
+   * lead nếu bước này lỗi — tách try/catch riêng, giống cách tryAutoAssign()
+   * ở trên tự nuốt lỗi để không làm hỏng thao tác chính.
+   */
+  private async notifyTeamOfNewData(
+    lead: Lead,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    if (!lead.assignedTeamId) return;
+
+    try {
+      const members = await this.prisma.account.findMany({
+        where: { teamId: lead.assignedTeamId, status: 'active' },
+        select: { id: true },
+      });
+      if (members.length === 0) return;
+
+      const now = new Date();
+      await this.prisma.notification.createMany({
+        data: members.map((member) => ({
+          accountId: member.id,
+          leadId: lead.id,
+          type: 'new_data_uploaded' as const,
+          channel: 'in_app' as const,
+          content: `Có data mới được thêm vào nhóm: ${lead.fullName} (${lead.phoneNumber})`,
+          senderId: lead.uploadedById,
+          scheduledAt: now,
+          sentAt: now,
+          status: 'sent' as const,
+        })),
+      });
+
+      // createMany() không trả lại các dòng vừa tạo — truy vấn lại đúng lô
+      // vừa ghi bằng (leadId, type, scheduledAt) — đủ định danh (1 lead chỉ
+      // kích hoạt hàm này đúng 1 lần lúc tạo lead), không đụng cách ghi gốc.
+      const created = await this.prisma.notification.findMany({
+        where: { leadId: lead.id, type: 'new_data_uploaded', scheduledAt: now },
+        include: {
+          sender: {
+            select: { id: true, fullName: true, role: true, avatarUrl: true },
+          },
+        },
+      });
+      for (const notification of created) {
+        this.realtime.emitNotificationCreated(
+          toNotificationResponse(notification),
+          currentUser,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Gửi thông báo "data mới" thất bại cho lead ${lead.id}`,
+        error as Error,
       );
     }
   }

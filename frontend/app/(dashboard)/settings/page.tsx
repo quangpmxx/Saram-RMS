@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import type { SystemConfig } from "@/lib/types";
+import type { Account, PaginatedResult, SystemConfig } from "@/lib/types";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage() {
@@ -12,7 +12,13 @@ export default async function SettingsPage() {
     redirect("/");
   }
 
-  const configs = await serverApi<SystemConfig[]>("/config");
+  // Danh sách tài khoản cho panel "Xem thử giao diện sinh nhật" (Mục 11,
+  // yêu cầu trực tiếp người dùng 2026-07-16) — tận dụng lại /account đã có,
+  // không tạo endpoint riêng.
+  const [configs, accountsResult] = await Promise.all([
+    serverApi<SystemConfig[]>("/config"),
+    serverApi<PaginatedResult<Account>>("/account?page=1&page_size=100"),
+  ]);
 
-  return <SettingsClient initialConfigs={configs} />;
+  return <SettingsClient initialConfigs={configs} accounts={accountsResult.items} />;
 }

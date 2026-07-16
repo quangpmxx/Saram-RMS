@@ -1,6 +1,7 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ListNotificationQueryDto } from './dto/list-notification-query.dto';
@@ -25,6 +26,7 @@ export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(
@@ -115,6 +117,31 @@ export class NotificationService {
       fieldChanged: 'content',
       newValue: dto.content,
     });
+
+    // Mục 3, yêu cầu người dùng (mở rộng realtime — Thông báo): createMany()
+    // không trả lại các dòng vừa tạo (Prisma chỉ trả {count}) — truy vấn lại
+    // CHÍNH XÁC đúng lô vừa ghi bằng `scheduledAt: now` (1 mốc thời gian duy
+    // nhất, chụp lúc TRƯỚC createMany, đủ để định danh lô — không đụng tới
+    // cách ghi DB gốc, chỉ thêm bước đọc lại để có id/dữ liệu đầy đủ phát realtime).
+    const created = await this.prisma.notification.findMany({
+      where: {
+        accountId: { in: accountIds },
+        type: 'admin_message',
+        senderId: currentUser.id,
+        scheduledAt: now,
+      },
+      include: {
+        sender: {
+          select: { id: true, fullName: true, role: true, avatarUrl: true },
+        },
+      },
+    });
+    for (const notification of created) {
+      this.realtime.emitNotificationCreated(
+        toNotificationResponse(notification),
+        currentUser,
+      );
+    }
 
     return { recipient_count: accountIds.length };
   }

@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Settings2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { SystemConfig } from "@/lib/types";
+import type { Account, SystemConfig } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { BirthdayPreviewPanel } from "@/components/birthday/birthday-preview-panel";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
@@ -22,7 +23,13 @@ function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("vi-VN");
 }
 
-export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfig[] }) {
+export function SettingsClient({
+  initialConfigs,
+  accounts,
+}: {
+  initialConfigs: SystemConfig[];
+  accounts: Account[];
+}) {
   useSetPageTitle("Cấu hình vận hành", "Tham số vận hành toàn hệ thống — chỉ Admin xem/sửa được.");
   const router = useRouter();
   const [configs, setConfigs] = useState(initialConfigs);
@@ -78,6 +85,8 @@ export function SettingsClient({ initialConfigs }: { initialConfigs: SystemConfi
           </div>
         )}
       </Card>
+
+      <BirthdayPreviewPanel accounts={accounts} />
 
       {editing && (
         <EditConfigModal

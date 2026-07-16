@@ -3,6 +3,7 @@ import { UnprocessableEntityException } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -38,12 +39,14 @@ describe('NotificationService', () => {
       ),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    const realtimeService = { emitNotificationCreated: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         NotificationService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 

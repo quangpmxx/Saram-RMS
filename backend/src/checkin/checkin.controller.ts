@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -18,6 +19,7 @@ import { CheckinPreviewQueryDto } from './dto/checkin-preview-query.dto';
 import { UpdateCompanyLocationDto } from './dto/update-company-location.dto';
 import { ListCheckinQueryDto } from './dto/list-checkin-query.dto';
 import { ResetCheckinDto } from './dto/reset-checkin.dto';
+import { UpdateCheckinNoteDto } from './dto/update-checkin-note.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
@@ -99,5 +101,25 @@ export class CheckinController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.checkinService.reset(id, dto.reason, user);
+  }
+
+  /** Yêu cầu trực tiếp người dùng (2026-07-16): Admin xác nhận thủ công 1 bản ghi Check in sang trạng thái "Hợp lệ". */
+  @Post(':id/approve')
+  @HttpCode(HttpStatus.OK)
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.checkinService.approveAsValid(id, user);
+  }
+
+  /** Yêu cầu trực tiếp người dùng (2026-07-16): cột "Ghi chú" ở trang quản lý Check in GPS — chỉ Admin sửa được. */
+  @Patch(':id/note')
+  updateNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCheckinNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.checkinService.updateNote(id, dto.note, user);
   }
 }

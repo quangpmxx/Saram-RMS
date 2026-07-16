@@ -61,13 +61,21 @@ datasource db {
   provider = "postgresql"
 }
 
-// Khớp cột "role" của bảng accounts (Mục 2.2, tài liệu 11)
+// Khớp cột "role" của bảng accounts (Mục 2.2, tài liệu 11).
+// Yêu cầu trực tiếp người dùng (2026-07-16): thêm 3 vai trò mới — accounting
+// (Kế toán), order_staff (NV QL Đơn hàng), shuttle_staff (NV Đưa đón). CHƯA
+// gắn quyền/truy cập tính năng gì cho 3 vai trò này (không thêm vào bất kỳ
+// @Roles()/VIEW_ROLES/ALL_NAV_ITEMS nào) — người dùng sẽ thống kê và thành
+// lập bộ quyền cụ thể sau, cho phép thêm/bớt quyền theo từng nhân viên.
 enum AccountRole {
   admin
   manager
   leader
   mkt
   sale
+  accounting
+  order_staff
+  shuttle_staff
 
   @@map("account_role")
 }
@@ -154,54 +162,54 @@ model Team {
 
 /// Mục 2.2, tài liệu 11 — Tài khoản nhân viên (Admin/Quản lý/Leader/MKT/Sale)
 model Account {
-  id           String        @id @default(uuid()) @db.Uuid
-  fullName     String        @map("full_name") @db.VarChar(150)
-  username     String        @unique @db.VarChar(50)
-  passwordHash String        @map("password_hash") @db.VarChar(255)
-  role         AccountRole
-  teamId       String?       @map("team_id") @db.Uuid
-  status       AccountStatus @default(active)
+  id                 String        @id @default(uuid()) @db.Uuid
+  fullName           String        @map("full_name") @db.VarChar(150)
+  username           String        @unique @db.VarChar(50)
+  passwordHash       String        @map("password_hash") @db.VarChar(255)
+  role               AccountRole
+  teamId             String?       @map("team_id") @db.Uuid
+  status             AccountStatus @default(active)
   // Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
   // ảnh đại diện tự upload, đường dẫn tương đối phục vụ tĩnh qua
   // useStaticAssets() trong main.ts (vd "/uploads/avatars/xxx.jpg").
-  avatarUrl    String?       @map("avatar_url") @db.VarChar(500)
+  avatarUrl          String?       @map("avatar_url") @db.VarChar(500)
   // Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
   // docs/09-13, yêu cầu trực tiếp người dùng — module Chấm công): "chức vụ"
   // tùy chỉnh, sửa tay được — null = chưa đặt, khi đó cột "Vị trí" ở bảng
   // chấm công hiện nhãn vai trò (role) mặc định như trước (xem
   // attendance.service.ts). Không thay thế `role` (vẫn giữ nguyên nghiệp vụ
   // phân quyền dựa trên role) — chỉ là nhãn hiển thị tùy chỉnh thêm.
-  position     String?       @db.VarChar(100)
+  position           String?       @db.VarChar(100)
   // Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
   // docs/09-13, yêu cầu trực tiếp người dùng): 5 field hồ sơ nhân sự — CHỈ
   // Admin sửa được (qua trang Quản lý tài khoản), Nhân viên/Leader chỉ XEM
   // (trang Cài đặt tài khoản, xem accounts.controller.ts/@Roles('admin') so
   // với auth.controller.ts GET /me không giới hạn vai trò). Đều nullable —
   // tài khoản cũ chưa có dữ liệu.
-  dateOfBirth        DateTime? @map("date_of_birth") @db.Date
-  hireDate           DateTime? @map("hire_date") @db.Date
-  personalPhone      String?   @map("personal_phone") @db.VarChar(20)
-  personalEmail      String?   @map("personal_email") @db.VarChar(255)
+  dateOfBirth        DateTime?     @map("date_of_birth") @db.Date
+  hireDate           DateTime?     @map("hire_date") @db.Date
+  personalPhone      String?       @map("personal_phone") @db.VarChar(20)
+  personalEmail      String?       @map("personal_email") @db.VarChar(255)
   /// Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng: "lúc trước bổ sung
   /// rồi mà còn thiếu") — CCCD (số căn cước công dân) + STK (số tài khoản
   /// ngân hàng nhận lương), cùng quy tắc CHỈ Admin sửa/Nhân viên chỉ xem
   /// như 4 field hồ sơ nhân sự phía trên.
-  citizenId          String?   @map("citizen_id") @db.VarChar(20)
-  bankAccountNumber  String?   @map("bank_account_number") @db.VarChar(30)
+  citizenId          String?       @map("citizen_id") @db.VarChar(20)
+  bankAccountNumber  String?       @map("bank_account_number") @db.VarChar(30)
   /// Số ngày phép còn lại. Admin đặt số ban đầu (trang Quản lý tài khoản).
   /// Từ 2026-07-15 (yêu cầu trực tiếp người dùng): TỰ ĐỘNG +1 mỗi khi sang
   /// tháng mới (xem leave-accrual.service.ts), và TỰ ĐỘNG trừ 1 khi tick
   /// "NP" (Nghỉ phép) trên bảng chấm công / hoàn lại khi bỏ tick (xem
   /// attendance.service.ts bulkSave()) — không còn là số tay hoàn toàn.
-  remainingLeaveDays Float?    @map("remaining_leave_days")
+  remainingLeaveDays Float?        @map("remaining_leave_days")
   /// Dấu mốc lần gần nhất được cộng dồn phép tháng — dùng để 1 tài khoản
   /// không bao giờ bị cộng 2 lần trong cùng 1 tháng dù cron chạy lại/server
   /// khởi động lại (so sánh tháng theo giờ Việt Nam, không so đúng giờ
   /// phút). NULL = chưa từng được cộng.
-  lastLeaveAccrualAt DateTime? @map("last_leave_accrual_at")
-  createdById  String?       @map("created_by") @db.Uuid
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  lastLeaveAccrualAt DateTime?     @map("last_leave_accrual_at")
+  createdById        String?       @map("created_by") @db.Uuid
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
 
   team            Team?      @relation("TeamMembers", fields: [teamId], references: [id])
   leaderOfTeam    Team?      @relation("TeamLeader")
@@ -238,7 +246,7 @@ model Account {
   distributionMemberships  DistributionMember[]
 
   // Phase 8 — quan hệ ngược từ Notification
-  notifications Notification[]
+  notifications     Notification[]
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược người gửi (admin_message)
   sentNotifications Notification[] @relation("NotificationSender")
 
@@ -261,17 +269,24 @@ model Account {
   updatedAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordUpdatedBy")
 
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ CheckinRecord (Check in GPS, Phase 1)
-  checkinRecords CheckinRecord[] @relation("CheckinRecordAccount")
+  checkinRecords                CheckinRecord[]         @relation("CheckinRecordAccount")
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược Admin đã Reset (Check in GPS, Phase 4)
-  voidedCheckinRecords CheckinRecord[] @relation("CheckinRecordVoidedBy")
+  voidedCheckinRecords          CheckinRecord[]         @relation("CheckinRecordVoidedBy")
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ CompanyLocationConfig (Check in GPS, Phase 2)
   updatedCompanyLocationConfigs CompanyLocationConfig[]
 
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ReportViolation (Check phạt)
-  reportViolations         ReportViolation[] @relation("ReportViolationAccount")
-  resolvedReportViolations ReportViolation[] @relation("ReportViolationResolvedBy")
+  reportViolations             ReportViolation[]      @relation("ReportViolationAccount")
+  resolvedReportViolations     ReportViolation[]      @relation("ReportViolationResolvedBy")
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ReportDeadlineConfig (Check phạt)
   updatedReportDeadlineConfigs ReportDeadlineConfig[]
+
+  // Dự án phụ — nâng cấp toàn diện (2026-07-16, ngoài phạm vi Design Freeze
+  // docs/09-13, yêu cầu trực tiếp người dùng — module "Tạo đơn"): quan hệ
+  // ngược từ LeaveRequest (Đơn xin nghỉ phép).
+  leaveRequests               LeaveRequest[] @relation("LeaveRequestAccount")
+  leaveRequestLeaderDecisions LeaveRequest[] @relation("LeaveRequestLeaderDecision")
+  leaveRequestAdminDecisions  LeaveRequest[] @relation("LeaveRequestAdminDecision")
 
   @@map("accounts")
 }
@@ -502,12 +517,12 @@ model ImportJob {
 /// Mục 2.9, tài liệu 11 — Lịch sử ghi chú/cuộc gọi của từng lead. Xóa mềm
 /// (is_deleted) để giữ lịch sử đầy đủ kể cả note đã xóa (Mục 10, tài liệu 09).
 model LeadNote {
-  id           String    @id @default(uuid()) @db.Uuid
-  leadId       String    @map("lead_id") @db.Uuid
-  createdById  String    @map("created_by") @db.Uuid
-  content      String
-  callStatusId String?   @map("call_status_id") @db.Uuid
-  callResultId String?   @map("call_result_id") @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  leadId             String    @map("lead_id") @db.Uuid
+  createdById        String    @map("created_by") @db.Uuid
+  content            String
+  callStatusId       String?   @map("call_status_id") @db.Uuid
+  callResultId       String?   @map("call_result_id") @db.Uuid
   // Dự án phụ — nâng cấp toàn diện: snapshot "Tình trạng Zalo" tại thời điểm
   // ghi note, cùng cơ chế với callStatusId/callResultId ở trên — hiện dưới
   // dạng "tag" phía trên note (Mục 2.9, docs/11).
@@ -599,11 +614,11 @@ model SystemConfig {
 /// dạng JSON string {"tên_cột": độ_rộng_px, ...} — validate ở service, không
 /// ràng buộc cấu trúc cột cụ thể ở DB (mỗi trang tự định nghĩa danh sách cột).
 model ColumnWidthConfig {
-  id            String   @id @default(uuid()) @db.Uuid
-  tableKey      String   @unique @map("table_key") @db.VarChar(100)
-  columnWidths  String   @map("column_widths") @db.VarChar(2000)
-  updatedById   String   @map("updated_by") @db.Uuid
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  tableKey     String   @unique @map("table_key") @db.VarChar(100)
+  columnWidths String   @map("column_widths") @db.VarChar(2000)
+  updatedById  String   @map("updated_by") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   updatedBy Account @relation(fields: [updatedById], references: [id])
 
@@ -658,6 +673,27 @@ enum NotificationType {
   /// cảnh báo tự động 1 Sale không có bản ghi nào trong "Danh sách đưa đón"
   /// (shuttle_records.sale) suốt 3 ngày liên tiếp — xem SaleReminderService.
   sale_no_shuttle_reminder
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-16, ngoài phạm vi Design Freeze
+  /// docs/09-13, yêu cầu trực tiếp người dùng): "Có 1 data mới được up lên
+  /// nhóm" — báo TOÀN BỘ thành viên nhóm (kể cả Leader) khi 1 ứng viên mới
+  /// được gán thẳng vào nhóm lúc tạo (CandidatesService.create(), dto.team_id).
+  new_data_uploaded
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-16, ngoài phạm vi Design Freeze
+  /// docs/09-13, yêu cầu trực tiếp người dùng): "Nhắc gọi lại" — Admin/Quản
+  /// lý/Leader chọn 1 thành viên trong ĐÚNG nhóm đang phụ trách data để nhắc
+  /// xử lý — KHÁC callback_reminder ở trên (hệ thống tự nhắc người đã hẹn
+  /// lịch gọi lại, không cần ai chọn tay).
+  manual_callback_reminder
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-16, module "Tạo đơn" — Đơn xin
+  /// nghỉ phép): báo Leader có đơn mới cần duyệt (hoặc báo Admin thẳng nếu
+  /// nhân viên không thuộc nhóm/nhóm không có Leader).
+  leave_request_pending_leader
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-16): báo Admin có đơn đã qua
+  /// Leader duyệt (hoặc lên thẳng nếu bỏ qua bước Leader), cần duyệt tiếp.
+  leave_request_pending_admin
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-16): báo người làm đơn biết kết
+  /// quả cuối cùng (đã duyệt/từ chối, ở bước Leader hoặc Admin).
+  leave_request_decided
 
   @@map("notification_type")
 }
@@ -685,29 +721,94 @@ enum NotificationStatus {
 /// Mục 2.14, tài liệu 11 — Hàng đợi thông báo nhắc lịch qua Zalo, worker nền
 /// quét theo (status, scheduled_at) để gửi đúng lúc, tránh gửi trùng/thất lạc.
 model Notification {
-  id          String              @id @default(uuid()) @db.Uuid
-  accountId   String              @map("account_id") @db.Uuid
-  leadId      String?             @map("lead_id") @db.Uuid
-  type        NotificationType
-  channel     NotificationChannel @default(zalo)
+  id             String              @id @default(uuid()) @db.Uuid
+  accountId      String              @map("account_id") @db.Uuid
+  leadId         String?             @map("lead_id") @db.Uuid
+  /// Dự án phụ — nâng cấp toàn diện (2026-07-16, module "Tạo đơn"): gắn
+  /// thông báo với 1 Đơn xin nghỉ phép cụ thể — cùng vai trò với `leadId`
+  /// (frontend bấm vào thông báo -> link thẳng tới đúng đơn/lao động).
+  leaveRequestId String?             @map("leave_request_id") @db.Uuid
+  type           NotificationType
+  channel        NotificationChannel @default(zalo)
   /// Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message,
   /// null với 2 loại nhắc lịch cũ (nội dung tự dựng ở tầng hiển thị như trước).
-  content     String?
+  content        String?
   /// Dự án phụ — nâng cấp toàn diện: Admin đã gửi (type=admin_message), null
   /// với 2 loại nhắc lịch cũ (hệ thống tự tạo, không có người gửi cụ thể).
-  senderId    String?             @map("sender_id") @db.Uuid
-  scheduledAt DateTime            @map("scheduled_at")
-  sentAt      DateTime?           @map("sent_at")
-  status      NotificationStatus  @default(pending)
-  createdAt   DateTime            @default(now()) @map("created_at")
+  senderId       String?             @map("sender_id") @db.Uuid
+  scheduledAt    DateTime            @map("scheduled_at")
+  sentAt         DateTime?           @map("sent_at")
+  status         NotificationStatus  @default(pending)
+  createdAt      DateTime            @default(now()) @map("created_at")
 
-  account Account  @relation(fields: [accountId], references: [id])
-  sender  Account? @relation("NotificationSender", fields: [senderId], references: [id])
-  lead    Lead?    @relation(fields: [leadId], references: [id])
+  account      Account       @relation(fields: [accountId], references: [id])
+  sender       Account?      @relation("NotificationSender", fields: [senderId], references: [id])
+  lead         Lead?         @relation(fields: [leadId], references: [id])
+  leaveRequest LeaveRequest? @relation(fields: [leaveRequestId], references: [id])
 
   @@index([status, scheduledAt])
   @@index([leadId, type])
+  @@index([leaveRequestId, type])
   @@map("notifications")
+}
+
+/// Dự án phụ — nâng cấp toàn diện (2026-07-16, ngoài phạm vi Design Freeze
+/// docs/09-13, yêu cầu trực tiếp người dùng — module "Tạo đơn"): Đơn xin
+/// nghỉ phép, quy trình duyệt 2 cấp Leader -> Admin. Nhân viên KHÔNG thuộc
+/// nhóm nào hoặc nhóm chưa có Leader thì bỏ qua bước Leader, lên thẳng
+/// `pending_admin` (xem LeaveRequestsService.determineInitialStatus()).
+model LeaveRequest {
+  id            String             @id @default(uuid()) @db.Uuid
+  accountId     String             @map("account_id") @db.Uuid
+  /// "Kính gửi" — tự gợi ý "Ban Giám đốc / Quản lý", nhân viên gõ thêm được.
+  recipientText String?            @map("recipient_text") @db.VarChar(255)
+  startDate     DateTime           @map("start_date") @db.Date
+  endDate       DateTime           @map("end_date") @db.Date
+  /// Tính tự động ở server = (endDate - startDate) + 1 ngày — KHÔNG nhận từ
+  /// client để tránh lệch với khoảng ngày thật (Mục yêu cầu: "thiết kế logic").
+  daysCount     Int                @map("days_count")
+  reason        String             @db.VarChar(1000)
+  /// "Đã bàn giao công việc cho" — tự do, không bắt buộc.
+  handoverTo    String?            @map("handover_to") @db.VarChar(255)
+  status        LeaveRequestStatus @default(pending_leader)
+
+  leaderDecisionById String?        @map("leader_decision_by") @db.Uuid
+  leaderDecisionAt   DateTime?      @map("leader_decision_at")
+  leaderDecision     LeaveDecision? @map("leader_decision")
+  leaderNote         String?        @map("leader_note") @db.VarChar(500)
+
+  adminDecisionById String?        @map("admin_decision_by") @db.Uuid
+  adminDecisionAt   DateTime?      @map("admin_decision_at")
+  adminDecision     LeaveDecision? @map("admin_decision")
+  adminNote         String?        @map("admin_note") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  account          Account        @relation("LeaveRequestAccount", fields: [accountId], references: [id])
+  leaderDecisionBy Account?       @relation("LeaveRequestLeaderDecision", fields: [leaderDecisionById], references: [id])
+  adminDecisionBy  Account?       @relation("LeaveRequestAdminDecision", fields: [adminDecisionById], references: [id])
+  notifications    Notification[]
+
+  @@index([accountId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+enum LeaveRequestStatus {
+  pending_leader
+  pending_admin
+  approved
+  rejected
+
+  @@map("leave_request_status")
+}
+
+enum LeaveDecision {
+  approved
+  rejected
+
+  @@map("leave_decision")
 }
 
 // ── Phase 9 — Phân quyền chi tiết (khung, chưa seed danh sách quyền) ────
@@ -752,31 +853,31 @@ model AccountPermission {
 /// đều là text tự do, không phải khóa ngoại. Mọi vai trò đã đăng nhập đều
 /// được thêm/sửa/xóa tự do (không giới hạn theo nhóm/người phụ trách).
 model ShuttleRecord {
-  id            String   @id @default(uuid()) @db.Uuid
-  date          DateTime @db.Date
-  fullName      String   @map("full_name") @db.VarChar(150)
-  phoneNumber   String   @map("phone_number") @db.VarChar(20)
-  company       String?  @db.VarChar(150)
-  area          String?  @db.VarChar(150)
-  type          String?  @db.VarChar(100)
-  sale          String?  @db.VarChar(150)
-  driver        String?  @map("driver") @db.VarChar(150)
+  id              String   @id @default(uuid()) @db.Uuid
+  date            DateTime @db.Date
+  fullName        String   @map("full_name") @db.VarChar(150)
+  phoneNumber     String   @map("phone_number") @db.VarChar(20)
+  company         String?  @db.VarChar(150)
+  area            String?  @db.VarChar(150)
+  type            String?  @db.VarChar(100)
+  sale            String?  @db.VarChar(150)
+  driver          String?  @map("driver") @db.VarChar(150)
   /// Lưu dạng chuỗi "HH:mm" — chỉ là giờ hẹn PV, tách biệt khỏi cột "date".
-  interviewTime String?  @map("interview_time") @db.VarChar(5)
-  contractor    String?  @db.VarChar(150)
+  interviewTime   String?  @map("interview_time") @db.VarChar(5)
+  contractor      String?  @db.VarChar(150)
   /// "Tình trạng đón" (Đã đón/Chưa đón được/Hẹn lại) — tên cột DB giữ
   /// nguyên "status" (không đổi để tránh thêm 1 lần migrate) dù giao diện
   /// đã tách riêng khỏi "Kết quả PV" (interviewResult, xem bên dưới) — yêu
   /// cầu trực tiếp người dùng, tách 1 cột "Trạng thái" cũ thành 2 cột.
-  status        String?  @db.VarChar(50)
+  status          String?  @db.VarChar(50)
   /// Dự án phụ — nâng cấp toàn diện: "Kết quả PV" (Đỗ phỏng vấn/Trượt phỏng
   /// vấn) — tách riêng khỏi "Tình trạng đón" ở trên.
-  interviewResult String? @map("interview_result") @db.VarChar(50)
-  note          String?
-  createdById   String   @map("created_by") @db.Uuid
-  updatedById   String   @map("updated_by") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  interviewResult String?  @map("interview_result") @db.VarChar(50)
+  note            String?
+  createdById     String   @map("created_by") @db.Uuid
+  updatedById     String   @map("updated_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   createdBy Account @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
   updatedBy Account @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
@@ -797,16 +898,16 @@ model ShuttleRecord {
 /// 1 trong các màu cố định ở SHUTTLE_OPTION_COLORS (frontend) — null = màu
 /// mặc định (xám).
 model ShuttleOption {
-  id        String   @id @default(uuid()) @db.Uuid
-  field     String   @db.VarChar(20)
-  value     String   @db.VarChar(150)
-  colorKey  String?  @map("color_key") @db.VarChar(20)
+  id           String   @id @default(uuid()) @db.Uuid
+  field        String   @db.VarChar(20)
+  value        String   @db.VarChar(150)
+  colorKey     String?  @map("color_key") @db.VarChar(20)
   /// Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
   /// màu CHỮ riêng, độc lập với colorKey (màu nền) — yêu cầu trực tiếp người
   /// dùng: "ngoài cho phép đổi màu nền chữ thì cho phép đổi màu chữ nữa".
   /// null = dùng màu chữ tương phản tự động theo colorKey (hành vi cũ).
-  textColorKey String? @map("text_color_key") @db.VarChar(20)
-  createdAt DateTime @default(now()) @map("created_at")
+  textColorKey String?  @map("text_color_key") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@unique([field, value])
   @@index([field])
@@ -841,10 +942,10 @@ model DailyReport {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  account   Account  @relation("DailyReportAccount", fields: [accountId], references: [id])
-  team      Team?    @relation(fields: [teamId], references: [id])
-  createdBy Account  @relation("DailyReportCreatedBy", fields: [createdById], references: [id])
-  updatedBy Account  @relation("DailyReportUpdatedBy", fields: [updatedById], references: [id])
+  account   Account @relation("DailyReportAccount", fields: [accountId], references: [id])
+  team      Team?   @relation(fields: [teamId], references: [id])
+  createdBy Account @relation("DailyReportCreatedBy", fields: [createdById], references: [id])
+  updatedBy Account @relation("DailyReportUpdatedBy", fields: [updatedById], references: [id])
 
   /// "Mỗi nhân viên chỉ có 1 báo cáo cho mỗi ngày" — yêu cầu trực tiếp người dùng.
   @@unique([accountId, date])
@@ -877,26 +978,26 @@ enum ReportViolationStatus {
 }
 
 model ReportViolation {
-  id        String   @id @default(uuid()) @db.Uuid
-  accountId String   @map("account_id") @db.Uuid
+  id                String                @id @default(uuid()) @db.Uuid
+  accountId         String                @map("account_id") @db.Uuid
   /// Ngày báo cáo bị vi phạm — DÙNG NGÀY BÁO CÁO làm chuẩn (Mục 2, yêu cầu
   /// người dùng: "không dùng ngày cập nhật cuối cùng để xác định đã nộp
   /// hay chưa").
-  reportDate DateTime @map("report_date") @db.Date
+  reportDate        DateTime              @map("report_date") @db.Date
   /// Snapshot đầy đủ thời điểm hạn chót TẠI THỜI ĐIỂM phát sinh vi phạm —
   /// không tính lại khi Admin đổi cấu hình hạn sau này (Mục 9).
-  deadlineSnapshot DateTime @map("deadline_snapshot")
+  deadlineSnapshot  DateTime              @map("deadline_snapshot")
   /// Thời điểm nộp báo cáo thật (DailyReport.createdAt) — null nếu chưa
   /// từng nộp. Mục 10: "Không dùng updatedAt của báo cáo... nếu hệ thống
   /// đã có createdAt/submittedAt" — luôn lấy từ createdAt.
-  actualSubmittedAt DateTime? @map("actual_submitted_at")
-  violationType     ReportViolationType @map("violation_type")
+  actualSubmittedAt DateTime?             @map("actual_submitted_at")
+  violationType     ReportViolationType   @map("violation_type")
   status            ReportViolationStatus @default(pending)
-  note              String?  @db.VarChar(500)
-  resolvedById      String?  @map("resolved_by") @db.Uuid
-  resolvedAt        DateTime? @map("resolved_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  note              String?               @db.VarChar(500)
+  resolvedById      String?               @map("resolved_by") @db.Uuid
+  resolvedAt        DateTime?             @map("resolved_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
 
   account    Account  @relation("ReportViolationAccount", fields: [accountId], references: [id])
   resolvedBy Account? @relation("ReportViolationResolvedBy", fields: [resolvedById], references: [id])
@@ -983,9 +1084,9 @@ model CheckinRecord {
   /// không thể xác thực đây có phải GPS thật hay không (Mục 9, lưu ý của
   /// người dùng: "không được tuyên bố hệ thống có thể chặn hoàn toàn vị trí
   /// giả") — chỉ lưu lại + tự tính khoảng cách/trạng thái từ giá trị này.
-  latitude  Float
-  longitude Float
-  accuracy  Float
+  latitude        Float
+  longitude       Float
+  accuracy        Float
   /// Địa chỉ dễ đọc từ reverse geocoding (Mục 3) — chỉ mang tính hiển thị,
   /// KHÔNG dùng để tính trạng thái hợp lệ (dùng latitude/longitude/khoảng
   /// cách thật). Có thể null nếu reverse geocoding lỗi/không phản hồi kịp.
@@ -1023,6 +1124,12 @@ model CheckinRecord {
   voidedAt   DateTime? @map("voided_at")
   voidedById String?   @map("voided_by") @db.Uuid
   voidReason String?   @map("void_reason") @db.VarChar(500)
+
+  /// Yêu cầu trực tiếp người dùng (2026-07-16): cột "Ghi chú" ở trang quản
+  /// lý Check in GPS — ghi chú tự do của Admin cho 1 bản ghi (KHÁC
+  /// voidReason ở trên — đó là lý do BẮT BUỘC khi Reset, đây là ghi chú tùy
+  /// chọn, sửa được nhiều lần, không gắn với hành động Reset/Duyệt nào).
+  note String? @db.VarChar(500)
 
   createdAt DateTime @default(now()) @map("created_at")
 

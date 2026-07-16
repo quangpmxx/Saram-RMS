@@ -128,6 +128,7 @@ function toRecordResponse(record: {
   device: string | null;
   operatingSystem: string | null;
   browser: string | null;
+  note: string | null;
   createdAt: Date;
 }): CheckinRecordResponseDto {
   return {
@@ -149,6 +150,7 @@ function toRecordResponse(record: {
     device: record.device,
     operating_system: record.operatingSystem,
     browser: record.browser,
+    note: record.note,
     created_at: record.createdAt.toISOString(),
   };
 }
@@ -627,5 +629,98 @@ export class CheckinService {
     });
 
     return { success: true };
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): Admin xem xét thủ công 1 bản
+   * ghi Check in đang "Ngoài công ty"/"Cần xác minh" (vd GPS kém chính xác
+   * nhưng Admin xác nhận nhân viên có mặt thật) và CHUYỂN THẲNG sang "Hợp
+   * lệ" — KHÁC Reset (không hủy bản ghi, không cho Check in lại), chỉ đổi
+   * field `status`, giữ nguyên toàn bộ dữ liệu GPS/IP/thiết bị gốc làm bằng
+   * chứng. Idempotent nếu bản ghi đã "Hợp lệ" — không ghi audit log thừa.
+   */
+  async approveAsValid(
+    recordId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<CheckinRecordResponseDto> {
+    if (currentUser.role !== 'admin') {
+      throw new ForbiddenException(
+        'Chỉ Admin được xác nhận trạng thái Check in',
+      );
+    }
+
+    const record = await this.prisma.checkinRecord.findUnique({
+      where: { id: recordId },
+    });
+    if (!record || record.isVoided) {
+      throw new NotFoundException(
+        'Không tìm thấy bản ghi Check in đang hoạt động',
+      );
+    }
+
+    if (record.status === 'valid') {
+      return toRecordResponse(record);
+    }
+
+    const updated = await this.prisma.checkinRecord.update({
+      where: { id: recordId },
+      data: { status: 'valid' },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'checkin_record',
+      entityId: recordId,
+      fieldChanged: 'status',
+      oldValue: record.status,
+      newValue: `valid (Admin xác nhận thủ công, nhân viên: ${record.accountId})`,
+    });
+
+    return toRecordResponse(updated);
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): cột "Ghi chú" ở trang quản lý
+   * Check in GPS — ghi chú tự do của Admin, sửa được nhiều lần (KHÁC
+   * voidReason ở reset() — lý do bắt buộc, chỉ ghi 1 lần lúc Reset). Không
+   * chặn theo isVoided (khác reset()/approveAsValid()) — Admin vẫn có thể
+   * ghi chú thêm cho 1 bản ghi đã bị Reset (vd giải thích thêm bối cảnh).
+   * Rỗng sau khi trim -> lưu null (xóa ghi chú), khớp quy ước các field text
+   * tùy chọn khác trong hệ thống (vd Lead.mktNote).
+   */
+  async updateNote(
+    recordId: string,
+    note: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<CheckinRecordResponseDto> {
+    if (currentUser.role !== 'admin') {
+      throw new ForbiddenException('Chỉ Admin được sửa ghi chú Check in');
+    }
+
+    const record = await this.prisma.checkinRecord.findUnique({
+      where: { id: recordId },
+    });
+    if (!record) {
+      throw new NotFoundException('Không tìm thấy bản ghi Check in');
+    }
+
+    const trimmed = note.trim();
+    const updated = await this.prisma.checkinRecord.update({
+      where: { id: recordId },
+      data: { note: trimmed || null },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'checkin_record',
+      entityId: recordId,
+      fieldChanged: 'note',
+      oldValue: record.note ?? '',
+      newValue: trimmed,
+    });
+
+    return toRecordResponse(updated);
   }
 }

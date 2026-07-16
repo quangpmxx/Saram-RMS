@@ -6,6 +6,7 @@ import {
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
@@ -50,6 +51,7 @@ export class ShuttleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(
@@ -128,7 +130,9 @@ export class ShuttleService {
       newValue: `${record.fullName} - ${record.phoneNumber}`,
     });
 
-    return toShuttleResponse(record);
+    const response = toShuttleResponse(record);
+    this.realtime.emitTransportationChange('created', response, currentUser);
+    return response;
   }
 
   async update(
@@ -172,7 +176,9 @@ export class ShuttleService {
       newValue: `${record.fullName} - ${record.phoneNumber}`,
     });
 
-    return toShuttleResponse(record);
+    const response = toShuttleResponse(record);
+    this.realtime.emitTransportationChange('updated', response, currentUser);
+    return response;
   }
 
   async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {
@@ -192,6 +198,8 @@ export class ShuttleService {
       entityId: id,
       oldValue: `${existing.fullName} - ${existing.phoneNumber}`,
     });
+
+    this.realtime.emitTransportationDeleted(id, currentUser);
   }
 
   /**

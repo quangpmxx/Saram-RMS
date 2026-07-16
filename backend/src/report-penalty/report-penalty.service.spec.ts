@@ -4,6 +4,7 @@ import { ReportPenaltyService } from './report-penalty.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
+import { RealtimeService } from '../realtime/realtime.service';
 
 describe('ReportPenaltyService', () => {
   let service: ReportPenaltyService;
@@ -25,6 +26,35 @@ describe('ReportPenaltyService', () => {
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
+  let realtimeService: {
+    emitPenaltyChange: jest.Mock;
+    emitDailyReportChange: jest.Mock;
+  };
+
+  const fullViolation = {
+    id: 'violation-1',
+    accountId: 'sale-1',
+    reportDate: new Date('2026-07-15T00:00:00.000Z'),
+    deadlineSnapshot: new Date('2026-07-15T15:30:00.000Z'),
+    actualSubmittedAt: null,
+    violationType: 'no_submission',
+    status: 'pending',
+    note: null,
+    resolvedById: null,
+    resolvedAt: null,
+    createdAt: new Date('2026-07-15T15:31:00.000Z'),
+    updatedAt: new Date('2026-07-15T15:31:00.000Z'),
+    account: {
+      id: 'sale-1',
+      fullName: 'Sale One',
+      avatarUrl: null,
+      role: 'sale',
+      teamId: 'team-1',
+      status: 'active',
+      team: { id: 'team-1', name: 'Nhóm Sale Demo' },
+    },
+    resolvedBy: null,
+  };
 
   const admin: AuthenticatedUser = {
     id: 'admin-1',
@@ -68,8 +98,8 @@ describe('ReportPenaltyService', () => {
       reportViolation: {
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({}),
-        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue(fullViolation),
+        update: jest.fn().mockResolvedValue(fullViolation),
         count: jest.fn().mockResolvedValue(0),
       },
       reportDeadlineConfig: {
@@ -80,12 +110,17 @@ describe('ReportPenaltyService', () => {
       $transaction: jest.fn().mockResolvedValue([0, []]),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    realtimeService = {
+      emitPenaltyChange: jest.fn(),
+      emitDailyReportChange: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ReportPenaltyService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 
@@ -123,13 +158,21 @@ describe('ReportPenaltyService', () => {
       const result = await service.runScan(AFTER_DEADLINE);
 
       expect(result.late_submissions).toEqual(['Sale One']);
-      expect(prisma.reportViolation.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          accountId: 'sale-1',
-          violationType: 'late_submission',
-          actualSubmittedAt: new Date('2026-07-15T15:30:01.000Z'),
+      expect(prisma.reportViolation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'sale-1',
+            violationType: 'late_submission',
+            actualSubmittedAt: new Date('2026-07-15T15:30:01.000Z'),
+          }),
         }),
-      });
+      );
+      // Job nền tự động tạo vi phạm -> phải phát realtime (actor=null, hệ thống tự thực hiện).
+      expect(realtimeService.emitPenaltyChange).toHaveBeenCalledWith(
+        'created',
+        expect.objectContaining({ id: fullViolation.id }),
+        null,
+      );
     });
 
     it('3) KHÔNG có báo cáo -> "Không nộp báo cáo"', async () => {
@@ -141,13 +184,15 @@ describe('ReportPenaltyService', () => {
         ['Sale One', 'Sale Two'].sort(),
       );
       expect(prisma.reportViolation.create).toHaveBeenCalledTimes(2);
-      expect(prisma.reportViolation.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          accountId: 'sale-1',
-          violationType: 'no_submission',
-          actualSubmittedAt: null,
+      expect(prisma.reportViolation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'sale-1',
+            violationType: 'no_submission',
+            actualSubmittedAt: null,
+          }),
         }),
-      });
+      );
     });
 
     it('4) Chạy job HAI LẦN -> lần 2 không tạo trùng (đã có bản ghi từ lần 1)', async () => {
@@ -183,26 +228,26 @@ describe('ReportPenaltyService', () => {
       });
       const submittedAt = new Date('2026-07-15T16:00:00.000Z');
 
-      await service.markSupplementedIfPending(
-        'sale-1',
-        '2026-07-15',
-        submittedAt,
-      );
+      await service.markSupplementedIfPending(sale, '2026-07-15', submittedAt);
 
-      expect(prisma.reportViolation.update).toHaveBeenCalledWith({
-        where: { id: 'violation-1' },
-        data: { status: 'supplemented', actualSubmittedAt: submittedAt },
-      });
+      expect(prisma.reportViolation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'violation-1' },
+          data: { status: 'supplemented', actualSubmittedAt: submittedAt },
+        }),
+      );
+      expect(realtimeService.emitPenaltyChange).toHaveBeenCalledWith(
+        'updated',
+        expect.objectContaining({ id: fullViolation.id }),
+        sale,
+      );
     });
 
     it('Không có vi phạm pending nào -> không làm gì', async () => {
       prisma.reportViolation.findUnique.mockResolvedValue(null);
-      await service.markSupplementedIfPending(
-        'sale-1',
-        '2026-07-15',
-        new Date(),
-      );
+      await service.markSupplementedIfPending(sale, '2026-07-15', new Date());
       expect(prisma.reportViolation.update).not.toHaveBeenCalled();
+      expect(realtimeService.emitPenaltyChange).not.toHaveBeenCalled();
     });
 
     it('Vi phạm đã bị Admin xử lý (confirmed) -> KHÔNG tự động ghi đè quyết định đó', async () => {
@@ -211,12 +256,9 @@ describe('ReportPenaltyService', () => {
         status: 'confirmed',
         violationType: 'no_submission',
       });
-      await service.markSupplementedIfPending(
-        'sale-1',
-        '2026-07-15',
-        new Date(),
-      );
+      await service.markSupplementedIfPending(sale, '2026-07-15', new Date());
       expect(prisma.reportViolation.update).not.toHaveBeenCalled();
+      expect(realtimeService.emitPenaltyChange).not.toHaveBeenCalled();
     });
   });
 
@@ -362,6 +404,11 @@ describe('ReportPenaltyService', () => {
           oldValue: 'pending',
           newValue: 'waived',
         }),
+      );
+      expect(realtimeService.emitPenaltyChange).toHaveBeenCalledWith(
+        'updated',
+        expect.objectContaining({ id: 'v1', status: 'waived' }),
+        admin,
       );
     });
 

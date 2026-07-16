@@ -553,4 +553,200 @@ describe('CheckinService (Phase 1+2+3+4)', () => {
       expect(result.id).toBe('rec-new-after-reset');
     });
   });
+
+  describe('approveAsValid() — yêu cầu trực tiếp người dùng (2026-07-16)', () => {
+    const flaggedRecord = {
+      id: 'rec-flagged',
+      accountId: 'sale-1',
+      attendanceDate: TODAY_UTC_MIDNIGHT,
+      checkedInAt: NOW,
+      latitude: 10.005,
+      longitude: 106.005,
+      accuracy: 150,
+      resolvedAddress: 'Địa chỉ test',
+      companyLatitude: 10.0,
+      companyLongitude: 106.0,
+      allowedRadius: 100,
+      distanceFromCompany: 800,
+      status: 'needs_verification' as const,
+      ipAddress: '203.0.113.5',
+      userAgent: CHROME_WINDOWS_UA,
+      device: 'Máy tính',
+      operatingSystem: 'Windows',
+      browser: 'Chrome 126.0.0.0',
+      createdAt: NOW,
+      isVoided: false,
+    };
+
+    it('23) Admin chuyển bản ghi "Cần xác minh"/"Ngoài công ty" sang "Hợp lệ", ghi audit log', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue(flaggedRecord);
+      prisma.checkinRecord.update.mockResolvedValue({
+        ...flaggedRecord,
+        status: 'valid',
+      });
+
+      const result = await service.approveAsValid('rec-flagged', admin);
+
+      expect(result.status).toBe('valid');
+      expect(prisma.checkinRecord.update).toHaveBeenCalledWith({
+        where: { id: 'rec-flagged' },
+        data: { status: 'valid' },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'admin-1',
+          actionType: 'update',
+          entityType: 'checkin_record',
+          entityId: 'rec-flagged',
+          fieldChanged: 'status',
+          oldValue: 'needs_verification',
+        }),
+      );
+    });
+
+    it('24) Leader/Nhân viên KHÔNG được tự xác nhận trạng thái', async () => {
+      await expect(
+        service.approveAsValid('rec-flagged', leader),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(service.approveAsValid('rec-flagged', sale)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.checkinRecord.update).not.toHaveBeenCalled();
+    });
+
+    it('25) Bản ghi không tồn tại hoặc đã bị Reset (voided) -> NotFoundException', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue(null);
+      await expect(
+        service.approveAsValid('rec-khong-ton-tai', admin),
+      ).rejects.toThrow(NotFoundException);
+
+      prisma.checkinRecord.findUnique.mockResolvedValue({
+        ...flaggedRecord,
+        isVoided: true,
+      });
+      await expect(
+        service.approveAsValid('rec-flagged', admin),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('26) Bản ghi đã "Hợp lệ" -> idempotent, không gọi update/audit log thừa', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue({
+        ...flaggedRecord,
+        status: 'valid',
+      });
+
+      const result = await service.approveAsValid('rec-flagged', admin);
+
+      expect(result.status).toBe('valid');
+      expect(prisma.checkinRecord.update).not.toHaveBeenCalled();
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateNote() — yêu cầu trực tiếp người dùng (2026-07-16, cột "Ghi chú")', () => {
+    const record = {
+      id: 'rec-1',
+      accountId: 'sale-1',
+      attendanceDate: TODAY_UTC_MIDNIGHT,
+      checkedInAt: NOW,
+      latitude: 10.0,
+      longitude: 106.0,
+      accuracy: 20,
+      resolvedAddress: 'Địa chỉ test',
+      companyLatitude: 10.0,
+      companyLongitude: 106.0,
+      allowedRadius: 100,
+      distanceFromCompany: 10,
+      status: 'valid' as const,
+      ipAddress: '203.0.113.5',
+      userAgent: CHROME_WINDOWS_UA,
+      device: 'Máy tính',
+      operatingSystem: 'Windows',
+      browser: 'Chrome 126.0.0.0',
+      note: null,
+      createdAt: NOW,
+      isVoided: false,
+    };
+
+    it('Admin sửa ghi chú thành công, ghi audit log đầy đủ', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue(record);
+      prisma.checkinRecord.update.mockResolvedValue({
+        ...record,
+        note: 'Nhân viên xin xác nhận có mặt thật dù GPS lệch',
+      });
+
+      const result = await service.updateNote(
+        'rec-1',
+        'Nhân viên xin xác nhận có mặt thật dù GPS lệch',
+        admin,
+      );
+
+      expect(result.note).toBe(
+        'Nhân viên xin xác nhận có mặt thật dù GPS lệch',
+      );
+      expect(prisma.checkinRecord.update).toHaveBeenCalledWith({
+        where: { id: 'rec-1' },
+        data: { note: 'Nhân viên xin xác nhận có mặt thật dù GPS lệch' },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'admin-1',
+          actionType: 'update',
+          entityType: 'checkin_record',
+          entityId: 'rec-1',
+          fieldChanged: 'note',
+          oldValue: '',
+          newValue: 'Nhân viên xin xác nhận có mặt thật dù GPS lệch',
+        }),
+      );
+    });
+
+    it('Gửi chuỗi rỗng (hoặc toàn khoảng trắng) -> lưu null (xóa ghi chú)', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue({
+        ...record,
+        note: 'Ghi chú cũ',
+      });
+      prisma.checkinRecord.update.mockResolvedValue({ ...record, note: null });
+
+      await service.updateNote('rec-1', '   ', admin);
+
+      expect(prisma.checkinRecord.update).toHaveBeenCalledWith({
+        where: { id: 'rec-1' },
+        data: { note: null },
+      });
+    });
+
+    it('Leader/Nhân viên KHÔNG được sửa ghi chú', async () => {
+      await expect(service.updateNote('rec-1', 'x', leader)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(service.updateNote('rec-1', 'x', sale)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.checkinRecord.update).not.toHaveBeenCalled();
+    });
+
+    it('Bản ghi không tồn tại -> NotFoundException', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateNote('rec-khong-ton-tai', 'x', admin),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('Bản ghi đã bị Reset (voided) VẪN sửa được ghi chú (không chặn theo isVoided, khác reset()/approveAsValid())', async () => {
+      prisma.checkinRecord.findUnique.mockResolvedValue({
+        ...record,
+        isVoided: true,
+      });
+      prisma.checkinRecord.update.mockResolvedValue({
+        ...record,
+        isVoided: true,
+        note: 'x',
+      });
+
+      const result = await service.updateNote('rec-1', 'x', admin);
+
+      expect(result.note).toBe('x');
+    });
+  });
 });

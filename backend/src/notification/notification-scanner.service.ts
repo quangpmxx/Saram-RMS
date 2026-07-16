@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { ZaloClientService } from './zalo-client.service';
+import { toNotificationResponse } from './dto/notification-response.dto';
 import { NotificationType } from '../../generated/prisma/enums';
 
 /**
@@ -31,6 +33,7 @@ export class NotificationScannerService {
     private readonly prisma: PrismaService,
     private readonly systemConfigService: SystemConfigService,
     private readonly zaloClient: ZaloClientService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   @Interval(2 * 60 * 1000)
@@ -152,7 +155,7 @@ export class NotificationScannerService {
     });
     if (alreadyHandled) return false;
 
-    await this.prisma.notification.create({
+    const created = await this.prisma.notification.create({
       data: {
         accountId,
         leadId,
@@ -162,6 +165,14 @@ export class NotificationScannerService {
         status: 'pending',
       },
     });
+    // Job nền tự động (không có actor người dùng) — khớp đúng hành vi
+    // polling hiện tại của NotificationBell (không lọc theo channel/status,
+    // hiện luôn dòng "pending" này) — realtime chỉ đẩy sớm hơn, không đổi
+    // dữ liệu hiển thị.
+    this.realtime.emitNotificationCreated(
+      toNotificationResponse(created),
+      null,
+    );
     return true;
   }
 
@@ -273,7 +284,7 @@ export class NotificationScannerService {
       });
       if (existing) continue;
 
-      await this.prisma.notification.create({
+      const created = await this.prisma.notification.create({
         data: {
           accountId: callback.lead.assignedToId,
           leadId: callback.lead.id,
@@ -289,6 +300,10 @@ export class NotificationScannerService {
           status: 'sent',
         },
       });
+      this.realtime.emitNotificationCreated(
+        toNotificationResponse(created),
+        null,
+      );
       sentCount++;
     }
     return sentCount;

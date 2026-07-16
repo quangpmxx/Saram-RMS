@@ -17,7 +17,7 @@ jest.mock('fs/promises', () => ({
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: {
-    account: { findUnique: jest.Mock; update: jest.Mock };
+    account: { findUnique: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
     session: { create: jest.Mock; update: jest.Mock };
   };
   let jwtService: { signAsync: jest.Mock };
@@ -40,7 +40,11 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     prisma = {
-      account: { findUnique: jest.fn(), update: jest.fn() },
+      account: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
       session: { create: jest.fn(), update: jest.fn() },
     };
     jwtService = { signAsync: jest.fn().mockResolvedValue('signed-jwt') };
@@ -61,7 +65,7 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('từ chối khi không tìm thấy tài khoản', async () => {
-      prisma.account.findUnique.mockResolvedValue(null);
+      prisma.account.findFirst.mockResolvedValue(null);
 
       await expect(
         service.login({ username: 'ghost', password: '123456' }, 'jest'),
@@ -69,7 +73,7 @@ describe('AuthService', () => {
     });
 
     it('từ chối khi tài khoản đã bị vô hiệu hóa', async () => {
-      prisma.account.findUnique.mockResolvedValue({
+      prisma.account.findFirst.mockResolvedValue({
         ...account,
         status: 'inactive',
       });
@@ -80,7 +84,7 @@ describe('AuthService', () => {
     });
 
     it('từ chối khi sai mật khẩu', async () => {
-      prisma.account.findUnique.mockResolvedValue(account);
+      prisma.account.findFirst.mockResolvedValue(account);
       (passwordUtil.comparePassword as jest.Mock).mockResolvedValue(false);
 
       await expect(
@@ -89,7 +93,7 @@ describe('AuthService', () => {
     });
 
     it('đăng nhập thành công: tạo session mới, ký JWT, ghi audit log, không trả mật khẩu', async () => {
-      prisma.account.findUnique.mockResolvedValue(account);
+      prisma.account.findFirst.mockResolvedValue(account);
       prisma.session.create.mockResolvedValue({
         id: 'session-1',
         accountId: account.id,
@@ -118,7 +122,7 @@ describe('AuthService', () => {
     });
 
     it('cho phép nhiều session cùng lúc (đa thiết bị) — không thu hồi session cũ khi đăng nhập lại', async () => {
-      prisma.account.findUnique.mockResolvedValue(account);
+      prisma.account.findFirst.mockResolvedValue(account);
       prisma.session.create.mockResolvedValue({
         id: 'session-2',
         accountId: account.id,
@@ -131,6 +135,22 @@ describe('AuthService', () => {
       );
 
       expect(prisma.session.update).not.toHaveBeenCalled();
+    });
+
+    it('đăng nhập được dù gõ tên đăng nhập hoa/thường khác với lúc lưu (yêu cầu trực tiếp người dùng, 2026-07-16)', async () => {
+      prisma.account.findFirst.mockResolvedValue(account);
+      prisma.session.create.mockResolvedValue({
+        id: 'session-3',
+        accountId: account.id,
+      });
+      (passwordUtil.comparePassword as jest.Mock).mockResolvedValue(true);
+
+      await service.login({ username: 'ADMIN', password: '123456' }, 'jest');
+
+      expect(prisma.account.findFirst).toHaveBeenCalledWith({
+        where: { username: { equals: 'ADMIN', mode: 'insensitive' } },
+        include: { team: { select: { id: true, name: true } } },
+      });
     });
   });
 

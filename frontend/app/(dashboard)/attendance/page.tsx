@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import type { AttendanceGrid, PaginatedResult, Team, TeamMember } from "@/lib/types";
+import type { AttendanceGrid, LeaveRequest, PaginatedResult, Team, TeamMember } from "@/lib/types";
 import { AttendanceClient } from "./attendance-client";
 
 /**
@@ -31,11 +31,15 @@ export default async function AttendancePage() {
   const year = Number(nowParts[0]);
   const month = Number(nowParts[1]);
 
-  const [initialGrid, teamsResult] = await Promise.all([
+  const [initialGrid, teamsResult, initialRequests] = await Promise.all([
     serverApi<AttendanceGrid>(`/attendance?year=${year}&month=${month}`),
     canFilterByTeam
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
+    // Yêu cầu trực tiếp người dùng (2026-07-16): "Đơn xin nghỉ phép" không
+    // còn là trang riêng trên menu — chuyển thành 1 tab trong Chấm công,
+    // y hệt cách "Check in GPS" đã làm. Tải sẵn dữ liệu ban đầu ở đây.
+    serverApi<LeaveRequest[]>("/leave-request"),
   ]);
 
   const teamsForMembers = canFilterByTeam ? teamsResult.items : user.team_id ? [{ id: user.team_id }] : [];
@@ -45,6 +49,7 @@ export default async function AttendancePage() {
 
   return (
     <AttendanceClient
+      currentUser={user}
       currentUserId={user.id}
       currentUserRole={user.role}
       canFilterByTeam={canFilterByTeam}
@@ -54,6 +59,7 @@ export default async function AttendancePage() {
       initialYear={year}
       initialMonth={month}
       initialGrid={initialGrid}
+      initialRequests={initialRequests}
     />
   );
 }

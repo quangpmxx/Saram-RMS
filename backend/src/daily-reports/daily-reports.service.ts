@@ -8,6 +8,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { ReportPenaltyService } from '../report-penalty/report-penalty.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ListDailyReportQueryDto } from './dto/list-daily-report-query.dto';
 import { UpsertDailyReportDto } from './dto/upsert-daily-report.dto';
@@ -107,6 +108,7 @@ export class DailyReportsService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly reportPenaltyService: ReportPenaltyService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   /**
@@ -275,13 +277,15 @@ export class DailyReportsService {
     // nộp trong cùng ngày), tự chuyển vi phạm đó thành "Đã nộp bổ sung" —
     // KHÔNG xóa lịch sử vi phạm, KHÔNG đổi cách nhập báo cáo ở trên.
     await this.reportPenaltyService.markSupplementedIfPending(
-      currentUser.id,
+      currentUser,
       today,
       report.createdAt,
     );
 
     const newLeads = await this.countNewLeadsForOne(currentUser.id, today);
-    return this.toRow(report, account, newLeads);
+    const row = this.toRow(report, account, newLeads);
+    this.realtime.emitDailyReportChange('created', row, currentUser);
+    return row;
   }
 
   /** Mục 2, yêu cầu người dùng: chỉ chủ báo cáo được sửa, CHỈ trong đúng ngày báo cáo đó. */
@@ -337,7 +341,9 @@ export class DailyReportsService {
       select: ACCOUNT_SELECT,
     });
     const newLeads = await this.countNewLeadsForOne(currentUser.id, reportDate);
-    return this.toRow(updated, account, newLeads);
+    const row = this.toRow(updated, account, newLeads);
+    this.realtime.emitDailyReportChange('updated', row, currentUser);
+    return row;
   }
 
   /**

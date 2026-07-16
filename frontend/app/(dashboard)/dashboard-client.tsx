@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Award,
@@ -21,7 +21,17 @@ import {
 } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import type { AccountRole, DashboardSummary, KpiBreakdown, LeadSource, SalePerformance, Team, TeamSummary } from "@/lib/types";
+import type {
+  AccountRole,
+  AppRealtimeEvent,
+  DashboardSummary,
+  KpiBreakdown,
+  LeadSource,
+  SalePerformance,
+  Team,
+  TeamSummary,
+} from "@/lib/types";
+import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +39,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { computeDateRange, type DateRangeValue } from "@/lib/date-range";
+import { computeDateRange, type DatePreset, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
@@ -72,24 +82,53 @@ function percentChange(current: number, previous: number | undefined): number | 
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
-function ChangeBadge({ value }: { value: number | null }) {
-  if (value === null) return null;
-  if (value === Infinity) {
-    return (
+/**
+ * Nhãn "so với ..." khớp đúng độ dài khoảng thời gian mà getPreviousRange()
+ * ở backend (dashboard.service.ts) thực sự dùng để tính % (khoảng liền
+ * trước, cùng độ dài với bộ lọc đang chọn) — yêu cầu trực tiếp người dùng
+ * (2026-07-17): ghi chú ngay dưới mỗi badge %, vd "Hẹn PV giảm 25,8%" xuống
+ * dòng "so với tháng trước".
+ */
+const PREVIOUS_PERIOD_LABEL: Partial<Record<DatePreset, string>> = {
+  today: "so với hôm qua",
+  yesterday: "so với hôm kia",
+  today_yesterday: "so với 2 ngày trước đó",
+  "7d": "so với 7 ngày trước đó",
+  "14d": "so với 14 ngày trước đó",
+  "28d": "so với 28 ngày trước đó",
+  "30d": "so với 30 ngày trước đó",
+  this_week: "so với tuần trước",
+  last_week: "so với tuần trước đó",
+  this_month: "so với tháng trước",
+  last_month: "so với tháng trước đó",
+};
+
+function previousPeriodLabel(preset: DatePreset): string {
+  return PREVIOUS_PERIOD_LABEL[preset] ?? "so với kỳ liền trước";
+}
+
+function ChangeBadge({ value, previousLabel }: { value: number | null; previousLabel: string }) {
+  if (value === null || value === 0) return null;
+
+  const badge =
+    value === Infinity ? (
       <Badge variant="accent" className="gap-0.5">
         <TrendingUp className="h-3 w-3" strokeWidth={2.5} />
         Mới
       </Badge>
+    ) : (
+      <Badge variant={value > 0 ? "success" : "danger"} className="gap-0.5">
+        {value > 0 ? <TrendingUp className="h-3 w-3" strokeWidth={2.5} /> : <TrendingDown className="h-3 w-3" strokeWidth={2.5} />}
+        {value > 0 ? "+" : ""}
+        {value}%
+      </Badge>
     );
-  }
-  if (value === 0) return null;
-  const isUp = value > 0;
+
   return (
-    <Badge variant={isUp ? "success" : "danger"} className="gap-0.5">
-      {isUp ? <TrendingUp className="h-3 w-3" strokeWidth={2.5} /> : <TrendingDown className="h-3 w-3" strokeWidth={2.5} />}
-      {isUp ? "+" : ""}
-      {value}%
-    </Badge>
+    <div className="flex flex-col items-center gap-1">
+      {badge}
+      <span className="text-[10px] text-slate-400">{previousLabel}</span>
+    </div>
   );
 }
 
@@ -263,6 +302,59 @@ export function DashboardClient({
     }
   }
 
+  /**
+   * Yêu cầu người dùng (Mục 4, mở rộng realtime — Dashboard) — refetch NỀN,
+   * giữ nguyên bộ lọc hiện tại (buildQuery() không truyền overrides => dùng
+   * đúng state đang chọn), KHÔNG bật `loading` (tránh nhấp nháy/spin icon
+   * "Làm mới" — khác hẳn refresh() gốc dùng cho hành động chủ động của
+   * người dùng).
+   */
+  async function silentRefresh() {
+    try {
+      const query = buildQuery();
+      const [nextSummary, nextPerformance, nextByTeam] = await Promise.all([
+        clientApi<DashboardSummary>(`/dashboard/summary?${query.toString()}`),
+        canViewPerformance
+          ? clientApi<SalePerformance[]>(`/dashboard/performance?${query.toString()}`)
+          : Promise.resolve<SalePerformance[]>([]),
+        canViewByTeam ? clientApi<TeamSummary[]>(`/dashboard/by-team?${query.toString()}`) : Promise.resolve<TeamSummary[]>([]),
+      ]);
+      setSummary(nextSummary);
+      setPerformance(nextPerformance);
+      setByTeam(nextByTeam);
+    } catch {
+      // Bỏ qua lỗi tải nền — dữ liệu cũ vẫn hiển thị, sự kiện invalidate kế tiếp sẽ tự sửa.
+    }
+  }
+
+  /**
+   * Mục 4: "dùng debounce/batch khoảng 500-1000ms để nhiều event liên tiếp
+   * không gọi API quá nhiều" — nhiều sự kiện dashboard.invalidate dồn dập
+   * (vd bulk assign nhiều lead cùng lúc) chỉ gộp thành ĐÚNG 1 lượt refetch.
+   */
+  const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function scheduleInvalidateRefresh() {
+    if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
+    invalidateTimerRef.current = setTimeout(() => {
+      invalidateTimerRef.current = null;
+      void silentRefresh();
+    }, 800);
+  }
+  useEffect(() => {
+    return () => {
+      if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
+    };
+  }, []);
+
+  function handleAppRealtimeEvent(event: AppRealtimeEvent) {
+    if (event.module !== "dashboard" || event.action !== "invalidate") return;
+    scheduleInvalidateRefresh();
+  }
+
+  useAppRealtime(handleAppRealtimeEvent);
+  /** Mục 8: sau khi mất mạng rồi kết nối lại, refetch 1 lần (không cần debounce — chỉ 1 lần duy nhất). */
+  useRealtimeReconnect(() => void silentRefresh());
+
   const dateRangeQuery = buildQuery().toString();
 
   const sortedTeams = useMemo(() => {
@@ -432,7 +524,7 @@ export function DashboardClient({
                 </div>
               </div>
               <div className="flex justify-center">
-                <ChangeBadge value={change} />
+                <ChangeBadge value={change} previousLabel={previousPeriodLabel(dateRange.preset)} />
               </div>
             </Card>
           );

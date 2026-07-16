@@ -45,3 +45,69 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
 }
+
+/*
+ * Giao diện chúc mừng sinh nhật (yêu cầu trực tiếp người dùng, 2026-07-16).
+ * Mục 5: hiệu ứng nhẹ, không gây rối mắt — bóng bay bay chậm, nến phát sáng
+ * nhẹ, confetti rơi có kiểm soát (JS tự giới hạn 3-5s, xem
+ * components/birthday/birthday-confetti-layer.tsx). Mục 5: "Tôn trọng
+ * prefers-reduced-motion — tắt animation, chỉ hiển thị giao diện tĩnh" —
+ * TẮT animation qua CSS (giữ nguyên phần tử, không animation) cho bóng
+ * bay/nến (vẫn nên hiện tĩnh); confetti thì JS không tạo ra luôn (frozen
+ * confetti giữa không trung không có ý nghĩa gì, xem birthday-confetti-layer.tsx).
+ */
+@keyframes birthday-confetti-fall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes birthday-balloon-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(2deg);
+  }
+}
+
+@keyframes birthday-candle-glow {
+  0%,
+  100% {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 2px rgba(251, 191, 36, 0.6));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.9));
+  }
+}
+
+.birthday-confetti-piece {
+  animation: birthday-confetti-fall linear forwards;
+}
+
+.birthday-balloon-float {
+  animation: birthday-balloon-float 4.5s ease-in-out infinite;
+}
+
+.birthday-candle-glow {
+  animation: birthday-candle-glow 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .birthday-confetti-piece,
+  .birthday-balloon-float,
+  .birthday-candle-glow {
+    animation: none !important;
+  }
+}

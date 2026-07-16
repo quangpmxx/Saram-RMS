@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Briefcase,
   CalendarClock,
@@ -18,6 +18,7 @@ import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import type {
   AccountRole,
+  AppRealtimeEvent,
   DailyReportRow,
   DailyReportSummary,
   DailyReportTotals,
@@ -25,6 +26,7 @@ import type {
   TeamMember,
   UpsertDailyReportPayload,
 } from "@/lib/types";
+import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +62,11 @@ const FORM_FIELDS: Array<{ key: keyof UpsertDailyReportPayload; label: string }>
   { key: "interview_passed", label: "Đỗ PV" },
   { key: "employed", label: "Đi làm" },
 ];
+
+/** Khớp key hàng đang dùng ở JSX (`${row.account.id}_${row.date}`) — không có id ổn định cho dòng "chưa báo cáo". */
+function dailyReportRowKey(row: { account: { id: string }; date: string }): string {
+  return `${row.account.id}_${row.date}`;
+}
 
 function formatDateVN(dateOnly: string): string {
   const [year, month, day] = dateOnly.split("-");
@@ -313,6 +320,49 @@ export function ReportsClient({
     setMyTodayRow(saved);
     void refresh();
   }
+
+  /**
+   * Yêu cầu người dùng (Mục 2) — realtime cho Báo cáo hằng ngày: "KPI tổng
+   * hợp theo nhóm và nhân viên cập nhật đúng" — `summary`/`rows` LUÔN đi
+   * cùng nhau (server tự tính lại reported_count/not_reported_count/tổng
+   * hợp theo nhóm), tự vá tay riêng dễ sai số hơn refetch nhẹ nền (không
+   * bật `loading` — tránh nhấp nháy icon "Làm mới"). Gộp nhiều sự kiện tới
+   * gần nhau thành 1 lượt gọi qua `pendingRefreshRef` — tránh gọi API dồn
+   * dập khi nhiều dòng đổi liên tiếp.
+   */
+  const pendingRefreshRef = useRef(false);
+  async function silentRefresh() {
+    if (pendingRefreshRef.current) return;
+    pendingRefreshRef.current = true;
+    try {
+      const query = buildQuery();
+      const [nextSummary, nextRows] = await Promise.all([
+        clientApi<DailyReportSummary>(`/daily-report/summary?${query.toString()}`),
+        clientApi<DailyReportRow[]>(`/daily-report?${query.toString()}`),
+      ]);
+      setSummary(nextSummary);
+      setRows(nextRows);
+    } catch {
+      // bỏ qua lỗi tải nền — dữ liệu cũ vẫn hiển thị.
+    } finally {
+      pendingRefreshRef.current = false;
+    }
+  }
+
+  function handleAppRealtimeEvent(event: AppRealtimeEvent) {
+    if (event.module !== "daily-report") return;
+    const row = event.payload as DailyReportRow | undefined;
+    if (!row) return;
+
+    void silentRefresh();
+
+    if (myTodayRow && dailyReportRowKey(myTodayRow) === dailyReportRowKey(row)) {
+      setMyTodayRow(row);
+    }
+  }
+
+  useAppRealtime(handleAppRealtimeEvent);
+  useRealtimeReconnect(() => void silentRefresh());
 
   const showByTeam = currentUserRole !== "sale" && summary.by_team.length > 0;
 

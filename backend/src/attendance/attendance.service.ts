@@ -33,10 +33,13 @@ const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 /** Khớp đúng ACCOUNT_ROLE_LABEL ở frontend (lib/types.ts) — dùng cho cột "Vị trí" khi xuất Excel. */
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Admin',
-  manager: 'Quản lý',
+  manager: 'Manager',
   leader: 'Leader',
-  mkt: 'MKT',
-  sale: 'Sale',
+  mkt: 'NV MKT',
+  sale: 'NV Sale',
+  accounting: 'Kế toán',
+  order_staff: 'NV QL Đơn hàng',
+  shuttle_staff: 'NV Đưa đón',
 };
 
 /** Khớp đúng STATUS_META ở frontend (attendance-client.tsx) — ký hiệu + màu nền/chữ khi xuất Excel. */

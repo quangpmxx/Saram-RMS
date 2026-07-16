@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemConfigService } from '../system-config/system-config.service';
+import {
+  CANDIDATE_INCLUDE,
+  toCandidateResponse,
+} from '../candidates/dto/candidate-response.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 /**
  * Mục 10.1, docs/09 + Mục 9.4, docs/10-system-design.md: worker nền quét
@@ -20,6 +25,7 @@ export class CarePoolScannerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly systemConfigService: SystemConfigService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   @Interval(2 * 60 * 1000)
@@ -40,16 +46,43 @@ export class CarePoolScannerService {
       await this.systemConfigService.getCarePoolThresholdMinutes();
     const cutoff = new Date(Date.now() - thresholdMinutes * 60 * 1000);
 
+    const where = {
+      deletedAt: null,
+      isHeld: false,
+      enteredCarePoolAt: null,
+      assignedTeamId: { not: null },
+      lastActivityAt: { not: null, lt: cutoff },
+    };
+
+    // Yêu cầu trực tiếp người dùng (2026-07-16): worker nền cũng phải đồng
+    // bộ realtime — lấy trước danh sách ID sẽ đổi (updateMany không trả về
+    // từng bản ghi), rồi tải lại đủ CANDIDATE_INCLUDE sau khi ghi để phát
+    // 1 sự kiện/lead. actor=null vì đây là hệ thống tự thực hiện, không
+    // phải 1 tài khoản cụ thể.
+    const matching = await this.prisma.lead.findMany({
+      where,
+      select: { id: true },
+    });
+    if (matching.length === 0) {
+      return 0;
+    }
+
     const result = await this.prisma.lead.updateMany({
-      where: {
-        deletedAt: null,
-        isHeld: false,
-        enteredCarePoolAt: null,
-        assignedTeamId: { not: null },
-        lastActivityAt: { not: null, lt: cutoff },
-      },
+      where,
       data: { enteredCarePoolAt: new Date() },
     });
+
+    const updatedLeads = await this.prisma.lead.findMany({
+      where: { id: { in: matching.map((lead) => lead.id) } },
+      include: CANDIDATE_INCLUDE,
+    });
+    for (const lead of updatedLeads) {
+      this.realtime.emitCandidateChange(
+        'care_pool_entered',
+        toCandidateResponse(lead),
+        null,
+      );
+    }
 
     return result.count;
   }

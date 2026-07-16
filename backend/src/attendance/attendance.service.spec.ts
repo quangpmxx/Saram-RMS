@@ -499,7 +499,7 @@ describe('AttendanceService', () => {
 
       const dataRow = 3; // hàng dữ liệu đầu tiên (sau 2 hàng tiêu đề)
       expect(sheet.getCell(dataRow, 2).value).toBe('Sale One');
-      expect(sheet.getCell(dataRow, 3).value).toBe('Sale');
+      expect(sheet.getCell(dataRow, 3).value).toBe('NV Sale');
       expect(sheet.getCell(dataRow, 4).value).toBe('✓'); // 01/07 = present
       expect(sheet.getCell(dataRow, 5).value).toBe('½'); // 02/07 = half
       const totalColumn = 3 + 31 + 1;

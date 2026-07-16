@@ -8,6 +8,8 @@ import { LeadPipelineService } from './lead-pipeline.service';
 import { CandidatesService } from './candidates.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { NOTE_INCLUDE } from './dto/note-response.dto';
 
 describe('LeadPipelineService', () => {
   let service: LeadPipelineService;
@@ -28,6 +30,11 @@ describe('LeadPipelineService', () => {
   };
   let auditLog: { log: jest.Mock };
   let candidatesService: { findOne: jest.Mock };
+  let realtimeService: {
+    emitCandidateChange: jest.Mock;
+    emitNoteChange: jest.Mock;
+    emitLeadDeleted: jest.Mock;
+  };
 
   const baseLead = {
     id: 'lead-1',
@@ -37,6 +44,62 @@ describe('LeadPipelineService', () => {
     callStatusId: null,
     callResultId: null,
     lastActivityAt: null,
+  };
+
+  /**
+   * Shape đầy đủ cho toCandidateResponse() — dùng làm giá trị trả về mặc
+   * định của prisma.lead.findUniqueOrThrow ở MỌI test, vì các hàm mới
+   * (reloadCandidate/reloadCandidateSilently) đều gọi hàm này để phát
+   * realtime sau khi ghi DB thành công.
+   */
+  const fullCandidateLead = {
+    ...baseLead,
+    fullName: 'Nguyễn Văn A',
+    phoneNumber: '0900000001',
+    birthYear: null,
+    address: null,
+    sourceId: 'source-1',
+    mktNote: null,
+    dataQualityScore: null,
+    uploadedById: 'mkt-1',
+    uploadedAt: new Date('2026-01-01'),
+    assignedAt: new Date('2026-01-01'),
+    assignmentMethod: 'manual',
+    zaloStatusId: null,
+    zaloFriendStatusId: null,
+    noteColor: null,
+    currentInterviewStatusId: null,
+    currentEmploymentStatusId: null,
+    currentPartnerCompanyName: null,
+    isHeld: false,
+    heldById: null,
+    heldAt: null,
+    enteredCarePoolAt: null,
+    carePoolLockedById: null,
+    isDuplicateFlagged: false,
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
+    source: { id: 'source-1', name: 'Facebook' },
+    uploadedBy: {
+      id: 'mkt-1',
+      fullName: 'MKT A',
+      role: 'mkt',
+      avatarUrl: null,
+    },
+    assignedTo: {
+      id: 'sale-1',
+      fullName: 'Sale A',
+      role: 'sale',
+      avatarUrl: null,
+    },
+    heldBy: null,
+    carePoolLockedBy: null,
+    callStatus: null,
+    callResult: null,
+    zaloStatus: null,
+    zaloFriendStatus: null,
+    currentInterviewStatus: null,
+    currentEmploymentStatus: null,
   };
 
   const saleUser = { id: 'sale-1', role: 'sale' as const, sessionId: 's' };
@@ -58,7 +121,12 @@ describe('LeadPipelineService', () => {
     prisma = {
       lead: {
         findUnique: jest.fn(),
-        findUniqueOrThrow: jest.fn(),
+        // Mặc định trả về 1 lead đầy đủ hợp lệ cho toCandidateResponse() —
+        // reloadCandidate()/reloadCandidateSilently() (dùng để phát realtime
+        // sau khi ghi DB) gọi hàm này ở MỌI API trong file, kể cả những API
+        // trước đây chưa từng gọi tới (createNote/deleteNote...). Test nào
+        // cần shape khác tự ghi đè bằng mockResolvedValue() của riêng nó.
+        findUniqueOrThrow: jest.fn().mockResolvedValue(fullCandidateLead),
         update: jest.fn(),
       },
       leadNote: {
@@ -72,6 +140,11 @@ describe('LeadPipelineService', () => {
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     candidatesService = { findOne: jest.fn().mockResolvedValue({}) };
+    realtimeService = {
+      emitCandidateChange: jest.fn(),
+      emitNoteChange: jest.fn(),
+      emitLeadDeleted: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -79,6 +152,7 @@ describe('LeadPipelineService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
         { provide: CandidatesService, useValue: candidatesService },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 
@@ -678,6 +752,7 @@ describe('LeadPipelineService', () => {
           deletedById: 'admin-1',
           deletedAt: expect.any(Date),
         },
+        include: NOTE_INCLUDE,
       });
 
       await service.deleteNote('lead-1', 'note-1', managerUser);
@@ -688,6 +763,7 @@ describe('LeadPipelineService', () => {
           deletedById: 'manager-1',
           deletedAt: expect.any(Date),
         },
+        include: NOTE_INCLUDE,
       });
     });
 
@@ -704,6 +780,7 @@ describe('LeadPipelineService', () => {
           deletedById: 'sale-1',
           deletedAt: expect.any(Date),
         },
+        include: NOTE_INCLUDE,
       });
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({

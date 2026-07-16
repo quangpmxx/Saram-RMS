@@ -2,12 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, FilePlus2, LogOut, Settings } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
-import { ACCOUNT_ROLE_LABEL, type Account } from "@/lib/types";
-import { adminGoldTextStyle } from "@/lib/admin-gold";
+import { ACCOUNT_ROLE_LABEL, type Account, type AccountRole } from "@/lib/types";
+import { roleAccentTextStyle } from "@/lib/role-accent";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
+
+/**
+ * Nút "Tạo đơn" (yêu cầu trực tiếp người dùng, 2026-07-16): mọi tài khoản
+ * nhân viên TRỪ Quản lý/Leader — tức chỉ MKT/Sale (Admin không phải "nhân
+ * viên", Quản lý/Leader bị loại rõ theo đúng yêu cầu). Chuyển tới /requests
+ * — trang hiện mục "Tạo đơn xin nghỉ phép" (module đầu tiên trong nhóm
+ * "Tạo đơn", các loại đơn khác sẽ bổ sung sau).
+ */
+const CREATE_REQUEST_ROLES: AccountRole[] = ["mkt", "sale"];
 
 /**
  * Tinh chỉnh trang đăng nhập/khu vực tài khoản (dự án phụ — nâng cấp toàn
@@ -73,7 +82,7 @@ export function UserMenu({ user }: { user: Account }) {
         <div className="hidden text-right text-xs leading-tight sm:block">
           <p className="font-medium text-slate-800">{user.full_name}</p>
           <p className="text-[11px] text-slate-500">
-            <span style={adminGoldTextStyle(user.role)}>{ACCOUNT_ROLE_LABEL[user.role]}</span>
+            <span style={roleAccentTextStyle(user.role)}>{ACCOUNT_ROLE_LABEL[user.role]}</span>
             {user.team_name ? ` · ${user.team_name}` : ""}
           </p>
         </div>
@@ -102,6 +111,20 @@ export function UserMenu({ user }: { user: Account }) {
             <Settings className="h-4 w-4 text-slate-400" strokeWidth={2} />
             Cài đặt tài khoản
           </button>
+          {CREATE_REQUEST_ROLES.includes(user.role) && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setIsOpen(false);
+                router.push("/attendance?tab=requests");
+              }}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <FilePlus2 className="h-4 w-4 text-slate-400" strokeWidth={2} />
+              Tạo đơn
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

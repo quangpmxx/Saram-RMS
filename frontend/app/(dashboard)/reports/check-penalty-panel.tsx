@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2, RotateCcw, Search, Settings2, X } from "lucide-
 import { ApiError, clientApi } from "@/lib/api-client";
 import type {
   AccountRole,
+  AppRealtimeEvent,
   PaginatedResult,
   ReportDeadline,
   ReportViolation,
@@ -13,6 +14,7 @@ import type {
   Team,
   TeamMember,
 } from "@/lib/types";
+import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -140,13 +142,7 @@ export function CheckPenaltyPanel({
       });
   }, [refreshKey]);
 
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setLoading(true);
-      setError(null);
-    });
+  function buildViolationParams(): URLSearchParams {
     const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
     if (dateRange.from) params.set("date_from", dateRange.from);
     if (dateRange.to) params.set("date_to", dateRange.to);
@@ -155,6 +151,17 @@ export function CheckPenaltyPanel({
     if (violationType) params.set("violation_type", violationType);
     if (status) params.set("status", status);
     if (keyword) params.set("keyword", keyword);
+    return params;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+    });
+    const params = buildViolationParams();
 
     clientApi<PaginatedResult<ReportViolation>>(`/report-penalty?${params.toString()}`)
       .then((result) => {
@@ -170,7 +177,67 @@ export function CheckPenaltyPanel({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange, teamId, accountId, violationType, status, keyword, page, refreshKey]);
+
+  /**
+   * Yêu cầu người dùng (Mục 2) — "Check phạt mới xuất hiện ngay với người
+   * có quyền xem... không refetch toàn bộ nếu chỉ 1 bảng bị ảnh hưởng".
+   * Vá đúng dòng theo id nếu đang hiển thị trong trang hiện tại; nếu là vi
+   * phạm MỚI có thể khớp trang/bộ lọc hiện tại thì tải nền lặng lẽ (không
+   * bật `loading` toàn bảng, tránh nhấp nháy).
+   */
+  async function silentRefetch() {
+    try {
+      const params = buildViolationParams();
+      const result = await clientApi<PaginatedResult<ReportViolation>>(`/report-penalty?${params.toString()}`);
+      setData(result);
+    } catch {
+      // bỏ qua lỗi tải nền
+    }
+  }
+
+  const [conflictViolationIds, setConflictViolationIds] = useState<Set<string>>(new Set());
+
+  function handleAppRealtimeEvent(event: AppRealtimeEvent) {
+    if (event.module !== "penalty") return;
+    const violation = event.payload as ReportViolation | undefined;
+    if (!violation) return;
+
+    const items = data?.items ?? [];
+    const existing = items.find((v) => v.id === violation.id);
+    if (existing) {
+      setData((prev) => (prev ? { ...prev, items: prev.items.map((v) => (v.id === violation.id ? violation : v)) } : prev));
+      // Modal đang mở đúng bản ghi này (Mục 7) — không tự ghi đè lựa chọn
+      // đang dở, chỉ đánh dấu để hiện cảnh báo nhỏ + cho phép tải lại.
+      if (statusTarget?.id === violation.id) {
+        setConflictViolationIds((prev) => new Set(prev).add(violation.id));
+      }
+      return;
+    }
+
+    if (event.action === "created") {
+      void silentRefetch();
+    }
+  }
+
+  useAppRealtime(handleAppRealtimeEvent);
+  useRealtimeReconnect(() => void silentRefetch());
+
+  function handleReloadConflictedViolation() {
+    if (!statusTarget) return;
+    const fresh = (data?.items ?? []).find((v) => v.id === statusTarget.id);
+    if (fresh) {
+      setStatusTarget(fresh);
+      setStatusValue(fresh.status);
+      setStatusNote(fresh.note ?? "");
+    }
+    setConflictViolationIds((prev) => {
+      const next = new Set(prev);
+      next.delete(statusTarget.id);
+      return next;
+    });
+  }
 
   function updateFilter(apply: () => void) {
     apply();
@@ -221,6 +288,12 @@ export function CheckPenaltyPanel({
     setStatusValue(violation.status);
     setStatusNote(violation.note ?? "");
     setStatusError(null);
+    setConflictViolationIds((prev) => {
+      if (!prev.has(violation.id)) return prev;
+      const next = new Set(prev);
+      next.delete(violation.id);
+      return next;
+    });
   }
 
   async function handleSaveStatus() {
@@ -482,6 +555,18 @@ export function CheckPenaltyPanel({
           }
         >
           <div className="flex flex-col gap-3">
+            {conflictViolationIds.has(statusTarget.id) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 ring-1 ring-inset ring-amber-200">
+                <span>Dữ liệu này vừa được cập nhật bởi người khác</span>
+                <button
+                  type="button"
+                  className="font-medium underline hover:text-amber-900"
+                  onClick={handleReloadConflictedViolation}
+                >
+                  Tải lại
+                </button>
+              </div>
+            )}
             <Field label="Trạng thái">
               <Select value={statusValue} onChange={(e) => setStatusValue(e.target.value as ReportViolationStatus)}>
                 {STATUS_OPTIONS.map((opt) => (

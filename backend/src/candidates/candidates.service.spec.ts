@@ -10,6 +10,7 @@ import { LeadDuplicateService } from './lead-duplicate.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 describe('CandidatesService', () => {
   let service: CandidatesService;
@@ -27,10 +28,21 @@ describe('CandidatesService', () => {
     leadSource: { findUnique: jest.Mock };
     team: { findUnique: jest.Mock };
     account: { findUnique: jest.Mock; findMany: jest.Mock };
+    notification: {
+      createMany: jest.Mock;
+      create: jest.Mock;
+      findMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
   let distributionRuleService: { tryAutoAssign: jest.Mock };
+  let realtimeService: {
+    emitCandidateChange: jest.Mock;
+    emitNoteChange: jest.Mock;
+    emitLeadDeleted: jest.Mock;
+    emitNotificationCreated: jest.Mock;
+  };
 
   const source = { id: 'source-1', name: 'Facebook' };
 
@@ -100,7 +112,15 @@ describe('CandidatesService', () => {
       },
       leadSource: { findUnique: jest.fn() },
       team: { findUnique: jest.fn() },
-      account: { findUnique: jest.fn(), findMany: jest.fn() },
+      account: {
+        findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      notification: {
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
@@ -108,6 +128,12 @@ describe('CandidatesService', () => {
       tryAutoAssign: jest
         .fn()
         .mockImplementation((lead: unknown) => Promise.resolve(lead)),
+    };
+    realtimeService = {
+      emitCandidateChange: jest.fn(),
+      emitNoteChange: jest.fn(),
+      emitLeadDeleted: jest.fn(),
+      emitNotificationCreated: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -117,6 +143,7 @@ describe('CandidatesService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
         { provide: DistributionRuleService, useValue: distributionRuleService },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 
@@ -193,6 +220,104 @@ describe('CandidatesService', () => {
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'create', entityType: 'lead' }),
       );
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện (2026-07-16): data mới up lên nhóm -> báo TẤT CẢ thành viên đang active trong nhóm (kể cả Leader)', async () => {
+      const leadInTeam = { ...baseLead, assignedTeamId: 'team-1' };
+      prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue({
+        id: 'team-1',
+        name: 'Nhóm Sale Demo',
+      });
+      prisma.lead.create.mockResolvedValue(leadInTeam);
+      prisma.lead.findMany.mockResolvedValue([leadInTeam]);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'leader-1' },
+        { id: 'sale-1' },
+        { id: 'sale-2' },
+      ]);
+
+      await service.create(
+        {
+          full_name: 'Nguyễn Văn A',
+          phone_number: '0900000001',
+          source_id: 'source-1',
+          team_id: 'team-1',
+        },
+        mktUser,
+      );
+
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { teamId: 'team-1', status: 'active' },
+        }),
+      );
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            accountId: 'leader-1',
+            leadId: 'lead-1',
+            type: 'new_data_uploaded',
+            channel: 'in_app',
+            senderId: 'mkt-1',
+            status: 'sent',
+          }),
+          expect.objectContaining({ accountId: 'sale-1' }),
+          expect.objectContaining({ accountId: 'sale-2' }),
+        ],
+      });
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện (2026-07-16): nhóm chưa có thành viên -> không gọi tạo thông báo', async () => {
+      const leadInTeam = { ...baseLead, assignedTeamId: 'team-1' };
+      prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue({
+        id: 'team-1',
+        name: 'Nhóm Sale Demo',
+      });
+      prisma.lead.create.mockResolvedValue(leadInTeam);
+      prisma.lead.findMany.mockResolvedValue([leadInTeam]);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(leadInTeam);
+      prisma.account.findMany.mockResolvedValue([]);
+
+      await service.create(
+        {
+          full_name: 'Nguyễn Văn A',
+          phone_number: '0900000001',
+          source_id: 'source-1',
+          team_id: 'team-1',
+        },
+        mktUser,
+      );
+
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+    });
+
+    it('Dự án phụ — nâng cấp toàn diện (2026-07-16): gửi thông báo lỗi KHÔNG làm hỏng thao tác tạo data chính', async () => {
+      const leadInTeam = { ...baseLead, assignedTeamId: 'team-1' };
+      prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue({
+        id: 'team-1',
+        name: 'Nhóm Sale Demo',
+      });
+      prisma.lead.create.mockResolvedValue(leadInTeam);
+      prisma.lead.findMany.mockResolvedValue([leadInTeam]);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(leadInTeam);
+      prisma.account.findMany.mockResolvedValue([{ id: 'leader-1' }]);
+      prisma.notification.createMany.mockRejectedValue(new Error('DB down'));
+
+      await expect(
+        service.create(
+          {
+            full_name: 'Nguyễn Văn A',
+            phone_number: '0900000001',
+            source_id: 'source-1',
+            team_id: 'team-1',
+          },
+          mktUser,
+        ),
+      ).resolves.toBeDefined();
     });
 
     it('tạo trùng SĐT → đánh dấu is_duplicate_flagged cho TẤT CẢ bản ghi cùng SĐT và trả duplicate_warning', async () => {
@@ -870,10 +995,12 @@ describe('CandidatesService', () => {
   describe('assignBulk', () => {
     it('bỏ qua các lead không hợp lệ (đã xóa/đã phân chia/không tồn tại), chỉ gán lead hợp lệ', async () => {
       prisma.account.findUnique.mockResolvedValue(saleAccount);
-      prisma.lead.findMany.mockResolvedValue([
-        { id: 'lead-1' },
-        { id: 'lead-2' },
-      ]);
+      prisma.lead.findMany
+        .mockResolvedValueOnce([{ id: 'lead-1' }, { id: 'lead-2' }])
+        .mockResolvedValueOnce([
+          { ...baseLead, id: 'lead-1' },
+          { ...baseLead, id: 'lead-2' },
+        ]);
       prisma.lead.updateMany.mockResolvedValue({ count: 2 });
 
       const result = await service.assignBulk(
@@ -986,6 +1113,144 @@ describe('CandidatesService', () => {
           actionType: 'transfer',
           oldValue: 'sale-1',
           newValue: 'sale-2 | reason: Sale A nghỉ phép',
+        }),
+      );
+    });
+  });
+
+  describe('getRemindTargets / remindCallback — yêu cầu trực tiếp người dùng (2026-07-16)', () => {
+    const leadInTeam = { ...baseLead, assignedTeamId: 'team-1' };
+
+    it('ném NotFoundException nếu ứng viên không tồn tại/đã xóa mềm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(null);
+      await expect(
+        service.getRemindTargets('ghost', leaderUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('từ chối nếu ứng viên chưa thuộc nhóm nào', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead); // assignedTeamId: null
+      await expect(
+        service.getRemindTargets('lead-1', leaderUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('MKT/Sale không có quyền nhắc gọi lại', async () => {
+      prisma.lead.findUnique.mockResolvedValue(leadInTeam);
+      await expect(
+        service.getRemindTargets('lead-1', saleUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(
+        service.remindCallback('lead-1', { account_id: 'sale-1' }, mktUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Leader không được nhắc cho data ngoài nhóm mình', async () => {
+      prisma.lead.findUnique.mockResolvedValue(leadInTeam);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-other' });
+
+      await expect(
+        service.getRemindTargets('lead-1', leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('trả về toàn bộ thành viên active trong nhóm (kể cả Leader), TRỪ chính người đang xem', async () => {
+      prisma.lead.findUnique.mockResolvedValue(leadInTeam);
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' }); // getOwnTeamId(leader)
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'Sale A', role: 'sale', avatarUrl: null },
+        { id: 'sale-2', fullName: 'Sale B', role: 'sale', avatarUrl: null },
+      ]);
+
+      const result = await service.getRemindTargets('lead-1', leaderUser);
+
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            teamId: 'team-1',
+            status: 'active',
+            id: { not: 'leader-1' },
+          },
+        }),
+      );
+      expect(result).toHaveLength(2);
+    });
+
+    it('Admin không bị giới hạn nhóm khi xem danh sách nhắc', async () => {
+      prisma.lead.findUnique.mockResolvedValue(leadInTeam);
+      prisma.account.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.getRemindTargets('lead-1', adminUser),
+      ).resolves.toEqual([]);
+      // Admin không gọi getOwnTeamId() -> account.findUnique không được gọi.
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('remindCallback: từ chối nếu tài khoản đích không thuộc đúng nhóm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(leadInTeam);
+      prisma.account.findUnique.mockResolvedValueOnce({
+        id: 'sale-2',
+        status: 'active',
+        teamId: 'team-2',
+      });
+
+      await expect(
+        service.remindCallback('lead-1', { account_id: 'sale-2' }, adminUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('remindCallback: gửi thành công -> tạo notification type=manual_callback_reminder, ghi audit log', async () => {
+      prisma.lead.findUnique.mockResolvedValue(leadInTeam);
+      prisma.account.findUnique.mockResolvedValueOnce({
+        id: 'sale-1',
+        status: 'active',
+        teamId: 'team-1',
+      });
+      prisma.notification.create.mockResolvedValue({
+        id: 'notif-1',
+        accountId: 'sale-1',
+        leadId: 'lead-1',
+        leaveRequestId: null,
+        type: 'manual_callback_reminder',
+        channel: 'in_app',
+        content: 'Nhắc xử lý',
+        senderId: 'admin-1',
+        sender: {
+          id: 'admin-1',
+          fullName: 'Admin Root',
+          role: 'admin',
+          avatarUrl: null,
+        },
+        scheduledAt: new Date('2026-07-16T10:00:00.000Z'),
+        sentAt: new Date('2026-07-16T10:00:00.000Z'),
+        status: 'sent',
+      });
+
+      const result = await service.remindCallback(
+        'lead-1',
+        { account_id: 'sale-1' },
+        adminUser,
+      );
+
+      expect(result).toEqual({ success: true });
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'sale-1',
+            leadId: 'lead-1',
+            type: 'manual_callback_reminder',
+            channel: 'in_app',
+            senderId: 'admin-1',
+            status: 'sent',
+          }),
+        }),
+      );
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'create',
+          entityType: 'notification',
         }),
       );
     });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Logo } from "@/components/logo";
 import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
 import { cn } from "@/lib/cn";
+import { useBirthdayTheme } from "@/lib/birthday-theme-context";
 
 /**
  * UI Polish — sidebar thu gọn mặc định (chỉ icon, ~72px), mở rộng mượt khi
@@ -20,16 +21,41 @@ import { cn } from "@/lib/cn";
  */
 export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  // Yêu cầu trực tiếp người dùng (2026-07-16), Mục 3: "Sidebar: giữ nguyên
+  // toàn bộ menu và trạng thái đóng/mở... thêm họa tiết bóng bay/dây cờ nhỏ
+  // ở phần trên/dưới... không cản thao tác hover/click." Gọi thẳng
+  // useBirthdayTheme() ở đây (component này vốn đã "use client") thay vì
+  // truyền prop từ layout.tsx (server component, không đọc được state
+  // "đã ẩn trang trí" — chỉ tồn tại ở localStorage phía client).
+  const { hasBirthdayToday, decorationsHidden } = useBirthdayTheme();
+  const birthdayActive = hasBirthdayToday && !decorationsHidden;
 
   return (
     <aside
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
       className={cn(
-        "z-20 hidden shrink-0 flex-col bg-gradient-to-b from-brand-900 to-brand-950 transition-[width] duration-300 ease-in-out md:flex",
+        "relative z-20 hidden shrink-0 flex-col transition-[width,background] duration-300 ease-in-out md:flex",
+        birthdayActive
+          ? "bg-gradient-to-b from-pink-700 via-fuchsia-800 to-brand-950"
+          : "bg-gradient-to-b from-brand-900 to-brand-950",
         isExpanded ? "md:w-64" : "md:w-[72px]",
       )}
     >
+      {/* pointer-events-none + vẽ TRƯỚC nội dung thật trong DOM (menu/logo
+          luôn nằm SAU nên tự nhiên đè lên trên, không cần z-index riêng) —
+          chữ/icon menu không bao giờ bị che, thao tác hover/click không bị cản. */}
+      {birthdayActive && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute inset-x-0 top-0 flex justify-center gap-2 pt-1.5 text-sm opacity-50">
+            <span>🎉</span>
+            <span>🎈</span>
+            <span>🎊</span>
+          </div>
+          <span className="birthday-balloon-float absolute right-2 bottom-16 text-lg opacity-40 select-none">🎈</span>
+        </div>
+      )}
+
       <div className="flex items-center px-[19px] py-5">
         <div
           className={cn(
@@ -39,7 +65,7 @@ export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
         >
           {/* w-max: giữ nguyên chiều rộng tự nhiên (icon + chữ) để wrapper ngoài
               clip đúng phần cần ẩn, không để flexbox ép co nhỏ icon lại. */}
-          <Logo variant="light" size="sm" showWordmark className="w-max" />
+          <Logo variant="light" size="sm" showWordmark href="/" className="w-max" />
         </div>
       </div>
       <div className="mt-2 flex-1">

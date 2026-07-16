@@ -35,6 +35,8 @@ export interface CheckinRecordResponseDto {
   device: string | null;
   operating_system: string | null;
   browser: string | null;
+  /** Yêu cầu trực tiếp người dùng (2026-07-16): ghi chú tự do của Admin cho bản ghi này — không bị redactRecordResponse() ẩn đi (không phải dữ liệu GPS/IP/thiết bị nhạy cảm). */
+  note: string | null;
   created_at: string;
 }
 

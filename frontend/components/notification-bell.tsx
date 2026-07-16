@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Bell, CalendarClock, Megaphone, Phone, X } from "lucide-react";
+import { Bell, CalendarClock, FileStack, FileText, Megaphone, Phone, PhoneCall, X } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
-import { ACCOUNT_ROLE_LABEL, type AppNotification, type PaginatedResult } from "@/lib/types";
-import { adminGoldTextStyle } from "@/lib/admin-gold";
+import { ACCOUNT_ROLE_LABEL, type AppNotification, type AppRealtimeEvent, type PaginatedResult } from "@/lib/types";
+import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
+import { roleAccentTextStyle } from "@/lib/role-accent";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -13,6 +15,11 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   callback_reminder: "Nhắc lịch gọi lại",
   interview_reminder: "Nhắc lịch phỏng vấn",
   admin_message: "Thông báo từ quản trị viên",
+  new_data_uploaded: "Data mới về nhóm",
+  manual_callback_reminder: "Nhắc gọi lại",
+  leave_request_pending_leader: "Đơn xin nghỉ phép cần duyệt",
+  leave_request_pending_admin: "Đơn xin nghỉ phép cần duyệt",
+  leave_request_decided: "Kết quả đơn xin nghỉ phép",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -27,8 +34,6 @@ const STATUS_CLASS: Record<AppNotification["status"], string> = {
   failed: "bg-red-50 text-red-700",
 };
 
-const POLL_INTERVAL_MS = 20_000;
-
 /**
  * Dự án phụ — nâng cấp toàn diện: "Nhắc lịch gọi lại" hiện nổi 1 phút (yêu
  * cầu trực tiếp người dùng), các loại còn lại giữ nguyên 30s như trước.
@@ -37,6 +42,11 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   callback_reminder: 60_000,
   interview_reminder: 30_000,
   admin_message: 30_000,
+  new_data_uploaded: 30_000,
+  manual_callback_reminder: 60_000,
+  leave_request_pending_leader: 60_000,
+  leave_request_pending_admin: 60_000,
+  leave_request_decided: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -51,6 +61,9 @@ function notificationTitle(n: AppNotification): string {
 function NotificationIcon({ type, className }: { type: AppNotification["type"]; className: string }) {
   if (type === "callback_reminder") return <Phone className={className} strokeWidth={2} />;
   if (type === "admin_message") return <Megaphone className={className} strokeWidth={2} />;
+  if (type === "new_data_uploaded") return <FileStack className={className} strokeWidth={2} />;
+  if (type === "manual_callback_reminder") return <PhoneCall className={className} strokeWidth={2} />;
+  if (type.startsWith("leave_request_")) return <FileText className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 
@@ -69,7 +82,7 @@ function NotificationSenderRow({ n }: { n: AppNotification }) {
         {n.sender && (
           <>
             {" ("}
-            <span style={adminGoldTextStyle(n.sender.role)}>{ACCOUNT_ROLE_LABEL[n.sender.role]}</span>
+            <span style={roleAccentTextStyle(n.sender.role)}>{ACCOUNT_ROLE_LABEL[n.sender.role]}</span>
             {")"}
           </>
         )}
@@ -151,17 +164,28 @@ function playNotificationSound() {
  * docs/13) — không đổi API, chỉ thêm UI hiển thị.
  *
  * "Đã xem"/"đã biết" chỉ lưu cục bộ trên trình duyệt (localStorage, theo
- * từng tài khoản) — backend không có khái niệm đã đọc/chưa đọc hay đẩy
- * (push) thông báo mới, nên client tự dò bằng cách polling GET /notification
- * mỗi 20 giây và so sánh id với danh sách "đã biết" (knownIds) để phát hiện
- * thông báo mới xuất hiện kể từ lần tải trước — không đổi DB/API cho việc này.
+ * từng tài khoản) — backend không có khái niệm đã đọc/chưa đọc ở tầng DB
+ * (không có cột is_read), nên KHÔNG có API mark-as-read thật để đồng bộ.
  *
- * Quy tắc: thông báo mới → hiện toast nổi + phát âm thanh + thêm vào danh
- * sách trong chuông. Toast tự biến mất sau 10s (KHÔNG đánh dấu đã xem →
- * chuông vẫn sáng đỏ + hiện số). Bấm X đóng toast → đánh dấu đã xem ngay
- * (chuông không sáng cho thông báo đó), vẫn còn trong danh sách chuông.
+ * Yêu cầu trực tiếp người dùng (2026-07-16, mở rộng realtime — Thông báo):
+ * (1) Thay polling 20s bằng đẩy realtime thật qua WebSocket (kênh chung
+ *     `app:event`, module `notification`, xem lib/realtime.ts) — chỉ còn 1
+ *     lần tải ban đầu lúc mount, KHÔNG còn setInterval nào cả.
+ * (2) "Đồng bộ trạng thái đã đọc giữa nhiều tab của cùng 1 tài khoản" — vì
+ *     trạng thái này CHỈ tồn tại ở localStorage (không có gì ở server để
+ *     đẩy realtime), dùng đúng cơ chế native của trình duyệt cho việc này:
+ *     sự kiện `storage` (tự bắn ở các TAB KHÁC khi 1 tab ghi localStorage
+ *     cùng origin) — không cần bất kỳ API/DB nào, không đổi phạm vi "chỉ lưu
+ *     cục bộ" đã có.
+ *
+ * Quy tắc hiển thị GIỮ NGUYÊN như cũ: thông báo mới → hiện toast nổi + phát
+ * âm thanh + thêm vào danh sách trong chuông. Toast tự biến mất sau thời
+ * gian cấu hình theo loại (KHÔNG đánh dấu đã xem → chuông vẫn sáng đỏ + hiện
+ * số). Bấm X đóng toast → đánh dấu đã xem ngay (chuông không sáng cho thông
+ * báo đó), vẫn còn trong danh sách chuông.
  */
 export function NotificationBell({ userId }: { userId: string }) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(() => loadIdSet(seenStorageKey(userId)));
@@ -210,6 +234,43 @@ export function NotificationBell({ userId }: { userId: string }) {
     if (markAsSeen) markSeen([id]);
   }
 
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): "ấn vào thông báo nổi hoặc
+   * trong quả chuông sẽ link thẳng đến lao động/đơn đang nhắc tới" — áp dụng
+   * chung cho MỌI loại thông báo có gắn `lead_id` hoặc `leave_request_id`,
+   * không cần liệt kê riêng từng loại vì đều dùng chung 2 field này.
+   *
+   * Yêu cầu trực tiếp người dùng (bổ sung, cùng ngày): "thông báo nào đã ấn
+   * vào thì nền trắng, chưa ấn thì nền đậm" — LUÔN đánh dấu đã xem ngay khi
+   * bấm (kể cả loại admin_message/cảnh báo không đưa đón, KHÔNG gắn
+   * lead_id/leave_request_id nên bấm vào không điều hướng đi đâu) — nếu
+   * không, thông báo loại đó sẽ mãi mãi hiện nền đậm không cách nào xóa.
+   */
+  function handleNotificationClick(n: AppNotification) {
+    markSeen([n.id]);
+    dismissToast(n.id, false);
+    const target = n.lead_id
+      ? `/candidates/${n.lead_id}`
+      : n.leave_request_id
+        ? // "Đơn xin nghỉ phép" không còn là trang riêng — nay là 1 tab
+          // trong "Chấm công" (xem attendance-client.tsx, tab "requests").
+          `/attendance?tab=requests&open=${n.leave_request_id}`
+        : null;
+    if (!target) return;
+    setIsOpen(false);
+    router.push(target);
+  }
+
+  function markKnown(ids: Iterable<string>) {
+    for (const id of ids) knownIdsRef.current.add(id);
+    saveIdSet(knownStorageKey(userId), knownIdsRef.current);
+  }
+
+  function scheduleToastDismiss(n: AppNotification) {
+    const timeout = setTimeout(() => dismissToast(n.id, false), TOAST_DURATION_MS[n.type]);
+    toastTimeoutsRef.current.set(n.id, timeout);
+  }
+
   async function fetchNotifications() {
     const result = await clientApi<PaginatedResult<AppNotification>>("/notification?page_size=20");
     setNotifications(result.items);
@@ -217,35 +278,75 @@ export function NotificationBell({ userId }: { userId: string }) {
     if (isFirstFetchRef.current) {
       // Lần tải đầu tiên = mốc gốc — không toast cho thông báo đã có sẵn từ trước.
       isFirstFetchRef.current = false;
-      for (const n of result.items) knownIdsRef.current.add(n.id);
-      saveIdSet(knownStorageKey(userId), knownIdsRef.current);
+      markKnown(result.items.map((n) => n.id));
       return;
     }
 
     const freshOnes = result.items.filter((n) => !knownIdsRef.current.has(n.id));
     if (freshOnes.length === 0) return;
 
-    for (const n of freshOnes) knownIdsRef.current.add(n.id);
-    saveIdSet(knownStorageKey(userId), knownIdsRef.current);
-
+    markKnown(freshOnes.map((n) => n.id));
     playNotificationSound();
     setToasts((prev) => [...prev, ...freshOnes]);
-    for (const n of freshOnes) {
-      const timeout = setTimeout(() => dismissToast(n.id, false), TOAST_DURATION_MS[n.type]);
-      toastTimeoutsRef.current.set(n.id, timeout);
-    }
+    for (const n of freshOnes) scheduleToastDismiss(n);
   }
+
+  /**
+   * Yêu cầu người dùng (Mục 3, mở rộng realtime) — thay polling: mỗi
+   * notification.created đẩy tới ĐÚNG account_id (đã lọc phòng ở backend,
+   * xem realtime.gateway.ts#userRoom) hiện ngay chuông/badge/toast, không
+   * cần đợi tới lượt poll kế tiếp. Kiểm tra `knownIdsRef` trước khi xử lý —
+   * tránh thêm trùng nếu cùng 1 sự kiện lỡ tới nhiều lần (reconnect dồn dập,
+   * Socket.IO gửi lại...).
+   */
+  function handleAppRealtimeEvent(event: AppRealtimeEvent) {
+    if (event.module !== "notification" || event.action !== "created") return;
+    const n = event.payload as AppNotification | undefined;
+    if (!n || n.account_id !== userId || knownIdsRef.current.has(n.id)) return;
+
+    markKnown([n.id]);
+    setNotifications((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev]));
+    playNotificationSound();
+    setToasts((prev) => [...prev, n]);
+    scheduleToastDismiss(n);
+  }
+
+  useAppRealtime(handleAppRealtimeEvent);
+  /** Mục 8: sau khi mất mạng rồi kết nối lại, refetch 1 lần để không bỏ sót sự kiện đã lỡ trong lúc mất kết nối. */
+  useRealtimeReconnect(() => void fetchNotifications());
+
+  /**
+   * Mục 3, yêu cầu người dùng — "đồng bộ trạng thái đã đọc giữa nhiều tab
+   * của cùng 1 tài khoản": trạng thái "đã xem"/"đã biết"/"đã xóa" CHỈ tồn
+   * tại ở localStorage (không có gì ở server để đẩy realtime) — dùng đúng
+   * sự kiện `storage` chuẩn của trình duyệt (tự bắn ở các TAB KHÁC, cùng
+   * origin, khi 1 tab ghi localStorage) để đồng bộ, không cần thêm API/DB.
+   */
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key === seenStorageKey(userId)) {
+        setSeenIds(loadIdSet(seenStorageKey(userId)));
+      } else if (event.key === dismissedStorageKey(userId)) {
+        setDismissedIds(loadIdSet(dismissedStorageKey(userId)));
+      } else if (event.key === knownStorageKey(userId)) {
+        knownIdsRef.current = loadIdSet(knownStorageKey(userId));
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
-    // Gọi lần đầu qua setTimeout(0) (thay vì gọi trực tiếp) — cùng kiểu "gọi
-    // hàm bất đồng bộ đã bọc timer" như setInterval bên dưới, tránh lỗi lint
+    // Gọi lần đầu qua setTimeout(0) (thay vì gọi trực tiếp) — tránh lỗi lint
     // "setState trong effect" (rule chỉ cảnh báo lệnh gọi hàm trực tiếp,
-    // không cảnh báo lệnh gọi bên trong callback của timer/promise).
+    // không cảnh báo lệnh gọi bên trong callback của timer/promise). Đây là
+    // lần tải DUY NHẤT qua REST — các cập nhật sau đó đến từ realtime
+    // (useAppRealtime ở trên), không còn polling định kỳ nữa.
     const immediate = setTimeout(() => {
       fetchNotifications()
         .catch(() => {
-          // Bỏ qua lỗi tải nền — không chặn UI, lần poll sau sẽ thử lại.
+          // Bỏ qua lỗi tải nền — không chặn UI, realtime/lần mở chuông sau sẽ tự cập nhật.
         })
         .finally(() => {
           if (!cancelled) {
@@ -254,14 +355,10 @@ export function NotificationBell({ userId }: { userId: string }) {
           }
         });
     }, 0);
-    const interval = setInterval(() => {
-      void fetchNotifications();
-    }, POLL_INTERVAL_MS);
     const timeouts = toastTimeoutsRef.current;
     return () => {
       cancelled = true;
       clearTimeout(immediate);
-      clearInterval(interval);
       for (const timeout of timeouts.values()) clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -299,9 +396,13 @@ export function NotificationBell({ userId }: { userId: string }) {
       setDropdownPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
     }
     try {
+      // Yêu cầu trực tiếp người dùng: "thông báo nào đã ấn vào thì nền
+      // trắng, chưa ấn thì nền đậm" — KHÔNG được tự đánh dấu "đã xem" hàng
+      // loạt chỉ vì mở quả chuông ra xem (trước đây làm vậy) — phải giữ
+      // nguyên trạng thái nền đậm cho tới khi người dùng bấm vào ĐÚNG dòng
+      // đó (xem handleNotificationClick).
       const result = await clientApi<PaginatedResult<AppNotification>>("/notification?page_size=20");
       setNotifications(result.items);
-      markSeen(result.items.map((n) => n.id));
     } finally {
       setHasLoadedOnce(true);
     }
@@ -366,7 +467,17 @@ export function NotificationBell({ userId }: { userId: string }) {
                 <p className="px-3.5 py-4 text-center text-xs text-slate-400">Chưa có thông báo nào</p>
               ) : (
                 visibleNotifications.map((n) => (
-                  <div key={n.id} className="px-3.5 py-2.5 hover:bg-slate-50">
+                  <div
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className={cn(
+                      "px-3.5 py-2.5 transition-colors",
+                      // Yêu cầu trực tiếp người dùng: đã ấn vào (đã xem) -> nền trắng
+                      // (mặc định); chưa ấn vào -> nền đậm hơn để dễ nhận ra.
+                      seenIds.has(n.id) ? "bg-white hover:bg-slate-50" : "bg-brand-100/70 hover:bg-brand-100",
+                      (n.lead_id || n.leave_request_id) && "cursor-pointer",
+                    )}
+                  >
                     <NotificationSenderRow n={n} />
                     <div className="flex items-start gap-2.5">
                       <NotificationIcon type={n.type} className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
@@ -400,11 +511,20 @@ export function NotificationBell({ userId }: { userId: string }) {
             {toasts.map((n) => (
               <div
                 key={n.id}
-                className="rounded-xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-900/15"
+                onClick={() => handleNotificationClick(n)}
+                className={cn(
+                  // Yêu cầu trực tiếp người dùng (2026-07-16): "đổi màu nền cho nổi bật,
+                  // dễ gây chú ý hơn" — nền trắng trơn trước đây dễ bị bỏ qua giữa các
+                  // khối trắng khác trên trang. Đổi sang nền gradient nhạt màu thương
+                  // hiệu (brand) + viền trái đậm 4px kiểu "alert" + viền/bóng đổ màu
+                  // thương hiệu, chữ vẫn giữ màu tối để không giảm độ đọc.
+                  "rounded-xl border border-brand-200 border-l-4 border-l-brand-500 bg-gradient-to-br from-brand-50 to-white p-3 shadow-lg shadow-brand-900/20 ring-1 ring-brand-500/10",
+                  (n.lead_id || n.leave_request_id) && "cursor-pointer",
+                )}
               >
                 <NotificationSenderRow n={n} />
                 <div className="flex items-start gap-2.5">
-                  <NotificationIcon type={n.type} className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+                  <NotificationIcon type={n.type} className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-800">{notificationTitle(n)}</p>
                     <p className="text-xs text-slate-500">{formatDateTime(n.scheduled_at)}</p>
@@ -412,7 +532,10 @@ export function NotificationBell({ userId }: { userId: string }) {
                   <button
                     type="button"
                     title="Đóng"
-                    onClick={() => dismissToast(n.id, true)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      dismissToast(n.id, true);
+                    }}
                     className="shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500"
                   >
                     <X className="h-3.5 w-3.5" strokeWidth={2} />

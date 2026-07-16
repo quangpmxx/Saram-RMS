@@ -43,6 +43,22 @@ import {
   toCallbackResponse,
 } from './dto/callback-response.dto';
 import { isLockActive, isVisibleInCarePool } from './care-pool.util';
+import { RealtimeService } from '../realtime/realtime.service';
+import { LeadEventTargets } from '../realtime/realtime-event.interface';
+
+/** Chuyển 1 bản ghi Lead (raw Prisma) thành đối tượng nhận realtime — dùng chung cho mọi hook trong file này. */
+function leadTargets(lead: {
+  assignedTeamId: string | null;
+  assignedToId: string | null;
+  carePoolLockedById: string | null;
+}): LeadEventTargets {
+  return {
+    assignedTeamId: lead.assignedTeamId,
+    assignedToId: lead.assignedToId,
+    carePoolLockedById: lead.carePoolLockedById,
+    visibleToAllLeaderSale: lead.assignedTeamId === null,
+  };
+}
 
 /**
  * Mục 6, docs/13-api-design.md (Phase 3 — Pipeline cuộc gọi & Lịch sử ghi
@@ -58,6 +74,7 @@ export class LeadPipelineService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly candidatesService: CandidatesService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async updateCallStatus(
@@ -83,7 +100,7 @@ export class LeadPipelineService {
       newValue: dto.call_status_id,
     });
 
-    return this.reloadCandidate(id);
+    return this.reloadCandidate(id, currentUser);
   }
 
   async updateCallResult(
@@ -109,7 +126,7 @@ export class LeadPipelineService {
       newValue: dto.call_result_id,
     });
 
-    return this.reloadCandidate(id);
+    return this.reloadCandidate(id, currentUser);
   }
 
   /**
@@ -141,7 +158,7 @@ export class LeadPipelineService {
       newValue: dto.zalo_status_id ?? undefined,
     });
 
-    return this.reloadCandidate(id);
+    return this.reloadCandidate(id, currentUser);
   }
 
   /**
@@ -180,7 +197,7 @@ export class LeadPipelineService {
       newValue: dto.zalo_friend_status_id ?? undefined,
     });
 
-    return this.reloadCandidate(id);
+    return this.reloadCandidate(id, currentUser);
   }
 
   /**
@@ -211,7 +228,7 @@ export class LeadPipelineService {
       newValue: dto.note_color ?? undefined,
     });
 
-    return this.reloadCandidate(id);
+    return this.reloadCandidate(id, currentUser);
   }
 
   /** Mục 6, docs/13: tất cả note (kể cả đã xóa) — giữ nguyên lịch sử. */
@@ -272,7 +289,18 @@ export class LeadPipelineService {
       newValue: dto.content,
     });
 
-    return toNoteResponse(created);
+    const noteResponse = toNoteResponse(created);
+    // Yêu cầu trực tiếp người dùng (2026-07-16): thêm note phải đồng bộ
+    // realtime — kèm luôn `candidate` mới nhất vì last_activity_at vừa đổi
+    // (ảnh hưởng thứ tự/hiển thị dòng data), gộp 1 sự kiện thay vì 2.
+    this.realtime.emitNoteChange(
+      'note_created',
+      noteResponse,
+      leadTargets(lead),
+      currentUser,
+      await this.reloadCandidateSilently(id),
+    );
+    return noteResponse;
   }
 
   /**
@@ -336,7 +364,17 @@ export class LeadPipelineService {
       newValue: dto.content,
     });
 
-    return toNoteResponse(updated);
+    const noteResponse = toNoteResponse(updated);
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (lead) {
+      this.realtime.emitNoteChange(
+        'note_updated',
+        noteResponse,
+        leadTargets(lead),
+        currentUser,
+      );
+    }
+    return noteResponse;
   }
 
   /**
@@ -369,13 +407,14 @@ export class LeadPipelineService {
       );
     }
 
-    await this.prisma.leadNote.update({
+    const deleted = await this.prisma.leadNote.update({
       where: { id: noteId },
       data: {
         isDeleted: true,
         deletedById: currentUser.id,
         deletedAt: new Date(),
       },
+      include: NOTE_INCLUDE,
     });
 
     await this.auditLog.log({
@@ -384,6 +423,16 @@ export class LeadPipelineService {
       entityType: 'lead_note',
       entityId: noteId,
     });
+
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (lead) {
+      this.realtime.emitNoteChange(
+        'note_deleted',
+        toNoteResponse(deleted),
+        leadTargets(lead),
+        currentUser,
+      );
+    }
   }
 
   /**
@@ -419,7 +468,7 @@ export class LeadPipelineService {
       include: INTERVIEW_INCLUDE,
     });
 
-    await this.syncCurrentInterviewSnapshot(id);
+    await this.syncCurrentInterviewSnapshot(id, currentUser);
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -503,7 +552,7 @@ export class LeadPipelineService {
       include: INTERVIEW_INCLUDE,
     });
 
-    await this.syncCurrentInterviewSnapshot(interview.leadId);
+    await this.syncCurrentInterviewSnapshot(interview.leadId, currentUser);
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -548,6 +597,11 @@ export class LeadPipelineService {
       newValue: `scheduled_at=${created.scheduledAt.toISOString()}`,
     });
 
+    this.realtime.emitCandidateChange(
+      'updated',
+      await this.reloadCandidateSilently(id),
+      currentUser,
+    );
     return toCallbackResponse(created);
   }
 
@@ -709,8 +763,15 @@ export class LeadPipelineService {
     return status;
   }
 
-  /** Mục 7.2, tài liệu 11: đồng bộ lại snapshot từ lần hẹn PV mới nhất. */
-  private async syncCurrentInterviewSnapshot(leadId: string): Promise<void> {
+  /**
+   * Mục 7.2, tài liệu 11: đồng bộ lại snapshot từ lần hẹn PV mới nhất.
+   * Snapshot này lộ ra ngoài dòng hiển thị data (current_interview_status...)
+   * nên cũng phát realtime "updated" (yêu cầu trực tiếp người dùng, 2026-07-16).
+   */
+  private async syncCurrentInterviewSnapshot(
+    leadId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
     const latest = await this.prisma.interviewAppointment.findFirst({
       where: { leadId },
       orderBy: { attemptNo: 'desc' },
@@ -725,9 +786,37 @@ export class LeadPipelineService {
         lastActivityAt: new Date(),
       },
     });
+
+    this.realtime.emitCandidateChange(
+      'updated',
+      await this.reloadCandidateSilently(leadId),
+      currentUser,
+    );
   }
 
-  private async reloadCandidate(id: string): Promise<CandidateResponseDto> {
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): dùng chung cho 5 API cập
+   * nhật 1 field đơn (call_status/call_result/zalo_status/zalo_friend_status/
+   * note_color) — tải lại đầy đủ CandidateResponseDto rồi phát realtime
+   * "updated" luôn tại đây, tránh lặp lại 5 lần cùng 1 đoạn code.
+   */
+  private async reloadCandidate(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const final = await this.prisma.lead.findUniqueOrThrow({
+      where: { id },
+      include: CANDIDATE_INCLUDE,
+    });
+    const response = toCandidateResponse(final);
+    this.realtime.emitCandidateChange('updated', response, currentUser);
+    return response;
+  }
+
+  /** Như reloadCandidate() nhưng KHÔNG tự phát realtime — dùng khi nơi gọi tự gộp candidate vào 1 sự kiện khác (vd note_created), tránh phát 2 sự kiện cho 1 thao tác. */
+  private async reloadCandidateSilently(
+    id: string,
+  ): Promise<CandidateResponseDto> {
     const final = await this.prisma.lead.findUniqueOrThrow({
       where: { id },
       include: CANDIDATE_INCLUDE,

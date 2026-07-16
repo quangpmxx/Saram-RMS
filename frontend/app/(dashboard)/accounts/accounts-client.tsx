@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Pencil, Plus, Power, PowerOff, ShieldCheck, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import { adminGoldBadgeStyle } from "@/lib/admin-gold";
+import { roleAccentBadgeStyle } from "@/lib/role-accent";
 import {
   ACCOUNT_ROLE_LABEL,
   type Account,
@@ -194,7 +194,7 @@ export function AccountsClient({
                   <td className="px-4 py-3 font-medium text-slate-800">{account.full_name}</td>
                   <td className="px-4 py-3 text-slate-500">{account.username}</td>
                   <td className="px-4 py-3">
-                    <Badge variant="info" style={adminGoldBadgeStyle(account.role)}>
+                    <Badge variant="info" style={roleAccentBadgeStyle(account.role)}>
                       {ACCOUNT_ROLE_LABEL[account.role]}
                     </Badge>
                   </td>

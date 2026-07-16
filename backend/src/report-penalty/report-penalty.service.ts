@@ -6,6 +6,7 @@ import {
 import { AccountRole, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { ListReportPenaltyQueryDto } from './dto/list-report-penalty-query.dto';
@@ -114,6 +115,7 @@ export class ReportPenaltyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   /** Mục 5: đọc hạn hiện tại — mọi vai trò xem được trang Check phạt đều cần biết hạn để hiểu cột "Hạn nộp", chỉ ĐỔI mới giới hạn Admin. */
@@ -283,7 +285,14 @@ export class ReportPenaltyService {
             actualSubmittedAt: report.createdAt,
             violationType: 'late_submission',
           });
-          if (created) lateSubmissions.push(sale.fullName);
+          if (created) {
+            lateSubmissions.push(sale.fullName);
+            // Job nền tự động (không có actor người dùng) — Mục 2, yêu cầu
+            // người dùng: "Job tự động tạo vi phạm Check phạt" phải đồng bộ
+            // realtime tới đúng người có quyền xem (Sale bị ghi nhận/Leader
+            // nhóm đó/Admin-Quản lý).
+            this.realtime.emitPenaltyChange('created', created, null);
+          }
         }
       } else if (!existingKeys.has(`${sale.id}_no_submission`)) {
         const created = await this.createViolationIfMissing({
@@ -293,7 +302,10 @@ export class ReportPenaltyService {
           actualSubmittedAt: null,
           violationType: 'no_submission',
         });
-        if (created) noSubmissions.push(sale.fullName);
+        if (created) {
+          noSubmissions.push(sale.fullName);
+          this.realtime.emitPenaltyChange('created', created, null);
+        }
       }
     }
 
@@ -305,23 +317,31 @@ export class ReportPenaltyService {
     };
   }
 
-  /** Bắt riêng P2002 (unique constraint accountId+reportDate+violationType) làm lớp chặn trùng cuối cùng chống race condition — Mục 3: "chạy lại nhiều lần không được sinh thêm bản ghi trùng". */
+  /**
+   * Bắt riêng P2002 (unique constraint accountId+reportDate+violationType)
+   * làm lớp chặn trùng cuối cùng chống race condition — Mục 3: "chạy lại
+   * nhiều lần không được sinh thêm bản ghi trùng". Trả về DTO đầy đủ (thay
+   * vì boolean) để nơi gọi phát realtime ngay được, không phải truy vấn lại.
+   */
   private async createViolationIfMissing(data: {
     accountId: string;
     reportDate: Date;
     deadlineSnapshot: Date;
     actualSubmittedAt: Date | null;
     violationType: 'late_submission' | 'no_submission';
-  }): Promise<boolean> {
+  }): Promise<ReportViolationResponseDto | null> {
     try {
-      await this.prisma.reportViolation.create({ data });
-      return true;
+      const created = await this.prisma.reportViolation.create({
+        data,
+        include: VIOLATION_INCLUDE,
+      });
+      return toViolationResponse(created);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        return false;
+        return null;
       }
       throw error;
     }
@@ -338,7 +358,7 @@ export class ReportPenaltyService {
    * đó (giả định hợp lý, không có trong đặc tả gốc — báo lại nếu sai).
    */
   async markSupplementedIfPending(
-    accountId: string,
+    currentUser: AuthenticatedUser,
     reportDateOnly: string,
     submittedAt: Date,
   ): Promise<void> {
@@ -346,7 +366,7 @@ export class ReportPenaltyService {
     const violation = await this.prisma.reportViolation.findUnique({
       where: {
         accountId_reportDate_violationType: {
-          accountId,
+          accountId: currentUser.id,
           reportDate,
           violationType: 'no_submission',
         },
@@ -354,13 +374,20 @@ export class ReportPenaltyService {
     });
     if (!violation || violation.status !== 'pending') return;
 
-    await this.prisma.reportViolation.update({
+    const updated = await this.prisma.reportViolation.update({
       where: { id: violation.id },
       data: {
         status: 'supplemented',
         actualSubmittedAt: submittedAt,
       },
+      include: VIOLATION_INCLUDE,
     });
+
+    this.realtime.emitPenaltyChange(
+      'updated',
+      toViolationResponse(updated),
+      currentUser,
+    );
   }
 
   /** Mục 7/8: bộ lọc + phân trang phía server + phạm vi RBAC. */
@@ -462,6 +489,8 @@ export class ReportPenaltyService {
       newValue: dto.status,
     });
 
-    return toViolationResponse(updated);
+    const response = toViolationResponse(updated);
+    this.realtime.emitPenaltyChange('updated', response, currentUser);
+    return response;
   }
 }

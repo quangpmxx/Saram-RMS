@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 
@@ -6,29 +7,38 @@ const MARK_PX = {
   md: 40,
 } as const;
 
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-17): "Ấn vào logo hoặc tên công ty
+ * sẽ mở trang chủ dashboard" — thêm prop `href` tùy chọn, bọc nội dung bằng
+ * <Link> khi được truyền vào. Không truyền `href` (vd. trang đăng nhập) thì
+ * giữ nguyên hành vi cũ, không phải link.
+ */
 export function Logo({
   size = "md",
   variant = "dark",
   showWordmark = true,
+  href,
   className,
 }: {
   size?: "sm" | "md" | "lg";
   variant?: "dark" | "light";
   showWordmark?: boolean;
+  href?: string;
   className?: string;
 }) {
   if (size === "lg") {
     // Kích thước gốc 112px/128px, tăng ~25-29% (yêu cầu tinh chỉnh trang đăng
     // nhập) — "lg" chỉ dùng riêng ở đó, không ảnh hưởng logo sidebar/header.
-    return (
+    const mark = (
       <div className={cn("relative h-36 w-36 sm:h-40 sm:w-40", className)}>
         <Image src="/saram-logo.jpg" alt="Saram Group" fill sizes="160px" className="object-contain" priority />
       </div>
     );
+    return href ? <Link href={href}>{mark}</Link> : mark;
   }
 
   const px = MARK_PX[size];
-  return (
+  const content = (
     <div className={cn("flex items-center gap-2.5", className)}>
       <div
         className="relative shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-black/5"
@@ -48,5 +58,13 @@ export function Logo({
         </span>
       )}
     </div>
+  );
+
+  return href ? (
+    <Link href={href} className="transition-opacity hover:opacity-80">
+      {content}
+    </Link>
+  ) : (
+    content
   );
 }

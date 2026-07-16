@@ -22,6 +22,7 @@ import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
+import { RemindCallbackDto } from './dto/remind-callback.dto';
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
 import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
@@ -177,6 +178,26 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.candidatesService.transfer(id, dto, user);
+  }
+
+  /** Yêu cầu trực tiếp người dùng (2026-07-16): danh sách thành viên nhóm để chọn khi "Nhắc gọi lại". */
+  @Get(':id/remind-target')
+  getRemindTargets(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.getRemindTargets(id, user);
+  }
+
+  /** Yêu cầu trực tiếp người dùng (2026-07-16): "Nhắc gọi lại" — gửi thông báo nổi/chuông/âm thanh cho 1 thành viên trong nhóm. */
+  @Post(':id/remind')
+  @HttpCode(HttpStatus.OK)
+  remindCallback(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RemindCallbackDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.remindCallback(id, dto, user);
   }
 
   @Get(':id/duplicates')

@@ -20,7 +20,8 @@ import { callStatusVariant } from "@/lib/call-status-variant";
 import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
 import { useToast } from "@/lib/toast-context";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
-import type { AccountRole, Candidate, Note, StatusCatalogItem } from "@/lib/types";
+import type { AccountRole, Candidate, LeadRealtimeEvent, Note, StatusCatalogItem } from "@/lib/types";
+import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Button } from "@/components/ui/button";
@@ -150,6 +151,16 @@ export function CandidateDetailClient({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingNoteColor, setIsSavingNoteColor] = useState(false);
+  /**
+   * Yêu cầu người dùng (Mục 5) — "không tự ghi đè nội dung người dùng đang
+   * nhập dở trong ô note; nếu record đang được chỉnh sửa và có người khác
+   * cập nhật, hiển thị cảnh báo nhỏ ... và cho phép tải lại". Ghi chú đang
+   * mở ô sửa (editingNoteId) vẫn được cập nhật NGẦM trong mảng `notes` (để
+   * "Tải lại" có sẵn dữ liệu mới nhất), nhưng KHÔNG đụng vào `editDraft` —
+   * chỉ đánh dấu conflictNoteId để hiện cảnh báo, người dùng tự quyết định
+   * tải lại (mất bản đang gõ) hay tiếp tục lưu đè.
+   */
+  const [conflictNoteId, setConflictNoteId] = useState<string | null>(null);
 
   const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
   const canEditPhone = canEditCandidate(candidate, currentUserId, currentUserRole, currentUserTeamId);
@@ -179,6 +190,42 @@ export function CandidateDetailClient({
     const result = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
     setNotes(result);
   }
+
+  /**
+   * Yêu cầu người dùng — đồng bộ realtime cho trang Chi tiết ứng viên (Mục
+   * 4: "nếu đang mở chi tiết/modal của record cũng phải cập nhật"). Chỉ xử
+   * lý sự kiện đúng lead đang mở; vá trực tiếp `candidate`/`notes` trong
+   * state, không gọi lại toàn bộ trang.
+   */
+  function handleRealtimeEvent(event: LeadRealtimeEvent) {
+    if (event.lead_id !== candidate.id) return;
+    const isSelf = event.actor?.id === currentUserId;
+
+    if (event.note) {
+      const note = event.note;
+      setNotes((prev) => {
+        const existingIndex = prev.findIndex((n) => n.id === note.id);
+        return existingIndex === -1 ? [...prev, note] : prev.map((n, i) => (i === existingIndex ? note : n));
+      });
+      if (!isSelf && editingNoteId === note.id) {
+        setConflictNoteId(note.id);
+      }
+    }
+
+    if (event.candidate) {
+      setCandidate(event.candidate);
+    }
+  }
+
+  useLeadRealtime(handleRealtimeEvent);
+  useRealtimeReconnect(() => {
+    void refreshNotes();
+    clientApi<Candidate>(`/candidate/${candidate.id}`)
+      .then(setCandidate)
+      .catch(() => {
+        // Bỏ qua lỗi tải nền — dữ liệu cũ vẫn hiển thị.
+      });
+  });
 
   /**
    * Mục 5, docs/13 + Mục 3, docs/12: Sale mở 1 lead đang ở Cột chăm sóc (không
@@ -380,6 +427,13 @@ export function CandidateDetailClient({
     setEditingNoteId(null);
     setEditDraft("");
     setEditError(null);
+    setConflictNoteId(null);
+  }
+
+  /** Mục 5 — "cho phép tải lại": bỏ bản đang gõ dở, lấy đúng nội dung mới nhất đã có sẵn trong `notes`. */
+  function handleReloadConflictedNote(note: Note) {
+    setEditDraft(note.content);
+    setConflictNoteId(null);
   }
 
   async function handleSaveEdit(note: Note) {
@@ -773,6 +827,18 @@ export function CandidateDetailClient({
 
                     {isEditing ? (
                       <div className="mt-2 flex flex-col gap-1.5">
+                        {conflictNoteId === note.id && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 ring-1 ring-inset ring-amber-200">
+                            <span>Dữ liệu này vừa được cập nhật bởi người khác</span>
+                            <button
+                              type="button"
+                              className="font-medium underline hover:text-amber-900"
+                              onClick={() => handleReloadConflictedNote(note)}
+                            >
+                              Tải lại
+                            </button>
+                          </div>
+                        )}
                         <Textarea
                           value={editDraft}
                           onChange={(event) => setEditDraft(event.target.value)}

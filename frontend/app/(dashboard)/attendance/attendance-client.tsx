@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Download, Loader2, Pencil, RotateCcw, Save, StickyNote } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
   ACCOUNT_ROLE_LABEL,
+  type Account,
   type AccountRole,
   type AttendanceBulkSavePayload,
   type AttendanceGrid,
   type AttendanceStatus,
+  type LeaveRequest,
   type Team,
   type TeamMember,
 } from "@/lib/types";
@@ -22,6 +25,7 @@ import { Checkbox, Field, Select } from "@/components/ui/form";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { CheckinManagementPanel } from "./checkin-management-panel";
+import { LeaveRequestClient } from "../requests/leave-request-client";
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
@@ -424,6 +428,7 @@ function AttendanceCellButton({
 }
 
 export function AttendanceClient({
+  currentUser,
   currentUserRole,
   canFilterByTeam,
   canFilterByAccount,
@@ -432,8 +437,10 @@ export function AttendanceClient({
   initialYear,
   initialMonth,
   initialGrid,
+  initialRequests,
 }: {
   currentUserId: string;
+  currentUser: Account;
   currentUserRole: AccountRole;
   canFilterByTeam: boolean;
   canFilterByAccount: boolean;
@@ -442,9 +449,11 @@ export function AttendanceClient({
   initialYear: number;
   initialMonth: number;
   initialGrid: AttendanceGrid;
+  initialRequests: LeaveRequest[];
 }) {
   useSetPageTitle("Chấm công nhân viên");
   const toast = useToast();
+  const searchParams = useSearchParams();
 
   /**
    * Tab "Check in GPS" (2026-07-15, yêu cầu trực tiếp người dùng, Mục 11):
@@ -452,8 +461,16 @@ export function AttendanceClient({
    * bên cạnh bảng chấm công thủ công thay vì route riêng, để không đụng vào
    * chức năng chấm công thủ công (Mục 12: "Không sửa chức năng chấm công
    * thủ công hiện tại"). Tab "manual" giữ nguyên state/logic cũ y hệt.
+   *
+   * Yêu cầu trực tiếp người dùng (2026-07-16): "Đơn xin nghỉ phép" không
+   * còn là mục riêng trên menu — chuyển thành tab thứ 3 ở đây, y hệt cách
+   * tab "Check in GPS" đã làm. Đọc `?tab=requests` để mở sẵn đúng tab này
+   * khi bấm link từ thông báo/nút "Tạo đơn" (khớp `?open=<id>` mà
+   * LeaveRequestClient tự đọc để mở sẵn đúng đơn — cùng 1 URL).
    */
-  const [activeTab, setActiveTab] = useState<"manual" | "checkin">("manual");
+  const [activeTab, setActiveTab] = useState<"manual" | "checkin" | "requests">(() =>
+    searchParams.get("tab") === "requests" ? "requests" : searchParams.get("tab") === "checkin" ? "checkin" : "manual",
+  );
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -914,6 +931,16 @@ export function AttendanceClient({
         >
           Check in GPS
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("requests")}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            activeTab === "requests" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          Đơn xin nghỉ phép
+        </button>
       </div>
 
       {activeTab === "checkin" && (
@@ -924,6 +951,8 @@ export function AttendanceClient({
           currentUserRole={currentUserRole}
         />
       )}
+
+      {activeTab === "requests" && <LeaveRequestClient currentUser={currentUser} initialRequests={initialRequests} />}
 
       <div className={activeTab === "manual" ? "space-y-4" : "hidden"}>
       <div ref={filterBarRef}>

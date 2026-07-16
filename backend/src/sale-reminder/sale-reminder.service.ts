@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
@@ -43,7 +45,10 @@ function diffInDays(a: Date, b: Date): number {
 export class SaleReminderService {
   private readonly logger = new Logger(SaleReminderService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   /** Chạy 1 lần/ngày lúc 10:00 (giờ Việt Nam) — yêu cầu trực tiếp người dùng. */
   @Cron('0 10 * * *', { timeZone: TIMEZONE })
@@ -115,8 +120,9 @@ export class SaleReminderService {
       if (sale.team?.leader) recipientIds.add(sale.team.leader.id);
 
       const now = new Date();
+      const accountIds = [...recipientIds];
       await this.prisma.notification.createMany({
-        data: [...recipientIds].map((accountId) => ({
+        data: accountIds.map((accountId) => ({
           accountId,
           type: 'sale_no_shuttle_reminder' as const,
           channel: 'in_app' as const,
@@ -126,6 +132,23 @@ export class SaleReminderService {
           status: 'sent' as const,
         })),
       });
+
+      // Job nền tự động (không có actor người dùng) — createMany() không
+      // trả lại các dòng vừa tạo, truy vấn lại bằng `scheduledAt: now`
+      // (chụp trước khi ghi, đủ định danh đúng lô vừa tạo trong vòng lặp này).
+      const created = await this.prisma.notification.findMany({
+        where: {
+          accountId: { in: accountIds },
+          type: 'sale_no_shuttle_reminder',
+          scheduledAt: now,
+        },
+      });
+      for (const notification of created) {
+        this.realtime.emitNotificationCreated(
+          toNotificationResponse(notification),
+          null,
+        );
+      }
       notified += recipientIds.size;
     }
 

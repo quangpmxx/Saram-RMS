@@ -13,6 +13,8 @@ export interface NotificationResponseDto {
   id: string;
   account_id: string;
   lead_id: string | null;
+  /** Dự án phụ — nâng cấp toàn diện (2026-07-16, module "Tạo đơn"): gắn với 1 Đơn xin nghỉ phép cụ thể — khớp vai trò lead_id. */
+  leave_request_id: string | null;
   type: string;
   channel: string;
   content: string | null;
@@ -38,6 +40,7 @@ export function toNotificationResponse(
     id: notification.id,
     account_id: notification.accountId,
     lead_id: notification.leadId,
+    leave_request_id: notification.leaveRequestId,
     type: notification.type,
     channel: notification.channel,
     content: notification.content,

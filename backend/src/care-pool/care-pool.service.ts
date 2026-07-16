@@ -15,6 +15,7 @@ import {
 } from '../candidates/dto/candidate-response.dto';
 import { isLockActive } from '../candidates/care-pool.util';
 import { ListCarePoolQueryDto } from './dto/list-care-pool-query.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 /** Mục 8, docs/09: Quản lý/Admin xem toàn bộ cột chăm sóc, không giới hạn nhóm. */
 const FULL_ACCESS_ROLES = new Set(['admin', 'manager']);
@@ -28,6 +29,7 @@ export class CarePoolService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   /** Mục 5, docs/13: Sale, Leader, Quản lý, Admin (phạm vi theo nhóm, trừ Quản lý/Admin xem toàn bộ). */
@@ -127,7 +129,13 @@ export class CarePoolService {
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange(
+      'care_pool_locked',
+      finalResponse,
+      currentUser,
+    );
+    return finalResponse;
   }
 
   /** Mục 5, docs/13: POST /care-pool/:id/release — Sale (người đang giữ khóa). */
@@ -147,6 +155,7 @@ export class CarePoolService {
       );
     }
 
+    let didRelease = false;
     if (lead.carePoolLockedById === currentUser.id) {
       await this.prisma.lead.update({
         where: { id },
@@ -159,13 +168,22 @@ export class CarePoolService {
         entityType: 'lead',
         entityId: id,
       });
+      didRelease = true;
     }
 
     const final = await this.prisma.lead.findUniqueOrThrow({
       where: { id },
       include: CANDIDATE_INCLUDE,
     });
-    return toCandidateResponse(final);
+    const finalResponse = toCandidateResponse(final);
+    if (didRelease) {
+      this.realtime.emitCandidateChange(
+        'care_pool_released',
+        finalResponse,
+        currentUser,
+      );
+    }
+    return finalResponse;
   }
 
   /** Mục 5, docs/13: DELETE /care-pool/:id — Admin (duy nhất). Không xóa ứng viên, chỉ gỡ khỏi danh sách. */
@@ -195,6 +213,16 @@ export class CarePoolService {
       entityId: id,
       fieldChanged: 'removed_from_care_pool_at',
     });
+
+    const final = await this.prisma.lead.findUniqueOrThrow({
+      where: { id },
+      include: CANDIDATE_INCLUDE,
+    });
+    this.realtime.emitCandidateChange(
+      'care_pool_removed',
+      toCandidateResponse(final),
+      currentUser,
+    );
   }
 
   private async loadCarePoolLead(id: string) {

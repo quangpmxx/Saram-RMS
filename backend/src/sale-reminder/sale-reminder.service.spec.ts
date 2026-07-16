@@ -4,6 +4,7 @@ import {
   SALE_NO_SHUTTLE_MESSAGE,
 } from './sale-reminder.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 describe('SaleReminderService', () => {
   let service: SaleReminderService;
@@ -18,6 +19,7 @@ describe('SaleReminderService', () => {
       findFirst: jest.Mock;
       createMany: jest.Mock;
       deleteMany: jest.Mock;
+      findMany: jest.Mock;
     };
   };
 
@@ -42,13 +44,16 @@ describe('SaleReminderService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
+    const realtimeService = { emitNotificationCreated: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         SaleReminderService,
         { provide: PrismaService, useValue: prisma },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 

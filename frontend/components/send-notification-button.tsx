@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type Account, type PaginatedResult, type Team } from "@/lib/types";
-import { adminGoldTextStyle } from "@/lib/admin-gold";
+import { roleAccentTextStyle } from "@/lib/role-accent";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Field, Textarea, Checkbox } from "@/components/ui/form";
@@ -68,6 +68,17 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
       else next.add(id);
       return next;
     });
+  }
+
+  // Yêu cầu trực tiếp người dùng (2026-07-16): thêm lựa chọn "Tất cả" trong
+  // danh sách Đối tượng gửi — thuần UX ở frontend (tick 1 phát chọn/bỏ chọn
+  // hết toàn bộ nhóm/thành viên đang hiển thị theo đúng tab đang chọn),
+  // KHÔNG cần đổi API — vẫn gửi nguyên mảng target_ids như chọn tay từng ô.
+  const currentOptionIds = (targetType === "team" ? teams : accounts).map((item) => item.id);
+  const isAllSelected = currentOptionIds.length > 0 && currentOptionIds.every((id) => selectedIds.has(id));
+
+  function toggleAll() {
+    setSelectedIds(isAllSelected ? new Set() : new Set(currentOptionIds));
   }
 
   function handleChangeTargetType(next: "team" | "account") {
@@ -157,31 +168,34 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
         <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 p-1.5">
           {isLoadingOptions ? (
             <p className="p-2 text-xs text-slate-400">Đang tải...</p>
-          ) : targetType === "team" ? (
-            teams.length === 0 ? (
-              <p className="p-2 text-xs text-slate-400">Chưa có nhóm nào</p>
-            ) : (
-              teams.map((team) => (
-                <label key={team.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">
-                  <Checkbox checked={selectedIds.has(team.id)} onChange={() => toggleId(team.id)} />
-                  {team.name}
-                  <span className="text-xs text-slate-400">({team.member_count} thành viên)</span>
-                </label>
-              ))
-            )
-          ) : accounts.length === 0 ? (
-            <p className="p-2 text-xs text-slate-400">Chưa có tài khoản nào</p>
+          ) : currentOptionIds.length === 0 ? (
+            <p className="p-2 text-xs text-slate-400">{targetType === "team" ? "Chưa có nhóm nào" : "Chưa có tài khoản nào"}</p>
           ) : (
-            accounts.map((account) => (
-              <label key={account.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">
-                <Checkbox checked={selectedIds.has(account.id)} onChange={() => toggleId(account.id)} />
-                {account.full_name}
-                <span className="text-xs text-slate-400">
-                  (<span style={adminGoldTextStyle(account.role)}>{ACCOUNT_ROLE_LABEL[account.role]}</span>
-                  {account.team_name ? ` · ${account.team_name}` : ""})
-                </span>
+            <>
+              <label className="mb-1 flex items-center gap-2 rounded border-b border-slate-100 px-2 py-1.5 text-sm font-medium hover:bg-slate-50">
+                <Checkbox checked={isAllSelected} onChange={toggleAll} />
+                Tất cả
+                <span className="text-xs font-normal text-slate-400">({currentOptionIds.length})</span>
               </label>
-            ))
+              {targetType === "team"
+                ? teams.map((team) => (
+                    <label key={team.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">
+                      <Checkbox checked={selectedIds.has(team.id)} onChange={() => toggleId(team.id)} />
+                      {team.name}
+                      <span className="text-xs text-slate-400">({team.member_count} thành viên)</span>
+                    </label>
+                  ))
+                : accounts.map((account) => (
+                    <label key={account.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">
+                      <Checkbox checked={selectedIds.has(account.id)} onChange={() => toggleId(account.id)} />
+                      {account.full_name}
+                      <span className="text-xs text-slate-400">
+                        (<span style={roleAccentTextStyle(account.role)}>{ACCOUNT_ROLE_LABEL[account.role]}</span>
+                        {account.team_name ? ` · ${account.team_name}` : ""})
+                      </span>
+                    </label>
+                  ))}
+            </>
           )}
         </div>
 

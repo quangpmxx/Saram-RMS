@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ShuttleService } from './shuttle.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { Prisma } from '../../generated/prisma/client';
 
 describe('ShuttleService', () => {
@@ -71,12 +72,17 @@ describe('ShuttleService', () => {
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    const realtimeService = {
+      emitTransportationChange: jest.fn(),
+      emitTransportationDeleted: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ShuttleService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 

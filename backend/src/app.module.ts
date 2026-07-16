@@ -27,6 +27,9 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveAccrualModule } from './leave-accrual/leave-accrual.module';
 import { CheckinModule } from './checkin/checkin.module';
 import { ReportPenaltyModule } from './report-penalty/report-penalty.module';
+import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { BirthdayModule } from './birthday/birthday.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -59,6 +62,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     LeaveAccrualModule,
     CheckinModule,
     ReportPenaltyModule,
+    LeaveRequestsModule,
+    RealtimeModule,
+    BirthdayModule,
   ],
   controllers: [AppController],
   providers: [

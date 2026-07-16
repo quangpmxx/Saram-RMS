@@ -42,8 +42,12 @@ export class AuthService {
     dto: LoginDto,
     deviceInfo: string | undefined,
   ): Promise<LoginResult> {
-    const account = await this.prisma.account.findUnique({
-      where: { username: dto.username },
+    // Yêu cầu trực tiếp người dùng (2026-07-16): tên đăng nhập không phân
+    // biệt hoa/thường ("ADMIN"/"Admin"/"admin" đều đăng nhập được) —
+    // `findFirst` + `mode: 'insensitive'` thay cho `findUnique` (chỉ so
+    // khớp chính xác từng ký tự).
+    const account = await this.prisma.account.findFirst({
+      where: { username: { equals: dto.username, mode: 'insensitive' } },
       include: { team: { select: TEAM_SELECT } },
     });
 

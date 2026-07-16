@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, ShieldCheck, RotateCcw } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { AccountRole, CheckinListResult, CheckinRecordStatus, CheckinStatusFilter, Team, TeamMember } from "@/lib/types";
 import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
@@ -79,6 +79,25 @@ export function CheckinManagementPanel({
   const [resetReason, setResetReason] = useState("");
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-16): cột "Ghi chú" cuối bảng — sửa
+   * ngay tại ô (giống Google Sheet, y hệt cách các bảng khác trong hệ thống
+   * đã làm — vd Danh sách đưa đón), lưu ngay khi rời ô, không cần Modal
+   * riêng như Reset (chỉ 1 field text đơn giản, không bắt buộc nhập).
+   * `noteDrafts` khóa theo id bản ghi Check in (KHÔNG phải account_id) — 1
+   * nhân viên có thể có NHIỀU bản ghi (Reset xong Check in lại), ghi chú
+   * luôn gắn với đúng 1 bản ghi cụ thể.
+   */
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
+
+  // Yêu cầu trực tiếp người dùng (2026-07-16): Admin chuyển thủ công 1 bản
+  // ghi "Ngoài công ty"/"Cần xác minh" sang "Hợp lệ" — vd GPS kém chính xác
+  // nhưng Admin xác nhận nhân viên có mặt thật. Xác nhận bằng window.confirm
+  // (khớp cách các hành động Admin khác trong hệ thống làm), không mở Modal
+  // riêng vì không cần nhập gì thêm.
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const isAdmin = currentUserRole === "admin";
   const filteredAccountOptions = accountOptions.filter((a) => EMPLOYEE_ROLES.includes(a.role));
@@ -161,6 +180,44 @@ export function CheckinManagementPanel({
       setResetError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
       setResetSubmitting(false);
+    }
+  }
+
+  async function handleApprove(recordId: string, fullName: string) {
+    if (!window.confirm(`Xác nhận chuyển Check in của "${fullName}" sang trạng thái Hợp lệ?`)) {
+      return;
+    }
+    setApprovingId(recordId);
+    try {
+      await clientApi(`/checkin/${recordId}/approve`, { method: "POST" });
+      toast.success(`Đã xác nhận Check in của ${fullName} là Hợp lệ`);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  /** Ô "Ghi chú" hiển thị draft đang gõ dở nếu có, không thì hiện đúng ghi chú đã lưu trên server. */
+  function noteValue(checkinId: string, serverNote: string | null): string {
+    return noteDrafts[checkinId] ?? serverNote ?? "";
+  }
+
+  async function handleSaveNote(checkinId: string, serverNote: string | null) {
+    const draft = noteDrafts[checkinId];
+    if (draft === undefined || draft.trim() === (serverNote ?? "").trim()) return;
+    setSavingNoteId(checkinId);
+    try {
+      await clientApi(`/checkin/${checkinId}/note`, {
+        method: "PATCH",
+        body: JSON.stringify({ note: draft.trim() }),
+      });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setSavingNoteId(null);
     }
   }
 
@@ -256,6 +313,7 @@ export function CheckinManagementPanel({
                   <th className="px-4 py-3">Địa chỉ IP</th>
                   <th className="px-4 py-3">Thiết bị</th>
                   {isAdmin && <th className="px-4 py-3">Hành động</th>}
+                  <th className="px-4 py-3">Ghi chú</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -320,22 +378,59 @@ export function CheckinManagementPanel({
                     {isAdmin && (
                       <td className="px-4 py-2.5">
                         {employee.checkin && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="xs"
-                            onClick={() => {
-                              setResetTarget({ recordId: employee.checkin!.id, fullName: employee.full_name });
-                              setResetReason("");
-                              setResetError(null);
-                            }}
-                          >
-                            <RotateCcw className="h-3 w-3" strokeWidth={2} />
-                            Reset
-                          </Button>
+                          <div className="flex flex-wrap gap-1">
+                            {employee.checkin.status !== "valid" && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="xs"
+                                disabled={approvingId === employee.checkin.id}
+                                onClick={() => void handleApprove(employee.checkin!.id, employee.full_name)}
+                              >
+                                <ShieldCheck className="h-3 w-3" strokeWidth={2} />
+                                Duyệt hợp lệ
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="xs"
+                              onClick={() => {
+                                setResetTarget({ recordId: employee.checkin!.id, fullName: employee.full_name });
+                                setResetReason("");
+                                setResetError(null);
+                              }}
+                            >
+                              <RotateCcw className="h-3 w-3" strokeWidth={2} />
+                              Reset
+                            </Button>
+                          </div>
                         )}
                       </td>
                     )}
+                    <td className="px-4 py-2.5">
+                      {employee.checkin ? (
+                        isAdmin ? (
+                          <input
+                            type="text"
+                            value={noteValue(employee.checkin.id, employee.checkin.note)}
+                            onChange={(e) => {
+                              const checkinId = employee.checkin!.id;
+                              const value = e.target.value;
+                              setNoteDrafts((prev) => ({ ...prev, [checkinId]: value }));
+                            }}
+                            onBlur={() => void handleSaveNote(employee.checkin!.id, employee.checkin!.note)}
+                            disabled={savingNoteId === employee.checkin.id}
+                            placeholder="Ghi chú..."
+                            className="w-full min-w-[140px] rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-700 outline-none placeholder:text-slate-400 hover:border-slate-200 focus:border-brand-400 focus:bg-white focus:ring-1 focus:ring-brand-400"
+                          />
+                        ) : (
+                          <span className="text-slate-600">{employee.checkin.note ?? "—"}</span>
+                        )
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

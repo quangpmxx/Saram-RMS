@@ -1,5 +1,5 @@
 import { ACCOUNT_ROLE_LABEL, type NamedRefWithRole } from "@/lib/types";
-import { adminGoldTextStyle } from "@/lib/admin-gold";
+import { roleAccentTextStyle } from "@/lib/role-accent";
 
 /**
  * Dự án phụ — nâng cấp toàn diện: mở ngoặc vai trò cạnh tên cho Admin/Quản
@@ -8,9 +8,9 @@ import { adminGoldTextStyle } from "@/lib/admin-gold";
  * created_by của Note/Interview/Callback) — yêu cầu trực tiếp người dùng:
  * "Các vai trò như admin, quản lý, leader thì thao tác ở đâu cũng phải mở
  * ngoặc vai trò cạnh tên". Sale/MKT không hiện ngoặc (đã là mặc định/hiển
- * nhiên trong nghiệp vụ, tránh rối mắt). Riêng Admin tô màu vàng gold (yêu
- * cầu trực tiếp người dùng ở phần trước) — Quản lý/Leader giữ màu chữ mặc
- * định.
+ * nhiên trong nghiệp vụ, tránh rối mắt). Mỗi vai trò tô màu riêng (yêu cầu
+ * trực tiếp người dùng): Admin vàng gold, Quản lý đỏ thẫm, Leader tím — xem
+ * lib/role-accent.ts.
  */
 const ROLE_HINT_ROLES = new Set(["admin", "manager", "leader"]);
 
@@ -22,7 +22,7 @@ export function NameWithRoleHint({ account, className }: { account: NamedRefWith
       {showHint && (
         <>
           {" ("}
-          <span style={adminGoldTextStyle(account.role)}>{ACCOUNT_ROLE_LABEL[account.role]}</span>
+          <span style={roleAccentTextStyle(account.role)}>{ACCOUNT_ROLE_LABEL[account.role]}</span>
           {")"}
         </>
       )}
