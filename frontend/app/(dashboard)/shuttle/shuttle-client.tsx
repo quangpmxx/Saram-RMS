@@ -1405,8 +1405,8 @@ export function ShuttleClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-400">
-              {/* Dòng nháp thêm mới — luôn hiện đầu bảng, nhập trực tiếp không cần popup. */}
-              <tr className="bg-brand-50/30">
+              {/* Dòng nháp thêm mới — luôn hiện đầu bảng, nhập trực tiếp không cần popup. Yêu cầu trực tiếp người dùng (2026-07-18): nền màu xám để phân biệt rõ với các dòng dữ liệu đã có. */}
+              <tr className="bg-slate-200">
                 <ShuttleRowFormCells
                   value={draft}
                   onChange={setDraft}

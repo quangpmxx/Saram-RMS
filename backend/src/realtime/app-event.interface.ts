@@ -12,7 +12,20 @@ import { AccountRole } from '../../generated/prisma/client';
  * hiện có, không tạo hệ thống WebSocket riêng".
  */
 export type AppRealtimeModule =
-  'transportation' | 'daily-report' | 'penalty' | 'notification' | 'dashboard';
+  | 'transportation'
+  | 'daily-report'
+  | 'penalty'
+  | 'notification'
+  | 'dashboard'
+  /**
+   * Dự án phụ — nâng cấp toàn diện (2026-07-17): "DS Sale" (module con của
+   * Nhập doanh số) — chỉ Admin xem được module này (@Roles('admin') ở
+   * sales-entry.controller.ts), nên phát `broadcastAll` là an toàn (không
+   * lộ rộng hơn quyền thật — không phải Admin thì không mở được trang này
+   * nên không có listener nào lắng nghe sự kiện, giống lý luận đã áp dụng
+   * cho 'transportation').
+   */
+  | 'sales-entry';
 
 export type AppRealtimeAction =
   'created' | 'updated' | 'deleted' | 'invalidate';

@@ -63,6 +63,8 @@ interface BirthdayThemeValue {
   /** Mục 8: đã bấm "Ẩn trang trí hôm nay" — CHỈ ẩn hiệu ứng/họa tiết, banner lời chúc vẫn còn (gọn hơn). */
   decorationsHidden: boolean;
   hideDecorationsToday: () => void;
+  /** Bù lại chiều ngược của hideDecorationsToday — trước đây không có cách nào bật lại trong cùng ngày (chỉ tự hết khi sang ngày mới), người dùng bị kẹt. */
+  showDecorationsToday: () => void;
   /** Mục 11, chế độ xem thử — chỉ có tác dụng thật nếu backend xác nhận currentUser là Admin + không phải production (âm thầm bỏ qua nếu không đủ điều kiện). */
   startPreview: (params: { simulated_date?: string; force_account_id?: string }) => Promise<void>;
   stopPreview: () => void;
@@ -130,6 +132,15 @@ export function BirthdayThemeProvider({
     }
   }
 
+  function showDecorationsToday() {
+    setDecorationsHidden(false);
+    try {
+      localStorage.removeItem(HIDE_STORAGE_PREFIX + vnDateKey());
+    } catch {
+      // localStorage không khả dụng — vẫn hiện lại được cho phiên hiện tại.
+    }
+  }
+
   async function startPreview(params: { simulated_date?: string; force_account_id?: string }) {
     const query = new URLSearchParams();
     if (params.simulated_date) query.set("simulated_date", params.simulated_date);
@@ -154,6 +165,7 @@ export function BirthdayThemeProvider({
         isPreview: isPreviewing || Boolean(data?.is_preview),
         decorationsHidden,
         hideDecorationsToday,
+        showDecorationsToday,
         startPreview,
         stopPreview,
       }}

@@ -12,7 +12,7 @@ import { useBirthdayTheme } from "@/lib/birthday-theme-context";
  * sẵn, xem BirthdayEmployee ở lib/types.ts).
  */
 export function BirthdayBanner() {
-  const { employees, hasBirthdayToday, decorationsHidden, hideDecorationsToday } = useBirthdayTheme();
+  const { employees, hasBirthdayToday, decorationsHidden, hideDecorationsToday, showDecorationsToday } = useBirthdayTheme();
 
   if (!hasBirthdayToday) return null;
 
@@ -79,8 +79,16 @@ export function BirthdayBanner() {
         </div>
       </div>
 
-      {!decorationsHidden && (
-        <div className="mt-3 flex justify-end border-t border-pink-200/70 pt-2">
+      <div className="mt-3 flex justify-end border-t border-pink-200/70 pt-2">
+        {decorationsHidden ? (
+          <button
+            type="button"
+            onClick={showDecorationsToday}
+            className="text-xs font-medium text-slate-400 transition-colors hover:text-slate-600"
+          >
+            Hiện trang trí
+          </button>
+        ) : (
           <button
             type="button"
             onClick={hideDecorationsToday}
@@ -88,8 +96,8 @@ export function BirthdayBanner() {
           >
             Ẩn trang trí hôm nay
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

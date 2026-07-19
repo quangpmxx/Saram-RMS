@@ -299,7 +299,13 @@ export interface LeadRealtimeEvent {
  * lao động giữ nguyên, không đụng), phát trên kênh Socket.IO riêng
  * (`app:event`, xem lib/realtime.ts).
  */
-export type AppRealtimeModule = "transportation" | "daily-report" | "penalty" | "notification" | "dashboard";
+export type AppRealtimeModule =
+  | "transportation"
+  | "daily-report"
+  | "penalty"
+  | "notification"
+  | "dashboard"
+  | "sales-entry";
 export type AppRealtimeAction = "created" | "updated" | "deleted" | "invalidate";
 
 export interface AppRealtimeEvent<TPayload = unknown> {
@@ -864,4 +870,53 @@ export interface ShuttleOptions {
 export interface SaleAccountItem {
   id: string;
   full_name: string;
+}
+
+// ── Dự án phụ — nâng cấp toàn diện (2026-07-17): "DS Sale" (module con của
+// "Nhập doanh số") — yêu cầu trực tiếp người dùng, xem sales-entry.controller.ts. ──
+
+/** Dùng chung cho cột "Sale" và "Đưa đón" — cả 2 tham chiếu Account thật, kèm avatar + tên nhóm để phân biệt người trùng tên. */
+export interface DsSaleAccountOption {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  team_name: string | null;
+}
+
+/** Cột "Công ty làm" — chưa có bảng công ty hợp tác thật, giữ hình dạng ổn định sẵn cho khi có nguồn thật (xem GET /sales-entry/ds-sale/companies). */
+export interface DsSaleCompanyOption {
+  id: string;
+  name: string;
+}
+
+export interface DsSaleRow {
+  id: string;
+  employee_code: string | null;
+  full_name: string | null;
+  date_of_birth: string | null;
+  identity_number: string | null;
+  hometown: string | null;
+  join_date: string | null;
+  company: DsSaleCompanyOption | null;
+  sale: DsSaleAccountOption | null;
+  pickup: DsSaleAccountOption | null;
+  note: string | null;
+  created_by: NamedRef;
+  updated_by: NamedRef;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Payload gửi lên khi tạo mới/lưu lại 1 dòng DS Sale (POST/PUT) — mọi trường đều tùy chọn, dòng trống hoàn toàn bị chặn ở service backend. */
+export interface DsSaleRowInput {
+  employee_code?: string;
+  full_name?: string;
+  date_of_birth?: string | null;
+  identity_number?: string;
+  hometown?: string;
+  join_date?: string | null;
+  company_id?: string | null;
+  sale_user_id?: string | null;
+  pickup_user_id?: string | null;
+  note?: string;
 }

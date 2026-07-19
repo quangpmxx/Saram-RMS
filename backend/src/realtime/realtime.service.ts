@@ -159,6 +159,29 @@ export class RealtimeService {
   }
 
   /**
+   * DS Sale (module con "Nhập doanh số") — chỉ Admin xem được (khớp
+   * `@Roles('admin')` ở sales-entry.controller.ts) nên `broadcastAll` an
+   * toàn, cùng lý luận với emitTransportationChange() ở trên.
+   */
+  emitSalesEntryChange<T extends { id: string }>(
+    action: AppRealtimeAction,
+    record: T,
+    actor: AuthenticatedUser | null,
+  ): void {
+    this.gateway.broadcastAppEvent(
+      { broadcastAll: true },
+      this.buildAppEvent(
+        'sales-entry',
+        'sales_entry_record',
+        action,
+        record.id,
+        actor,
+        record,
+      ),
+    );
+  }
+
+  /**
    * Báo cáo hằng ngày — Sale chỉ xem báo cáo của chính mình (`accountId`),
    * Leader xem cả nhóm nhưng KHÔNG qua phòng nhóm chung của Data lao động
    * (Sale cùng nhóm KHÔNG được xem báo cáo của nhau) — dùng `leaderOfTeamId`

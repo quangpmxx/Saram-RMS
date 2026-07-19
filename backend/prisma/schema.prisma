@@ -288,6 +288,12 @@ model Account {
   leaveRequestLeaderDecisions LeaveRequest[] @relation("LeaveRequestLeaderDecision")
   leaveRequestAdminDecisions  LeaveRequest[] @relation("LeaveRequestAdminDecision")
 
+  // Dự án phụ — nâng cấp toàn diện (2026-07-17): quan hệ ngược từ SalesEntryRecord (DS Sale)
+  salesEntrySaleFor   SalesEntryRecord[] @relation("SalesEntrySaleUser")
+  salesEntryPickupFor SalesEntryRecord[] @relation("SalesEntryPickupUser")
+  createdSalesEntries SalesEntryRecord[] @relation("SalesEntryCreatedBy")
+  updatedSalesEntries SalesEntryRecord[] @relation("SalesEntryUpdatedBy")
+
   @@map("accounts")
 }
 
@@ -1179,4 +1185,47 @@ model CompanyLocationConfig {
   updatedBy Account @relation(fields: [updatedById], references: [id])
 
   @@map("company_location_configs")
+}
+
+/// Dự án phụ — nâng cấp toàn diện (2026-07-17, ngoài phạm vi Design Freeze
+/// docs/09-13, yêu cầu trực tiếp người dùng): "DS Sale" — bảng con trong
+/// module "Nhập doanh số". `companyId` CHƯA có bảng công ty hợp tác thật để
+/// tham chiếu (module "Quản lý đơn hàng" còn để trống chờ phát triển) — để
+/// nullable, KHÔNG gắn quan hệ Prisma, chỉ giữ chỗ cho khóa ngoại thật khi
+/// bảng công ty hợp tác ra đời (xem sales-entry.service.ts, endpoint GET
+/// /sales-entry/ds-sale/companies hiện trả về rỗng). `saleUserId`/
+/// `pickupUserId` tham chiếu Account thật (vai trò 'sale'/'shuttle_staff'),
+/// lưu bằng id để đổi tên tài khoản không làm lệch dữ liệu cũ. Mọi trường
+/// nghiệp vụ đều nullable — dòng nháp chưa nhập gì vẫn tạo được ở phía
+/// client, nhưng service tầng ngoài chặn lưu bản ghi hoàn toàn rỗng.
+model SalesEntryRecord {
+  id             String    @id @default(uuid()) @db.Uuid
+  employeeCode   String?   @map("employee_code") @db.VarChar(50)
+  fullName       String?   @map("full_name") @db.VarChar(150)
+  dateOfBirth    DateTime? @map("date_of_birth") @db.Date
+  identityNumber String?   @map("identity_number") @db.VarChar(20)
+  hometown       String?   @db.VarChar(255)
+  joinDate       DateTime? @map("join_date") @db.Date
+  companyId      String?   @map("company_id") @db.Uuid
+  saleUserId     String?   @map("sale_user_id") @db.Uuid
+  pickupUserId   String?   @map("pickup_user_id") @db.Uuid
+  note           String?
+  createdById    String    @map("created_by") @db.Uuid
+  updatedById    String    @map("updated_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  saleUser   Account? @relation("SalesEntrySaleUser", fields: [saleUserId], references: [id])
+  pickupUser Account? @relation("SalesEntryPickupUser", fields: [pickupUserId], references: [id])
+  createdBy  Account  @relation("SalesEntryCreatedBy", fields: [createdById], references: [id])
+  updatedBy  Account  @relation("SalesEntryUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([fullName])
+  @@index([employeeCode])
+  @@index([identityNumber])
+  @@index([joinDate])
+  @@index([companyId])
+  @@index([saleUserId])
+  @@index([pickupUserId])
+  @@map("sales_entry_records")
 }

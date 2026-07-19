@@ -30,6 +30,7 @@ import { ReportPenaltyModule } from './report-penalty/report-penalty.module';
 import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { BirthdayModule } from './birthday/birthday.module';
+import { SalesEntryModule } from './sales-entry/sales-entry.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -65,6 +66,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     LeaveRequestsModule,
     RealtimeModule,
     BirthdayModule,
+    SalesEntryModule,
   ],
   controllers: [AppController],
   providers: [
