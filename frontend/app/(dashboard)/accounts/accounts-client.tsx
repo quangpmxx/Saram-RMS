@@ -1,46 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Pencil, Plus, Power, PowerOff, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { roleAccentBadgeStyle } from "@/lib/role-accent";
-import {
-  ACCOUNT_ROLE_LABEL,
-  type Account,
-  type AccountPermissionGrant,
-  type AccountRole,
-  type Team,
-} from "@/lib/types";
+import { ACCOUNT_ROLE_LABEL, type Account, type AccountRole, type ModulePermissionLevel, type Team } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Checkbox, Field, Input, Select } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { TeamsClient } from "../teams/teams-client";
 import { cn } from "@/lib/cn";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
-/** Mục 9.1, docs/12-ui-design.md: "Cấu hình quyền chi tiết" chỉ áp dụng cho Quản lý/Leader. */
-const PERMISSION_CONFIGURABLE_ROLES: AccountRole[] = ["manager", "leader"];
 
-type ModalState =
-  | { mode: "none" }
-  | { mode: "create" }
-  | { mode: "edit"; account: Account }
-  | { mode: "permissions"; account: Account };
+type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; account: Account };
 
 export function AccountsClient({
+  permissionLevel,
   initialAccounts,
   teams,
 }: {
+  permissionLevel: ModulePermissionLevel;
   initialAccounts: Account[];
   teams: Team[];
 }) {
   useSetPageTitle("Quản lý tài khoản", "Tạo và phân quyền tài khoản nhân viên trong hệ thống.");
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ khối bảng/tab Quản lý nhóm
+  // bằng pointer-events (rất nhiều nút/hành động rải rác, không disable
+  // riêng lẻ từng cái). Backend (ModulePermissionGuard) là lớp chặn thật.
+  const isReadOnly = permissionLevel === "view";
   const router = useRouter();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
@@ -133,6 +129,11 @@ export function AccountsClient({
 
   return (
     <div className="mx-auto max-w-5xl">
+      {isReadOnly && (
+        <div className="mb-3">
+          <ViewOnlyBadge />
+        </div>
+      )}
       <div className="mb-4 flex gap-1.5">
         <button
           type="button"
@@ -156,11 +157,15 @@ export function AccountsClient({
         </button>
       </div>
 
-      {activeTab === "teams" && <TeamsClient initialTeams={teams} leaders={leaders} />}
+      {activeTab === "teams" && (
+        <div className={cn(isReadOnly && "pointer-events-none opacity-60")}>
+          <TeamsClient initialTeams={teams} leaders={leaders} />
+        </div>
+      )}
 
       <div className={activeTab === "accounts" ? "" : "hidden"}>
       <div className="mb-4 flex justify-end">
-        <Button type="button" onClick={() => setModal({ mode: "create" })}>
+        <Button type="button" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
           <Plus className="h-4 w-4" strokeWidth={2.5} />
           Thêm tài khoản mới
         </Button>
@@ -188,7 +193,7 @@ export function AccountsClient({
                 <th className="px-4 py-3">Hành động</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className={cn("divide-y divide-slate-100", isReadOnly && "pointer-events-none opacity-60")}>
               {accounts.map((account) => (
                 <tr key={account.id} className="transition-colors hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-800">{account.full_name}</td>
@@ -236,17 +241,6 @@ export function AccountsClient({
                         <KeyRound className="h-3.5 w-3.5" strokeWidth={2} />
                         Reset mật khẩu
                       </Button>
-                      {PERMISSION_CONFIGURABLE_ROLES.includes(account.role) && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setModal({ mode: "permissions", account })}
-                        >
-                          <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} />
-                          Cấu hình quyền
-                        </Button>
-                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -294,6 +288,7 @@ export function AccountsClient({
               method: "PUT",
               body: JSON.stringify({
                 full_name: payload.full_name,
+                username: payload.username,
                 team_id: payload.team_id ?? null,
                 date_of_birth: payload.date_of_birth ?? null,
                 hire_date: payload.hire_date ?? null,
@@ -311,145 +306,7 @@ export function AccountsClient({
         />
       )}
 
-      {modal.mode === "permissions" && (
-        <PermissionModal
-          account={modal.account}
-          onClose={() => setModal({ mode: "none" })}
-          onSaved={() => toast.success("Đã lưu cấu hình quyền")}
-        />
-      )}
     </div>
-  );
-}
-
-/**
- * Mục 9.1, docs/12-ui-design.md ("Popup cấu hình quyền chi tiết") + Mục 2,
- * docs/13-api-design.md (GET /permission, PUT /account/:id/permission).
- *
- * KHUNG PHÂN QUYỀN CHI TIẾT (Phase 9, docs/14-roadmap.md): danh mục quyền
- * cụ thể chưa được chốt với chủ doanh nghiệp thật (Mục 11.1, docs/09) —
- * bảng `permissions` đã seed 5 quyền tạm (xem seedPhase9Permissions() ở
- * backend/src/prisma/seed.ts) để có ngay dữ liệu dùng thử; không phải danh
- * sách chính thức cuối cùng, có thể điều chỉnh sau. Nếu danh mục trống
- * (môi trường chưa chạy seed), popup vẫn hiển thị đúng empty state thay vì
- * lỗi — không cần sửa code khi danh sách quyền thay đổi.
- */
-function PermissionModal({
-  account,
-  onClose,
-  onSaved,
-}: {
-  account: Account;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [grants, setGrants] = useState<AccountPermissionGrant[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // PUT /account/:id/permission với danh sách rỗng không ghi/đổi gì
-        // (vòng lặp cập nhật trong AccountsService.updatePermissions() rỗng
-        // theo đúng "permissions" truyền vào) nhưng vẫn trả về đúng "danh
-        // sách Permission hiện tại của tài khoản kèm trạng thái bật/tắt"
-        // (Mục 2, docs/13) — tái dùng đúng 1 API đã có để lấy trạng thái
-        // hiện tại lúc mở popup, không cần thêm GET /account/:id/permission
-        // ngoài phạm vi đã chốt.
-        const current = await clientApi<AccountPermissionGrant[]>(`/account/${account.id}/permission`, {
-          method: "PUT",
-          body: JSON.stringify({ permissions: [] }),
-        });
-        if (!cancelled) setGrants(current);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [account.id]);
-
-  async function handleSave() {
-    if (!grants) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      await clientApi(`/account/${account.id}/permission`, {
-        method: "PUT",
-        body: JSON.stringify({
-          permissions: grants.map((g) => ({ permission_id: g.id, is_granted: g.is_granted })),
-        }),
-      });
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      title={`Cấu hình quyền — ${account.full_name}`}
-      description={`Vai trò: ${ACCOUNT_ROLE_LABEL[account.role]}`}
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Đóng
-          </Button>
-          {grants && grants.length > 0 && (
-            <Button type="button" disabled={isSubmitting} onClick={() => void handleSave()}>
-              {isSubmitting ? "Đang lưu..." : "Lưu cấu hình"}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
-
-      {!isLoading && grants && grants.length === 0 && (
-        <EmptyState
-          title="Chưa có quyền nào được định nghĩa"
-          description='Danh sách quyền chi tiết cho vai trò Quản lý/Leader chưa được xác nhận với chủ doanh nghiệp (Mục 11.1, tài liệu 09). Khung dữ liệu/API đã sẵn sàng — chỉ cần bổ sung danh mục quyền khi có xác nhận.'
-        />
-      )}
-
-      {!isLoading && grants && grants.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {grants.map((grant) => (
-            <label key={grant.id} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2.5">
-              <Checkbox
-                checked={grant.is_granted}
-                onChange={(event) =>
-                  setGrants((prev) =>
-                    prev
-                      ? prev.map((g) => (g.id === grant.id ? { ...g, is_granted: event.target.checked } : g))
-                      : prev,
-                  )
-                }
-              />
-              <span>
-                <span className="block text-sm font-medium text-slate-800">{grant.name}</span>
-                {grant.description && <span className="block text-xs text-slate-500">{grant.description}</span>}
-              </span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {error && (
-        <p role="alert" className="mt-3 text-sm text-red-600">
-          {error}
-        </p>
-      )}
-    </Modal>
   );
 }
 
@@ -571,7 +428,7 @@ function AccountModal({
         </Field>
 
         <Field label="Tên đăng nhập">
-          <Input value={username} disabled={isEdit} onChange={(event) => setUsername(event.target.value)} />
+          <Input value={username} onChange={(event) => setUsername(event.target.value)} />
         </Field>
 
         {!isEdit && (

@@ -4,14 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Settings2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { Account, SystemConfig } from "@/lib/types";
+import type { Account, ModulePermissionLevel, SystemConfig } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { BirthdayPreviewPanel } from "@/components/birthday/birthday-preview-panel";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { cn } from "@/lib/cn";
 
 /** Tên hiển thị thân thiện cho từng tham số đã biết — Mục 9.2, docs/12-ui-design.md. */
 const CONFIG_LABEL: Record<string, string> = {
@@ -24,13 +26,16 @@ function formatDateTime(value: string): string {
 }
 
 export function SettingsClient({
+  permissionLevel,
   initialConfigs,
   accounts,
 }: {
+  permissionLevel: ModulePermissionLevel;
   initialConfigs: SystemConfig[];
   accounts: Account[];
 }) {
   useSetPageTitle("Cấu hình vận hành", "Tham số vận hành toàn hệ thống — chỉ Admin xem/sửa được.");
+  const isReadOnly = permissionLevel === "view";
   const router = useRouter();
   const [configs, setConfigs] = useState(initialConfigs);
   const [editing, setEditing] = useState<SystemConfig | null>(null);
@@ -44,6 +49,11 @@ export function SettingsClient({
 
   return (
     <div className="mx-auto max-w-4xl">
+      {isReadOnly && (
+        <div className="mb-3">
+          <ViewOnlyBadge />
+        </div>
+      )}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -56,7 +66,7 @@ export function SettingsClient({
                 <th className="px-4 py-3">Hành động</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className={cn("divide-y divide-slate-100", isReadOnly && "pointer-events-none opacity-60")}>
               {configs.map((config) => (
                 <tr key={config.key} className="transition-colors hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-800">

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { Candidate, LeadSource, PaginatedResult, StatusCatalogItem, Team, TeamMember } from "@/lib/types";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { CandidatesClient } from "./candidates-client";
@@ -32,10 +33,14 @@ export default async function CandidatesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getCurrentUser();
-
-  if (!user || !["admin", "manager", "mkt", "leader", "sale"].includes(user.role)) {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
   }
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản): thay cho mảng vai trò cố định cũ — mặc định vẫn đúng 5 vai trò
+  // này (xem module-registry.ts, module "candidates"), Admin có thể mở
+  // rộng/thu hẹp riêng từng tài khoản qua trang "Phân quyền".
+  const permissionLevel = await requirePageAccess("candidates");
 
   const params = await searchParams;
   const getParam = (key: string): string | undefined => {
@@ -121,6 +126,7 @@ export default async function CandidatesPage({
 
   return (
     <CandidatesClient
+      permissionLevel={permissionLevel}
       initialCandidates={candidatesResult.items}
       initialTotal={candidatesResult.total}
       sources={sources}

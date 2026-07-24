@@ -16,6 +16,28 @@ export type AccountRole =
   | "shuttle_staff";
 export type AccountStatus = "active" | "inactive";
 
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
+ * dùng): "Phân quyền" phiên bản đơn giản — mức quyền theo module. Đặt ở
+ * đây (không phải lib/module-permission.ts, file đó có "server-only") để
+ * client component nào cũng import được để nhận prop `permissionLevel`.
+ */
+export type ModulePermissionLevel = "none" | "view" | "edit";
+
+/** GET /module-permission/modules — danh sách module cho trang Admin "Phân quyền". */
+export interface ModulePermissionSummary {
+  code: string;
+  label: string;
+}
+
+/** GET /module-permission/:accountId — quyền hiệu lực hiện tại của 1 tài khoản, theo từng module. */
+export interface AccountModulePermissions {
+  account_id: string;
+  role: AccountRole;
+  is_admin: boolean;
+  permissions: Record<string, ModulePermissionLevel>;
+}
+
 export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   admin: "Admin",
   manager: "Manager",
@@ -734,19 +756,6 @@ export interface AuditLogEntry {
   old_value: string | null;
   new_value: string | null;
   created_at: string;
-}
-
-/** Đối tượng "Permission" — Mục 0.1, docs/13-api-design.md. */
-export interface Permission {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-}
-
-/** PUT /account/:id/permission response — Mục 2, docs/13-api-design.md. */
-export interface AccountPermissionGrant extends Permission {
-  is_granted: boolean;
 }
 
 // ── Phase 8 — Thông báo Zalo ──────────────────────────────────────────

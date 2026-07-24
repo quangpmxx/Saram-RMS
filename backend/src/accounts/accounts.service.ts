@@ -17,8 +17,6 @@ import {
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
-import { UpdateAccountPermissionDto } from './dto/update-account-permission.dto';
-import { AccountPermissionGrantDto } from '../permission/dto/permission-response.dto';
 
 const TEAM_SELECT = { id: true, name: true } as const;
 
@@ -139,32 +137,44 @@ export class AccountsService {
       await this.assertTeamExists(dto.team_id);
     }
 
-    const account = await this.prisma.account.update({
-      where: { id },
-      data: {
-        fullName: dto.full_name,
-        teamId: dto.team_id === undefined ? undefined : dto.team_id,
-        status: dto.status,
-        dateOfBirth:
-          dto.date_of_birth === undefined
-            ? undefined
-            : dto.date_of_birth === null
-              ? null
-              : new Date(dto.date_of_birth),
-        hireDate:
-          dto.hire_date === undefined
-            ? undefined
-            : dto.hire_date === null
-              ? null
-              : new Date(dto.hire_date),
-        personalPhone: dto.personal_phone,
-        personalEmail: dto.personal_email,
-        remainingLeaveDays: dto.remaining_leave_days,
-        citizenId: dto.citizen_id,
-        bankAccountNumber: dto.bank_account_number,
-      },
-      include: { team: { select: TEAM_SELECT } },
-    });
+    // Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
+    // dùng): cho phép Admin sửa `username` — bọc try/catch để bắt trùng tên
+    // đăng nhập với tài khoản khác (unique constraint, P2002) → 409 thân
+    // thiện thay vì lỗi 500 (khớp cách create() đã xử lý).
+    let account: Prisma.AccountGetPayload<{
+      include: { team: { select: { id: true; name: true } } };
+    }>;
+    try {
+      account = await this.prisma.account.update({
+        where: { id },
+        data: {
+          fullName: dto.full_name,
+          username: dto.username,
+          teamId: dto.team_id === undefined ? undefined : dto.team_id,
+          status: dto.status,
+          dateOfBirth:
+            dto.date_of_birth === undefined
+              ? undefined
+              : dto.date_of_birth === null
+                ? null
+                : new Date(dto.date_of_birth),
+          hireDate:
+            dto.hire_date === undefined
+              ? undefined
+              : dto.hire_date === null
+                ? null
+                : new Date(dto.hire_date),
+          personalPhone: dto.personal_phone,
+          personalEmail: dto.personal_email,
+          remainingLeaveDays: dto.remaining_leave_days,
+          citizenId: dto.citizen_id,
+          bankAccountNumber: dto.bank_account_number,
+        },
+        include: { team: { select: TEAM_SELECT } },
+      });
+    } catch (error) {
+      throw this.mapKnownError(error);
+    }
 
     await this.logFieldChanges(actorId, id, existing, dto);
 
@@ -256,97 +266,6 @@ export class AccountsService {
     });
   }
 
-  /**
-   * Mục 2, docs/13-api-design.md — PUT /account/:id/permission. Chỉ áp dụng
-   * cho tài khoản Quản lý/Leader (Mục 9.1, docs/12). Danh mục `permissions`
-   * đã seed 5 quyền tạm ở Phase 9 (xem seedPhase9Permissions() trong
-   * seed.ts) — chưa phải danh sách chính thức từ chủ doanh nghiệp thật, có
-   * thể điều chỉnh sau; method này hoạt động đúng logic dù danh mục thay
-   * đổi hay tạm thời rỗng.
-   */
-  async updatePermissions(
-    id: string,
-    dto: UpdateAccountPermissionDto,
-    actorId: string,
-  ): Promise<AccountPermissionGrantDto[]> {
-    const account = await this.prisma.account.findUnique({ where: { id } });
-    if (!account) {
-      throw new NotFoundException('Không tìm thấy tài khoản');
-    }
-    if (account.role !== 'manager' && account.role !== 'leader') {
-      throw new UnprocessableEntityException(
-        'Chỉ cấu hình được quyền chi tiết cho tài khoản vai trò Quản lý/Leader',
-      );
-    }
-
-    const allPermissions = await this.prisma.permission.findMany();
-    const permissionById = new Map(allPermissions.map((p) => [p.id, p]));
-
-    for (const item of dto.permissions) {
-      const permission = permissionById.get(item.permission_id);
-      if (!permission) {
-        throw new NotFoundException(
-          `Không tìm thấy quyền có id "${item.permission_id}"`,
-        );
-      }
-      const existing = await this.prisma.accountPermission.findUnique({
-        where: {
-          accountId_permissionId: {
-            accountId: id,
-            permissionId: item.permission_id,
-          },
-        },
-      });
-
-      await this.prisma.accountPermission.upsert({
-        where: {
-          accountId_permissionId: {
-            accountId: id,
-            permissionId: item.permission_id,
-          },
-        },
-        create: {
-          accountId: id,
-          permissionId: item.permission_id,
-          isGranted: item.is_granted,
-          updatedById: actorId,
-        },
-        update: { isGranted: item.is_granted, updatedById: actorId },
-      });
-
-      await this.auditLog.log({
-        accountId: actorId,
-        actionType: 'update',
-        entityType: 'account_permission',
-        entityId: id,
-        fieldChanged: permission.code,
-        oldValue: String(existing?.isGranted ?? false),
-        newValue: String(item.is_granted),
-      });
-    }
-
-    return this.getPermissionGrants(id);
-  }
-
-  private async getPermissionGrants(
-    accountId: string,
-  ): Promise<AccountPermissionGrantDto[]> {
-    const [allPermissions, grants] = await Promise.all([
-      this.prisma.permission.findMany({ orderBy: { code: 'asc' } }),
-      this.prisma.accountPermission.findMany({ where: { accountId } }),
-    ]);
-    const grantedByPermissionId = new Map(
-      grants.map((g) => [g.permissionId, g.isGranted]),
-    );
-    return allPermissions.map((p) => ({
-      id: p.id,
-      code: p.code,
-      name: p.name,
-      description: p.description,
-      is_granted: grantedByPermissionId.get(p.id) ?? false,
-    }));
-  }
-
   private async assertTeamExists(teamId: string): Promise<void> {
     const team = await this.prisma.team.findUnique({ where: { id: teamId } });
     if (!team) {
@@ -361,6 +280,7 @@ export class AccountsService {
     entityId: string,
     before: {
       fullName: string;
+      username: string;
       teamId: string | null;
       status: string;
       dateOfBirth: Date | null;
@@ -384,6 +304,13 @@ export class AccountsService {
         field: 'full_name',
         oldValue: before.fullName,
         newValue: dto.full_name,
+      });
+    }
+    if (dto.username !== undefined && dto.username !== before.username) {
+      changes.push({
+        field: 'username',
+        oldValue: before.username,
+        newValue: dto.username,
       });
     }
     if (dto.team_id !== undefined && dto.team_id !== before.teamId) {

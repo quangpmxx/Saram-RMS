@@ -14,6 +14,7 @@ import {
   History,
   LayoutDashboard,
   Settings2,
+  ShieldCheck,
   TrendingUp,
   UserCog,
   Users,
@@ -36,6 +37,7 @@ const ICONS = {
   attendance: CalendarCheck,
   salesEntry: TrendingUp,
   orderManagement: Handshake,
+  permissions: ShieldCheck,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

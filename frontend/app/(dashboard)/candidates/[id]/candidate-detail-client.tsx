@@ -20,7 +20,7 @@ import { callStatusVariant } from "@/lib/call-status-variant";
 import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
 import { useToast } from "@/lib/toast-context";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
-import type { AccountRole, Candidate, LeadRealtimeEvent, Note, StatusCatalogItem } from "@/lib/types";
+import type { AccountRole, Candidate, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
@@ -30,6 +30,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { InlineEditField } from "./inline-edit-field";
 import { InlineNoteComposer } from "./inline-note-composer";
@@ -89,6 +90,7 @@ function formatDateTime(value: string): string {
 
 
 export function CandidateDetailClient({
+  permissionLevel,
   initialCandidate,
   initialNotes,
   callStatuses,
@@ -99,6 +101,7 @@ export function CandidateDetailClient({
   currentUserRole,
   currentUserTeamId,
 }: {
+  permissionLevel: ModulePermissionLevel;
   initialCandidate: Candidate;
   initialNotes: Note[];
   callStatuses: StatusCatalogItem[];
@@ -109,6 +112,13 @@ export function CandidateDetailClient({
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
 }) {
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản, Mục 2/6): trang Chi tiết ứng viên có RẤT NHIỀU điểm chỉnh sửa rải
+  // rác (ghi chú, trạng thái cuộc gọi, Zalo, lịch hẹn...) — CHƯA khóa từng
+  // điểm riêng lẻ ở phiên bản này (chỉ hiện badge cảnh báo); backend
+  // (ModulePermissionGuard, module "candidates") vẫn LUÔN chặn thật mọi
+  // API ghi khi "Chỉ xem" — an toàn dữ liệu không phụ thuộc bước này.
+  const isReadOnly = permissionLevel === "view";
   const router = useRouter();
   const [candidate, setCandidate] = useState(initialCandidate);
   const [notes, setNotes] = useState(initialNotes);
@@ -479,6 +489,12 @@ export function CandidateDetailClient({
         <ArrowLeft className="h-4 w-4" strokeWidth={2} />
         Quay lại danh sách lao động
       </Link>
+
+      {isReadOnly && (
+        <div className="mb-3">
+          <ViewOnlyBadge />
+        </div>
+      )}
 
       <PageHeader
         title={candidate.full_name}

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi, ApiError } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { Candidate, Note, StatusCatalogItem } from "@/lib/types";
 import { CandidateDetailClient } from "./candidate-detail-client";
 
@@ -17,10 +18,10 @@ export default async function CandidateDetailPage({
 }) {
   const { id } = await params;
   const user = await getCurrentUser();
-
-  if (!user || !["admin", "manager", "mkt", "leader", "sale"].includes(user.role)) {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
   }
+  const permissionLevel = await requirePageAccess("candidates");
 
   let candidate: Candidate;
   let notes: Note[];
@@ -45,6 +46,7 @@ export default async function CandidateDetailPage({
 
   return (
     <CandidateDetailClient
+      permissionLevel={permissionLevel}
       initialCandidate={candidate}
       initialNotes={notes}
       callStatuses={callStatuses}

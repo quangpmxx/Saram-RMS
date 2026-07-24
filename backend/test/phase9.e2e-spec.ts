@@ -24,7 +24,6 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
 
   let adminId: string;
   let managerId: string;
-  let leaderAId: string;
 
   const server = () => app.getHttpServer();
   const USERNAMES = [
@@ -57,9 +56,6 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
     await prisma.lead.deleteMany({});
-    await prisma.accountPermission.deleteMany({
-      where: { account: { username: { in: USERNAMES } } },
-    });
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
     });
@@ -123,7 +119,6 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
         teamId: teamA.id,
       },
     });
-    leaderAId = leaderA.id;
     await prisma.team.update({
       where: { id: teamA.id },
       data: { leaderId: leaderA.id },
@@ -300,46 +295,6 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
           (g) => g.phone_number === dupPhone,
         ),
       ).toBe(false);
-    });
-  });
-
-  describe('Khung Phân quyền chi tiết (GET /permission, PUT /account/:id/permission, Mục 2, docs/13)', () => {
-    it('GET /permission: Admin xem được (danh mục rỗng — chưa chốt với chủ doanh nghiệp), vai trò khác bị từ chối', async () => {
-      const res = await adminAgent.get('/permission').expect(200);
-      expect(res.body).toEqual([]);
-      await saleAAgent.get('/permission').expect(403);
-      await managerAgent.get('/permission').expect(403);
-    });
-
-    it('PUT /account/:id/permission: Admin cấu hình cho Quản lý/Leader thành công (danh sách rỗng)', async () => {
-      const res = await adminAgent
-        .put(`/account/${managerId}/permission`)
-        .send({ permissions: [] })
-        .expect(200);
-      expect(res.body).toEqual([]);
-
-      const res2 = await adminAgent
-        .put(`/account/${leaderAId}/permission`)
-        .send({ permissions: [] })
-        .expect(200);
-      expect(res2.body).toEqual([]);
-    });
-
-    it('không áp dụng được cho tài khoản Sale/MKT (không phải Quản lý/Leader) → 422', async () => {
-      const saleA = await prisma.account.findUniqueOrThrow({
-        where: { username: 'phase9_sale_a' },
-      });
-      await adminAgent
-        .put(`/account/${saleA.id}/permission`)
-        .send({ permissions: [] })
-        .expect(422);
-    });
-
-    it('không phải Admin thì không cấu hình được → 403', async () => {
-      await managerAgent
-        .put(`/account/${leaderAId}/permission`)
-        .send({ permissions: [] })
-        .expect(403);
     });
   });
 });

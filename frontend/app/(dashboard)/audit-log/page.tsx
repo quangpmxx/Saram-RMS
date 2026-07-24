@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { AuditLogEntry, Account, PaginatedResult } from "@/lib/types";
 import { AuditLogClient } from "./audit-log-client";
 
@@ -17,9 +18,12 @@ import { AuditLogClient } from "./audit-log-client";
  */
 export default async function AuditLogPage() {
   const user = await getCurrentUser();
-  if (!user || !["admin", "manager"].includes(user.role)) {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
   }
+  // Nhật ký không có thao tác thêm/sửa/xóa nào (chỉ xem + lọc) — chỉ cần
+  // chặn truy cập khi "none", không cần phân biệt view/edit ở giao diện.
+  await requirePageAccess("audit-log");
 
   const canPickAccount = user.role === "admin";
 
@@ -31,6 +35,10 @@ export default async function AuditLogPage() {
   ]);
 
   return (
-    <AuditLogClient initialLogs={logs} canPickAccount={canPickAccount} accounts={accountsResult.items} />
+    <AuditLogClient
+      initialLogs={logs}
+      canPickAccount={canPickAccount}
+      accounts={accountsResult.items}
+    />
   );
 }

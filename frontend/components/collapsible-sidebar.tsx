@@ -65,7 +65,7 @@ export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
         >
           {/* w-max: giữ nguyên chiều rộng tự nhiên (icon + chữ) để wrapper ngoài
               clip đúng phần cần ẩn, không để flexbox ép co nhỏ icon lại. */}
-          <Logo variant="light" size="sm" showWordmark href="/" className="w-max" />
+          <Logo variant="light" size="sm" showWordmark slogan="Make Saram Great Again" href="/" className="w-max" />
         </div>
       </div>
       <div className="mt-2 flex-1">

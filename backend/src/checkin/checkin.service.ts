@@ -33,8 +33,17 @@ const TIMEZONE = 'Asia/Ho_Chi_Minh';
  */
 const CHECKIN_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
 
-/** Mục 10: Admin/Quản lý/Leader/Nhân viên đều xem được (phạm vi khác nhau) — khớp VIEW_ROLES ở attendance.service.ts. */
-const VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'mkt', 'sale']);
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-24): "Trang chấm công GPS chỉ có
+ * quản lý và admin xem được, còn lại không ai có quyền" — SIẾT LẠI so với
+ * Mục 10 gốc (từng cho cả Leader/Nhân viên xem, chỉ khác phạm vi chi
+ * tiết). Chỉ ảnh hưởng "trang quản lý Check in" (GET /checkin/records) —
+ * KHÔNG đụng tới việc Leader/Nhân viên/Sale/MKT tự Check in cho chính
+ * mình (CHECKIN_ROLES, GET /checkin/status, GET /checkin/preview,
+ * POST /checkin — vẫn giữ nguyên, đó là hành động tự phục vụ khác hẳn
+ * "xem trang quản lý").
+ */
+const VIEW_ROLES = new Set(['admin', 'manager']);
 
 /** Mục 10: chỉ Admin/Quản lý "xem chi tiết GPS, IP, thiết bị" của người KHÁC — Leader/Nhân viên chỉ xem được đầy đủ bản ghi CỦA CHÍNH MÌNH. */
 const FULL_DETAIL_ROLES = new Set(['admin', 'manager']);

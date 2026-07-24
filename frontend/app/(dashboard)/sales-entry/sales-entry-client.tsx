@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useSetPageTitle } from "@/lib/page-title-context";
-import type { DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, PaginatedResult } from "@/lib/types";
+import type { DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, ModulePermissionLevel, PaginatedResult } from "@/lib/types";
 import { DsSaleClient } from "./ds-sale-client";
 
 /**
@@ -18,12 +18,14 @@ import { DsSaleClient } from "./ds-sale-client";
  * sidebar dùng chung.
  */
 export function SalesEntryClient({
+  permissionLevel,
   currentUserId,
   initialRows,
   initialSaleAccounts,
   initialPickupAccounts,
   initialCompanies,
 }: {
+  permissionLevel: ModulePermissionLevel;
   currentUserId: string;
   initialRows: PaginatedResult<DsSaleRow>;
   initialSaleAccounts: DsSaleAccountOption[];
@@ -71,6 +73,7 @@ export function SalesEntryClient({
 
       {activeTab === "ds-sale" && (
         <DsSaleClient
+          permissionLevel={permissionLevel}
           currentUserId={currentUserId}
           initialRows={initialRows}
           initialSaleAccounts={initialSaleAccounts}

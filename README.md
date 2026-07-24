@@ -255,8 +255,14 @@ Không có màn hình riêng trong app (đúng Mục 10, `docs/09`: "hệ thốn
 3. Đăng nhập `sale_demo_a`/`123456` → vào **Trùng lặp** → không thấy nhóm trùng SĐT `0901000004` (không có bản ghi nào thuộc "Nhóm Sale Demo" của Sale này) — đúng quy tắc "Sale không thấy cảnh báo trùng khác nhóm".
 4. Quay lại `admin` → vào **Nhật ký** → thấy toàn bộ lịch sử thao tác đã tích lũy từ các Phase trước (đăng nhập, tạo/sửa tài khoản, phân chia lead, cập nhật cấu hình...). Thử lọc theo tài khoản, theo loại hành động (vd "Đăng nhập"), theo khoảng ngày → danh sách và số "Tổng số hành động" cập nhật đúng theo bộ lọc. Bấm vào 1 dòng để xem popup chi tiết đầy đủ.
 5. Đăng nhập `manager_demo` (nếu có) hoặc bất kỳ tài khoản `sale`/`leader`/`mkt` nào → không thấy mục **Nhật ký** trên menu; gọi thẳng `GET /audit-log` cũng bị từ chối (403) — chỉ Admin/Quản lý xem được.
-6. Vào **Quản lý tài khoản** (Admin) → với 1 tài khoản vai trò **Quản lý** hoặc **Leader**, thấy nút **Cấu hình quyền** → bấm vào mở popup, hiển thị 5 quyền đã seed sẵn (Thêm nhân viên, Vô hiệu hóa/kích hoạt lại nhân viên, Reset mật khẩu nhân viên, Xóa ứng viên, Sửa cấu hình vận hành — xem "Ghi chú giả định của Phase 9" bên dưới về nguồn gốc danh sách này), tick chọn rồi **Lưu cấu hình** → mở lại popup thấy đúng trạng thái vừa lưu. Với tài khoản vai trò **Sale**/**MKT**, không thấy nút này.
+6. **[2026-07-24] Khung "Cấu hình quyền" (nút trên màn Quản lý tài khoản, 5 quyền tạm) đã bị XÓA HẲN** — thay bằng trang **Phân quyền** (`/permissions`, chỉ Admin, xem mục 5.12 bên dưới). Xem "Ghi chú giả định của Phase 9" bên dưới về lịch sử/lý do gỡ bỏ.
 
+### 5.12. Phân quyền theo module (dự án phụ, 2026-07-24)
+
+1. Đăng nhập `admin`/`123456` → menu bên trái có mục **Phân quyền** (icon khiên, cuối danh sách) → vào `/permissions`, chọn 1 tài khoản Sale/Leader/Manager bên trái → bên phải hiện đúng 12 module với 3 lựa chọn Không có quyền/Chỉ xem/Chỉnh sửa.
+2. Đặt 1 tài khoản Sale: **Trang chủ Dashboard** = Chỉ xem, **Danh sách đưa đón** = Chỉnh sửa, **Báo cáo** = Không có quyền → **Lưu phân quyền**.
+3. Đăng xuất, đăng nhập lại đúng tài khoản Sale đó → menu không còn mục **Báo cáo**; gõ thẳng URL `/reports` → chuyển hướng sang `/access-denied`; vào **Trang chủ Dashboard** → thấy badge "Chỉ xem — không thể chỉnh sửa", gọi thử API ghi (vd `POST`) bị 403; vào **Danh sách đưa đón** → sửa/thêm dòng bình thường.
+4. Đăng nhập lại `admin` → vào **Phân quyền**, chọn chính tài khoản Admin đang đăng nhập → không có radio nào để sửa (banner báo "Admin luôn có toàn quyền"), gọi thẳng `PUT /module-permission/<id admin>` cũng bị từ chối (400).
 ---
 
 ## 6. Kiểm tra chất lượng (không bắt buộc, dùng khi cần xác minh lại)
@@ -322,6 +328,17 @@ Khoảng thời gian mặc định khi vào Dashboard/Báo cáo là **Tháng nà
 
 ### Ghi chú giả định của Phase 9 (Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết)
 
+> **[2026-07-24] ĐÃ GỠ BỎ HẲN — xem mục "Phân quyền" (dự án phụ) bên dưới.**
+> Toàn bộ đoạn mô tả "Khung Phân quyền chi tiết" (5 quyền tạm, bảng
+> `permissions`/`account_permissions`, `GET /permission`,
+> `PUT /account/:id/permission`, nút "Cấu hình quyền") dưới đây chỉ còn giá
+> trị LỊCH SỬ — yêu cầu trực tiếp người dùng ("gộp luôn") sau khi xác nhận
+> hệ thống này chưa từng thực sự chặn hành động nào (chỉ lưu/hiển thị).
+> Toàn bộ model/API/UI liên quan đã bị xóa, thay bằng hệ thống "Phân quyền"
+> theo module (`UserModulePermission`, `ModulePermissionGuard`, trang
+> `/permissions`) — xem mục riêng "Phân quyền (dự án phụ, ngoài Phase 9)"
+> bên dưới.
+
 **Khung Phân quyền chi tiết ban đầu dừng lại đúng như cảnh báo tường minh của `docs/14-roadmap.md`:** "danh sách quyền cụ thể (checklist) cho vai trò Quản lý/Leader hiện chưa được chốt với chủ doanh nghiệp (Mục 11.1, tài liệu 09)... Phase này chỉ dựng phần khung (bảng `permissions` rỗng, giao diện checklist) và **phải dừng lại xin xác nhận danh sách quyền cụ thể trước khi hoàn thiện** — không tự suy đoán quyền nào nên có." Đã dựng đầy đủ khung (database + API + giao diện) rồi hỏi lại người dùng trực tiếp trong phiên làm việc; người dùng chọn **tự soạn ngay 1 danh sách tạm** thay vì để trống, nên bảng `permissions` hiện đã seed 5 quyền (xem `seedPhase9Permissions()`, `backend/src/prisma/seed.ts`) — **không phải danh sách chính thức cuối cùng từ chủ doanh nghiệp thật**, chỉ là lựa chọn tạm để tính năng dùng thử được ngay, có thể điều chỉnh/thay thế bất kỳ lúc nào chỉ bằng cách sửa danh sách trong hàm seed đó (không cần đổi code khác):
 - `ADD_EMPLOYEE`, `DEACTIVATE_EMPLOYEE`, `RESET_PASSWORD` — bám sát đúng 3 hành động đã **xác nhận cứng chỉ Admin làm được** tại Mục 8, `docs/09`.
 - `DELETE_LEAD`, `EDIT_SYSTEM_CONFIG` — đúng 2 trong số các ví dụ mã quyền mà chính `docs/11` (Mục 2.4) đã gợi ý sẵn khi mô tả cột `code`.
@@ -332,6 +349,21 @@ Khoảng thời gian mặc định khi vào Dashboard/Báo cáo là **Tháng nà
 **Trùng lặp toàn hệ thống (S15):** `docs/13` (Mục 2) chỉ cho `GET /candidate/duplicate` nhận `page`, `page_size`, `team_id` — không có `date_from`/`date_to`/`sale_id` như mô tả ở `docs/12` Mục 4 ("lọc theo khoảng ngày trùng, theo nhóm/sale liên quan"). Vì Design Freeze không cho tự thêm tham số ngoài API đã chốt, màn hình **Trùng lặp** chỉ lọc theo nhóm (Admin/Quản lý) và không có bộ lọc ngày/sale — tương tự, thống kê chỉ hiện "Tổng số nhóm trùng lặp" (từ `total` của API), không tách theo "ngày/tuần" như mô tả UI gốc (không có dữ liệu hỗ trợ). Với Sale/Leader, 1 nhóm trùng chỉ hiển thị nếu còn **≥2 bản ghi** thuộc đúng nhóm họ sau khi lọc — nếu chỉ còn 1 (bản ghi trùng còn lại ở nhóm khác), nhóm đó ẩn hoàn toàn, giữ đúng tinh thần "Trùng khác nhóm: Sale không thấy cảnh báo" (Mục 10, `docs/09`) thay vì để lộ việc tồn tại trùng lặp ở nơi khác.
 
 **Nhật ký (S14):** bộ lọc "theo tài khoản" trên giao diện chỉ hiện với Admin — nguồn dữ liệu để dựng dropdown chọn tài khoản (`GET /account`) chỉ Admin gọi được (Mục 2, `docs/13`), Quản lý không có API nào khác để lấy toàn bộ danh sách tài khoản nên không hiện bộ lọc này (vẫn lọc được theo loại hành động/đối tượng/khoảng thời gian). Thống kê "Số phiên đăng nhập đang hoạt động" mô tả ở `docs/12` Mục 9.3 không có API hỗ trợ (không có trong danh sách 59 endpoint đã chốt của `docs/13`) nên không hiển thị — chỉ giữ lại "Tổng số hành động trong bộ lọc hiện tại" (lấy từ `total` của chính `GET /audit-log`, không cần API mới).
+
+### Phân quyền (dự án phụ, 2026-07-24, ngoài phạm vi Design Freeze docs/09-13)
+
+Thay thế hoàn toàn "Khung Phân quyền chi tiết" của Phase 9 ở trên (đã xóa hẳn — yêu cầu trực tiếp người dùng "gộp luôn", sau khi xác nhận hệ thống cũ chưa từng thực sự chặn hành động nào). Phiên bản đơn giản: phân quyền **theo module** (không theo từng hành động nhỏ), mỗi tài khoản + module có đúng 1 trong 3 mức:
+
+- **Không có quyền** — ẩn mục menu, chặn cả truy cập URL trực tiếp (route trả về `/access-denied`).
+- **Chỉ xem** — mở được trang, chỉ `GET` được phép; mọi API ghi (`POST`/`PUT`/`PATCH`/`DELETE`) bị chặn 403 ở backend, không chỉ ẩn nút ở giao diện.
+- **Chỉnh sửa** — không bị hệ thống này giới hạn thêm gì cả (các luật nghiệp vụ chi tiết theo vai trò cũ, vd "chỉ MKT được upload data mới", **vẫn giữ nguyên y hệt**, không bị hệ thống mới cấp thêm quyền vượt qua).
+
+Khi Admin **chưa** cấu hình gì cho 1 (tài khoản, module), hệ thống tự suy quyền mặc định theo vai trò (khớp đúng hành vi hiện tại trước khi có tính năng này) — đảm bảo không ai bị mất quyền đang có ngay sau khi triển khai. Admin luôn có toàn quyền mọi module và không tự thu hồi được quyền của chính mình.
+
+- Database: bảng `user_module_permissions` (`accountId` + `module` + mức `none`/`view`/`edit`).
+- Backend: `ModulePermissionGuard` (global, `backend/src/module-permission/`) tra theo `context.getClass()` trong 1 registry duy nhất ánh xạ module → các controller thật sự phục vụ trang đó — không cần gắn decorator vào từng controller.
+- Frontend: trang quản trị **Phân quyền** (`/permissions`, chỉ Admin) — trái là danh sách tài khoản + tìm kiếm, phải là danh sách module với radio 3 lựa chọn.
+- Phạm vi cố ý CHƯA gate (tránh khóa nhầm chức năng tự phục vụ): tab "Check in GPS"/"Đơn xin nghỉ phép" trong Chấm công (API vừa tự phục vụ vừa quản trị chung 1 controller); các endpoint danh mục dùng chung nhiều module (catalog/status).
 
 ### Ghi chú khác biệt so với `docs/12-ui-design.md` Mục 7 (Interview/Calendar)
 

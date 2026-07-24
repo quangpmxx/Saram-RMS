@@ -39,6 +39,7 @@ import type {
   ImportJobStatus,
   LeadRealtimeEvent,
   LeadSource,
+  ModulePermissionLevel,
   Note,
   PaginatedResult,
   RemindTarget,
@@ -48,6 +49,7 @@ import type {
 } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -147,6 +149,7 @@ function zaloStatusStyle(name: string | undefined): { backgroundColor: string; c
 }
 
 export function CandidatesClient({
+  permissionLevel,
   initialCandidates,
   initialTotal,
   sources,
@@ -160,6 +163,7 @@ export function CandidatesClient({
   initialViewMode,
   initialFilters,
 }: {
+  permissionLevel: ModulePermissionLevel;
   initialCandidates: Candidate[];
   initialTotal: number;
   sources: LeadSource[];
@@ -205,6 +209,11 @@ export function CandidatesClient({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useSetPageTitle("Data lao động", "Thu thập, tìm kiếm và quản lý dữ liệu lao động.");
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ bảng bằng pointer-events (rất
+  // nhiều điểm nhập trực tiếp/inline khắp bảng). Backend
+  // (ModulePermissionGuard) là lớp chặn thật.
+  const isReadOnly = permissionLevel === "view";
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
@@ -579,6 +588,11 @@ export function CandidatesClient({
 
   return (
     <div className="w-full">
+      {isReadOnly && (
+        <div className="mb-2">
+          <ViewOnlyBadge />
+        </div>
+      )}
       {/* UI Polish — tinh chỉnh mật độ hiển thị: thu nhỏ tiêu đề ~11% (text-lg → text-base), giảm mb-2 → mb-1 để sát bộ lọc hơn. */}
       <div className="mb-1 flex items-start justify-between gap-3 md:hidden">
         <div>
@@ -669,11 +683,17 @@ export function CandidatesClient({
             </Button>
             {(currentUserRole === "mkt" || currentUserRole === "admin") && (
               <>
-                <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "import" })}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isReadOnly}
+                  onClick={() => setModal({ mode: "import" })}
+                >
                   <Upload className="h-4 w-4" strokeWidth={2} />
                   Nhập từ Excel
                 </Button>
-                <Button type="button" size="sm" onClick={() => setModal({ mode: "create" })}>
+                <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
                   <Plus className="h-4 w-4" strokeWidth={2.5} />
                   Thêm lao động mới
                 </Button>
@@ -757,7 +777,12 @@ export function CandidatesClient({
       {viewMode === "pending" && canAssign && selectedIds.size > 0 && (
         <Card className="mb-2 flex items-center justify-between gap-3 p-2.5">
           <span className="text-sm text-slate-600">Đã chọn {selectedIds.size} lao động</span>
-          <Button type="button" size="sm" onClick={() => setModal({ mode: "assign", candidateIds: [...selectedIds] })}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={isReadOnly}
+            onClick={() => setModal({ mode: "assign", candidateIds: [...selectedIds] })}
+          >
             <UserPlus className="h-4 w-4" strokeWidth={2} />
             Phân chia đã chọn
           </Button>
@@ -813,7 +838,16 @@ export function CandidatesClient({
                 <th className="px-1 py-2 text-center">HĐ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-brand-400">
+            <tbody
+              className={cn(
+                "divide-y divide-brand-400",
+                // "Chỉ xem" vẫn phải xem được Chi tiết ứng viên (Mục 2: "Được
+                // xem") — khóa pointer-events toàn <tbody> (input/nút/checkbox
+                // inline rất nhiều, không disable riêng lẻ nổi) nhưng MỞ LẠI
+                // riêng thẻ <a> (link "Xem chi tiết") bằng arbitrary variant.
+                isReadOnly && "pointer-events-none opacity-60 [&_a]:pointer-events-auto",
+              )}
+            >
               {candidates.map((candidate, index) => {
                 const uploadedAt = formatUploadedAt(candidate.uploaded_at);
                 const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;

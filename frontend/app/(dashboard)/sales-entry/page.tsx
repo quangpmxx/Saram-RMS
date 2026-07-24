@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, PaginatedResult } from "@/lib/types";
 import { SalesEntryClient } from "./sales-entry-client";
 
@@ -18,9 +19,10 @@ const DEFAULT_PAGE_SIZE = 100;
  */
 export default async function SalesEntryPage() {
   const user = await getCurrentUser();
-  if (!user || user.role !== "admin") {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
   }
+  const permissionLevel = await requirePageAccess("sales-entry");
 
   const [initialRows, saleAccounts, pickupAccounts, companies] = await Promise.all([
     serverApi<PaginatedResult<DsSaleRow>>(`/sales-entry/ds-sale?page=1&page_size=${DEFAULT_PAGE_SIZE}`),
@@ -31,6 +33,7 @@ export default async function SalesEntryPage() {
 
   return (
     <SalesEntryClient
+      permissionLevel={permissionLevel}
       currentUserId={user.id}
       initialRows={initialRows}
       initialSaleAccounts={saleAccounts}

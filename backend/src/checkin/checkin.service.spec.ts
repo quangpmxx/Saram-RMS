@@ -312,55 +312,27 @@ describe('CheckinService (Phase 1+2+3+4)', () => {
       expect(row?.checkin?.ip_address).toBe('203.0.113.5');
     });
 
-    it('10) Leader xem đồng đội KHÁC trong nhóm -> GPS/IP/thiết bị bị ẩn (null), nhưng vẫn thấy trạng thái/khoảng cách/giờ', async () => {
+    it('10-13) [2026-07-24, yêu cầu trực tiếp người dùng: "Trang chấm công GPS chỉ có quản lý và admin xem được, còn lại không ai có quyền"] Leader/Sale/MKT bị từ chối xem trang quản lý Check in (siết lại từ Mục 10 gốc — trước đây Leader/Nhân viên được xem phạm vi giới hạn)', async () => {
+      await expect(
+        service.listRecords({ date: '2026-07-15' }, leader),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.listRecords({ date: '2026-07-15' }, sale),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.account.findMany).not.toHaveBeenCalled();
+    });
+
+    it('Quản lý (manager) vẫn xem được đầy đủ chi tiết như Admin', async () => {
       prisma.account.findMany.mockResolvedValue([teamMember('sale-1')]);
       prisma.checkinRecord.findMany.mockResolvedValue([
         fullCheckinRecord('sale-1'),
       ]);
 
-      const result = await service.listRecords({ date: '2026-07-15' }, leader);
+      const result = await service.listRecords({ date: '2026-07-15' }, manager);
 
       const row = result.employees[0];
-      expect(row.checkin?.latitude).toBeNull();
-      expect(row.checkin?.ip_address).toBeNull();
-      expect(row.checkin?.user_agent).toBeNull();
-      expect(row.checkin?.status).toBe('valid');
-      expect(row.checkin?.distance_from_company_meters).toBe(15);
-    });
-
-    it('11) Leader xem CHÍNH MÌNH -> vẫn thấy đầy đủ chi tiết (không tự ẩn dữ liệu của chính mình)', async () => {
-      prisma.account.findMany.mockResolvedValue([
-        teamMember('leader-1', { role: 'leader' }),
-      ]);
-      prisma.checkinRecord.findMany.mockResolvedValue([
-        fullCheckinRecord('leader-1'),
-      ]);
-
-      const result = await service.listRecords({ date: '2026-07-15' }, leader);
-
-      expect(result.employees[0].checkin?.latitude).toBe(10.0001);
-      expect(result.employees[0].checkin?.ip_address).toBe('203.0.113.5');
-    });
-
-    it('12) Leader thử xem người NGOÀI nhóm (query.account_id) -> danh sách rỗng, không rò rỉ (kịch bản 8, Mục 13)', async () => {
-      prisma.account.findMany.mockResolvedValue([]);
-
-      const result = await service.listRecords(
-        { date: '2026-07-15', account_id: 'sale-ngoai-nhom' },
-        leader,
-      );
-
-      expect(result.employees).toHaveLength(0);
-    });
-
-    it('13) Nhân viên (sale) chỉ xem được chính mình', async () => {
-      await service.listRecords({ date: '2026-07-15' }, sale);
-
-      expect(prisma.account.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'sale-1', role: { in: ['leader', 'mkt', 'sale'] } },
-        }),
-      );
+      expect(row.checkin?.latitude).toBe(10.0001);
+      expect(row.checkin?.ip_address).toBe('203.0.113.5');
     });
 
     it('14) Lọc trạng thái "not_checked_in" -> chỉ trả nhân viên CHƯA có bản ghi ngày đó', async () => {

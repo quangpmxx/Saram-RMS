@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { CalendarEvent, PaginatedResult, Team, TeamMember } from "@/lib/types";
 import { CalendarClient } from "./calendar-client";
 
@@ -17,10 +18,10 @@ function toDateInputValue(date: Date): string {
  */
 export default async function CalendarPage() {
   const user = await getCurrentUser();
-
-  if (!user || !["admin", "manager", "leader", "sale"].includes(user.role)) {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
   }
+  const permissionLevel = await requirePageAccess("calendar");
 
   const today = new Date();
   const from = new Date(today);
@@ -63,6 +64,7 @@ export default async function CalendarPage() {
 
   return (
     <CalendarClient
+      permissionLevel={permissionLevel}
       initialEvents={events}
       initialDateFrom={dateFrom}
       initialDateTo={dateTo}

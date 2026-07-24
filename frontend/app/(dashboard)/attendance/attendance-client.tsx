@@ -14,6 +14,7 @@ import {
   type AttendanceGrid,
   type AttendanceStatus,
   type LeaveRequest,
+  type ModulePermissionLevel,
   type Team,
   type TeamMember,
 } from "@/lib/types";
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Checkbox, Field, Select } from "@/components/ui/form";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { CheckinManagementPanel } from "./checkin-management-panel";
@@ -428,6 +430,7 @@ function AttendanceCellButton({
 }
 
 export function AttendanceClient({
+  permissionLevel,
   currentUser,
   currentUserRole,
   canFilterByTeam,
@@ -439,6 +442,7 @@ export function AttendanceClient({
   initialGrid,
   initialRequests,
 }: {
+  permissionLevel: ModulePermissionLevel;
   currentUserId: string;
   currentUser: Account;
   currentUserRole: AccountRole;
@@ -452,6 +456,14 @@ export function AttendanceClient({
   initialRequests: LeaveRequest[];
 }) {
   useSetPageTitle("Chấm công nhân viên");
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản, Mục 2/6): CHỈ áp dụng cho tab "Chấm công thủ công" (bảng chính,
+  // khớp đúng phạm vi backend thật gate — AttendanceController). Tab
+  // "Check in GPS"/"Đơn xin nghỉ phép" có endpoint tự phục vụ lẫn quản trị
+  // trong cùng controller nên KHÔNG gate ở registry backend (xem
+  // module-registry.ts phía backend) — để UI 2 tab đó khớp đúng thực tế,
+  // không khóa nhầm thứ backend vẫn cho phép.
+  const isReadOnly = permissionLevel === "view";
   const toast = useToast();
   const searchParams = useSearchParams();
 
@@ -468,9 +480,17 @@ export function AttendanceClient({
    * khi bấm link từ thông báo/nút "Tạo đơn" (khớp `?open=<id>` mà
    * LeaveRequestClient tự đọc để mở sẵn đúng đơn — cùng 1 URL).
    */
-  const [activeTab, setActiveTab] = useState<"manual" | "checkin" | "requests">(() =>
-    searchParams.get("tab") === "requests" ? "requests" : searchParams.get("tab") === "checkin" ? "checkin" : "manual",
-  );
+  // Yêu cầu trực tiếp người dùng (2026-07-24): "Trang chấm công GPS chỉ có
+  // quản lý và admin xem được, còn lại không ai có quyền" — ẩn hẳn tab này
+  // với Leader/MKT/Sale (kể cả deep-link ?tab=checkin cũng không mở được).
+  // Backend (checkin.service.ts#VIEW_ROLES) là lớp chặn thật, đây chỉ là UI.
+  const canViewCheckin = currentUserRole === "admin" || currentUserRole === "manager";
+  const [activeTab, setActiveTab] = useState<"manual" | "checkin" | "requests">(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "checkin") return canViewCheckin ? "checkin" : "manual";
+    if (tab === "requests") return "requests";
+    return "manual";
+  });
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -921,16 +941,18 @@ export function AttendanceClient({
         >
           Chấm công thủ công
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("checkin")}
-          className={cn(
-            "rounded-md px-2 py-1 text-xs font-medium transition-colors",
-            activeTab === "checkin" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
-          )}
-        >
-          Check in GPS
-        </button>
+        {canViewCheckin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("checkin")}
+            className={cn(
+              "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+              activeTab === "checkin" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+            )}
+          >
+            Check in GPS
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setActiveTab("requests")}
@@ -943,7 +965,7 @@ export function AttendanceClient({
         </button>
       </div>
 
-      {activeTab === "checkin" && (
+      {activeTab === "checkin" && canViewCheckin && (
         <CheckinManagementPanel
           canFilterByTeam={canFilterByTeam}
           teams={teams}
@@ -954,7 +976,13 @@ export function AttendanceClient({
 
       {activeTab === "requests" && <LeaveRequestClient currentUser={currentUser} initialRequests={initialRequests} />}
 
-      <div className={activeTab === "manual" ? "space-y-4" : "hidden"}>
+      {activeTab === "manual" && isReadOnly && <ViewOnlyBadge />}
+      <div
+        className={cn(
+          activeTab === "manual" ? "space-y-4" : "hidden",
+          activeTab === "manual" && isReadOnly && "pointer-events-none opacity-60",
+        )}
+      >
       <div ref={filterBarRef}>
       <Card className="p-2">
         <div className="flex flex-wrap items-end gap-2">

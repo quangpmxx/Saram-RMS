@@ -250,10 +250,6 @@ model Account {
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược người gửi (admin_message)
   sentNotifications Notification[] @relation("NotificationSender")
 
-  // Phase 9 — quan hệ ngược từ AccountPermission
-  permissionGrants        AccountPermission[] @relation("AccountPermissionAccount")
-  updatedPermissionGrants AccountPermission[] @relation("AccountPermissionUpdatedBy")
-
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ShuttleRecord (Danh sách đưa đón)
   createdShuttleRecords ShuttleRecord[] @relation("ShuttleRecordCreatedBy")
   updatedShuttleRecords ShuttleRecord[] @relation("ShuttleRecordUpdatedBy")
@@ -293,6 +289,10 @@ model Account {
   salesEntryPickupFor SalesEntryRecord[] @relation("SalesEntryPickupUser")
   createdSalesEntries SalesEntryRecord[] @relation("SalesEntryCreatedBy")
   updatedSalesEntries SalesEntryRecord[] @relation("SalesEntryUpdatedBy")
+
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24): quan hệ ngược từ UserModulePermission (Phân quyền)
+  modulePermissions        UserModulePermission[] @relation("UserModulePermissionAccount")
+  updatedModulePermissions UserModulePermission[] @relation("UserModulePermissionUpdatedBy")
 
   @@map("accounts")
 }
@@ -819,37 +819,6 @@ enum LeaveDecision {
 
 // ── Phase 9 — Phân quyền chi tiết (khung, chưa seed danh sách quyền) ────
 
-/// Mục 2.4, tài liệu 11 — Danh mục quyền có thể cấu hình. RỖNG theo đúng
-/// cảnh báo của docs/14-roadmap.md (Phase 9) — chờ xác nhận danh sách quyền
-/// cụ thể từ chủ doanh nghiệp trước khi seed.
-model Permission {
-  id          String  @id @default(uuid()) @db.Uuid
-  code        String  @unique @db.VarChar(50)
-  name        String  @db.VarChar(150)
-  description String? @db.VarChar(255)
-
-  accountGrants AccountPermission[]
-
-  @@map("permissions")
-}
-
-/// Mục 2.5, tài liệu 11 — Quyền cụ thể đã cấu hình cho 1 tài khoản
-/// (Quản lý/Leader). `is_granted` mặc định false — chỉ bật khi Admin tick.
-model AccountPermission {
-  id           String   @id @default(uuid()) @db.Uuid
-  accountId    String   @map("account_id") @db.Uuid
-  permissionId String   @map("permission_id") @db.Uuid
-  isGranted    Boolean  @default(false) @map("is_granted")
-  updatedById  String   @map("updated_by") @db.Uuid
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  account    Account    @relation("AccountPermissionAccount", fields: [accountId], references: [id])
-  permission Permission @relation(fields: [permissionId], references: [id])
-  updatedBy  Account    @relation("AccountPermissionUpdatedBy", fields: [updatedById], references: [id])
-
-  @@unique([accountId, permissionId])
-  @@map("account_permissions")
-}
 
 // ── Dự án phụ — nâng cấp toàn diện: Danh sách đưa đón ────────────────────
 
@@ -1228,4 +1197,46 @@ model SalesEntryRecord {
   @@index([saleUserId])
   @@index([pickupUserId])
   @@map("sales_entry_records")
+}
+
+/// Dự án phụ — nâng cấp toàn diện (2026-07-24, ngoài phạm vi Design Freeze
+/// docs/09-13, yêu cầu trực tiếp người dùng): "Phân quyền" phiên bản đơn
+/// giản — phân quyền THEO MODULE (không theo từng hành động nhỏ như
+/// thêm/sửa/xóa riêng biệt). Đặt tên `UserModulePermission` (không phải
+/// `UserPermission` như bản đặc tả gốc gợi ý) để phân biệt rõ với hệ
+/// thống 5-quyền CŨ (`Permission`/`AccountPermission`, "Cấu hình quyền" ở
+/// trang Quản lý tài khoản — ADD_EMPLOYEE/DEACTIVATE_EMPLOYEE/
+/// RESET_PASSWORD/DELETE_LEAD/EDIT_SYSTEM_CONFIG) — hệ thống cũ đó CHƯA
+/// BAO GIỜ được backend thực sự dùng để chặn hành động nào (chỉ lưu/hiển
+/// thị), nên đã XÓA HẲN theo yêu cầu trực tiếp người dùng ("gộp luôn") sau
+/// khi xác nhận không có nơi nào phụ thuộc vào nó — bảng này thay thế
+/// hoàn toàn. Không có dòng nào cho 1 (account, module) = coi như CHƯA
+/// CẤU HÌNH, tự suy ra theo vai trò mặc định của module đó (xem
+/// module-permission.service.ts#getEffective) — đảm bảo không ai bị mất
+/// quyền đang có ngay sau khi triển khai tính năng này.
+model UserModulePermission {
+  id          String                @id @default(uuid()) @db.Uuid
+  accountId   String                @map("account_id") @db.Uuid
+  /// Mã module — khớp đúng `code` trong module-registry.ts (backend) và
+  /// module-registry.ts (frontend), vd "candidates", "shuttle"... KHÔNG
+  /// dùng enum Prisma cho trường này vì danh sách module còn mở rộng thêm
+  /// sau này (module mới không cần migration DB).
+  module      String                @db.VarChar(50)
+  permission  ModulePermissionLevel
+  updatedById String                @map("updated_by") @db.Uuid
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  account   Account @relation("UserModulePermissionAccount", fields: [accountId], references: [id])
+  updatedBy Account @relation("UserModulePermissionUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([accountId, module])
+  @@map("user_module_permissions")
+}
+
+enum ModulePermissionLevel {
+  none
+  view
+  edit
+
+  @@map("module_permission_level")
 }

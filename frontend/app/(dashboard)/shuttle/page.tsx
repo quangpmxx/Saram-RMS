@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { PaginatedResult, SaleAccountItem, ShuttleOptions, ShuttleRecord } from "@/lib/types";
 import { ShuttleClient } from "./shuttle-client";
 
@@ -15,6 +16,7 @@ export default async function ShuttlePage() {
   if (!user) {
     redirect("/login");
   }
+  const permissionLevel = await requirePageAccess("shuttle");
 
   const [listResult, options, saleAccounts] = await Promise.all([
     serverApi<PaginatedResult<ShuttleRecord>>("/shuttle?page=1&page_size=20"),
@@ -22,5 +24,12 @@ export default async function ShuttlePage() {
     serverApi<SaleAccountItem[]>("/shuttle/sale-accounts"),
   ]);
 
-  return <ShuttleClient initialResult={listResult} initialOptions={options} initialSaleAccounts={saleAccounts} />;
+  return (
+    <ShuttleClient
+      permissionLevel={permissionLevel}
+      initialResult={listResult}
+      initialOptions={options}
+      initialSaleAccounts={saleAccounts}
+    />
+  );
 }

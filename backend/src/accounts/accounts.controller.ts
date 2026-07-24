@@ -15,14 +15,20 @@ import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
-import { UpdateAccountPermissionDto } from './dto/update-account-permission.dto';
-import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
-/** Mục 2, docs/13-api-design.md — toàn bộ endpoint /account chỉ dành cho Admin. */
+/**
+ * Mục 2, docs/13-api-design.md — toàn bộ endpoint /account chỉ dành cho Admin.
+ *
+ * Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+ * giản): BỎ `@Roles('admin')` cấp controller cũ — thay bằng
+ * ModulePermissionGuard tra theo module "accounts" (defaultRoles giữ
+ * nguyên y hệt ['admin']), cho phép Admin cấp/thu quyền riêng từng tài
+ * khoản qua trang "Phân quyền" (vd cấp Quyền "Chỉnh sửa" module này cho 1
+ * Quản lý cụ thể nếu muốn).
+ */
 @Controller('account')
-@Roles('admin')
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
 
@@ -82,14 +88,5 @@ export class AccountsController {
   ) {
     await this.accountsService.resetPassword(id, user.id);
     return { message: 'Đã đặt lại mật khẩu về mặc định' };
-  }
-
-  @Put(':id/permission')
-  updatePermissions(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateAccountPermissionDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.accountsService.updatePermissions(id, dto, user.id);
   }
 }

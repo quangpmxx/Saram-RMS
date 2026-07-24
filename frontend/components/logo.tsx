@@ -17,12 +17,15 @@ export function Logo({
   size = "md",
   variant = "dark",
   showWordmark = true,
+  slogan,
   href,
   className,
 }: {
   size?: "sm" | "md" | "lg";
   variant?: "dark" | "light";
   showWordmark?: boolean;
+  /** Dòng chữ nhỏ hiện dưới tên "Saram Vina" — yêu cầu trực tiếp người dùng (2026-07-24). Chỉ hiện khi showWordmark=true. */
+  slogan?: string;
   href?: string;
   className?: string;
 }) {
@@ -47,15 +50,27 @@ export function Logo({
         <Image src="/saram-logo.jpg" alt="Saram Group" fill sizes={`${px}px`} className="object-contain p-0.5" />
       </div>
       {showWordmark && (
-        <span
-          className={cn(
-            "font-bold tracking-tight",
-            size === "md" ? "text-base" : "text-sm",
-            variant === "light" ? "text-white" : "text-brand-900",
+        <div className="flex flex-col leading-tight">
+          <span
+            className={cn(
+              "font-bold tracking-tight",
+              size === "md" ? "text-base" : "text-sm",
+              variant === "light" ? "text-white" : "text-brand-900",
+            )}
+          >
+            Saram Vina
+          </span>
+          {slogan && (
+            <span
+              className={cn(
+                "text-[10px] font-medium tracking-wide whitespace-nowrap",
+                variant === "light" ? "text-white/60" : "text-brand-900/50",
+              )}
+            >
+              {slogan}
+            </span>
           )}
-        >
-          Saram Vina
-        </span>
+        </div>
       )}
     </div>
   );

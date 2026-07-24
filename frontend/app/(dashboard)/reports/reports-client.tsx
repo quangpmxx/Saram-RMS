@@ -22,6 +22,7 @@ import type {
   DailyReportRow,
   DailyReportSummary,
   DailyReportTotals,
+  ModulePermissionLevel,
   Team,
   TeamMember,
   UpsertDailyReportPayload,
@@ -34,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
@@ -219,6 +221,7 @@ function DailyReportDetailModal({ row, onClose }: { row: DailyReportRow; onClose
 }
 
 export function ReportsClient({
+  permissionLevel,
   currentUserRole,
   canFilterByTeam,
   canFilterBySale,
@@ -230,6 +233,7 @@ export function ReportsClient({
   initialSummary,
   initialRows,
 }: {
+  permissionLevel: ModulePermissionLevel;
   currentUserRole: AccountRole;
   canFilterByTeam: boolean;
   canFilterBySale: boolean;
@@ -365,9 +369,11 @@ export function ReportsClient({
   useRealtimeReconnect(() => void silentRefresh());
 
   const showByTeam = currentUserRole !== "sale" && summary.by_team.length > 0;
+  const isReadOnly = permissionLevel === "view";
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+      {isReadOnly && <ViewOnlyBadge />}
       <div className="flex gap-1.5">
         <button
           type="button"
@@ -392,13 +398,15 @@ export function ReportsClient({
       </div>
 
       {activeTab === "penalty" && (
-        <CheckPenaltyPanel
-          currentUserRole={currentUserRole}
-          canFilterByTeam={canFilterByTeam}
-          canFilterBySale={canFilterBySale}
-          teams={teams}
-          saleMembers={saleMembers}
-        />
+        <div className={cn(isReadOnly && "pointer-events-none opacity-60")}>
+          <CheckPenaltyPanel
+            currentUserRole={currentUserRole}
+            canFilterByTeam={canFilterByTeam}
+            canFilterBySale={canFilterBySale}
+            teams={teams}
+            saleMembers={saleMembers}
+          />
+        </div>
       )}
 
       <div className={activeTab === "daily" ? "space-y-5" : "hidden"}>
@@ -455,7 +463,7 @@ export function ReportsClient({
           )}
           <div className="ml-auto flex items-center gap-2">
             {canSubmitReport && (
-              <Button type="button" onClick={() => void openEntryModal()}>
+              <Button type="button" disabled={isReadOnly} onClick={() => void openEntryModal()}>
                 {myTodayRow?.report_id ? <ClipboardEdit className="h-4 w-4" strokeWidth={2} /> : <ClipboardPlus className="h-4 w-4" strokeWidth={2} />}
                 {myTodayRow?.report_id ? "Sửa báo cáo hôm nay" : "Nhập báo cáo hằng ngày"}
               </Button>
@@ -471,7 +479,7 @@ export function ReportsClient({
       {canSubmitReport && !myTodayRow?.report_id && (
         <Card className="flex flex-wrap items-center justify-between gap-2 border-accent-200 bg-accent-50/60 p-3">
           <p className="text-sm text-accent-800">Hôm nay bạn chưa nộp báo cáo.</p>
-          <Button type="button" size="sm" onClick={() => void openEntryModal()}>
+          <Button type="button" size="sm" disabled={isReadOnly} onClick={() => void openEntryModal()}>
             <ClipboardPlus className="h-4 w-4" strokeWidth={2} />
             Nhập ngay
           </Button>
@@ -580,7 +588,13 @@ export function ReportsClient({
                         </Button>
                       )}
                       {row.report_id && canSubmitReport && row.date === myTodayRow?.date && (
-                        <Button type="button" variant="ghost" size="xs" onClick={() => setEntryTarget(row)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          disabled={isReadOnly}
+                          onClick={() => setEntryTarget(row)}
+                        >
                           Sửa
                         </Button>
                       )}

@@ -18,7 +18,6 @@ import { SystemConfigModule } from './system-config/system-config.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
-import { PermissionModule } from './permission/permission.module';
 import { ColumnWidthModule } from './column-width/column-width.module';
 import { ShuttleModule } from './shuttle/shuttle.module';
 import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
@@ -31,6 +30,8 @@ import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { SalesEntryModule } from './sales-entry/sales-entry.module';
+import { ModulePermissionModule } from './module-permission/module-permission.module';
+import { ModulePermissionGuard } from './module-permission/module-permission.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -54,7 +55,6 @@ import { RolesGuard } from './common/guards/roles.guard';
     DistributionModule,
     DashboardModule,
     NotificationModule,
-    PermissionModule,
     ColumnWidthModule,
     ShuttleModule,
     SaleReminderModule,
@@ -67,6 +67,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     RealtimeModule,
     BirthdayModule,
     SalesEntryModule,
+    ModulePermissionModule,
   ],
   controllers: [AppController],
   providers: [
@@ -76,6 +77,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     // gắn guard. Thứ tự chạy theo thứ tự khai báo: JwtAuthGuard trước.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Dự án phụ — nâng cấp toàn diện (2026-07-24): "Phân quyền" phiên bản
+    // đơn giản — chạy SAU RolesGuard, chỉ THÊM giới hạn (NONE/VIEW), không
+    // thay thế @Roles() hiện có (xem module-permission.guard.ts).
+    { provide: APP_GUARD, useClass: ModulePermissionGuard },
   ],
 })
 export class AppModule {}

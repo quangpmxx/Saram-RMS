@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { DailyReportRow, DailyReportSummary, PaginatedResult, Team, TeamMember } from "@/lib/types";
 import { ReportsClient } from "./reports-client";
 
@@ -20,9 +21,10 @@ import { ReportsClient } from "./reports-client";
  */
 export default async function ReportsPage() {
   const user = await getCurrentUser();
-  if (!user || !["admin", "manager", "leader", "sale"].includes(user.role)) {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
   }
+  const permissionLevel = await requirePageAccess("reports");
 
   const canFilterByTeam = ["admin", "manager"].includes(user.role);
   const canFilterBySale = ["admin", "manager", "leader"].includes(user.role);
@@ -50,6 +52,7 @@ export default async function ReportsPage() {
 
   return (
     <ReportsClient
+      permissionLevel={permissionLevel}
       currentUserRole={user.role}
       canFilterByTeam={canFilterByTeam}
       canFilterBySale={canFilterBySale}

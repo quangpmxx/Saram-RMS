@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { AttendanceGrid, LeaveRequest, PaginatedResult, Team, TeamMember } from "@/lib/types";
 import { AttendanceClient } from "./attendance-client";
 
@@ -14,6 +15,7 @@ import { AttendanceClient } from "./attendance-client";
 export default async function AttendancePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const permissionLevel = await requirePageAccess("attendance");
 
   const canFilterByTeam = ["admin", "manager"].includes(user.role);
   const canFilterByAccount = ["admin", "manager", "leader"].includes(user.role);
@@ -49,6 +51,7 @@ export default async function AttendancePage() {
 
   return (
     <AttendanceClient
+      permissionLevel={permissionLevel}
       currentUser={user}
       currentUserId={user.id}
       currentUserRole={user.role}

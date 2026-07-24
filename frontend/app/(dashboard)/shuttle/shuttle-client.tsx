@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { SHUTTLE_OPTION_COLORS, shuttleColorStyle } from "@/lib/shuttle-colors";
 import type {
   AppRealtimeEvent,
+  ModulePermissionLevel,
   PaginatedResult,
   SaleAccountItem,
   ShuttleOptionItem,
@@ -23,6 +24,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 
 /**
@@ -866,15 +868,24 @@ function ShuttleRowFormCells({
 }
 
 export function ShuttleClient({
+  permissionLevel,
   initialResult,
   initialOptions,
   initialSaleAccounts,
 }: {
+  permissionLevel: ModulePermissionLevel;
   initialResult: PaginatedResult<ShuttleRecord>;
   initialOptions: ShuttleOptions;
   initialSaleAccounts: SaleAccountItem[];
 }) {
   useSetPageTitle("Danh sách đưa đón", "Quản lý lịch đưa đón lao động.");
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ khối bảng bằng pointer-events
+  // (chặn click/gõ chuột vào MỌI ô nhập/ComboCell/nút trong bảng mà không
+  // cần sửa từng field riêng lẻ — ShuttleRowFormCells dùng chung cho cả
+  // dòng nháp lẫn dòng dữ liệu, rất nhiều field). Backend (ModulePermissionGuard)
+  // vẫn là lớp chặn thật sự — CSS này chỉ hỗ trợ UX, không phải bảo mật.
+  const isReadOnly = permissionLevel === "view";
   const toast = useToast();
   const [records, setRecords] = useState(initialResult.items);
   const [total, setTotal] = useState(initialResult.total);
@@ -1227,6 +1238,11 @@ export function ShuttleClient({
 
   return (
     <div className="-mt-3 mx-auto max-w-[1700px]">
+      {isReadOnly && (
+        <div className="mb-2">
+          <ViewOnlyBadge />
+        </div>
+      )}
       <div ref={filterBarRef} className="sticky z-20 bg-slate-50" style={{ top: headerHeight }}>
       <Card className="mb-2 flex flex-col gap-1.5 p-1.5">
       <div className="flex flex-wrap items-end gap-1.5">
@@ -1404,7 +1420,7 @@ export function ShuttleClient({
                 <th className="px-3 py-2.5">HĐ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-brand-400">
+            <tbody className={cn("divide-y divide-brand-400", isReadOnly && "pointer-events-none opacity-60")}>
               {/* Dòng nháp thêm mới — luôn hiện đầu bảng, nhập trực tiếp không cần popup. Yêu cầu trực tiếp người dùng (2026-07-18): nền màu xám để phân biệt rõ với các dòng dữ liệu đã có. */}
               <tr className="bg-slate-200">
                 <ShuttleRowFormCells

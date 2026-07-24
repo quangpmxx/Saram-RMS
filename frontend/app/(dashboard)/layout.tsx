@@ -2,7 +2,9 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import { type AccountRole, type BirthdayToday } from "@/lib/types";
+import { type BirthdayToday } from "@/lib/types";
+import { MODULE_REGISTRY } from "@/lib/module-registry";
+import { getMyModulePermissions } from "@/lib/module-permission";
 import { Logo } from "@/components/logo";
 import { CollapsibleSidebar } from "@/components/collapsible-sidebar";
 import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
@@ -33,69 +35,33 @@ async function getBirthdayToday(): Promise<BirthdayToday | null> {
   }
 }
 
-const ALL_NAV_ITEMS: Array<NavItem & { roles: AccountRole[] }> = [
-  { href: "/", label: "Trang chủ Dashboard", icon: "home", roles: ["admin", "manager", "leader", "mkt", "sale"] },
-  { href: "/candidates", label: "Data lao động", icon: "candidates", roles: ["admin", "manager", "mkt", "leader", "sale"] },
-  {
-    href: "/shuttle",
-    label: "Danh sách đưa đón",
-    icon: "shuttle",
-    roles: ["admin", "manager", "leader", "mkt", "sale"],
-  },
-  { href: "/reports", label: "Báo cáo", icon: "reports", roles: ["admin", "manager", "leader", "sale"] },
-  // Dự án phụ — nâng cấp toàn diện: module "Chấm công thủ công" (2026-07-14,
-  // yêu cầu trực tiếp người dùng) — Admin/Quản lý/Leader xem+chỉnh theo
-  // phạm vi, Nhân viên (MKT/Sale) chỉ xem chấm công của chính mình (RBAC
-  // chi tiết nằm ở attendance.service.ts, khớp Mục 8 bản đặc tả).
-  {
-    href: "/attendance",
-    label: "Chấm công",
-    icon: "attendance",
-    roles: ["admin", "manager", "leader", "mkt", "sale"],
-  },
-  // Dự án phụ — nâng cấp toàn diện: module Kế toán — CHỈ khung sườn (icon +
-  // trang "sắp ra mắt"), chưa có nghiệp vụ gì. Yêu cầu trực tiếp người dùng
-  // (2026-07-14): "hiện tại thì để nó ở tài khoản admin thôi đã" — chỉ Admin
-  // thấy được, mở rộng thêm vai trò khác sau khi có nghiệp vụ thật.
-  {
-    href: "/accounting",
-    label: "Kế toán",
-    icon: "accounting",
-    roles: ["admin"],
-  },
-  // Dự án phụ — nâng cấp toàn diện: module Nhập doanh số + Quản lý đơn hàng —
-  // CHỈ khung sườn, chưa có nghiệp vụ gì (yêu cầu trực tiếp người dùng,
-  // 2026-07-16, "để trống chờ phát triển thêm giống như kế toán ấy") — đặt
-  // ngay dưới Kế toán, cùng khớp roles ["admin"] như Kế toán.
-  {
-    href: "/sales-entry",
-    label: "Nhập doanh số",
-    icon: "salesEntry",
-    roles: ["admin"],
-  },
-  {
-    href: "/order-management",
-    label: "Quản lý đơn hàng",
-    icon: "orderManagement",
-    roles: ["admin"],
-  },
-  { href: "/calendar", label: "Lịch hẹn", icon: "calendar", roles: ["admin", "manager", "leader", "sale"] },
-  { href: "/audit-log", label: "Nhật ký", icon: "auditLog", roles: ["admin", "manager"] },
-  { href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", roles: ["admin"] },
-  { href: "/settings", label: "Cấu hình vận hành", icon: "settings", roles: ["admin"] },
-  // "Đơn xin nghỉ phép" — yêu cầu trực tiếp người dùng (2026-07-16): không
-  // còn là mục riêng trên menu, đã chuyển thành 1 tab trong "Chấm công"
-  // (xem attendance/attendance-client.tsx, tab "requests").
-];
-
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [user, birthdayToday] = await Promise.all([getCurrentUser(), getBirthdayToday()]);
+  const [user, birthdayToday, permissions] = await Promise.all([
+    getCurrentUser(),
+    getBirthdayToday(),
+    getMyModulePermissions(),
+  ]);
 
   if (!user) {
     redirect("/login");
   }
 
-  const navItems = ALL_NAV_ITEMS.filter((item) => item.roles.includes(user.role));
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
+  // dùng): "Phân quyền" phiên bản đơn giản — menu giờ lọc theo QUYỀN HIỆU
+  // LỰC thật (permissions[code] !== "none"), không còn lọc thẳng theo mảng
+  // vai trò cố định nữa. Khi Admin CHƯA cấu hình gì cho 1 tài khoản, BE tự
+  // trả về đúng quyền suy ra từ vai trò (xem module-permission.service.ts),
+  // nên hành vi menu KHÔNG đổi cho tới khi Admin chủ động phân quyền riêng.
+  const navItems: NavItem[] = MODULE_REGISTRY.filter((item) => (permissions[item.code] ?? "none") !== "none").map(
+    (item) => ({ href: item.href, label: item.label, icon: item.icon }),
+  );
+  // "Phân quyền" — CHỈ Admin, không đi qua hệ thống module-permission (tự
+  // quản lý chính nó sẽ tạo vòng lặp vô nghĩa: Admin luôn 'edit' mọi module
+  // nên thực chất luôn hiện, nhưng để rõ ràng/an toàn vẫn gate cứng theo
+  // role admin ở đây, khớp cách trang này tự chặn ở page.tsx).
+  if (user.role === "admin") {
+    navItems.push({ href: "/permissions", label: "Phân quyền", icon: "permissions" });
+  }
 
   return (
     <PageTitleProvider>

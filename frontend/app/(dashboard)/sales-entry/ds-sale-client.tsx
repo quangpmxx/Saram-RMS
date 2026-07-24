@@ -9,12 +9,14 @@ import { ApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Checkbox } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import type {
   AppRealtimeEvent,
   DsSaleAccountOption,
   DsSaleCompanyOption,
   DsSaleRow,
   DsSaleRowInput,
+  ModulePermissionLevel,
   PaginatedResult,
 } from "@/lib/types";
 import { buildDsSaleExportUrl, createDsSaleRow, deleteDsSaleRows, listDsSaleRows, updateDsSaleRow } from "@/lib/ds-sale-api";
@@ -164,6 +166,7 @@ function toInput(row: SheetRow): DsSaleRowInput {
 }
 
 export function DsSaleClient({
+  permissionLevel,
   currentUserId,
   initialRows,
   initialSaleAccounts,
@@ -171,6 +174,7 @@ export function DsSaleClient({
   initialCompanies,
   extraTopOffset = 0,
 }: {
+  permissionLevel: ModulePermissionLevel;
   currentUserId: string;
   initialRows: PaginatedResult<DsSaleRow>;
   initialSaleAccounts: DsSaleAccountOption[];
@@ -180,6 +184,10 @@ export function DsSaleClient({
   extraTopOffset?: number;
 }) {
   const toast = useToast();
+  // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
+  // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ bảng bằng pointer-events (bảng
+  // DS Sale nhập trực tiếp từng ô, quá nhiều field để disable riêng lẻ).
+  const isReadOnly = permissionLevel === "view";
 
   // Nguồn dropdown tải sẵn từ SERVER (page.tsx, Mục 4/5/6) — không đổi trong
   // phiên xem trang này nên chỉ cần chuyển dạng 1 lần, không cần useState riêng.
@@ -568,6 +576,7 @@ export function DsSaleClient({
 
   return (
     <div className="space-y-2">
+      {isReadOnly && <ViewOnlyBadge />}
       {/* Mục 10 — bộ lọc gọn, không chiếm quá nhiều chiều cao. */}
       <div ref={filterBarRef} className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-2">
         <Field label="Từ khóa" uiSize="xs" className="w-48">
@@ -633,11 +642,17 @@ export function DsSaleClient({
           <Button type="button" size="xs" variant="outline" onClick={clearFilters}>
             Xóa lọc
           </Button>
-          <Button type="button" size="xs" variant="secondary" onClick={addRow}>
+          <Button type="button" size="xs" variant="secondary" disabled={isReadOnly} onClick={addRow}>
             <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
             Thêm dòng
           </Button>
-          <Button type="button" size="xs" variant="outline" onClick={() => setAddCountModalOpen(true)}>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={isReadOnly}
+            onClick={() => setAddCountModalOpen(true)}
+          >
             <Rows3 className="h-3.5 w-3.5" strokeWidth={2} />
             Thêm nhiều dòng
           </Button>
@@ -645,7 +660,7 @@ export function DsSaleClient({
             type="button"
             size="xs"
             variant="danger"
-            disabled={selected.size === 0}
+            disabled={isReadOnly || selected.size === 0}
             onClick={() => setDeleteConfirmOpen(true)}
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
@@ -752,7 +767,7 @@ export function DsSaleClient({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={cn(isReadOnly && "pointer-events-none opacity-60")}>
             {sheetRows.map((row, rowIndex) => {
               const isBlankDraft = row.id === null && isRowBlank(row);
               const zebra = rowIndex % 2 === 1 ? "bg-slate-50" : "bg-white";

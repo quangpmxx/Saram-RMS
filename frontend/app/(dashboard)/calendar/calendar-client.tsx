@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, CalendarDays, Search } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { CalendarEvent, Candidate, PaginatedResult, TeamMember } from "@/lib/types";
+import type { CalendarEvent, Candidate, ModulePermissionLevel, PaginatedResult, TeamMember } from "@/lib/types";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal } from "@/components/ui/modal";
+import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
@@ -43,12 +44,14 @@ function groupByDate(events: CalendarEvent[]): Array<{ dateKey: string; events: 
  * tài liệu cho phép "Danh sách agenda" là 1 trong 2 chế độ xem hợp lệ.
  */
 export function CalendarClient({
+  permissionLevel,
   initialEvents,
   initialDateFrom,
   initialDateTo,
   canFilterBySale,
   saleMembers,
 }: {
+  permissionLevel: ModulePermissionLevel;
   initialEvents: CalendarEvent[];
   initialDateFrom: string;
   initialDateTo: string;
@@ -86,10 +89,17 @@ export function CalendarClient({
     setEvents(result);
   }
 
+  const isReadOnly = permissionLevel === "view";
+
   return (
     <div className="mx-auto max-w-4xl">
+      {isReadOnly && (
+        <div className="mb-3">
+          <ViewOnlyBadge />
+        </div>
+      )}
       <div className="mb-4 flex justify-end">
-        <Button type="button" onClick={() => setIsScheduleModalOpen(true)}>
+        <Button type="button" disabled={isReadOnly} onClick={() => setIsScheduleModalOpen(true)}>
           <CalendarPlus className="h-4 w-4" strokeWidth={2} />
           Đặt lịch hẹn PV mới
         </Button>

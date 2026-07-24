@@ -2,6 +2,7 @@ import {
   IsDateString,
   IsEmail,
   IsEnum,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -20,12 +21,24 @@ import { AccountStatus } from '../../../generated/prisma/enums';
  * field mới để Admin xóa/reset về trống — @IsOptional() bỏ qua validate khi
  * giá trị là null hoặc undefined (class-validator), khớp cách team_id đã
  * làm.
+ *
+ * Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
+ * dùng): "Cho phép admin chỉnh sửa tên đăng nhập của tất cả mọi người" —
+ * thêm `username` (tùy chọn, không phải mọi lần sửa đều đổi tên đăng
+ * nhập). Trùng tên đăng nhập với tài khoản khác → 409 (xem
+ * AccountsService#mapKnownError, bắt lỗi unique P2002 có sẵn).
  */
 export class UpdateAccountDto {
   @IsOptional()
   @IsString()
   @MaxLength(150)
   full_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'Tên đăng nhập không được để trống' })
+  @MaxLength(50)
+  username?: string;
 
   @IsOptional()
   @IsUUID('4', { message: 'team_id không hợp lệ' })

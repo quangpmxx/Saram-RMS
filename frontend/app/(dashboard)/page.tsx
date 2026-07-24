@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { requirePageAccess } from "@/lib/module-permission";
 import type { DashboardSummary, LeadSource, PaginatedResult, SalePerformance, Team, TeamSummary } from "@/lib/types";
 import { DashboardClient } from "./dashboard-client";
 
@@ -14,6 +15,9 @@ import { DashboardClient } from "./dashboard-client";
 export default async function HomePage() {
   const user = await getCurrentUser();
   if (!user) return null;
+  // Dashboard không có thao tác thêm/sửa/xóa nào — chỉ cần chặn truy cập
+  // khi "none", không cần phân biệt view/edit ở giao diện.
+  await requirePageAccess("dashboard");
 
   const canViewPerformance = ["admin", "manager", "leader"].includes(user.role);
   const canViewByTeam = ["admin", "manager"].includes(user.role);
