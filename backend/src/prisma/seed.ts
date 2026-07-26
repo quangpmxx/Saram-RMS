@@ -797,50 +797,17 @@ async function seedPhase4Sample(prisma: PrismaClient): Promise<void> {
 }
 
 /**
- * Dữ liệu mẫu Phase 5 để trải nghiệm ngay tab "Cột chăm sóc" + màn hình Cấu
- * hình vận hành:
- *  - Tham số CARE_POOL_THRESHOLD_MINUTES (mặc định 30 phút) — seed sẵn để
- *    Admin có ít nhất 1 dòng sửa được trên màn hình Cấu hình (Mục 9.2,
- *    docs/12-ui-design.md — màn hình này chỉ sửa tham số có sẵn, không có
- *    nút "Thêm tham số").
+ * Dữ liệu mẫu Phase 5 để trải nghiệm ngay tab "Cột chăm sóc":
  *  - 1 ứng viên "Hoàng Văn Đạt" (0901000006) thuộc Sale Demo B, đã gọi 1 lần
- *    rồi bị bỏ quên quá ngưỡng — set thẳng `enteredCarePoolAt` (thay vì chờ
- *    CarePoolScannerService quét theo chu kỳ 2 phút) để thấy ngay trong tab
- *    "Cột chăm sóc" mà không cần đợi worker chạy.
- * Idempotent: bỏ qua nếu ứng viên/tham số đã tồn tại.
+ *    rồi bị bỏ quên — set thẳng `enteredCarePoolAt` để thấy ngay trong tab
+ *    "Cột chăm sóc" mà không cần thao tác gì thêm.
+ * Yêu cầu trực tiếp người dùng (2026-07-24): đã gỡ bỏ hẳn worker tự động
+ * quét-vào-cột-chăm-sóc (CarePoolScannerService, tham số cấu hình
+ * CARE_POOL_THRESHOLD_MINUTES) — không còn sử dụng nữa, nên `entered
+ * CarePoolAt` giờ là cách DUY NHẤT 1 lead vào cột chăm sóc.
+ * Idempotent: bỏ qua nếu ứng viên đã tồn tại.
  */
 async function seedPhase5Sample(prisma: PrismaClient): Promise<void> {
-  const admin = await prisma.account.findUnique({
-    where: { username: 'admin' },
-  });
-  if (admin) {
-    const existingConfig = await prisma.systemConfig.findUnique({
-      where: { configKey: 'CARE_POOL_THRESHOLD_MINUTES' },
-    });
-    // Nếu dòng cấu hình đang trỏ tới 1 tài khoản admin khác (vd: tài khoản
-    // tạm của bộ test e2e chạy chung DB dev — xem README mục cảnh báo
-    // test:e2e) thì gán lại về đúng tài khoản admin seed, KHÔNG đổi giá trị
-    // đang có (tránh ghi đè thay đổi thật của người dùng qua màn hình Cấu hình).
-    if (existingConfig && existingConfig.updatedById !== admin.id) {
-      await prisma.systemConfig.update({
-        where: { configKey: 'CARE_POOL_THRESHOLD_MINUTES' },
-        data: { updatedById: admin.id },
-      });
-    }
-    if (!existingConfig) {
-      await prisma.systemConfig.create({
-        data: {
-          configKey: 'CARE_POOL_THRESHOLD_MINUTES',
-          configValue: '30',
-          description:
-            'Ngưỡng thời gian (phút) trước khi lead bị bỏ quên tự động vào cột chăm sóc',
-          updatedById: admin.id,
-        },
-      });
-      console.log('Đã seed tham số cấu hình CARE_POOL_THRESHOLD_MINUTES = 30.');
-    }
-  }
-
   const existingLead = await prisma.lead.findFirst({
     where: { phoneNumber: '0901000006' },
   });
@@ -897,7 +864,7 @@ async function seedPhase5Sample(prisma: PrismaClient): Promise<void> {
   });
 
   console.log(
-    'Đã tạo ứng viên mẫu "Hoàng Văn Đạt" (Sale Demo B) đang ở Cột chăm sóc do bỏ quên quá ngưỡng.',
+    'Đã tạo ứng viên mẫu "Hoàng Văn Đạt" (Sale Demo B) đang ở Cột chăm sóc.',
   );
 }
 
@@ -963,45 +930,19 @@ async function seedPhase6Sample(prisma: PrismaClient): Promise<void> {
 }
 
 /**
- * Dữ liệu mẫu Phase 8 để trải nghiệm ngay Thông báo Zalo:
- *  - Tham số NOTIFICATION_LEAD_MINUTES (mặc định 15 phút) — seed sẵn để
- *    Admin có dòng sửa được trên màn hình Cấu hình (tái dùng đúng màn hình
- *    đã có từ Phase 5, không có màn hình riêng cho Phase 8).
+ * Dữ liệu mẫu Phase 8 để trải nghiệm ngay thông báo "lịch gọi lại đến giờ"
+ * TRONG ỨNG DỤNG (chuông + toast, xem NotificationScannerService#
+ * tickInAppCallback):
  *  - 1 ứng viên "Đặng Văn Phúc" (0901000007) thuộc Sale Demo A, có lịch gọi
- *    lại đặt CHỈ 5 PHÚT sau thời điểm seed (dưới ngưỡng nhắc 15 phút) — để
- *    NotificationScannerService tạo thông báo "pending" rồi gửi ngay ở lượt
- *    quét đầu tiên (chu kỳ 2 phút) sau khi backend khởi động, không cần đợi
- *    nhiều ngày như lịch hẹn PV mẫu của Phase 4.
- * Idempotent: bỏ qua nếu ứng viên/tham số đã tồn tại.
+ *    lại đặt CHỈ 5 PHÚT sau thời điểm seed — sẽ có thông báo trong ứng dụng
+ *    ngay khi lịch tới giờ, không cần đợi nhiều ngày như lịch hẹn PV mẫu
+ *    của Phase 4.
+ * Yêu cầu trực tiếp người dùng (2026-07-24): đã gỡ bỏ hẳn worker nhắc lịch
+ * qua Zalo TRƯỚC giờ hẹn N phút (tham số cấu hình NOTIFICATION_LEAD_MINUTES)
+ * — không còn sử dụng nữa, chỉ còn tính năng thông báo trong ứng dụng ở trên.
+ * Idempotent: bỏ qua nếu ứng viên đã tồn tại.
  */
 async function seedPhase8Sample(prisma: PrismaClient): Promise<void> {
-  const admin = await prisma.account.findUnique({
-    where: { username: 'admin' },
-  });
-  if (admin) {
-    const existingConfig = await prisma.systemConfig.findUnique({
-      where: { configKey: 'NOTIFICATION_LEAD_MINUTES' },
-    });
-    if (existingConfig && existingConfig.updatedById !== admin.id) {
-      await prisma.systemConfig.update({
-        where: { configKey: 'NOTIFICATION_LEAD_MINUTES' },
-        data: { updatedById: admin.id },
-      });
-    }
-    if (!existingConfig) {
-      await prisma.systemConfig.create({
-        data: {
-          configKey: 'NOTIFICATION_LEAD_MINUTES',
-          configValue: '15',
-          description:
-            'Số phút nhắc trước giờ hẹn (gọi lại/phỏng vấn) qua Zalo',
-          updatedById: admin.id,
-        },
-      });
-      console.log('Đã seed tham số cấu hình NOTIFICATION_LEAD_MINUTES = 15.');
-    }
-  }
-
   const existingLead = await prisma.lead.findFirst({
     where: { phoneNumber: '0901000007' },
   });
@@ -1053,7 +994,7 @@ async function seedPhase8Sample(prisma: PrismaClient): Promise<void> {
   });
 
   console.log(
-    'Đã tạo ứng viên mẫu "Đặng Văn Phúc" (Sale Demo A) với lịch gọi lại 5 phút sau khi seed — sẽ có thông báo Zalo mô phỏng ở lượt quét đầu tiên.',
+    'Đã tạo ứng viên mẫu "Đặng Văn Phúc" (Sale Demo A) với lịch gọi lại 5 phút sau khi seed — sẽ có thông báo trong ứng dụng khi lịch tới giờ.',
   );
 }
 
@@ -1088,12 +1029,31 @@ async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
     );
   };
 
+  // Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
+  // — company giờ là companyId (khóa ngoại OrderRecord), không còn là chuỗi
+  // tự do. Tự tạo 3 đơn hàng mẫu này nếu chưa có sẵn (idempotent).
+  const companyNameById = async (name: string): Promise<string> => {
+    const existing = await prisma.orderRecord.findFirst({
+      where: { name },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+    const created = await prisma.orderRecord.create({
+      data: { name },
+      select: { id: true },
+    });
+    return created.id;
+  };
+  const goertekId = await companyNameById('Goertek');
+  const samsungId = await companyNameById('Samsung');
+  const foxconnId = await companyNameById('Foxconn');
+
   const records = [
     {
       date: dateAt(0),
       fullName: 'Nguyễn Văn Toàn',
       phoneNumber: '0912345001',
-      company: 'Goertek',
+      companyId: goertekId,
       area: 'Bắc Ninh',
       type: 'Chính thức',
       sale: 'Sale Demo A',
@@ -1107,7 +1067,7 @@ async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
       date: dateAt(0),
       fullName: 'Trần Thị Hạnh',
       phoneNumber: '0912345002',
-      company: 'Samsung',
+      companyId: samsungId,
       area: 'Thái Nguyên',
       type: 'Thời vụ',
       sale: 'Sale Demo B',
@@ -1121,7 +1081,7 @@ async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
       date: dateAt(1),
       fullName: 'Lê Văn Đức',
       phoneNumber: '0912345003',
-      company: 'Foxconn',
+      companyId: foxconnId,
       area: 'Bắc Giang',
       type: 'Chính thức',
       sale: 'Sale Demo A',
@@ -1135,7 +1095,7 @@ async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
       date: dateAt(-1),
       fullName: 'Phạm Thị Ngọc',
       phoneNumber: '0912345004',
-      company: 'Goertek',
+      companyId: goertekId,
       area: 'Bắc Ninh',
       type: 'Chính thức',
       sale: 'Sale Demo B',
@@ -1150,7 +1110,7 @@ async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
       date: dateAt(-2),
       fullName: 'Hoàng Văn Nam',
       phoneNumber: '0912345005',
-      company: 'Samsung',
+      companyId: samsungId,
       area: 'Thái Nguyên',
       type: 'Thời vụ',
       sale: 'Sale Demo A',
@@ -1173,13 +1133,15 @@ async function seedShuttleSample(prisma: PrismaClient): Promise<void> {
 
 /**
  * Dự án phụ — nâng cấp toàn diện: danh sách gợi ý CÓ LƯU LẠI (bảng
- * shuttle_options) kèm màu nền cho 9 trường "chọn" của Danh sách đưa đón —
+ * shuttle_options) kèm màu nền cho các trường "chọn" của Danh sách đưa đón —
  * backfill đúng các giá trị đã seed ở seedShuttleSample() để không "biến
  * mất" khỏi trình đơn thả xuống. "status" = "Tình trạng đón" (Đã đón/Chưa
  * đón được/Hẹn lại), "interview_result" = "Kết quả PV" (Đỗ phỏng vấn/Trượt
  * phỏng vấn) — tách từ 1 cột "Trạng thái" cũ theo yêu cầu trực tiếp người
  * dùng. "interview_time" (Giờ phỏng vấn) đổi từ ô nhập tay tự do sang chọn
  * từ trình đơn thả xuống — không có màu (colorKey null), chỉ là giờ preset.
+ * "company" KHÔNG còn nằm trong bảng này nữa (2026-07-26) — xem
+ * seedShuttleSample() ở trên (OrderRecord/companyId).
  */
 async function seedShuttleOptions(prisma: PrismaClient): Promise<void> {
   const entries: Array<{
@@ -1187,9 +1149,6 @@ async function seedShuttleOptions(prisma: PrismaClient): Promise<void> {
     value: string;
     colorKey: string | null;
   }> = [
-    { field: 'company', value: 'Goertek', colorKey: 'green' },
-    { field: 'company', value: 'Samsung', colorKey: 'purple' },
-    { field: 'company', value: 'Foxconn', colorKey: 'blue' },
     { field: 'area', value: 'Bắc Ninh', colorKey: 'teal' },
     { field: 'area', value: 'Thái Nguyên', colorKey: 'indigo' },
     { field: 'area', value: 'Bắc Giang', colorKey: 'orange' },

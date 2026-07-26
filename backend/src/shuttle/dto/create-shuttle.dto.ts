@@ -1,11 +1,17 @@
+import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
 } from 'class-validator';
+
+/** Ô "company" trên bảng gửi "" khi bỏ trống (khớp quy ước "" = chưa nhập của các ô khác) — coi như null, không phải lỗi định dạng UUID. */
+const emptyToNull = ({ value }: { value: unknown }) =>
+  value === '' ? null : value;
 
 /**
  * Dự án phụ — nâng cấp toàn diện: POST /shuttle (Danh sách đưa đón) — nhập
@@ -27,10 +33,11 @@ export class CreateShuttleDto {
   @MaxLength(20)
   phone_number: string;
 
+  /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — tham chiếu OrderRecord thật, không còn chuỗi tự do. */
   @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  company?: string;
+  @Transform(emptyToNull)
+  @IsUUID()
+  company_id?: string | null;
 
   @IsOptional()
   @IsString()

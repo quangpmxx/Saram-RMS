@@ -24,6 +24,9 @@ describe('ShuttleService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
+    orderRecord: {
+      findMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
@@ -35,7 +38,7 @@ describe('ShuttleService', () => {
     date: new Date('2026-07-13'),
     fullName: 'Nguyễn Văn A',
     phoneNumber: '0901000001',
-    company: 'Goertek',
+    companyId: 'company-1',
     area: 'Bắc Ninh',
     type: 'Chính thức',
     sale: 'Sale A',
@@ -68,6 +71,9 @@ describe('ShuttleService', () => {
         upsert: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
+      },
+      orderRecord: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn(),
     };
@@ -103,14 +109,14 @@ describe('ShuttleService', () => {
       expect(result.items[0].date).toBe('2026-07-13');
     });
 
-    it('lọc theo keyword (tên hoặc SĐT), company, type, sale, driver, status, khoảng ngày', async () => {
+    it('lọc theo keyword (tên hoặc SĐT), company_id, type, sale, driver, status, khoảng ngày', async () => {
       prisma.$transaction.mockResolvedValue([0, []]);
 
       await service.list({
         page: 1,
         page_size: 20,
         keyword: '0901',
-        company: 'Goertek',
+        company_id: 'company-1',
         type: 'Chính thức',
         sale: 'Sale A',
         driver: 'Anh Hùng',
@@ -126,7 +132,7 @@ describe('ShuttleService', () => {
             { phoneNumber: { contains: '0901', mode: 'insensitive' } },
           ],
           date: { gte: new Date('2026-07-13'), lte: new Date('2026-07-14') },
-          company: 'Goertek',
+          companyId: 'company-1',
           type: 'Chính thức',
           sale: 'Sale A',
           driver: 'Anh Hùng',
@@ -233,16 +239,16 @@ describe('ShuttleService', () => {
   describe('getOptions', () => {
     it('nhóm các dòng shuttle_options theo field, kèm màu', async () => {
       prisma.shuttleOption.findMany.mockResolvedValue([
-        { id: 'opt-1', field: 'company', value: 'Goertek', colorKey: 'green' },
+        { id: 'opt-1', field: 'driver', value: 'Anh Hùng', colorKey: 'green' },
         { id: 'opt-2', field: 'status', value: 'Đã đón', colorKey: 'green' },
-        { id: 'opt-3', field: 'company', value: 'Samsung', colorKey: null },
+        { id: 'opt-3', field: 'driver', value: 'Anh Tuấn', colorKey: null },
       ]);
 
       const result = await service.getOptions();
 
-      expect(result.companies).toEqual([
-        { id: 'opt-1', value: 'Goertek', color_key: 'green' },
-        { id: 'opt-3', value: 'Samsung', color_key: null },
+      expect(result.drivers).toEqual([
+        { id: 'opt-1', value: 'Anh Hùng', color_key: 'green' },
+        { id: 'opt-3', value: 'Anh Tuấn', color_key: null },
       ]);
       expect(result.statuses).toEqual([
         { id: 'opt-2', value: 'Đã đón', color_key: 'green' },
@@ -250,10 +256,48 @@ describe('ShuttleService', () => {
       expect(result.areas).toEqual([]);
       expect(result.types).toEqual([]);
       expect(result.sales).toEqual([]);
-      expect(result.drivers).toEqual([]);
       expect(result.contractors).toEqual([]);
       expect(result.interviewResults).toEqual([]);
       expect(result.interviewTimes).toEqual([]);
+    });
+  });
+
+  describe('listCompanies', () => {
+    it('đọc từ order_records (công ty chính là đơn hàng), trả đúng hình dạng ShuttleOptionItemDto', async () => {
+      prisma.orderRecord.findMany.mockResolvedValue([
+        {
+          id: 'company-1',
+          name: 'Foxconn',
+          colorKey: 'blue-base',
+          textColorKey: null,
+        },
+        {
+          id: 'company-2',
+          name: 'Samsung',
+          colorKey: null,
+          textColorKey: null,
+        },
+      ]);
+
+      const result = await service.listCompanies();
+
+      expect(prisma.orderRecord.findMany).toHaveBeenCalledWith({
+        orderBy: { name: 'asc' },
+      });
+      expect(result).toEqual([
+        {
+          id: 'company-1',
+          value: 'Foxconn',
+          color_key: 'blue-base',
+          text_color_key: null,
+        },
+        {
+          id: 'company-2',
+          value: 'Samsung',
+          color_key: null,
+          text_color_key: null,
+        },
+      ]);
     });
   });
 
@@ -261,29 +305,29 @@ describe('ShuttleService', () => {
     it('upsert theo (field, value), ghi audit log', async () => {
       prisma.shuttleOption.upsert.mockResolvedValue({
         id: 'opt-new',
-        field: 'company',
-        value: 'Foxconn',
+        field: 'area',
+        value: 'Bắc Ninh',
         colorKey: 'blue',
       });
 
       const result = await service.addOption(
-        { field: 'company', value: 'Foxconn', color_key: 'blue' },
+        { field: 'area', value: 'Bắc Ninh', color_key: 'blue' },
         currentUser,
       );
 
       expect(prisma.shuttleOption.upsert).toHaveBeenCalledWith({
-        where: { field_value: { field: 'company', value: 'Foxconn' } },
+        where: { field_value: { field: 'area', value: 'Bắc Ninh' } },
         update: { colorKey: 'blue', textColorKey: undefined },
         create: {
-          field: 'company',
-          value: 'Foxconn',
+          field: 'area',
+          value: 'Bắc Ninh',
           colorKey: 'blue',
           textColorKey: null,
         },
       });
       expect(result).toEqual({
         id: 'opt-new',
-        value: 'Foxconn',
+        value: 'Bắc Ninh',
         color_key: 'blue',
       });
       expect(auditLog.log).toHaveBeenCalledWith(
@@ -397,8 +441,8 @@ describe('ShuttleService', () => {
     it('xóa khỏi danh sách gợi ý, KHÔNG đụng shuttle_record, ghi audit log', async () => {
       prisma.shuttleOption.findUnique.mockResolvedValue({
         id: 'opt-1',
-        field: 'company',
-        value: 'Goertek',
+        field: 'area',
+        value: 'Bắc Ninh',
         colorKey: 'green',
       });
       prisma.shuttleOption.delete.mockResolvedValue({});

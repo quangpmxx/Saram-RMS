@@ -2,9 +2,11 @@ import { ShuttleOption } from '../../../generated/prisma/client';
 
 /**
  * Dự án phụ — nâng cấp toàn diện: GET /shuttle/options — danh sách gợi ý CÓ
- * LƯU LẠI (bảng shuttle_options, xem schema.prisma) của 7 trường "chọn" —
+ * LƯU LẠI (bảng shuttle_options, xem schema.prisma) của các trường "chọn" —
  * mỗi mục kèm màu nền đã chọn (color_key), có thể xóa riêng (DELETE
  * /shuttle/options/:id) mà không đụng dữ liệu các dòng đưa đón đã nhập.
+ * "company" KHÔNG còn ở đây (2026-07-26) — xem GET /shuttle/companies,
+ * ShuttleService#listCompanies() (đọc từ OrderRecord).
  */
 export interface ShuttleOptionItemDto {
   id: string;
@@ -15,7 +17,6 @@ export interface ShuttleOptionItemDto {
 }
 
 export interface ShuttleOptionsResponseDto {
-  companies: ShuttleOptionItemDto[];
   areas: ShuttleOptionItemDto[];
   types: ShuttleOptionItemDto[];
   sales: ShuttleOptionItemDto[];

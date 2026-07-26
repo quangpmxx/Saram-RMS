@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Check, ChevronDown, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { SHUTTLE_OPTION_COLORS, shuttleColorStyle } from "@/lib/shuttle-colors";
+import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import type {
   AppRealtimeEvent,
   ModulePermissionLevel,
@@ -23,6 +23,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { ColorPalette } from "@/components/ui/color-palette";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
@@ -50,7 +51,6 @@ const PLAIN_FIELD_CLASS_LEFT =
   "w-full resize-none rounded border-0 bg-transparent px-1 py-0 text-left text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:ring-1 focus:ring-brand-400";
 
 const OPTION_FIELD_KEYS: Record<string, keyof ShuttleOptions> = {
-  company: "companies",
   area: "areas",
   type: "types",
   driver: "drivers",
@@ -128,7 +128,7 @@ function DateShortInput({
 interface Filters {
   keyword: string;
   date: DateRangeValue;
-  company: string;
+  company_id: string;
   type: string;
   sale: string;
   driver: string;
@@ -139,7 +139,7 @@ interface Filters {
 const EMPTY_FILTERS: Filters = {
   keyword: "",
   date: EMPTY_DATE_RANGE,
-  company: "",
+  company_id: "",
   type: "",
   sale: "",
   driver: "",
@@ -151,7 +151,7 @@ interface ShuttleFormValue {
   date: string;
   full_name: string;
   phone_number: string;
-  company: string;
+  company_id: string;
   area: string;
   type: string;
   sale: string;
@@ -168,7 +168,7 @@ function emptyFormValue(): ShuttleFormValue {
     date: todayISODate(),
     full_name: "",
     phone_number: "",
-    company: "",
+    company_id: "",
     area: "",
     type: "",
     sale: "",
@@ -186,7 +186,7 @@ function formValueFromRecord(record: ShuttleRecord): ShuttleFormValue {
     date: record.date,
     full_name: record.full_name,
     phone_number: record.phone_number,
-    company: record.company ?? "",
+    company_id: record.company_id ?? "",
     area: record.area ?? "",
     type: record.type ?? "",
     sale: record.sale ?? "",
@@ -226,6 +226,7 @@ function ComboCell({
   onManageOptions,
   compact,
   textClassName,
+  matchBy = "value",
 }: {
   value: string;
   options: ShuttleOptionItem[];
@@ -234,13 +235,23 @@ function ComboCell({
    * Mở popup quản lý (thêm/sửa/xóa) toàn bộ danh sách gợi ý của trường này —
    * để trống (undefined) để ẩn hẳn nút "Chỉnh sửa", dùng cho trường "Sale"
    * (nguồn lấy từ danh sách tài khoản thật, không cho tự thêm/sửa/xóa ở đây
-   * nữa — yêu cầu trực tiếp người dùng).
+   * nữa — yêu cầu trực tiếp người dùng) và "Công ty" (quản lý riêng ở trang
+   * Quản lý đơn hàng — yêu cầu trực tiếp người dùng, 2026-07-26: "công ty
+   * chính là đơn hàng").
    */
   onManageOptions?: () => void;
   /** Thu nhỏ nút hiển thị — riêng 2 ô "Tình trạng đón"/"Kết quả PV" xếp chồng trong cùng 1 cột (yêu cầu trực tiếp người dùng). */
   compact?: boolean;
   /** Chỉ đổi riêng cỡ chữ, giữ nguyên kích thước/kiểu ô — riêng cột "Sale" (yêu cầu trực tiếp người dùng: "cỡ chữ của cột sale để bé lại"). Bỏ qua nếu compact=true (compact đã tự quyết cỡ chữ riêng). */
   textClassName?: string;
+  /**
+   * "value" (mặc định): 7 trường "chọn" gốc lưu thẳng CHUỖI HIỂN THỊ (vd
+   * "Bắc Ninh") — value prop CHÍNH LÀ nhãn hiển thị, khớp option.value.
+   * "id": riêng "Công ty" (2026-07-26, "công ty chính là đơn hàng") lưu
+   * company_id (khóa ngoại OrderRecord) — value prop là ID, khác nhãn hiển
+   * thị, phải tra theo option.id rồi hiển thị option.value (tên đơn hàng).
+   */
+  matchBy?: "value" | "id";
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{
@@ -296,8 +307,13 @@ function ComboCell({
     setIsOpen(false);
   }
 
-  const currentOption = options.find((option) => option.value === value);
+  const currentOption = options.find((option) =>
+    matchBy === "id" ? option.id === value : option.value === value,
+  );
   const triggerStyle = shuttleColorStyle(currentOption?.color_key, currentOption?.text_color_key);
+  // matchBy="value": currentOption?.value luôn trùng value khi tìm thấy (giữ nguyên hành vi cũ y hệt).
+  // matchBy="id": value là company_id (không phải nhãn) — PHẢI hiện currentOption?.value (tên), không hiện thẳng id.
+  const triggerLabel = matchBy === "id" ? (currentOption?.value ?? "") : (currentOption?.value ?? value);
 
   return (
     <>
@@ -317,7 +333,7 @@ function ComboCell({
         )}
       >
         <span className="min-w-0 text-center break-words whitespace-normal">
-          {value || <span className="text-slate-400">Chọn</span>}
+          {triggerLabel || <span className="text-slate-400">Chọn</span>}
         </span>
         <ChevronDown
           className={cn(
@@ -356,7 +372,7 @@ function ComboCell({
                   <button
                     key={option.id}
                     type="button"
-                    onClick={() => selectValue(option.value)}
+                    onClick={() => selectValue(matchBy === "id" ? option.id : option.value)}
                     style={optionStyle}
                     className={cn(
                       "rounded-full px-2.5 py-1 text-left text-xs font-medium break-words whitespace-normal",
@@ -397,37 +413,6 @@ function ComboCell({
  * độ) — khớp đúng cấu trúc bảng màu người dùng gửi ảnh yêu cầu, thay vì
  * flex-wrap tự do như trước.
  */
-function ColorPalette({ selected, onPick }: { selected: string | null; onPick: (key: string | null) => void }) {
-  return (
-    <div className="grid grid-cols-10 gap-1">
-      {SHUTTLE_OPTION_COLORS.map((c) => (
-        <button
-          key={c.key}
-          type="button"
-          title={c.label}
-          onClick={() => onPick(c.key)}
-          style={{ backgroundColor: c.backgroundColor }}
-          className={cn(
-            "h-5 w-5 rounded-full ring-1 ring-inset ring-black/10 transition-transform hover:scale-110",
-            selected === c.key && "ring-2 ring-brand-500 ring-offset-1",
-          )}
-        />
-      ))}
-      <button
-        type="button"
-        title="Không màu"
-        onClick={() => onPick(null)}
-        className={cn(
-          "flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-400 ring-1 ring-inset ring-slate-300 hover:scale-110",
-          selected === null && "ring-2 ring-brand-500 ring-offset-1",
-        )}
-      >
-        <X className="h-3 w-3" strokeWidth={2} />
-      </button>
-    </div>
-  );
-}
-
 /**
  * Dự án phụ — nâng cấp toàn diện: popup CHỈ chỉnh màu nền cho cột Sale (yêu
  * cầu trực tiếp người dùng: "cho thêm 1 bảng màu cho phép sửa được màu nền
@@ -698,9 +683,14 @@ function ShuttleOptionManagerModal({
  * "Sửa" trước (yêu cầu trực tiếp người dùng: "cho phép chỉnh sửa tự do tất
  * cả nội dung y hệt Google Sheet" — "không cần phải ấn sửa rồi mới sửa
  * được"). Dùng chung cho cả dòng nháp thêm mới lẫn từng dòng dữ liệu đã có.
- * 7 trường Công ty/Khu vực/Loại hình/Sale/Nhân viên đưa đón/Nhà thầu/Trạng
- * thái dùng ComboCell (chọn từ trình đơn thả xuống, không gõ tay trực tiếp
- * — yêu cầu trực tiếp người dùng, có ảnh minh họa trình đơn Google Sheet).
+ * Công ty/Khu vực/Loại hình/Sale/Nhân viên đưa đón/Nhà thầu/Trạng thái/Kết
+ * quả PV/Giờ phỏng vấn đều dùng ComboCell (chọn từ trình đơn thả xuống,
+ * không gõ tay trực tiếp — yêu cầu trực tiếp người dùng, có ảnh minh họa
+ * trình đơn Google Sheet). Riêng "Công ty" (2026-07-26, "công ty chính là
+ * đơn hàng") dùng ComboCell với matchBy="id" — value lưu company_id (khóa
+ * ngoại OrderRecord), không phải chuỗi hiển thị như 8 trường còn lại; quản
+ * lý thêm/sửa/xóa/màu tại trang Quản lý đơn hàng, không có nút "Chỉnh sửa"
+ * ở đây.
  */
 function ShuttleRowFormCells({
   value,
@@ -709,6 +699,7 @@ function ShuttleRowFormCells({
   onCommitField,
   options,
   saleOptions,
+  companyOptions,
   onManageOptions,
   onManageSaleColors,
 }: {
@@ -726,7 +717,9 @@ function ShuttleRowFormCells({
   options: ShuttleOptions;
   /** Danh sách tài khoản role=sale (từ /shuttle/sale-accounts), dựng lại thành dạng ShuttleOptionItem[] để dùng chung ComboCell — TÊN không cho tự thêm/sửa/xóa, chỉ MÀU chỉnh được (yêu cầu trực tiếp người dùng). */
   saleOptions: ShuttleOptionItem[];
-  /** Mở popup quản lý danh sách gợi ý (thêm/sửa/xóa) của 1 trong 7 trường "chọn" (không áp dụng cho Sale). */
+  /** Danh sách đơn hàng (từ /shuttle/companies, đọc từ OrderRecord) — yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng". Không cho tự thêm/sửa/xóa ở đây — quản lý riêng tại trang Quản lý đơn hàng. */
+  companyOptions: ShuttleOptionItem[];
+  /** Mở popup quản lý danh sách gợi ý (thêm/sửa/xóa) của 1 trong 6 trường "chọn" (không áp dụng cho Sale/Công ty). */
   onManageOptions: (field: string, label: string) => void;
   /** Mở popup CHỈ chỉnh màu nền cho từng tài khoản Sale — không đổi tên/thêm/xóa tài khoản. */
   onManageSaleColors: () => void;
@@ -781,10 +774,10 @@ function ShuttleRowFormCells({
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <ComboCell
-          value={value.company}
-          options={options.companies}
-          onSelect={(v) => selectCombo("company", v)}
-          onManageOptions={() => onManageOptions("company", "Công ty")}
+          value={value.company_id}
+          options={companyOptions}
+          onSelect={(v) => selectCombo("company_id", v)}
+          matchBy="id"
         />
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
@@ -872,11 +865,14 @@ export function ShuttleClient({
   initialResult,
   initialOptions,
   initialSaleAccounts,
+  initialCompanies,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialResult: PaginatedResult<ShuttleRecord>;
   initialOptions: ShuttleOptions;
   initialSaleAccounts: SaleAccountItem[];
+  /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — GET /shuttle/companies, đọc từ OrderRecord (module Quản lý đơn hàng). */
+  initialCompanies: ShuttleOptionItem[];
 }) {
   useSetPageTitle("Danh sách đưa đón", "Quản lý lịch đưa đón lao động.");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
@@ -892,6 +888,12 @@ export function ShuttleClient({
   const [page, setPage] = useState(initialResult.page);
   const [pageSize, setPageSize] = useState(initialResult.page_size);
   const [options, setOptions] = useState(initialOptions);
+  // Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
+  // — KHÔNG có cơ chế thêm/sửa/xóa nào trong trang Đưa đón nữa (quản lý
+  // riêng ở trang Quản lý đơn hàng), nên chỉ đọc thẳng từ props, khớp đúng
+  // cách saleOptions bên dưới derive từ initialSaleAccounts (không dùng
+  // useState vì không có nơi nào trong file này setCompanies).
+  const companies = initialCompanies;
   /**
    * Dựng lại thành ShuttleOptionItem[] để tái dùng ComboCell — TÊN lấy từ
    * tài khoản Sale thật (initialSaleAccounts), MÀU lấy từ options.sales
@@ -965,7 +967,7 @@ export function ShuttleClient({
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
     if (activeFilters.date.from) query.set("date_from", activeFilters.date.from);
     if (activeFilters.date.to) query.set("date_to", activeFilters.date.to);
-    if (activeFilters.company) query.set("company", activeFilters.company);
+    if (activeFilters.company_id) query.set("company_id", activeFilters.company_id);
     if (activeFilters.type) query.set("type", activeFilters.type);
     if (activeFilters.sale) query.set("sale", activeFilters.sale);
     if (activeFilters.driver) query.set("driver", activeFilters.driver);
@@ -1280,12 +1282,12 @@ export function ShuttleClient({
         <Field uiSize="xs" label="Công ty" className="w-28">
           <Select
             uiSize="xs"
-            value={filters.company}
-            onChange={(event) => setFilters((prev) => ({ ...prev, company: event.target.value }))}
+            value={filters.company_id}
+            onChange={(event) => setFilters((prev) => ({ ...prev, company_id: event.target.value }))}
           >
             <option value="">Tất cả</option>
-            {options.companies.map((item) => (
-              <option key={item.id} value={item.value}>
+            {companies.map((item) => (
+              <option key={item.id} value={item.id}>
                 {item.value}
               </option>
             ))}
@@ -1428,6 +1430,7 @@ export function ShuttleClient({
                   onChange={setDraft}
                   options={options}
                   saleOptions={saleOptions}
+                  companyOptions={companies}
                   onManageOptions={(field, label) => setManageField({ field, label })}
                   onManageSaleColors={() => setIsManagingSaleColors(true)}
                 />
@@ -1458,6 +1461,7 @@ export function ShuttleClient({
                       onCommitField={(next) => void saveRowIfChanged(record, next)}
                       options={options}
                       saleOptions={saleOptions}
+                      companyOptions={companies}
                       onManageOptions={(field, label) => setManageField({ field, label })}
                       onManageSaleColors={() => setIsManagingSaleColors(true)}
                     />

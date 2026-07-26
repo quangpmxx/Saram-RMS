@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
 import { requirePageAccess } from "@/lib/module-permission";
-import type { PaginatedResult, SaleAccountItem, ShuttleOptions, ShuttleRecord } from "@/lib/types";
+import type { PaginatedResult, SaleAccountItem, ShuttleOptionItem, ShuttleOptions, ShuttleRecord } from "@/lib/types";
 import { ShuttleClient } from "./shuttle-client";
 
 /**
@@ -18,10 +18,14 @@ export default async function ShuttlePage() {
   }
   const permissionLevel = await requirePageAccess("shuttle");
 
-  const [listResult, options, saleAccounts] = await Promise.all([
+  const [listResult, options, saleAccounts, companies] = await Promise.all([
     serverApi<PaginatedResult<ShuttleRecord>>("/shuttle?page=1&page_size=20"),
     serverApi<ShuttleOptions>("/shuttle/options"),
     serverApi<SaleAccountItem[]>("/shuttle/sale-accounts"),
+    // Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
+    // — nguồn gợi ý cột "Công ty" giờ đọc từ OrderRecord (module Quản lý
+    // đơn hàng), không còn quản lý riêng qua /shuttle/options nữa.
+    serverApi<ShuttleOptionItem[]>("/shuttle/companies"),
   ]);
 
   return (
@@ -30,6 +34,7 @@ export default async function ShuttlePage() {
       initialResult={listResult}
       initialOptions={options}
       initialSaleAccounts={saleAccounts}
+      initialCompanies={companies}
     />
   );
 }

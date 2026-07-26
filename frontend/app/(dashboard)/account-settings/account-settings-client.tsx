@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
+import { BirthdayPreviewPanel } from "@/components/birthday/birthday-preview-panel";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { CheckinLocationSettings } from "./checkin-location-settings";
@@ -29,7 +30,7 @@ function formatDateOnly(value: string | null): string {
  * đổi được cho tài khoản khác qua màn Quản lý tài khoản), đổi mật khẩu.
  * Trước đây là modal, đổi sang trang riêng để tránh giới hạn chiều cao popup.
  */
-export function AccountSettingsClient({ user }: { user: Account }) {
+export function AccountSettingsClient({ user, accounts }: { user: Account; accounts: Account[] }) {
   useSetPageTitle("Cài đặt tài khoản", "Ảnh đại diện, tên người dùng và mật khẩu đăng nhập.");
   const router = useRouter();
   const toast = useToast();
@@ -214,6 +215,15 @@ export function AccountSettingsClient({ user }: { user: Account }) {
               <div className="mt-3">
                 <CheckinLocationSettings />
               </div>
+            </section>
+          )}
+
+          {/* Xem thử giao diện sinh nhật — dời từ trang Cấu hình vận hành
+              sang đây (yêu cầu trực tiếp người dùng, 2026-07-24), chỉ Admin
+              thấy — cùng pattern admin-only với "Cài đặt Check in" ở trên. */}
+          {user.role === "admin" && (
+            <section>
+              <BirthdayPreviewPanel accounts={accounts} />
             </section>
           )}
 

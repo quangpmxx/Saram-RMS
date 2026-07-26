@@ -14,9 +14,11 @@ import { useBirthdayTheme } from "@/lib/birthday-theme-context";
  * phép truyền ngày giả lập HOẶC chọn 1 tài khoản làm 'sinh nhật hôm nay'
  * trong preview... nút 'Xem thử giao diện sinh nhật'... KHÔNG đổi ngày sinh
  * thật... KHÔNG ảnh hưởng người dùng khác trong production." Đặt trong
- * trang Cấu hình vận hành (chỉ Admin vào được) — backend (birthday.service.ts)
- * đã tự kiểm tra lại role=admin + NODE_ENV !== production, âm thầm bỏ qua
- * nếu không đủ điều kiện nên không cần lo lộ ra ngoài production.
+ * trang Cài đặt tài khoản (chỉ Admin thấy — dời từ trang Cấu hình vận hành
+ * sang đây theo yêu cầu trực tiếp người dùng, 2026-07-24) — backend
+ * (birthday.service.ts) đã tự kiểm tra lại role=admin + NODE_ENV !==
+ * production, âm thầm bỏ qua nếu không đủ điều kiện nên không cần lo lộ ra
+ * ngoài production.
  */
 export function BirthdayPreviewPanel({ accounts }: { accounts: Account[] }) {
   const { isPreview, startPreview, stopPreview } = useBirthdayTheme();
@@ -47,7 +49,7 @@ export function BirthdayPreviewPanel({ accounts }: { accounts: Account[] }) {
   }
 
   return (
-    <Card className="mt-6 p-4 sm:p-5">
+    <Card className="p-4 sm:p-5">
       <div className="flex items-center gap-2">
         <PartyPopper className="h-4 w-4 text-brand-500" strokeWidth={2} />
         <h2 className="text-sm font-semibold text-slate-800">Xem thử giao diện sinh nhật</h2>

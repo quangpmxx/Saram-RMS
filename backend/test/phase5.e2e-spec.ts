@@ -3,19 +3,24 @@ import request from 'supertest';
 import { bootstrapTestApp } from './utils/bootstrap-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hashPassword } from '../src/common/utils/password.util';
-import { CarePoolScannerService } from '../src/care-pool/care-pool-scanner.service';
-import { CARE_POOL_THRESHOLD_KEY } from '../src/system-config/system-config.service';
 
 /**
  * Kiểm thử end-to-end đúng theo "Tiêu chí hoàn thành / test độc lập" của
  * Phase 5 trong docs/14-roadmap.md. Cần kết nối DATABASE_URL thật.
  * Tự tạo dữ liệu/tài khoản riêng (username có tiền tố "phase5_") để không
  * đụng tới dữ liệu của các bộ test khác chạy trên cùng database.
+ *
+ * Yêu cầu trực tiếp người dùng (2026-07-24): đã gỡ bỏ hẳn worker tự động
+ * quét-vào-cột-chăm-sóc (CarePoolScannerService, tham số cấu hình
+ * CARE_POOL_THRESHOLD_MINUTES) — các test chỉ kiểm tra logic quét đã bị
+ * xóa khỏi bộ test này; các test còn lại (khóa/mở khóa, gỡ khỏi cột, phạm
+ * vi xem theo nhóm, giữ/bỏ giữ số) chuyển sang seed thẳng
+ * `enteredCarePoolAt` qua Prisma (đường DUY NHẤT còn lại để vào cột chăm
+ * sóc) thay vì gọi scanner.
  */
-describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
+describe('Phase 5 — Cột chăm sóc (Care Pool) (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let scanner: CarePoolScannerService;
   let facebookSourceId: string;
   let calledStatusId: string;
   let teamId: string;
@@ -48,10 +53,17 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
     });
   }
 
+  /** Đường DUY NHẤT còn lại để 1 lead vào cột chăm sóc, sau khi gỡ bỏ scanner tự động (2026-07-24). */
+  async function enterCarePool(leadId: string) {
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: { enteredCarePoolAt: new Date() },
+    });
+  }
+
   beforeAll(async () => {
     app = await bootstrapTestApp();
     prisma = app.get(PrismaService);
-    scanner = app.get(CarePoolScannerService);
 
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
@@ -63,12 +75,6 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
     });
     await prisma.auditLog.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
-    });
-    // system_configs.updated_by có thể đang trỏ tới 1 tài khoản phase5_* từ
-    // lần chạy trước — xóa trước để không vi phạm khóa ngoại khi xóa account,
-    // sẽ tạo lại ngay bên dưới sau khi có tài khoản admin mới của lần chạy này.
-    await prisma.systemConfig.deleteMany({
-      where: { configKey: CARE_POOL_THRESHOLD_KEY },
     });
     await prisma.account.deleteMany({
       where: { username: { in: USERNAMES } },
@@ -104,23 +110,13 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
         status: 'active',
       },
     });
-    const adminAccount = await prisma.account.create({
+    await prisma.account.create({
       data: {
         fullName: 'Admin Phase5',
         username: 'phase5_admin',
         passwordHash,
         role: 'admin',
         status: 'active',
-      },
-    });
-    // Ngưỡng mặc định 30 phút — luôn tạo mới sạch cho mỗi lần chạy bộ test này.
-    await prisma.systemConfig.create({
-      data: {
-        configKey: CARE_POOL_THRESHOLD_KEY,
-        configValue: '30',
-        description:
-          'Ngưỡng thời gian (phút) trước khi lead bị bỏ quên vào cột chăm sóc',
-        updatedById: adminAccount.id,
       },
     });
     const leader = await prisma.account.create({
@@ -211,74 +207,6 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
     return leadId;
   }
 
-  it('Lead đã xử lý (có last_activity_at), bỏ quên quá ngưỡng → tự động vào cột chăm sóc', async () => {
-    const leadId = await createAssignedLead('Bỏ Quên A', '0970000001', saleAId);
-    await saleAAgent
-      .put(`/candidate/${leadId}/call-status`)
-      .send({ call_status_id: calledStatusId })
-      .expect(200);
-    await backdateActivity(leadId, 31);
-
-    await scanner.runScan();
-
-    const list = await saleBAgent
-      .get('/care-pool')
-      .query({ page_size: 50 })
-      .expect(200);
-    expect(list.body.items.some((i: { id: string }) => i.id === leadId)).toBe(
-      true,
-    );
-  });
-
-  it('Lead hoàn toàn mới (chưa xử lý lần nào) → KHÔNG vào cột chăm sóc dù để lâu', async () => {
-    const leadId = await createAssignedLead(
-      'Lead Mới Chưa Gọi',
-      '0970000002',
-      saleAId,
-    );
-    // Không cập nhật call-status/call-result gì cả — lastActivityAt vẫn null.
-
-    await scanner.runScan();
-
-    const list = await saleBAgent
-      .get('/care-pool')
-      .query({ page_size: 50 })
-      .expect(200);
-    expect(list.body.items.some((i: { id: string }) => i.id === leadId)).toBe(
-      false,
-    );
-  });
-
-  it('Sale giữ số → lead không bị đẩy vào cột chăm sóc dù quá ngưỡng', async () => {
-    const leadId = await createAssignedLead('Đã Giữ Số', '0970000003', saleAId);
-    await saleAAgent
-      .put(`/candidate/${leadId}/call-status`)
-      .send({ call_status_id: calledStatusId })
-      .expect(200);
-    await saleAAgent.post(`/candidate/${leadId}/hold`).expect(200);
-    await backdateActivity(leadId, 31);
-
-    await scanner.runScan();
-
-    const list = await saleBAgent
-      .get('/care-pool')
-      .query({ page_size: 50 })
-      .expect(200);
-    expect(list.body.items.some((i: { id: string }) => i.id === leadId)).toBe(
-      false,
-    );
-
-    const detail = await saleAAgent.get(`/candidate/${leadId}`).expect(200);
-    expect(detail.body.is_held).toBe(true);
-
-    // Bỏ giữ số để dọn trạng thái cho các test khác không phụ thuộc lead này.
-    await saleAAgent.delete(`/candidate/${leadId}/hold`).expect(200);
-    const afterUnhold = await saleAAgent
-      .get(`/candidate/${leadId}`)
-      .expect(200);
-    expect(afterUnhold.body.is_held).toBe(false);
-  });
-
   it('2 Sale cùng mở 1 lead trong cột chăm sóc → người thứ 2 bị chặn (409) tới khi người thứ 1 giải phóng', async () => {
     const leadId = await createAssignedLead(
       'Cạnh Tranh Khóa',
@@ -290,7 +218,7 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
       .send({ call_status_id: calledStatusId })
       .expect(200);
     await backdateActivity(leadId, 31);
-    await scanner.runScan();
+    await enterCarePool(leadId);
 
     // Sale B chiếm khóa trước. Cần thêm Sale C (không phải chủ sở hữu gốc,
     // khác Sale B) để đúng kịch bản "người thứ 2" — Sale A là chủ sở hữu
@@ -352,7 +280,7 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
       .send({ call_status_id: calledStatusId })
       .expect(200);
     await backdateActivity(leadId, 31);
-    await scanner.runScan();
+    await enterCarePool(leadId);
 
     let list = await adminAgent
       .get('/care-pool')
@@ -417,62 +345,6 @@ describe('Phase 5 — Cột chăm sóc tự động (Care Pool) (e2e)', () => {
     });
     await prisma.account.delete({ where: { id: outsiderLeader.id } });
     await prisma.team.delete({ where: { id: otherTeam.id } });
-  });
-
-  it('Đổi ngưỡng thời gian trong Cấu hình hệ thống → hành vi quét áp dụng theo giá trị mới', async () => {
-    const leadId = await createAssignedLead(
-      'Ngưỡng Mới',
-      '0970000006',
-      saleAId,
-    );
-    await saleAAgent
-      .put(`/candidate/${leadId}/call-status`)
-      .send({ call_status_id: calledStatusId })
-      .expect(200);
-    await backdateActivity(leadId, 10); // chỉ 10 phút — chưa đủ ngưỡng mặc định 30 phút
-
-    await scanner.runScan();
-    let list = await saleBAgent
-      .get('/care-pool')
-      .query({ page_size: 50 })
-      .expect(200);
-    expect(list.body.items.some((i: { id: string }) => i.id === leadId)).toBe(
-      false,
-    );
-
-    // Admin đổi ngưỡng xuống 5 phút.
-    await adminAgent
-      .put(`/config/${CARE_POOL_THRESHOLD_KEY}`)
-      .send({ value: '5' })
-      .expect(200);
-
-    await scanner.runScan();
-    list = await saleBAgent
-      .get('/care-pool')
-      .query({ page_size: 50 })
-      .expect(200);
-    expect(list.body.items.some((i: { id: string }) => i.id === leadId)).toBe(
-      true,
-    );
-
-    // Khôi phục lại ngưỡng mặc định để không ảnh hưởng các test khác.
-    await adminAgent
-      .put(`/config/${CARE_POOL_THRESHOLD_KEY}`)
-      .send({ value: '30' })
-      .expect(200);
-  });
-
-  it('GET/PUT /config chỉ Admin được dùng', async () => {
-    await leaderAgent.get('/config').expect(403);
-    await leaderAgent
-      .put(`/config/${CARE_POOL_THRESHOLD_KEY}`)
-      .send({ value: '20' })
-      .expect(403);
-
-    const list = await adminAgent.get('/config').expect(200);
-    expect(
-      list.body.some((c: { key: string }) => c.key === CARE_POOL_THRESHOLD_KEY),
-    ).toBe(true);
   });
 
   it('Hold/unhold chỉ Sale (lead của mình) được thao tác', async () => {

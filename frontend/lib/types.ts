@@ -376,17 +376,6 @@ export interface CalendarEvent {
   created_by: NamedRefWithRole;
 }
 
-// ── Phase 5 — Cột chăm sóc tự động (Care Pool) ───────────────────────────
-
-/** GET/PUT /config — Mục 9, docs/13-api-design.md. */
-export interface SystemConfig {
-  key: string;
-  value: string;
-  description: string | null;
-  updated_by: NamedRef;
-  updated_at: string;
-}
-
 // ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────
 
 /** GET/PUT /distribution-rule/:teamId — Mục 0.1, docs/13-api-design.md. */
@@ -834,7 +823,8 @@ export interface ShuttleRecord {
   date: string;
   full_name: string;
   phone_number: string;
-  company: string | null;
+  /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — tham chiếu OrderRecord.id, resolve tên/màu qua GET /shuttle/companies (khớp cách các trường "chọn" khác). */
+  company_id: string | null;
   area: string | null;
   type: string | null;
   sale: string | null;
@@ -863,7 +853,6 @@ export interface ShuttleOptionItem {
 }
 
 export interface ShuttleOptions {
-  companies: ShuttleOptionItem[];
   areas: ShuttleOptionItem[];
   types: ShuttleOptionItem[];
   /** "sale" chỉ lưu MÀU cho tài khoản Sale thật (value = họ tên tài khoản) — không dùng để liệt kê tên (xem SaleAccountItem/listSaleAccounts). */
@@ -928,4 +917,18 @@ export interface DsSaleRowInput {
   sale_user_id?: string | null;
   pickup_user_id?: string | null;
   note?: string;
+}
+
+/**
+ * Dự án phụ — nâng cấp toàn diện (2026-07-26, yêu cầu trực tiếp người dùng):
+ * GET/POST/PUT/DELETE /order-management — danh sách đơn hàng, mỗi tên đơn
+ * hàng chọn được màu nền/màu chữ riêng (khớp đúng cơ chế color_key/
+ * text_color_key của ShuttleOptionItem — "giống như trang đưa đón lao động").
+ */
+export interface OrderRecord {
+  id: string;
+  name: string;
+  color_key: string | null;
+  text_color_key: string | null;
+  created_at: string;
 }

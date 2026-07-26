@@ -32,11 +32,11 @@ export interface DsSaleAccountOptionDto {
 }
 
 /**
- * Cột "Công ty làm" — CHƯA có bảng công ty hợp tác thật (module "Quản lý
- * đơn hàng" còn để trống chờ phát triển), giữ hình dạng response ổn định
- * sẵn để khi có nguồn thật chỉ cần đổi phần lấy dữ liệu, không đổi hợp đồng
- * API (Mục 4, yêu cầu người dùng: "thiết kế sẵn theo hướng có thể kết nối
- * với nguồn dữ liệu công ty hợp tác sau này").
+ * Cột "Công ty làm" — tham chiếu OrderRecord thật (module "Quản lý đơn
+ * hàng", 2026-07-26: "công ty chính là đơn hàng"). Giữ nguyên hình dạng
+ * response {id, name} đã thiết kế sẵn từ trước (Mục 4, yêu cầu người dùng:
+ * "thiết kế sẵn theo hướng có thể kết nối với nguồn dữ liệu công ty hợp tác
+ * sau này") — không đổi hợp đồng API, chỉ đổi nguồn dữ liệu.
  */
 export interface DsSaleCompanyOptionDto {
   id: string;
@@ -71,14 +71,9 @@ export type DsSaleRowWithRelations = SalesEntryRecord & {
   updatedBy: Pick<Account, 'id' | 'fullName'>;
   saleUser: AccountPick | null;
   pickupUser: AccountPick | null;
+  company: { id: string; name: string } | null;
 };
 
-/**
- * Cột "Công ty làm" chưa có bảng thật để join — `record.companyId` được giữ
- * lại nguyên trạng (Mục 13, "companyId nullable"), nhưng chưa resolve được
- * tên nên hiện luôn trả `company: null` (khớp đúng thực tế "chưa có dữ liệu
- * công ty hợp tác").
- */
 export function toDsSaleRowResponse(
   record: DsSaleRowWithRelations,
 ): DsSaleRowResponseDto {
@@ -90,7 +85,9 @@ export function toDsSaleRowResponse(
     identity_number: record.identityNumber,
     hometown: record.hometown,
     join_date: toDateOnly(record.joinDate),
-    company: null,
+    company: record.company
+      ? { id: record.company.id, name: record.company.name }
+      : null,
     sale: toAccountOption(record.saleUser),
     pickup: toAccountOption(record.pickupUser),
     note: record.note,
@@ -120,4 +117,5 @@ export const DS_SALE_INCLUDE = {
       team: { select: { name: true } },
     },
   },
+  company: { select: { id: true, name: true } },
 } as const;

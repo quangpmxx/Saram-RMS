@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -43,9 +44,10 @@ export class ListShuttleQueryDto {
   @IsDateString()
   date_to?: string;
 
+  /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — lọc theo OrderRecord.id thật. */
   @IsOptional()
-  @IsString()
-  company?: string;
+  @IsUUID()
+  company_id?: string;
 
   @IsOptional()
   @IsString()

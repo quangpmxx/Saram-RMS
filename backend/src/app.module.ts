@@ -14,7 +14,6 @@ import { ImportsModule } from './imports/imports.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { CarePoolModule } from './care-pool/care-pool.module';
-import { SystemConfigModule } from './system-config/system-config.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
@@ -30,6 +29,7 @@ import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { SalesEntryModule } from './sales-entry/sales-entry.module';
+import { OrderManagementModule } from './order-management/order-management.module';
 import { ModulePermissionModule } from './module-permission/module-permission.module';
 import { ModulePermissionGuard } from './module-permission/module-permission.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -38,8 +38,10 @@ import { RolesGuard } from './common/guards/roles.guard';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    // Phase 5 — bộ lập lịch/worker nền, bắt buộc cho Cột chăm sóc (M6, Mục
-    // 4.3, tài liệu 10) và tái sử dụng sau cho nhắc lịch Zalo (M11, Phase 8).
+    // Bộ lập lịch/worker nền — dùng cho thông báo trong ứng dụng đúng giờ
+    // hẹn gọi lại (NotificationScannerService#tickInAppCallback). Các worker
+    // Cột chăm sóc tự động (Phase 5) và nhắc lịch Zalo (Phase 8) đã bị gỡ bỏ
+    // hẳn (2026-07-24, yêu cầu trực tiếp người dùng).
     ScheduleModule.forRoot(),
     PrismaModule,
     AuditLogModule,
@@ -51,7 +53,6 @@ import { RolesGuard } from './common/guards/roles.guard';
     CatalogModule,
     CalendarModule,
     CarePoolModule,
-    SystemConfigModule,
     DistributionModule,
     DashboardModule,
     NotificationModule,
@@ -67,6 +68,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     RealtimeModule,
     BirthdayModule,
     SalesEntryModule,
+    OrderManagementModule,
     ModulePermissionModule,
   ],
   controllers: [AppController],

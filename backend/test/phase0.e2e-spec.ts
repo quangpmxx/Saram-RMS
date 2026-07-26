@@ -29,13 +29,15 @@ describe('Phase 0 — Nền tảng hệ thống & Tài khoản (e2e)', () => {
 
     // Dọn sạch dữ liệu Phase 0 trước khi chạy, để bộ test tự chứa và lặp lại được.
     // Liệt kê rõ toàn bộ bảng phụ thuộc (lead_notes, interview_appointments,
-    // callback_schedules, system_configs, auto_distribution_members/_rules,
-    // leads, import_jobs, notifications, account_permissions, permissions)
-    // thay vì chỉ dựa vào CASCADE — PGlite (npx prisma dev) không cascade tin
-    // cậy qua nhiều cấp quan hệ (accounts → leads → lead_notes/... ,
-    // accounts/teams → auto_distribution_rules → _members).
+    // callback_schedules, auto_distribution_members/_rules, leads,
+    // import_jobs, notifications) thay vì chỉ dựa vào CASCADE — PGlite (npx
+    // prisma dev) không cascade tin cậy qua nhiều cấp quan hệ (accounts →
+    // leads → lead_notes/... , accounts/teams → auto_distribution_rules →
+    // _members). Bảng account_permissions/permissions (hệ Phân quyền cũ) và
+    // system_configs (Cấu hình vận hành) đã bị DROP hẳn (2026-07-24) — không
+    // còn trong danh sách này nữa.
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE lead_notes, interview_appointments, callback_schedules, notifications, account_permissions, permissions, system_configs, auto_distribution_members, auto_distribution_rules, import_jobs, leads, audit_logs, sessions, accounts, teams RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE lead_notes, interview_appointments, callback_schedules, notifications, auto_distribution_members, auto_distribution_rules, import_jobs, leads, audit_logs, sessions, accounts, teams RESTART IDENTITY CASCADE',
     );
 
     const passwordHash = await hashPassword(adminCreds.password);

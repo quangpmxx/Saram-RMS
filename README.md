@@ -8,10 +8,10 @@ Trạng thái: **Phase 0** (Nền tảng hệ thống & Tài khoản), **Phase 1
 - **Chờ phân chia**, phân chia thủ công (từng lead hoặc hàng loạt), chuyển lead giữa các Sale trong nhóm, không gian "Lead của tôi" cho Sale, workload từng Sale cho Leader (Phase 2).
 - Màn hình **Chi tiết ứng viên**: Sale cập nhật tình trạng/kết quả cuộc gọi, ghi lịch sử ghi chú theo thời gian (không ghi đè), xóa mềm ghi chú (vẫn giữ lịch sử) — MKT xem được nhưng không sửa (Phase 3).
 - Đặt lịch hẹn phỏng vấn (kèm hẹn lại khi bùng PV, giữ nguyên lịch sử các lần hẹn), cập nhật kết quả PV/đi làm (đỗ/trượt, đi làm/không đi làm kèm lý do bắt buộc), đặt lịch gọi lại, màn hình **Lịch hẹn** dạng agenda tổng hợp cả 2 loại lịch (Phase 4).
-- **Cột chăm sóc**: lead bị bỏ quên quá ngưỡng thời gian (mặc định 30 phút, chỉnh được) tự động chuyển vào cột chăm sóc dùng chung của nhóm; Sale mở lead để xử lý sẽ tự chiếm khóa (khóa hết hạn sau 15 phút nếu quên giải phóng), Admin gỡ khỏi cột chăm sóc khi cần. Sale đánh dấu/bỏ đánh dấu **giữ số** ngay trên trang Chi tiết ứng viên để tạm dừng cơ chế tự động này. Màn hình **Cấu hình vận hành** (Admin) để chỉnh ngưỡng thời gian trên (Phase 5).
+- **Cột chăm sóc**: cột chăm sóc dùng chung của nhóm; Sale mở lead để xử lý sẽ tự chiếm khóa (khóa hết hạn sau 15 phút nếu quên giải phóng), Admin gỡ khỏi cột chăm sóc khi cần (Phase 5). *(Worker tự động đẩy lead bị bỏ quên vào cột chăm sóc + màn hình "Cấu hình vận hành" đã bị gỡ bỏ hẳn 2026-07-24 — xem mục 5.7.)*
 - **Tự động phân chia lead (Round-robin)**: Leader cấu hình danh sách + thứ tự Sale tham gia vòng quay ngay trên màn hình Ứng viên, kích hoạt/tạm dừng bất kỳ lúc nào; khi bật, lead mới (nhập tay hoặc import Excel) tự động gán lần lượt theo thứ tự, quay vòng lại từ đầu khi hết danh sách — tự động bỏ qua Sale đã nghỉ việc/rời nhóm; tạm dừng thì quay về phân chia thủ công (Phase 6).
 - **Dashboard & Báo cáo**: trang chủ hiển thị 5 chỉ số đã chốt (lead mới theo nguồn, lead chờ phân chia, phễu chuyển đổi Lead→Hẹn PV→Đến PV→Đỗ PV→Đi làm, hiệu suất từng Sale, số lead ở cột chăm sóc theo nhóm) — phạm vi dữ liệu tự động theo đúng quyền từng vai trò, lọc theo khoảng thời gian/nhóm. Trang **Báo cáo** riêng (Leader/Quản lý/Admin) mở rộng lọc sâu hơn theo nhóm/Sale/nguồn, xem breakdown dạng bảng, bấm vào 1 dòng để mở đúng danh sách ứng viên đã lọc sẵn (Phase 7).
-- **Thông báo Zalo**: worker nền tự động quét lịch gọi lại/lịch hẹn phỏng vấn sắp tới hạn, xếp vào hàng đợi và gửi nhắc cho đúng nhân viên phụ trách trước giờ hẹn N phút (chỉnh được ở màn hình Cấu hình vận hành, mặc định 15 phút); mỗi tài khoản xem lại lịch sử thông báo của chính mình qua `GET /notification`. Kênh gửi Zalo thực tế được mô phỏng (ghi log) do thiết kế chưa có nơi lưu định danh Zalo của nhân viên — xem "Ghi chú giả định của Phase 8" (Phase 8).
+- **Thông báo Zalo** *(đã gỡ bỏ hẳn 2026-07-24 — xem mục 5.10)*: từng là worker nền tự động quét lịch gọi lại/lịch hẹn phỏng vấn sắp tới hạn, gửi nhắc qua Zalo trước giờ hẹn N phút. Tính năng nhắc lịch gọi lại **trong ứng dụng** (chuông + toast, không qua Zalo) vẫn hoạt động bình thường.
 - **Nhật ký & Trùng lặp nâng cao**: màn hình **Nhật ký** (Admin/Quản lý) tra cứu toàn bộ lịch sử thao tác đã ghi từ Phase 0, lọc theo tài khoản/loại hành động/đối tượng/khoảng thời gian. Màn hình **Trùng lặp** (mọi vai trò, phạm vi tự động theo quyền) liệt kê toàn hệ thống các nhóm ứng viên trùng số điện thoại, mở rộng từ cảnh báo cơ bản đã có ở Phase 1. **Khung Phân quyền chi tiết** (Cấu hình quyền trên màn Quản lý tài khoản, áp dụng cho Quản lý/Leader) đã dựng đầy đủ database + API nhưng cố tình chưa có danh mục quyền cụ thể — theo đúng cảnh báo tường minh của roadmap, chờ xác nhận từ chủ doanh nghiệp (Phase 9).
 
 Phase 9 khép lại toàn bộ 10 Phase đã hoạch định tại `docs/14-roadmap.md`. Các hướng mở rộng tiếp theo (module đưa đón lao động, đa chi nhánh, tìm kiếm nâng cao...) chỉ mới được ghi nhận ở mục "Các điểm có thể mở rộng trong tương lai" của `docs/10-system-design.md`, chưa có kế hoạch Phase cụ thể.
@@ -116,11 +116,10 @@ Nếu thành công, terminal in ra dòng dạng:
 Đã tạo 3 ứng viên trùng SĐT 0901000005 ở 2 nhóm khác nhau + 1 chưa phân chia để thử tooltip "Trùng SĐT".
 Đã cập nhật tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) cho ứng viên "Nguyễn Văn An".
 Đã tạo dữ liệu mẫu Phase 4: lịch hẹn PV cho "Nguyễn Văn An" (đã đi làm) và "Trần Thị Bình" (bùng PV → đỗ nhưng không đi làm → hẹn lại sắp tới) + 1 lịch gọi lại.
-Đã seed tham số cấu hình CARE_POOL_THRESHOLD_MINUTES = 30.
-Đã tạo ứng viên mẫu "Hoàng Văn Đạt" (Sale Demo B) đang ở Cột chăm sóc do bỏ quên quá ngưỡng.
+Đã tạo ứng viên mẫu "Hoàng Văn Đạt" (Sale Demo B) đang ở Cột chăm sóc.
 Đã tạo cấu hình vòng quay mẫu [Sale Demo A → Sale Demo B] cho "Nhóm Sale Demo" (đang TẮT — Leader tự kích hoạt khi muốn thử).
 ```
-**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) và 1 lịch hẹn PV đã "Đỗ PV" + "Đã đi làm"; ứng viên "Trần Thị Bình" có sẵn 3 lần hẹn PV (bùng PV → đỗ nhưng không đi làm kèm lý do → hẹn lại sắp tới) + 1 lịch gọi lại — để thử ngay màn Chi tiết ứng viên và Lịch hẹn, xem mục 5; ứng viên "Hoàng Văn Đạt" (Sale Demo B) đã được đặt sẵn ở trạng thái bị bỏ quên quá ngưỡng (30 phút) nên xuất hiện ngay trong tab **Cột chăm sóc** mà không cần đợi worker quét — để thử ngay mục 5.7; "Nhóm Sale Demo" đã có sẵn cấu hình vòng quay tự động phân chia [Sale Demo A → Sale Demo B] nhưng cố ý để **TẮT** — để thử ngay mục 5.8 mà không ảnh hưởng các bước demo phân chia thủ công khác.
+**Ghi nhớ tài khoản Admin** — đây là tài khoản duy nhất có quyền tạo tài khoản khác. Lệnh `seed` còn tạo sẵn: 1 tài khoản MKT mẫu (`mkt_demo`/`123456`) kèm 5 ứng viên mẫu (trong đó có 1 cặp trùng số điện thoại); 2 nhóm mẫu "Nhóm Sale Demo" (Leader `leader_demo`/`123456`, Sale `sale_demo_a`/`sale_demo_b`/`123456`) và "Nhóm Sale Demo 2" (Leader `leader_demo_2`/`123456`, Sale `sale_demo_c`/`123456`); riêng SĐT `0901000005` cố tình trùng ở cả 2 nhóm + 1 bản ghi chưa phân chia, để thử ngay tooltip "Trùng SĐT" với đủ tình huống cùng nhóm/khác nhóm; ứng viên "Nguyễn Văn An" đã có sẵn tình trạng/kết quả cuộc gọi + 3 ghi chú (1 đã xóa mềm) và 1 lịch hẹn PV đã "Đỗ PV" + "Đã đi làm"; ứng viên "Trần Thị Bình" có sẵn 3 lần hẹn PV (bùng PV → đỗ nhưng không đi làm kèm lý do → hẹn lại sắp tới) + 1 lịch gọi lại — để thử ngay màn Chi tiết ứng viên và Lịch hẹn, xem mục 5; ứng viên "Hoàng Văn Đạt" (Sale Demo B) đã được đặt sẵn ở trạng thái đã vào Cột chăm sóc (seed thẳng, không còn worker tự động quét — xem mục 5.7) nên xuất hiện ngay trong tab **Cột chăm sóc** — để thử ngay mục 5.7; "Nhóm Sale Demo" đã có sẵn cấu hình vòng quay tự động phân chia [Sale Demo A → Sale Demo B] nhưng cố ý để **TẮT** — để thử ngay mục 5.8 mà không ảnh hưởng các bước demo phân chia thủ công khác.
 
 ---
 
@@ -205,17 +204,17 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 7. Bấm **Đặt lịch hẹn PV mới** ngay trên trang **Lịch hẹn** (không cần vào Candidate trước) → tìm ứng viên theo tên/SĐT → chọn → nhập công ty đối tác + ngày giờ → xác nhận, không cần mở màn Chi tiết ứng viên trước.
 8. Đăng nhập `sale_demo_a` / `123456` → vào **Lịch hẹn** → chỉ thấy lịch hẹn của ứng viên mình phụ trách ("Nguyễn Văn An"), không thấy lịch của `sale_demo_b`. Đăng nhập `mkt_demo` / `123456` → menu không có mục **Lịch hẹn** (MKT chỉ xem dữ liệu ứng viên, không xử lý pipeline theo `docs/10` Mục 6).
 
-### 5.7. Cột chăm sóc tự động & Cấu hình vận hành (Phase 5)
+### 5.7. Cột chăm sóc (Phase 5)
 
-1. Đăng nhập `sale_demo_a` / `123456` (đồng đội cùng nhóm với `sale_demo_b`, không phụ trách lead dưới đây) → vào **Ứng viên** → bấm tab **Cột chăm sóc** → thấy sẵn ứng viên mẫu "Hoàng Văn Đạt" (do `sale_demo_b` phụ trách, đã gọi 1 lần rồi bị bỏ quên quá ngưỡng) với trạng thái khóa **"Đang rảnh"**.
+> **[2026-07-24] ĐÃ GỠ BỎ HẲN worker tự động quét-vào-cột-chăm-sóc** (từng chạy nền mỗi 2 phút, so ngưỡng thời gian cấu hình được ở màn **Cấu hình vận hành** — màn này cũng đã bị xóa hẳn, xem mục 5.10) — theo yêu cầu trực tiếp người dùng ("hiện tại không sử dụng... nữa rồi", "tắt hẳn cả 2 tính năng nghiệp vụ"). Cột chăm sóc (khóa/mở khóa xử lý, giữ số, Admin gỡ khỏi cột, xem theo nhóm) **vẫn hoạt động bình thường** — chỉ khác là không còn cách nào để 1 lead TỰ ĐỘNG vào cột chăm sóc nữa; dữ liệu mẫu "Hoàng Văn Đạt" bên dưới được seed sẵn ở trạng thái đã-vào-cột-chăm-sóc để vẫn demo được các thao tác còn lại.
+
+1. Đăng nhập `sale_demo_a` / `123456` (đồng đội cùng nhóm với `sale_demo_b`, không phụ trách lead dưới đây) → vào **Ứng viên** → bấm tab **Cột chăm sóc** → thấy sẵn ứng viên mẫu "Hoàng Văn Đạt" (do `sale_demo_b` phụ trách, seed sẵn ở trạng thái đã vào cột chăm sóc) với trạng thái khóa **"Đang rảnh"**.
 2. Bấm **Mở xử lý** trên dòng đó → hệ thống tự động chiếm khóa xử lý (không cần thao tác gì thêm) và mở màn Chi tiết ứng viên — thấy badge **"Cột chăm sóc — Đang xử lý: Bạn"**. Quay lại tab **Cột chăm sóc** → trạng thái khóa đã đổi thành **"Đang xử lý: Bạn"**.
 3. Đăng nhập bằng 1 tài khoản Sale khác cùng nhóm (vd tự tạo qua **Quản lý tài khoản**, hoặc dùng `sale_demo_c` sau khi Admin chuyển vào cùng nhóm) → vào **Cột chăm sóc** → thử bấm **Mở xử lý** trên lead đang bị `sale_demo_a` khóa → hệ thống từ chối (409, "Sale ... đang xử lý, vui lòng thử lại sau").
 4. Quay lại `sale_demo_a` → bấm **Giải phóng** trên dòng đó → khóa được gỡ, dòng trở lại **"Đang rảnh"**, Sale khác giờ mở xử lý được.
-5. Đăng nhập `sale_demo_b` / `123456` (chủ sở hữu lead) → mở ứng viên "Hoàng Văn Đạt" → bấm **Giữ số** → xác nhận popup cảnh báo → thấy badge **"Đang giữ số"** ngay trên trang. Vào lại tab **Cột chăm sóc** bằng tài khoản khác → lead này không còn tự động bị đẩy vào cột chăm sóc lần nữa dù bỏ quên tiếp (cơ chế quét bỏ qua lead đang giữ số). Bấm **Bỏ giữ số** để hủy.
+5. Đăng nhập `sale_demo_b` / `123456` (chủ sở hữu lead) → mở ứng viên "Hoàng Văn Đạt" → bấm **Giữ số** → xác nhận popup cảnh báo → thấy badge **"Đang giữ số"** ngay trên trang. Bấm **Bỏ giữ số** để hủy.
 6. Đăng nhập `admin` / `123456` → vào **Cột chăm sóc** → thấy toàn bộ lead trong cột chăm sóc (không giới hạn theo nhóm, khác Sale/Leader). Bấm **Gỡ** trên 1 dòng → xác nhận → lead biến mất khỏi cột chăm sóc nhưng vẫn còn nguyên trong danh sách **Ứng viên** (không bị xóa).
 7. Đăng nhập `mkt_demo` / `123456` → menu **Ứng viên** không có tab **Cột chăm sóc** (MKT không có quyền xem, theo Mục 5 `docs/13`).
-8. Vẫn với `admin` → vào menu **Cấu hình vận hành** (chỉ Admin thấy mục này) → thấy tham số **"Ngưỡng thời gian vào Cột chăm sóc (phút)"** đang là `30`. Bấm **Sửa** → đổi thành 1 giá trị khác (vd `45`) → xác nhận popup cảnh báo ảnh hưởng toàn hệ thống → lưu thành công, cột "Cập nhật gần nhất" đổi theo. Đăng nhập bằng vai trò khác (Quản lý/Leader/Sale) → không thấy mục **Cấu hình vận hành** trên menu, và gọi thẳng API cũng bị từ chối (chỉ Admin).
-9. Cơ chế quét tự động chạy nền mỗi 2 phút (không cần thao tác gì) — 1 lead bất kỳ đã qua ít nhất 1 lần xử lý (có "Xử lý gần nhất") mà quá ngưỡng thời gian cấu hình ở bước 8, không bị giữ số, sẽ tự động xuất hiện trong **Cột chăm sóc** ở lần quét kế tiếp; lead hoàn toàn mới chưa xử lý lần nào thì không bao giờ tự vào cột chăm sóc dù để lâu.
 
 ### 5.8. Tự động phân chia lead — Round-robin (Phase 6)
 
@@ -240,13 +239,7 @@ Chạy thành công khi thấy dòng `Ready in ...`. Mở trình duyệt vào `h
 
 ### 5.10. Thông báo Zalo (Phase 8)
 
-Không có màn hình riêng trong app (đúng Mục 10, `docs/09`: "hệ thống hiện tại chưa cần thêm thông báo trong app") — chỉ có API `GET /notification` (mỗi tài khoản xem lịch sử thông báo của chính mình) và tham số cấu hình `NOTIFICATION_LEAD_MINUTES` trên màn hình **Cấu hình vận hành** đã có từ Phase 5. Cách kiểm thử nhanh nhất là qua API/database, không qua giao diện:
-
-1. Đăng nhập `admin`/`123456` → **Cấu hình vận hành** → thấy dòng **"Số phút nhắc trước giờ hẹn qua Zalo (phút)"** = 15 (seed sẵn) → sửa được giống hệt cách sửa ngưỡng Cột chăm sóc (Phase 5).
-2. Dữ liệu mẫu đã seed sẵn 1 ứng viên **"Đặng Văn Phúc"** (Sale Demo A) với 1 lịch gọi lại đặt 5 phút sau thời điểm seed — khởi động backend (`npm run start:dev`), đợi tối đa 2 phút (chu kỳ quét của worker), gọi `GET /notification` bằng tài khoản `sale_demo_a` → thấy 1 thông báo `type=callback_reminder`, `status=sent`.
-3. Đặt 1 lịch hẹn PV/gọi lại mới cho 1 ứng viên (qua trang Chi tiết ứng viên) với giờ hẹn CÒN XA (vd 5 ngày sau) → sau lượt quét kế tiếp, `GET /notification` (Sale phụ trách) thấy dòng `status=pending`, `sent_at=null` — đúng nghĩa "đã lên lịch, chưa tới giờ gửi".
-4. Dời lịch hẹn đó lại gần hơn hoặc chuyển lead sang Sale khác trước khi tới giờ gửi → thông báo `pending` tự cập nhật đúng giờ/đúng người mới, không tạo thêm dòng trùng.
-5. Đánh dấu lịch gọi lại "đã hoàn tất" trước giờ nhắc → không có thông báo nào được tạo cho lịch đó.
+> **[2026-07-24] ĐÃ GỠ BỎ HẲN** worker nhắc lịch qua Zalo (tham số cấu hình `NOTIFICATION_LEAD_MINUTES`, `ZaloClientService`) cùng màn hình **Cấu hình vận hành** nó dùng chung với Phase 5 — theo yêu cầu trực tiếp người dùng ("không sử dụng... nữa rồi", "xoá hẳn module cấu hình vận hành"). Kênh Zalo không còn tồn tại trong hệ thống. Tính năng nhắc lịch gọi lại còn lại (chuông + toast **trong ứng dụng**, đúng thời điểm đặt lịch — dự án phụ, không thuộc phạm vi Phase 8 gốc) vẫn hoạt động bình thường, xem `NotificationScannerService#tickInAppCallback`.
 
 ### 5.11. Nhật ký, Trùng lặp nâng cao & Phân quyền chi tiết (Phase 9)
 
@@ -259,7 +252,7 @@ Không có màn hình riêng trong app (đúng Mục 10, `docs/09`: "hệ thốn
 
 ### 5.12. Phân quyền theo module (dự án phụ, 2026-07-24)
 
-1. Đăng nhập `admin`/`123456` → menu bên trái có mục **Phân quyền** (icon khiên, cuối danh sách) → vào `/permissions`, chọn 1 tài khoản Sale/Leader/Manager bên trái → bên phải hiện đúng 12 module với 3 lựa chọn Không có quyền/Chỉ xem/Chỉnh sửa.
+1. Đăng nhập `admin`/`123456` → menu bên trái có mục **Phân quyền** (icon khiên, cuối danh sách) → vào `/permissions`, chọn 1 tài khoản Sale/Leader/Manager bên trái → bên phải hiện đúng 11 module (module "settings"/Cấu hình vận hành đã bị gỡ bỏ hẳn 2026-07-24, xem mục 5.10) với 3 lựa chọn Không có quyền/Chỉ xem/Chỉnh sửa.
 2. Đặt 1 tài khoản Sale: **Trang chủ Dashboard** = Chỉ xem, **Danh sách đưa đón** = Chỉnh sửa, **Báo cáo** = Không có quyền → **Lưu phân quyền**.
 3. Đăng xuất, đăng nhập lại đúng tài khoản Sale đó → menu không còn mục **Báo cáo**; gõ thẳng URL `/reports` → chuyển hướng sang `/access-denied`; vào **Trang chủ Dashboard** → thấy badge "Chỉ xem — không thể chỉnh sửa", gọi thử API ghi (vd `POST`) bị 403; vào **Danh sách đưa đón** → sửa/thêm dòng bình thường.
 4. Đăng nhập lại `admin` → vào **Phân quyền**, chọn chính tài khoản Admin đang đăng nhập → không có radio nào để sửa (banner báo "Admin luôn có toàn quyền"), gọi thẳng `PUT /module-permission/<id admin>` cũng bị từ chối (400).
@@ -317,6 +310,14 @@ Chỉ số "số cuộc gọi" trong Hiệu suất Sale (`GET /dashboard/perform
 Khoảng thời gian mặc định khi vào Dashboard/Báo cáo là **Tháng này** — tài liệu liệt kê 4 lựa chọn (Hôm nay/Tuần này/Tháng này/Tùy chọn) nhưng không chỉ định mặc định là lựa chọn nào.
 
 ### Ghi chú giả định của Phase 8 (Thông báo Zalo) — nghiệp vụ tài liệu chưa mô tả
+
+> **[2026-07-24] ĐÃ GỠ BỎ HẲN — toàn bộ đoạn mô tả bên dưới chỉ còn giá trị
+> LỊCH SỬ.** Worker nhắc lịch qua Zalo (`NOTIFICATION_LEAD_MINUTES`,
+> `ZaloClientService`) cùng màn hình **Cấu hình vận hành** (`SystemConfig`,
+> `GET/PUT /config`) nó dùng chung với Phase 5 đã bị xóa hoàn toàn — theo
+> yêu cầu trực tiếp người dùng ("không sử dụng... nữa rồi", "xoá hẳn module
+> cấu hình vận hành"). Kênh Zalo không còn tồn tại trong hệ thống — xem
+> mục 5.10.
 
 `docs/09` Mục 11.5 tự xác nhận: "mới xác nhận kênh gửi là Zalo, chưa xác định rõ những sự kiện cụ thể nào sẽ kích hoạt gửi thông báo" — nhưng `docs/11` (Mục 2.14, bảng `notifications`) đã chốt cột `type` chỉ có đúng 2 giá trị `callback_reminder`/`interview_reminder`, nên 2 sự kiện kích hoạt (lịch gọi lại, lịch hẹn PV) coi như đã được xác định qua thiết kế database — chỉ còn "tần suất" (bao nhiêu phút trước giờ hẹn) và "nội dung" tin nhắn là thật sự bỏ ngỏ:
 - **Tần suất:** dùng đúng 1 tham số cấu hình duy nhất `NOTIFICATION_LEAD_MINUTES` (mặc định 15 phút, sửa được ở màn hình Cấu hình vận hành có sẵn từ Phase 5) — khớp cách diễn đạt số ít "gửi đúng thời điểm **cấu hình**" tại tiêu chí hoàn thành Phase 8, `docs/14-roadmap.md`. Không tự thêm nhiều mốc nhắc (vd 1 ngày + 1 giờ trước) vì không có căn cứ trong tài liệu.

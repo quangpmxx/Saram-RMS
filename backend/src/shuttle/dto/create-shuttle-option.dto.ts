@@ -8,8 +8,11 @@ import {
 
 /**
  * Dự án phụ — nâng cấp toàn diện: POST /shuttle/options — thêm 1 giá trị mới
- * vào danh sách gợi ý của 1 trong 9 trường "chọn", kèm màu nền tự chọn (yêu
- * cầu trực tiếp người dùng: "dữ liệu mới khi thêm thì được chọn màu nền").
+ * vào danh sách gợi ý của 1 trong các trường "chọn", kèm màu nền tự chọn
+ * (yêu cầu trực tiếp người dùng: "dữ liệu mới khi thêm thì được chọn màu
+ * nền"). "company" KHÔNG còn nằm trong danh sách này (2026-07-26, yêu cầu
+ * trực tiếp người dùng: "công ty chính là đơn hàng") — quản lý riêng qua
+ * module Quản lý đơn hàng (OrderRecord), xem shuttle.service.ts#listCompanies().
  * "interview_result" tách riêng khỏi "status" (yêu cầu trực tiếp người dùng:
  * tách cột "Trạng thái" cũ thành "Tình trạng đón" + "Kết quả PV").
  * "interview_time" (Giờ phỏng vấn) đổi từ ô nhập tay tự do sang chọn từ
@@ -22,7 +25,6 @@ import {
  * value = tên tài khoản có sẵn, không cho gõ tay tên mới.
  */
 export const SHUTTLE_OPTION_FIELDS = [
-  'company',
   'area',
   'type',
   'sale',

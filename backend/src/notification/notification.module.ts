@@ -1,20 +1,14 @@
 import { Module } from '@nestjs/common';
-import { SystemConfigModule } from '../system-config/system-config.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { NotificationScannerService } from './notification-scanner.service';
-import { ZaloClientService } from './zalo-client.service';
 
 @Module({
-  imports: [SystemConfigModule, AuditLogModule, RealtimeModule],
+  imports: [AuditLogModule, RealtimeModule],
   controllers: [NotificationController],
-  providers: [
-    NotificationService,
-    NotificationScannerService,
-    ZaloClientService,
-  ],
+  providers: [NotificationService, NotificationScannerService],
   exports: [NotificationScannerService],
 })
 export class NotificationModule {}

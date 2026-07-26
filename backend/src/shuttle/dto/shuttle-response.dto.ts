@@ -6,7 +6,8 @@ export interface ShuttleResponseDto {
   date: string;
   full_name: string;
   phone_number: string;
-  company: string | null;
+  /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — tham chiếu OrderRecord.id, resolve tên/màu ở frontend qua GET /shuttle/companies (khớp cách các trường "chọn" khác đã làm). */
+  company_id: string | null;
   area: string | null;
   type: string | null;
   sale: string | null;
@@ -22,7 +23,7 @@ export interface ShuttleResponseDto {
   updated_at: string;
 }
 
-type ShuttleWithRelations = ShuttleRecord & {
+export type ShuttleWithRelations = ShuttleRecord & {
   createdBy: Pick<Account, 'id' | 'fullName'>;
   updatedBy: Pick<Account, 'id' | 'fullName'>;
 };
@@ -37,7 +38,7 @@ export function toShuttleResponse(
     date: record.date.toISOString().slice(0, 10),
     full_name: record.fullName,
     phone_number: record.phoneNumber,
-    company: record.company,
+    company_id: record.companyId,
     area: record.area,
     type: record.type,
     sale: record.sale,

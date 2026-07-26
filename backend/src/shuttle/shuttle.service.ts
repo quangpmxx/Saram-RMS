@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -23,11 +24,11 @@ import { SaleAccountItemDto } from './dto/sale-account-response.dto';
 import {
   SHUTTLE_INCLUDE,
   ShuttleResponseDto,
+  ShuttleWithRelations,
   toShuttleResponse,
 } from './dto/shuttle-response.dto';
 
 const OPTION_FIELDS = [
-  'company',
   'area',
   'type',
   'sale',
@@ -71,7 +72,7 @@ export class ShuttleService {
         lte: query.date_to ? new Date(query.date_to) : undefined,
       };
     }
-    if (query.company) where.company = query.company;
+    if (query.company_id) where.companyId = query.company_id;
     if (query.type) where.type = query.type;
     if (query.sale) where.sale = query.sale;
     if (query.driver) where.driver = query.driver;
@@ -101,26 +102,31 @@ export class ShuttleService {
     dto: CreateShuttleDto,
     currentUser: AuthenticatedUser,
   ): Promise<ShuttleResponseDto> {
-    const record = await this.prisma.shuttleRecord.create({
-      data: {
-        date: new Date(dto.date),
-        fullName: dto.full_name,
-        phoneNumber: dto.phone_number,
-        company: dto.company,
-        area: dto.area,
-        type: dto.type,
-        sale: dto.sale,
-        driver: dto.driver,
-        interviewTime: dto.interview_time,
-        contractor: dto.contractor,
-        status: dto.status,
-        interviewResult: dto.interview_result,
-        note: dto.note,
-        createdById: currentUser.id,
-        updatedById: currentUser.id,
-      },
-      include: SHUTTLE_INCLUDE,
-    });
+    let record: ShuttleWithRelations;
+    try {
+      record = await this.prisma.shuttleRecord.create({
+        data: {
+          date: new Date(dto.date),
+          fullName: dto.full_name,
+          phoneNumber: dto.phone_number,
+          companyId: dto.company_id,
+          area: dto.area,
+          type: dto.type,
+          sale: dto.sale,
+          driver: dto.driver,
+          interviewTime: dto.interview_time,
+          contractor: dto.contractor,
+          status: dto.status,
+          interviewResult: dto.interview_result,
+          note: dto.note,
+          createdById: currentUser.id,
+          updatedById: currentUser.id,
+        },
+        include: SHUTTLE_INCLUDE,
+      });
+    } catch (error) {
+      throw this.mapCompanyForeignKeyError(error);
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -147,26 +153,31 @@ export class ShuttleService {
       throw new NotFoundException('Không tìm thấy dòng đưa đón');
     }
 
-    const record = await this.prisma.shuttleRecord.update({
-      where: { id },
-      data: {
-        date: dto.date === undefined ? undefined : new Date(dto.date),
-        fullName: dto.full_name,
-        phoneNumber: dto.phone_number,
-        company: dto.company,
-        area: dto.area,
-        type: dto.type,
-        sale: dto.sale,
-        driver: dto.driver,
-        interviewTime: dto.interview_time,
-        contractor: dto.contractor,
-        status: dto.status,
-        interviewResult: dto.interview_result,
-        note: dto.note,
-        updatedById: currentUser.id,
-      },
-      include: SHUTTLE_INCLUDE,
-    });
+    let record: ShuttleWithRelations;
+    try {
+      record = await this.prisma.shuttleRecord.update({
+        where: { id },
+        data: {
+          date: dto.date === undefined ? undefined : new Date(dto.date),
+          fullName: dto.full_name,
+          phoneNumber: dto.phone_number,
+          companyId: dto.company_id === undefined ? undefined : dto.company_id,
+          area: dto.area,
+          type: dto.type,
+          sale: dto.sale,
+          driver: dto.driver,
+          interviewTime: dto.interview_time,
+          contractor: dto.contractor,
+          status: dto.status,
+          interviewResult: dto.interview_result,
+          note: dto.note,
+          updatedById: currentUser.id,
+        },
+        include: SHUTTLE_INCLUDE,
+      });
+    } catch (error) {
+      throw this.mapCompanyForeignKeyError(error);
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -203,10 +214,11 @@ export class ShuttleService {
   }
 
   /**
-   * Danh sách gợi ý (kèm màu) của 8 trường "chọn" — đọc từ bảng
+   * Danh sách gợi ý (kèm màu) của các trường "chọn" — đọc từ bảng
    * shuttle_options (LƯU LẠI, khác cách cũ suy ra từ giá trị distinct trong
    * shuttle_records) để hỗ trợ xóa riêng từng giá trị mà không đụng dữ liệu
-   * các dòng đưa đón đã nhập.
+   * các dòng đưa đón đã nhập. "company" KHÔNG còn ở đây (2026-07-26) — xem
+   * listCompanies() bên dưới.
    */
   async getOptions(): Promise<ShuttleOptionsResponseDto> {
     const rows = await this.prisma.shuttleOption.findMany({
@@ -221,7 +233,6 @@ export class ShuttleService {
     }
 
     return {
-      companies: byField.get('company') ?? [],
       areas: byField.get('area') ?? [],
       types: byField.get('type') ?? [],
       // "sale" chỉ lưu MÀU (value = tên tài khoản thật, không phải tên tự
@@ -375,5 +386,39 @@ export class ShuttleService {
       id: account.id,
       full_name: account.fullName,
     }));
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
+   * — nguồn gợi ý cho cột "Công ty" giờ là module Quản lý đơn hàng
+   * (OrderRecord), KHÔNG còn quản lý riêng qua shuttle_options nữa. Endpoint
+   * riêng trong module Shuttle (không dùng /order-management — endpoint đó
+   * chỉ Admin gọi được) để mọi vai trò đang dùng Danh sách đưa đón đều xem
+   * được, khớp đúng nguyên tắc của listSaleAccounts() ở trên.
+   */
+  async listCompanies(): Promise<ShuttleOptionItemDto[]> {
+    const records = await this.prisma.orderRecord.findMany({
+      orderBy: { name: 'asc' },
+    });
+
+    return records.map((record) => ({
+      id: record.id,
+      value: record.name,
+      color_key: record.colorKey,
+      text_color_key: record.textColorKey,
+    }));
+  }
+
+  /** company_id hợp lệ định dạng nhưng không tồn tại (đơn hàng vừa bị xóa ở tab khác) → P2003 lúc ghi. */
+  private mapCompanyForeignKeyError(error: unknown): Error {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2003'
+    ) {
+      return new BadRequestException(
+        'Công ty đã chọn không tồn tại hoặc đã bị xóa — vui lòng chọn lại',
+      );
+    }
+    return error as Error;
   }
 }

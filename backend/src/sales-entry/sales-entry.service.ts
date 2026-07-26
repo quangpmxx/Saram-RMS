@@ -16,6 +16,7 @@ import {
   DsSaleAccountOptionDto,
   DsSaleCompanyOptionDto,
   DsSaleRowResponseDto,
+  DsSaleRowWithRelations,
   toDsSaleRowResponse,
 } from './dto/ds-sale-response.dto';
 
@@ -121,14 +122,19 @@ export class SalesEntryService {
       throw new BadRequestException('Không thể lưu 1 dòng hoàn toàn trống');
     }
 
-    const record = await this.prisma.salesEntryRecord.create({
-      data: {
-        ...this.toWriteData(dto),
-        createdById: currentUser.id,
-        updatedById: currentUser.id,
-      },
-      include: DS_SALE_INCLUDE,
-    });
+    let record: DsSaleRowWithRelations;
+    try {
+      record = await this.prisma.salesEntryRecord.create({
+        data: {
+          ...this.toWriteData(dto),
+          createdById: currentUser.id,
+          updatedById: currentUser.id,
+        },
+        include: DS_SALE_INCLUDE,
+      });
+    } catch (error) {
+      throw this.mapCompanyForeignKeyError(error);
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -159,14 +165,19 @@ export class SalesEntryService {
       throw new NotFoundException('Không tìm thấy dòng DS Sale');
     }
 
-    const record = await this.prisma.salesEntryRecord.update({
-      where: { id },
-      data: {
-        ...this.toWriteData(dto),
-        updatedById: currentUser.id,
-      },
-      include: DS_SALE_INCLUDE,
-    });
+    let record: DsSaleRowWithRelations;
+    try {
+      record = await this.prisma.salesEntryRecord.update({
+        where: { id },
+        data: {
+          ...this.toWriteData(dto),
+          updatedById: currentUser.id,
+        },
+        include: DS_SALE_INCLUDE,
+      });
+    } catch (error) {
+      throw this.mapCompanyForeignKeyError(error);
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -201,6 +212,25 @@ export class SalesEntryService {
     }
 
     return { deleted: result.count };
+  }
+
+  /**
+   * `company_id`/`sale_user_id`/`pickup_user_id` đều là khóa ngoại thật
+   * (Account/OrderRecord) — id hợp lệ về định dạng (@IsUUID()) nhưng không
+   * tồn tại (vd đơn hàng/tài khoản vừa bị xóa ở tab khác) sẽ khiến Prisma
+   * ném P2003 ngay lúc ghi, khớp cách accounts.service.ts#deletePermanently
+   * đã xử lý cho trường hợp tương tự.
+   */
+  private mapCompanyForeignKeyError(error: unknown): Error {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2003'
+    ) {
+      return new BadRequestException(
+        'Công ty/Sale/Đưa đón đã chọn không tồn tại hoặc đã bị xóa — vui lòng chọn lại',
+      );
+    }
+    return error as Error;
   }
 
   private toWriteData(dto: UpsertDsSaleRowDto) {
@@ -257,15 +287,16 @@ export class SalesEntryService {
 
   /**
    * Mục 4, yêu cầu người dùng: "Tạo service/API abstraction riêng để lấy
-   * danh sách công ty... nếu chức năng công ty hợp tác chưa tồn tại thì để
-   * dropdown rỗng có thông báo." Module "Quản lý đơn hàng" (nơi sẽ quản lý
-   * công ty hợp tác) hiện vẫn là khung sườn trống (yêu cầu trực tiếp người
-   * dùng, 2026-07-16) — CHƯA có bảng dữ liệu thật để đọc, nên trả về mảng
-   * rỗng. Giữ nguyên hàm/endpoint riêng biệt để sau này chỉ cần đổi PHẦN
-   * THÂN hàm này sang đọc từ bảng công ty hợp tác thật, không đổi gì ở
-   * controller/frontend.
+   * danh sách công ty." Từ 2026-07-26 (yêu cầu trực tiếp người dùng: "công
+   * ty chính là đơn hàng"), nguồn dữ liệu thật là module "Quản lý đơn hàng"
+   * (OrderRecord) — giữ nguyên hàm/endpoint riêng biệt như thiết kế ban đầu,
+   * không đổi gì ở controller/frontend.
    */
-  listCompanies(): DsSaleCompanyOptionDto[] {
-    return [];
+  async listCompanies(): Promise<DsSaleCompanyOptionDto[]> {
+    const records = await this.prisma.orderRecord.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
+    return records;
   }
 }

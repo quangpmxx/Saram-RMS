@@ -235,9 +235,6 @@ model Account {
   createdInterviews InterviewAppointment[] @relation("InterviewAppointmentCreatedBy")
   createdCallbacks  CallbackSchedule[]     @relation("CallbackScheduleCreatedBy")
 
-  // Phase 5 — quan hệ ngược từ SystemConfig
-  updatedConfigs SystemConfig[]
-
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ColumnWidthConfig
   updatedColumnWidthConfigs ColumnWidthConfig[]
 
@@ -596,21 +593,12 @@ model CallbackSchedule {
 }
 
 // ── Phase 5 — Cột chăm sóc tự động (Care Pool) ───────────────────────────
-
-/// Mục 2.15, tài liệu 11 — Tham số cấu hình hệ thống (vd ngưỡng thời gian
-/// vào cột chăm sóc). Seed sẵn CARE_POOL_THRESHOLD_MINUTES="30" khi cài đặt.
-model SystemConfig {
-  id          String   @id @default(uuid()) @db.Uuid
-  configKey   String   @unique @map("config_key") @db.VarChar(100)
-  configValue String   @map("config_value") @db.VarChar(255)
-  description String?  @db.VarChar(255)
-  updatedById String   @map("updated_by") @db.Uuid
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  updatedBy Account @relation(fields: [updatedById], references: [id])
-
-  @@map("system_configs")
-}
+//
+// Mô hình SystemConfig (màn hình "Cấu hình vận hành", tham số
+// CARE_POOL_THRESHOLD_MINUTES/NOTIFICATION_LEAD_MINUTES) đã bị GỠ BỎ HẲN
+// (2026-07-24, yêu cầu trực tiếp người dùng) cùng 2 worker tự động đứng sau
+// nó (CarePoolScannerService, phần nhắc lịch qua Zalo của
+// NotificationScannerService) — không còn sử dụng nữa, xem README.
 
 /// Dự án phụ — nâng cấp toàn diện: độ rộng cột do Admin tùy chỉnh, áp dụng
 /// chung cho MỌI tài khoản (không phải preference riêng từng người).
@@ -819,7 +807,6 @@ enum LeaveDecision {
 
 // ── Phase 9 — Phân quyền chi tiết (khung, chưa seed danh sách quyền) ────
 
-
 // ── Dự án phụ — nâng cấp toàn diện: Danh sách đưa đón ────────────────────
 
 /// Danh sách đưa đón lao động — nhập tay ĐỘC LẬP, thay thế Google Sheet đang
@@ -832,7 +819,10 @@ model ShuttleRecord {
   date            DateTime @db.Date
   fullName        String   @map("full_name") @db.VarChar(150)
   phoneNumber     String   @map("phone_number") @db.VarChar(20)
-  company         String?  @db.VarChar(150)
+  /// Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
+  /// — đổi từ chuỗi tự do sang khóa ngoại thật tới OrderRecord (module Quản
+  /// lý đơn hàng), khớp đúng cách sales_entry_records.company_id đã làm.
+  companyId       String?  @map("company_id") @db.Uuid
   area            String?  @db.VarChar(150)
   type            String?  @db.VarChar(100)
   sale            String?  @db.VarChar(150)
@@ -854,24 +844,28 @@ model ShuttleRecord {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  createdBy Account @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
-  updatedBy Account @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
+  createdBy Account      @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
+  updatedBy Account      @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
+  company   OrderRecord? @relation(fields: [companyId], references: [id])
 
   @@index([date])
   @@index([status])
   @@index([interviewResult])
+  @@index([companyId])
   @@map("shuttle_records")
 }
 
 /// Dự án phụ — nâng cấp toàn diện: danh sách gợi ý CÓ LƯU LẠI (khác cách cũ
-/// tự suy ra từ giá trị distinct trong shuttle_records) cho 7 trường "chọn"
-/// của Danh sách đưa đón (Công ty/Khu vực/Loại hình/Sale/Nhân viên đưa đón/
-/// Nhà thầu/Trạng thái) — cần bảng riêng vì yêu cầu trực tiếp người dùng:
-/// xóa được 1 giá trị cũ khỏi danh sách gợi ý (không đụng dữ liệu các dòng
-/// đã nhập), và chọn màu nền khi thêm giá trị mới — cả 2 việc này không thể
-/// làm được nếu danh sách chỉ suy ra từ dữ liệu sẵn có. `colorKey` tham chiếu
-/// 1 trong các màu cố định ở SHUTTLE_OPTION_COLORS (frontend) — null = màu
-/// mặc định (xám).
+/// tự suy ra từ giá trị distinct trong shuttle_records) cho các trường
+/// "chọn" của Danh sách đưa đón (Khu vực/Loại hình/Sale/Nhân viên đưa đón/
+/// Nhà thầu/Trạng thái/Kết quả PV/Giờ phỏng vấn) — cần bảng riêng vì yêu cầu
+/// trực tiếp người dùng: xóa được 1 giá trị cũ khỏi danh sách gợi ý (không
+/// đụng dữ liệu các dòng đã nhập), và chọn màu nền khi thêm giá trị mới —
+/// cả 2 việc này không thể làm được nếu danh sách chỉ suy ra từ dữ liệu sẵn
+/// có. `colorKey` tham chiếu 1 trong các màu cố định ở SHUTTLE_OPTION_COLORS
+/// (frontend) — null = màu mặc định (xám). "Công ty" KHÔNG còn nằm trong
+/// bảng này nữa (2026-07-26, yêu cầu trực tiếp người dùng: "công ty chính
+/// là đơn hàng") — xem OrderRecord + ShuttleRecord.companyId ở trên.
 model ShuttleOption {
   id           String   @id @default(uuid()) @db.Uuid
   field        String   @db.VarChar(20)
@@ -1158,11 +1152,9 @@ model CompanyLocationConfig {
 
 /// Dự án phụ — nâng cấp toàn diện (2026-07-17, ngoài phạm vi Design Freeze
 /// docs/09-13, yêu cầu trực tiếp người dùng): "DS Sale" — bảng con trong
-/// module "Nhập doanh số". `companyId` CHƯA có bảng công ty hợp tác thật để
-/// tham chiếu (module "Quản lý đơn hàng" còn để trống chờ phát triển) — để
-/// nullable, KHÔNG gắn quan hệ Prisma, chỉ giữ chỗ cho khóa ngoại thật khi
-/// bảng công ty hợp tác ra đời (xem sales-entry.service.ts, endpoint GET
-/// /sales-entry/ds-sale/companies hiện trả về rỗng). `saleUserId`/
+/// module "Nhập doanh số". `companyId` tham chiếu OrderRecord thật (module
+/// "Quản lý đơn hàng", 2026-07-26: "công ty chính là đơn hàng" — xem
+/// sales-entry.service.ts#listCompanies()). `saleUserId`/
 /// `pickupUserId` tham chiếu Account thật (vai trò 'sale'/'shuttle_staff'),
 /// lưu bằng id để đổi tên tài khoản không làm lệch dữ liệu cũ. Mọi trường
 /// nghiệp vụ đều nullable — dòng nháp chưa nhập gì vẫn tạo được ở phía
@@ -1184,10 +1176,11 @@ model SalesEntryRecord {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  saleUser   Account? @relation("SalesEntrySaleUser", fields: [saleUserId], references: [id])
-  pickupUser Account? @relation("SalesEntryPickupUser", fields: [pickupUserId], references: [id])
-  createdBy  Account  @relation("SalesEntryCreatedBy", fields: [createdById], references: [id])
-  updatedBy  Account  @relation("SalesEntryUpdatedBy", fields: [updatedById], references: [id])
+  saleUser   Account?     @relation("SalesEntrySaleUser", fields: [saleUserId], references: [id])
+  pickupUser Account?     @relation("SalesEntryPickupUser", fields: [pickupUserId], references: [id])
+  createdBy  Account      @relation("SalesEntryCreatedBy", fields: [createdById], references: [id])
+  updatedBy  Account      @relation("SalesEntryUpdatedBy", fields: [updatedById], references: [id])
+  company    OrderRecord? @relation(fields: [companyId], references: [id])
 
   @@index([fullName])
   @@index([employeeCode])
@@ -1239,4 +1232,29 @@ enum ModulePermissionLevel {
   edit
 
   @@map("module_permission_level")
+}
+
+/// Dự án phụ — nâng cấp toàn diện (2026-07-26, ngoài phạm vi Design Freeze
+/// docs/09-13, yêu cầu trực tiếp người dùng): module "Quản lý đơn hàng" —
+/// phiên bản đơn giản nhất, chỉ 1 danh sách tên đơn hàng, mỗi tên chọn được
+/// màu nền/màu chữ riêng. Cấu trúc + cách dùng `colorKey`/`textColorKey`
+/// khớp Y HỆT `ShuttleOption` ở trên (yêu cầu trực tiếp người dùng: "giống
+/// như trang đưa đón lao động") — cùng bảng màu SHUTTLE_OPTION_COLORS, cùng
+/// nguyên tắc không lưu người tạo trên bản ghi (dùng audit log để truy vết).
+/// Chỉ Admin xem/dùng được (module-permission, defaultRoles ['admin']).
+/// Yêu cầu trực tiếp người dùng (cùng ngày): "công ty chính là đơn hàng" —
+/// cột Công ty ở Đưa đón (ShuttleRecord.companyId) và Công ty làm ở Nhập
+/// doanh số (SalesEntryRecord.companyId) đều tham chiếu thẳng bảng này,
+/// KHÔNG có bảng "Company" riêng.
+model OrderRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(255)
+  colorKey     String?  @map("color_key") @db.VarChar(20)
+  textColorKey String?  @map("text_color_key") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  shuttleRecords    ShuttleRecord[]
+  salesEntryRecords SalesEntryRecord[]
+
+  @@map("order_records")
 }

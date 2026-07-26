@@ -836,6 +836,24 @@ export class DashboardService {
       'LG Display',
       'Canon',
     ];
+    // Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn
+    // hàng" — cột company của shuttle_records giờ là companyId (khóa ngoại
+    // OrderRecord), không còn nhận chuỗi tự do nữa. Demo data reuse đúng 5
+    // tên công ty cũ, tự tạo nếu chưa có sẵn trong Quản lý đơn hàng.
+    const partnerCompanyIds: string[] = [];
+    for (const name of PARTNER_COMPANIES) {
+      const existing = await this.prisma.orderRecord.findFirst({
+        where: { name },
+        select: { id: true },
+      });
+      const company =
+        existing ??
+        (await this.prisma.orderRecord.create({
+          data: { name },
+          select: { id: true },
+        }));
+      partnerCompanyIds.push(company.id);
+    }
 
     const randomFrom = <T>(arr: T[]): T =>
       arr[Math.floor(Math.random() * arr.length)];
@@ -1019,7 +1037,7 @@ export class DashboardService {
             date: randomDateWithinDays(38),
             fullName: `${randomFrom(FIRST_NAMES)} ${randomFrom(LAST_NAMES)}`,
             phoneNumber: `09${Math.floor(10000000 + Math.random() * 89999999)}`,
-            company: randomFrom(PARTNER_COMPANIES),
+            companyId: randomFrom(partnerCompanyIds),
             sale: sale.fullName,
             status,
             interviewResult,

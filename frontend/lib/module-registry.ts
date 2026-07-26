@@ -55,5 +55,4 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   { code: "calendar", href: "/calendar", label: "Lịch hẹn", icon: "calendar", defaultRoles: ["admin", "manager", "leader", "sale"] },
   { code: "audit-log", href: "/audit-log", label: "Nhật ký", icon: "auditLog", defaultRoles: ["admin", "manager"] },
   { code: "accounts", href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", defaultRoles: ["admin"] },
-  { code: "settings", href: "/settings", label: "Cấu hình vận hành", icon: "settings", defaultRoles: ["admin"] },
 ];

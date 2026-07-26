@@ -46,6 +46,12 @@ export class ShuttleController {
     return this.shuttleService.listSaleAccounts();
   }
 
+  /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — nguồn gợi ý cột "Công ty", đọc từ OrderRecord (module Quản lý đơn hàng). */
+  @Get('companies')
+  listCompanies() {
+    return this.shuttleService.listCompanies();
+  }
+
   @Post('options')
   addOption(
     @Body() dto: CreateShuttleOptionDto,

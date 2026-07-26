@@ -16,7 +16,7 @@ import { CalendarController } from '../calendar/calendar.controller';
 import { AuditLogController } from '../audit-log/audit-log.controller';
 import { AccountsController } from '../accounts/accounts.controller';
 import { TeamsController } from '../teams/teams.controller';
-import { SystemConfigController } from '../system-config/system-config.controller';
+import { OrderManagementController } from '../order-management/order-management.controller';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, ngoài phạm vi Design Freeze
@@ -122,16 +122,10 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     defaultRoles: ['admin'],
     controllers: [AccountsController, TeamsController],
   },
-  {
-    code: 'settings',
-    label: 'Cấu hình vận hành',
-    defaultRoles: ['admin'],
-    controllers: [SystemConfigController],
-  },
-  // "Kế toán" và "Quản lý đơn hàng" — CHỈ khung sườn, chưa có controller
-  // backend (trang tĩnh "sắp ra mắt") — không có gì để Guard kiểm tra,
-  // nhưng vẫn liệt kê ở đây (controllers: []) để hiện trong trang Admin
-  // "Phân quyền" và gate được Ở TẦNG FRONTEND (ẩn menu/chặn route).
+  // "Kế toán" — CHỈ khung sườn, chưa có controller backend (trang tĩnh "sắp
+  // ra mắt") — không có gì để Guard kiểm tra, nhưng vẫn liệt kê ở đây
+  // (controllers: []) để hiện trong trang Admin "Phân quyền" và gate được
+  // Ở TẦNG FRONTEND (ẩn menu/chặn route).
   {
     code: 'accounting',
     label: 'Kế toán',
@@ -142,7 +136,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     code: 'order-management',
     label: 'Quản lý đơn hàng',
     defaultRoles: ['admin'],
-    controllers: [],
+    controllers: [OrderManagementController],
   },
 ];
 
