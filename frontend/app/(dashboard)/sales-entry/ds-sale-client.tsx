@@ -11,6 +11,7 @@ import { Field, Input, Select, Checkbox } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import type {
+  AccountRole,
   AppRealtimeEvent,
   DsSaleAccountOption,
   DsSaleCompanyOption,
@@ -96,10 +97,21 @@ const TEXT_FIELDS = ["employee_code", "full_name", "date_of_birth", "identity_nu
 type TextField = (typeof TEXT_FIELDS)[number];
 
 function toOption(account: DsSaleAccountOption): DsSaleSelectOption {
-  return { id: account.id, label: account.full_name, sublabel: account.team_name, avatarUrl: account.avatar_url };
+  return {
+    id: account.id,
+    label: account.nickname ?? account.full_name,
+    sublabel: account.team_name,
+    avatarUrl: account.avatar_url,
+  };
 }
 
-function makeDraftRow(): SheetRow {
+/**
+ * Yêu cầu trực tiếp người dùng (2026-07-27): "Sale sẽ tự nhập doanh số cho
+ * chính mình... không cần chọn sale ở cột này mà sẽ hiện luôn tên mình" —
+ * dòng nháp mới của Sale luôn có sẵn `sale = defaultSale` (chính họ), các
+ * vai trò khác vẫn để trống như trước (defaultSale = null).
+ */
+function makeDraftRow(defaultSale: DsSaleSelectOption | null = null): SheetRow {
   return {
     localId: `draft-${crypto.randomUUID()}`,
     id: null,
@@ -110,7 +122,7 @@ function makeDraftRow(): SheetRow {
     hometown: "",
     join_date: "",
     company: null,
-    sale: null,
+    sale: defaultSale,
     pickup: null,
     note: "",
     status: "idle",
@@ -135,7 +147,14 @@ function toSheetRow(row: DsSaleRow): SheetRow {
   };
 }
 
-function isRowBlank(row: SheetRow): boolean {
+/**
+ * `ignoreSale=true` cho vai trò Sale (yêu cầu trực tiếp người dùng,
+ * 2026-07-27) — dòng nháp của Sale luôn có sẵn `sale = chính họ` (xem
+ * makeDraftRow), nên KHÔNG tính trường này khi xét "trống", nếu không dòng
+ * nháp trống sẽ không bao giờ được coi là trống, tự lưu thành dòng rác dù
+ * chưa gõ gì khác — khớp đúng logic isRowBlank() ở backend (sales-entry.service.ts).
+ */
+function isRowBlank(row: SheetRow, ignoreSale = false): boolean {
   return (
     !row.employee_code.trim() &&
     !row.full_name.trim() &&
@@ -144,7 +163,7 @@ function isRowBlank(row: SheetRow): boolean {
     !row.hometown.trim() &&
     !row.join_date &&
     !row.company &&
-    !row.sale &&
+    (ignoreSale || !row.sale) &&
     !row.pickup &&
     !row.note.trim()
   );
@@ -168,6 +187,9 @@ function toInput(row: SheetRow): DsSaleRowInput {
 export function DsSaleClient({
   permissionLevel,
   currentUserId,
+  currentUserRole,
+  currentUserFullName,
+  currentUserNickname,
   initialRows,
   initialSaleAccounts,
   initialPickupAccounts,
@@ -176,6 +198,9 @@ export function DsSaleClient({
 }: {
   permissionLevel: ModulePermissionLevel;
   currentUserId: string;
+  currentUserRole: AccountRole;
+  currentUserFullName: string;
+  currentUserNickname: string | null;
   initialRows: PaginatedResult<DsSaleRow>;
   initialSaleAccounts: DsSaleAccountOption[];
   initialPickupAccounts: DsSaleAccountOption[];
@@ -188,6 +213,14 @@ export function DsSaleClient({
   // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ bảng bằng pointer-events (bảng
   // DS Sale nhập trực tiếp từng ô, quá nhiều field để disable riêng lẻ).
   const isReadOnly = permissionLevel === "view";
+  // Yêu cầu trực tiếp người dùng (2026-07-27): "Sale sẽ tự nhập doanh số
+  // cho chính mình... không cần chọn sale ở cột này mà sẽ hiện luôn tên
+  // mình, chỉ có leader, quản lý, admin là được chọn sale như hiện tại".
+  const isSaleRole = currentUserRole === "sale";
+  const selfOption: DsSaleSelectOption = useMemo(
+    () => ({ id: currentUserId, label: currentUserNickname ?? currentUserFullName }),
+    [currentUserId, currentUserFullName, currentUserNickname],
+  );
 
   // Nguồn dropdown tải sẵn từ SERVER (page.tsx, Mục 4/5/6) — không đổi trong
   // phiên xem trang này nên chỉ cần chuyển dạng 1 lần, không cần useState riêng.
@@ -268,8 +301,8 @@ export function DsSaleClient({
   // nghị thay useEffect, đã dùng ở shuttle-client.tsx) thay vì effect phụ
   // thuộc [sheetRows] — tránh 1 lượt render thừa + lỗi lint set-state-in-effect.
   const lastRow = sheetRows[sheetRows.length - 1];
-  if (!lastRow || lastRow.id !== null || !isRowBlank(lastRow)) {
-    setSheetRows((prev) => [...prev, makeDraftRow()]);
+  if (!lastRow || lastRow.id !== null || !isRowBlank(lastRow, isSaleRole)) {
+    setSheetRows((prev) => [...prev, makeDraftRow(isSaleRole ? selfOption : null)]);
   }
 
   useEffect(() => {
@@ -335,7 +368,7 @@ export function DsSaleClient({
   async function saveRow(row: SheetRow) {
     const localId = row.localId;
 
-    if (isRowBlank(row)) {
+    if (isRowBlank(row, isSaleRole)) {
       setSheetRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: "idle" } : r)));
       return;
     }
@@ -420,14 +453,14 @@ export function DsSaleClient({
   }
 
   function addRow() {
-    const row = makeDraftRow();
+    const row = makeDraftRow(isSaleRole ? selfOption : null);
     focusFieldOnMount.current = `${row.localId}:full_name`;
     setSheetRows((prev) => [...prev.slice(0, -1), row, prev[prev.length - 1]]);
   }
 
   function addMultipleRows(count: number) {
     const clamped = Math.min(Math.max(count, 1), 100);
-    const rows = Array.from({ length: clamped }, () => makeDraftRow());
+    const rows = Array.from({ length: clamped }, () => makeDraftRow(isSaleRole ? selfOption : null));
     setSheetRows((prev) => [...prev.slice(0, -1), ...rows, prev[prev.length - 1]]);
     setAddCountModalOpen(false);
   }
@@ -441,7 +474,7 @@ export function DsSaleClient({
     });
   }
 
-  const selectableRows = sheetRows.filter((r) => r.id !== null || !isRowBlank(r));
+  const selectableRows = sheetRows.filter((r) => r.id !== null || !isRowBlank(r, isSaleRole));
   const allSelected = selectableRows.length > 0 && selectableRows.every((r) => selected.has(r.localId));
 
   function toggleSelectAll() {
@@ -498,7 +531,7 @@ export function DsSaleClient({
       grid.forEach((lineCells, r) => {
         const targetIndex = rowIndex + r;
         while (targetIndex >= next.length - 1) {
-          next.splice(next.length - 1, 0, makeDraftRow());
+          next.splice(next.length - 1, 0, makeDraftRow(isSaleRole ? selfOption : null));
         }
         let updatedRow = next[targetIndex];
         lineCells.forEach((cellValue, c) => {
@@ -616,15 +649,18 @@ export function DsSaleClient({
             emptyLabel="Chưa có dữ liệu công ty hợp tác"
           />
         </Field>
-        <Field label="Sale" uiSize="xs" className="w-36">
-          <DsSaleSearchSelect
-            options={saleAccounts}
-            value={saleFilter}
-            onChange={setSaleFilter}
-            placeholder="Tất cả"
-            emptyLabel="Chưa có tài khoản Sale"
-          />
-        </Field>
+        {/* Sale luôn chỉ xem được dòng của chính mình (ép ở backend) — lọc theo Sale vô nghĩa nên ẩn hẳn ô này. */}
+        {!isSaleRole && (
+          <Field label="Sale" uiSize="xs" className="w-36">
+            <DsSaleSearchSelect
+              options={saleAccounts}
+              value={saleFilter}
+              onChange={setSaleFilter}
+              placeholder="Tất cả"
+              emptyLabel="Chưa có tài khoản Sale"
+            />
+          </Field>
+        )}
         <Field label="Đưa đón" uiSize="xs" className="w-36">
           <DsSaleSearchSelect
             options={pickupAccounts}
@@ -769,7 +805,7 @@ export function DsSaleClient({
           </thead>
           <tbody className={cn(isReadOnly && "pointer-events-none opacity-60")}>
             {sheetRows.map((row, rowIndex) => {
-              const isBlankDraft = row.id === null && isRowBlank(row);
+              const isBlankDraft = row.id === null && isRowBlank(row, isSaleRole);
               const zebra = rowIndex % 2 === 1 ? "bg-slate-50" : "bg-white";
               return (
                 <tr key={row.localId} className={cn(zebra, "group")}>
@@ -866,13 +902,23 @@ export function DsSaleClient({
                     />
                   </td>
                   <td className={cn("border-r border-b border-slate-100 p-0.5", zebra)}>
-                    <DsSaleSearchSelect
-                      options={saleAccounts}
-                      value={row.sale}
-                      onChange={(v) => updateFieldAndSave(row.localId, "sale", v)}
-                      placeholder="Chọn Sale"
-                      emptyLabel="Chưa có tài khoản Sale"
-                    />
+                    {isSaleRole ? (
+                      // Yêu cầu trực tiếp người dùng (2026-07-27): Sale tự
+                      // nhập doanh số cho chính mình — luôn hiện tên mình,
+                      // không mở được ô chọn (đã ép ở backend, đây chỉ là
+                      // phản ánh đúng UX, không phải lớp bảo mật).
+                      <div className="flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                        <span className="min-w-0 truncate text-center">{selfOption.label}</span>
+                      </div>
+                    ) : (
+                      <DsSaleSearchSelect
+                        options={saleAccounts}
+                        value={row.sale}
+                        onChange={(v) => updateFieldAndSave(row.localId, "sale", v)}
+                        placeholder="Chọn Sale"
+                        emptyLabel="Chưa có tài khoản Sale"
+                      />
+                    )}
                   </td>
                   <td className={cn("border-r border-b border-slate-100 p-0.5", zebra)}>
                     <DsSaleSearchSelect

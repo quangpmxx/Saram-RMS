@@ -20,7 +20,7 @@ import {
   ShuttleOptionsResponseDto,
   toShuttleOptionItem,
 } from './dto/shuttle-options-response.dto';
-import { SaleAccountItemDto } from './dto/sale-account-response.dto';
+import { AccountOptionItemDto } from './dto/sale-account-response.dto';
 import {
   SHUTTLE_INCLUDE,
   ShuttleResponseDto,
@@ -74,8 +74,8 @@ export class ShuttleService {
     }
     if (query.company_id) where.companyId = query.company_id;
     if (query.type) where.type = query.type;
-    if (query.sale) where.sale = query.sale;
-    if (query.driver) where.driver = query.driver;
+    if (query.sale_user_id) where.saleUserId = query.sale_user_id;
+    if (query.driver_user_id) where.driverUserId = query.driver_user_id;
     if (query.status) where.status = query.status;
     if (query.interview_result) where.interviewResult = query.interview_result;
 
@@ -112,8 +112,8 @@ export class ShuttleService {
           companyId: dto.company_id,
           area: dto.area,
           type: dto.type,
-          sale: dto.sale,
-          driver: dto.driver,
+          saleUserId: dto.sale_user_id,
+          driverUserId: dto.driver_user_id,
           interviewTime: dto.interview_time,
           contractor: dto.contractor,
           status: dto.status,
@@ -164,8 +164,10 @@ export class ShuttleService {
           companyId: dto.company_id === undefined ? undefined : dto.company_id,
           area: dto.area,
           type: dto.type,
-          sale: dto.sale,
-          driver: dto.driver,
+          saleUserId:
+            dto.sale_user_id === undefined ? undefined : dto.sale_user_id,
+          driverUserId:
+            dto.driver_user_id === undefined ? undefined : dto.driver_user_id,
           interviewTime: dto.interview_time,
           contractor: dto.contractor,
           status: dto.status,
@@ -235,10 +237,10 @@ export class ShuttleService {
     return {
       areas: byField.get('area') ?? [],
       types: byField.get('type') ?? [],
-      // "sale" chỉ lưu MÀU (value = tên tài khoản thật, không phải tên tự
-      // gõ) — xem addOption()/updateOption(), Sale ComboCell ở frontend
-      // dùng key này để tô màu, KHÔNG dùng để liệt kê tên (lấy từ
-      // listSaleAccounts() thay vì đây).
+      // "sale"/"driver" chỉ lưu MÀU (value = account.id thật, không phải
+      // tên) — xem addOption()/updateOption(), Sale/Driver ComboCell ở
+      // frontend dùng key này để tô màu, KHÔNG dùng để liệt kê tên (lấy từ
+      // listSaleAccounts()/listDriverAccounts() thay vì đây).
       sales: byField.get('sale') ?? [],
       drivers: byField.get('driver') ?? [],
       contractors: byField.get('contractor') ?? [],
@@ -375,16 +377,33 @@ export class ShuttleService {
    * riêng trong module Shuttle (không dùng /account — chỉ Admin gọi được
    * theo docs/13) để mọi vai trò đang dùng Danh sách đưa đón đều xem được.
    */
-  async listSaleAccounts(): Promise<SaleAccountItemDto[]> {
+  async listSaleAccounts(): Promise<AccountOptionItemDto[]> {
+    return this.listAccountOptions('sale');
+  }
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-28): "chuyển cả 2 cột sang liên
+   * kết tài khoản thật" — nguồn gợi ý cho cột "Đưa đón", khớp đúng cách
+   * listSaleAccounts() đã làm cho cột "Sale" (role='shuttle_staff' thay vì
+   * 'sale').
+   */
+  async listDriverAccounts(): Promise<AccountOptionItemDto[]> {
+    return this.listAccountOptions('shuttle_staff');
+  }
+
+  private async listAccountOptions(
+    role: 'sale' | 'shuttle_staff',
+  ): Promise<AccountOptionItemDto[]> {
     const accounts = await this.prisma.account.findMany({
-      where: { role: 'sale', status: 'active' },
-      select: { id: true, fullName: true },
+      where: { role, status: 'active' },
+      select: { id: true, fullName: true, nickname: true },
       orderBy: { fullName: 'asc' },
     });
 
     return accounts.map((account) => ({
       id: account.id,
       full_name: account.fullName,
+      nickname: account.nickname,
     }));
   }
 

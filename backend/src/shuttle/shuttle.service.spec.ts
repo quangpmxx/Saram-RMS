@@ -41,8 +41,8 @@ describe('ShuttleService', () => {
     companyId: 'company-1',
     area: 'Bắc Ninh',
     type: 'Chính thức',
-    sale: 'Sale A',
-    driver: 'Anh Hùng',
+    saleUserId: 'sale-1',
+    driverUserId: 'driver-1',
     interviewTime: '08:30',
     contractor: 'Nhà thầu Minh Phát',
     status: 'Đã đón',
@@ -53,6 +53,8 @@ describe('ShuttleService', () => {
     updatedAt: new Date('2026-07-13'),
     createdBy: { id: 'user-1', fullName: 'Sale Demo A' },
     updatedBy: { id: 'user-1', fullName: 'Sale Demo A' },
+    saleUser: { id: 'sale-1', fullName: 'Sale A', nickname: null },
+    driverUser: { id: 'driver-1', fullName: 'Anh Hùng', nickname: null },
   };
 
   beforeEach(async () => {
@@ -109,7 +111,7 @@ describe('ShuttleService', () => {
       expect(result.items[0].date).toBe('2026-07-13');
     });
 
-    it('lọc theo keyword (tên hoặc SĐT), company_id, type, sale, driver, status, khoảng ngày', async () => {
+    it('lọc theo keyword (tên hoặc SĐT), company_id, type, sale_user_id, driver_user_id, status, khoảng ngày', async () => {
       prisma.$transaction.mockResolvedValue([0, []]);
 
       await service.list({
@@ -118,8 +120,8 @@ describe('ShuttleService', () => {
         keyword: '0901',
         company_id: 'company-1',
         type: 'Chính thức',
-        sale: 'Sale A',
-        driver: 'Anh Hùng',
+        sale_user_id: 'sale-1',
+        driver_user_id: 'driver-1',
         status: 'Đã đón',
         date_from: '2026-07-13',
         date_to: '2026-07-14',
@@ -134,8 +136,8 @@ describe('ShuttleService', () => {
           date: { gte: new Date('2026-07-13'), lte: new Date('2026-07-14') },
           companyId: 'company-1',
           type: 'Chính thức',
-          sale: 'Sale A',
-          driver: 'Anh Hùng',
+          saleUserId: 'sale-1',
+          driverUserId: 'driver-1',
           status: 'Đã đón',
         },
       });

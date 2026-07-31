@@ -126,7 +126,10 @@ export function CandidateDetailClient({
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
   // UI Polish — "Tình trạng cuộc gọi"/"Kết quả cuộc gọi" đổi từ popup sang
   // chọn ngay tại trang (vẫn 1 giá trị mỗi ô như cũ, không đổi database) —
-  // nút "Gọi ngay" đổi thành "Lưu thông tin" để lưu 2 lựa chọn này.
+  // nút "Gọi ngay" đổi thành "Lưu thông tin". Từ 2026-07-27 (yêu cầu trực
+  // tiếp người dùng), nút này gộp lưu LUÔN cả Năm sinh/Địa chỉ đang gõ dở
+  // (2 ô đó vốn chỉ lưu được bằng Enter) — xem handleSaveCallInfo() và
+  // birthYearDraft/addressDraft bên dưới.
   const [callStatusId, setCallStatusId] = useState(initialCandidate.call_status?.id ?? "");
   const [callResultId, setCallResultId] = useState(initialCandidate.call_result?.id ?? "");
   const [zaloStatusId, setZaloStatusId] = useState(initialCandidate.zalo_status?.id ?? "");
@@ -152,6 +155,31 @@ export function CandidateDetailClient({
   useEffect(() => {
     liveCallInfoRef.current = { candidateId: candidate.id, callStatusId, callResultId, zaloStatusId };
   });
+
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-27): "khi ấn lưu thông tin thì mọi
+   * thứ sẽ được lưu lại luôn" — Năm sinh/Địa chỉ vốn CHỈ lưu được bằng Enter
+   * (không có nút, xem inline-edit-field.tsx). Giữ nguyên Enter hoạt động y
+   * hệt cũ, CHỈ THÊM đường lưu thứ 2: theo dõi giá trị đang gõ dở ở đây (qua
+   * InlineEditField#onDraftChange) để nút "Lưu thông tin" gộp lưu cùng lúc
+   * với 3 lựa chọn tiến trình cuộc gọi bên dưới.
+   */
+  const [birthYearDraft, setBirthYearDraft] = useState(candidate.birth_year?.toString() ?? "");
+  const [addressDraft, setAddressDraft] = useState(candidate.address ?? "");
+  // "Điều chỉnh state khi render" (khớp mẫu DateShortInput ở shuttle-client.tsx)
+  // — đồng bộ lại 2 ô nháp trên nếu candidate.birth_year/address đổi từ BÊN
+  // NGOÀI (Enter đã lưu xong, hoặc cập nhật realtime từ người khác), tránh
+  // "Lưu thông tin" vô tình ghi đè lại giá trị cũ đã gõ dở từ trước đó.
+  const [syncedBirthYear, setSyncedBirthYear] = useState(candidate.birth_year);
+  if (candidate.birth_year !== syncedBirthYear) {
+    setSyncedBirthYear(candidate.birth_year);
+    setBirthYearDraft(candidate.birth_year?.toString() ?? "");
+  }
+  const [syncedAddress, setSyncedAddress] = useState(candidate.address);
+  if (candidate.address !== syncedAddress) {
+    setSyncedAddress(candidate.address);
+    setAddressDraft(candidate.address ?? "");
+  }
   const [isSavingZaloFriendStatus, setIsSavingZaloFriendStatus] = useState(false);
   const [isSavingCallInfo, setIsSavingCallInfo] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
@@ -330,6 +358,42 @@ export function CandidateDetailClient({
   async function handleSaveCallInfo() {
     setIsSavingCallInfo(true);
     try {
+      // Yêu cầu trực tiếp người dùng (2026-07-27): gộp lưu luôn Năm sinh/Địa
+      // chỉ đang gõ dở (nếu có đổi so với giá trị hiện tại) — validate y hệt
+      // logic trong inline-edit-field.tsx#onSave cho Năm sinh, chặn lưu cả
+      // trang nếu không hợp lệ (khớp cách các ô khác báo lỗi tại chỗ).
+      const trimmedBirthYear = birthYearDraft.trim();
+      const currentBirthYear = candidate.birth_year?.toString() ?? "";
+      let birthYearToSave: number | null | undefined;
+      if (trimmedBirthYear !== currentBirthYear) {
+        if (!trimmedBirthYear) {
+          birthYearToSave = null;
+        } else {
+          const parsed = Number(trimmedBirthYear);
+          const currentYear = new Date().getFullYear();
+          if (!Number.isInteger(parsed) || parsed < 1900 || parsed > currentYear) {
+            toast.error("Năm sinh không hợp lệ (1900 – năm hiện tại)");
+            setIsSavingCallInfo(false);
+            return;
+          }
+          birthYearToSave = parsed;
+        }
+      }
+
+      const trimmedAddress = addressDraft.trim();
+      const currentAddress = candidate.address ?? "";
+      const addressToSave: string | null | undefined = trimmedAddress !== currentAddress ? trimmedAddress || null : undefined;
+
+      if (birthYearToSave !== undefined || addressToSave !== undefined) {
+        await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...(birthYearToSave !== undefined ? { birth_year: birthYearToSave } : {}),
+            ...(addressToSave !== undefined ? { address: addressToSave } : {}),
+          }),
+        });
+      }
+
       if (callStatusId && callStatusId !== candidate.call_status?.id) {
         await clientApi<Candidate>(`/candidate/${candidate.id}/call-status`, {
           method: "PUT",
@@ -577,6 +641,7 @@ export function CandidateDetailClient({
               editValue={candidate.birth_year?.toString() ?? ""}
               inputType="number"
               alwaysEditable
+              onDraftChange={setBirthYearDraft}
               onSave={async (value) => {
                 const trimmed = value.trim();
                 let birthYear: number | null = null;
@@ -601,6 +666,7 @@ export function CandidateDetailClient({
               displayValue={candidate.address ?? "—"}
               editValue={candidate.address ?? ""}
               alwaysEditable
+              onDraftChange={setAddressDraft}
               onSave={async (value) => {
                 const address = value.trim() || null;
                 const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {

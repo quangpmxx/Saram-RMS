@@ -164,6 +164,11 @@ model Team {
 model Account {
   id                 String        @id @default(uuid()) @db.Uuid
   fullName           String        @map("full_name") @db.VarChar(150)
+  /// Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh do Admin
+  /// đặt (trang Quản lý tài khoản) — hiển thị THAY cho họ tên đầy đủ ở các
+  /// cột "Sale"/"Đưa đón" (module Đưa đón, Nhập doanh số) vì tên đầy đủ quá
+  /// dài. NULL = chưa đặt, khi đó vẫn hiện họ tên đầy đủ như trước.
+  nickname           String?       @db.VarChar(150)
   username           String        @unique @db.VarChar(50)
   passwordHash       String        @map("password_hash") @db.VarChar(255)
   role               AccountRole
@@ -250,6 +255,11 @@ model Account {
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ShuttleRecord (Danh sách đưa đón)
   createdShuttleRecords ShuttleRecord[] @relation("ShuttleRecordCreatedBy")
   updatedShuttleRecords ShuttleRecord[] @relation("ShuttleRecordUpdatedBy")
+  /// Bổ sung 2026-07-28 (yêu cầu trực tiếp người dùng): "Sale"/"Đưa đón" ở
+  /// module Danh sách đưa đón chuyển từ chuỗi tự do sang khóa ngoại thật,
+  /// khớp đúng cách SalesEntryRecord.saleUserId/pickupUserId đã làm.
+  shuttleSaleFor        ShuttleRecord[] @relation("ShuttleRecordSaleUser")
+  shuttleDriverFor      ShuttleRecord[] @relation("ShuttleRecordDriverUser")
 
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ DailyReport (Báo cáo hằng ngày)
   dailyReports        DailyReport[] @relation("DailyReportAccount")
@@ -811,9 +821,12 @@ enum LeaveDecision {
 
 /// Danh sách đưa đón lao động — nhập tay ĐỘC LẬP, thay thế Google Sheet đang
 /// dùng. KHÔNG liên kết với Lead/ứng viên hay bất kỳ module nghiệp vụ nào
-/// khác (yêu cầu trực tiếp người dùng) — mọi trường (kể cả "Sale"/"Nhà thầu")
-/// đều là text tự do, không phải khóa ngoại. Mọi vai trò đã đăng nhập đều
-/// được thêm/sửa/xóa tự do (không giới hạn theo nhóm/người phụ trách).
+/// khác (yêu cầu trực tiếp người dùng). "Nhà thầu" vẫn là text tự do. "Sale"/
+/// "Đưa đón" (2026-07-28, yêu cầu trực tiếp người dùng: "chuyển cả 2 cột
+/// sang liên kết tài khoản thật") LÀ khóa ngoại Account thật (role
+/// 'sale'/'shuttle_staff') — xem saleUserId/driverUserId bên dưới. Mọi vai
+/// trò đã đăng nhập đều được thêm/sửa/xóa tự do (không giới hạn theo
+/// nhóm/người phụ trách).
 model ShuttleRecord {
   id              String   @id @default(uuid()) @db.Uuid
   date            DateTime @db.Date
@@ -825,8 +838,11 @@ model ShuttleRecord {
   companyId       String?  @map("company_id") @db.Uuid
   area            String?  @db.VarChar(150)
   type            String?  @db.VarChar(100)
-  sale            String?  @db.VarChar(150)
-  driver          String?  @map("driver") @db.VarChar(150)
+  /// Yêu cầu trực tiếp người dùng (2026-07-28): chuyển "Sale"/"Đưa đón" từ
+  /// chuỗi tự do sang khóa ngoại Account thật (role 'sale'/'shuttle_staff')
+  /// — để hỗ trợ hiển thị biệt danh (Account.nickname) thay tên đầy đủ.
+  saleUserId      String?  @map("sale_user_id") @db.Uuid
+  driverUserId    String?  @map("driver_user_id") @db.Uuid
   /// Lưu dạng chuỗi "HH:mm" — chỉ là giờ hẹn PV, tách biệt khỏi cột "date".
   interviewTime   String?  @map("interview_time") @db.VarChar(5)
   contractor      String?  @db.VarChar(150)
@@ -847,11 +863,15 @@ model ShuttleRecord {
   createdBy Account      @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
   updatedBy Account      @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
   company   OrderRecord? @relation(fields: [companyId], references: [id])
+  saleUser  Account?     @relation("ShuttleRecordSaleUser", fields: [saleUserId], references: [id])
+  driverUser Account?    @relation("ShuttleRecordDriverUser", fields: [driverUserId], references: [id])
 
   @@index([date])
   @@index([status])
   @@index([interviewResult])
   @@index([companyId])
+  @@index([saleUserId])
+  @@index([driverUserId])
   @@map("shuttle_records")
 }
 

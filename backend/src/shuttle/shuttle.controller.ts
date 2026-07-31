@@ -46,6 +46,12 @@ export class ShuttleController {
     return this.shuttleService.listSaleAccounts();
   }
 
+  /** Bổ sung 2026-07-28 (yêu cầu trực tiếp người dùng: "chuyển cả 2 cột sang liên kết tài khoản thật") — nguồn gợi ý cột "Đưa đón" (role='shuttle_staff'). */
+  @Get('driver-accounts')
+  listDriverAccounts() {
+    return this.shuttleService.listDriverAccounts();
+  }
+
   /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — nguồn gợi ý cột "Công ty", đọc từ OrderRecord (module Quản lý đơn hàng). */
   @Get('companies')
   listCompanies() {

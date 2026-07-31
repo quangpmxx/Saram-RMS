@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { SalesEntryService } from './sales-entry.service';
 import { ListDsSaleQueryDto } from './dto/list-ds-sale-query.dto';
+import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
 const HEADER_FILL = 'FF1E3A8A';
 const HEADER_FONT_COLOR = 'FFFFFFFF';
@@ -45,8 +46,9 @@ export class SalesEntryExportService {
 
   async exportXlsx(
     query: ListDsSaleQueryDto,
+    currentUser: AuthenticatedUser,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const rows = await this.salesEntryService.exportRows(query);
+    const rows = await this.salesEntryService.exportRows(query, currentUser);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('DS Sale', {

@@ -44,7 +44,17 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     defaultRoles: ["admin", "manager", "leader", "mkt", "sale"],
   },
   { code: "accounting", href: "/accounting", label: "Kế toán", icon: "accounting", defaultRoles: ["admin"] },
-  { code: "sales-entry", href: "/sales-entry", label: "Nhập doanh số", icon: "salesEntry", defaultRoles: ["admin"] },
+  {
+    code: "sales-entry",
+    href: "/sales-entry",
+    label: "Nhập doanh số",
+    icon: "salesEntry",
+    // Yêu cầu trực tiếp người dùng (2026-07-27): Sale tự nhập doanh số cho
+    // chính mình; Leader/Quản lý/Admin/Kế toán giữ nguyên như trước. Phạm
+    // vi xem/sửa chi tiết theo vai trò (Sale: chỉ dòng mình; Leader: cả
+    // nhóm; còn lại: toàn bộ) enforce ở backend, không chỉ dừng ở đây.
+    defaultRoles: ["admin", "manager", "leader", "sale", "accounting"],
+  },
   {
     code: "order-management",
     href: "/order-management",

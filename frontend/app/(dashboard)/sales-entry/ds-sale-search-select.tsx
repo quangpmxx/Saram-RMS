@@ -78,7 +78,7 @@ export function DsSaleSearchSelect({
         )}
       >
         <span className="min-w-0 flex-1 truncate text-center">{value ? value.label : placeholder}</span>
-        {value && (
+        {value && !disabled && (
           <span
             role="button"
             tabIndex={-1}

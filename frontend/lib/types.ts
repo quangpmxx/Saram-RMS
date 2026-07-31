@@ -52,6 +52,8 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
 export interface Account {
   id: string;
   full_name: string;
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ ở cột Sale/Đưa đón, null = chưa đặt. */
+  nickname: string | null;
   username: string;
   role: AccountRole;
   team_id: string | null;
@@ -827,8 +829,9 @@ export interface ShuttleRecord {
   company_id: string | null;
   area: string | null;
   type: string | null;
-  sale: string | null;
-  driver: string | null;
+  /** Yêu cầu trực tiếp người dùng (2026-07-28): "chuyển cả 2 cột sang liên kết tài khoản thật" — tham chiếu Account thật (role='sale'/'shuttle_staff'), không còn chuỗi tự do. */
+  sale: AccountOptionItem | null;
+  driver: AccountOptionItem | null;
   interview_time: string | null;
   contractor: string | null;
   /** "Tình trạng đón" (Đã đón/Chưa đón được/Hẹn lại). */
@@ -855,7 +858,7 @@ export interface ShuttleOptionItem {
 export interface ShuttleOptions {
   areas: ShuttleOptionItem[];
   types: ShuttleOptionItem[];
-  /** "sale" chỉ lưu MÀU cho tài khoản Sale thật (value = họ tên tài khoản) — không dùng để liệt kê tên (xem SaleAccountItem/listSaleAccounts). */
+  /** "sale"/"driver" chỉ lưu MÀU cho tài khoản thật (value = account.id) — không dùng để liệt kê tên (xem AccountOptionItem/listSaleAccounts/listDriverAccounts). */
   sales: ShuttleOptionItem[];
   drivers: ShuttleOptionItem[];
   contractors: ShuttleOptionItem[];
@@ -864,10 +867,12 @@ export interface ShuttleOptions {
   interviewTimes: ShuttleOptionItem[];
 }
 
-/** GET /shuttle/sale-accounts — tài khoản role=sale, đang active — nguồn cột "Sale" (yêu cầu trực tiếp người dùng: lấy từ danh sách tài khoản để sau này làm báo cáo). */
-export interface SaleAccountItem {
+/** GET /shuttle/sale-accounts (role=sale) và GET /shuttle/driver-accounts (role=shuttle_staff, bổ sung 2026-07-28) — tài khoản thật, đang active — nguồn cột "Sale"/"Đưa đón". */
+export interface AccountOptionItem {
   id: string;
   full_name: string;
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ, null = chưa đặt (fallback về full_name). */
+  nickname: string | null;
 }
 
 // ── Dự án phụ — nâng cấp toàn diện (2026-07-17): "DS Sale" (module con của
@@ -877,6 +882,8 @@ export interface SaleAccountItem {
 export interface DsSaleAccountOption {
   id: string;
   full_name: string;
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ, null = chưa đặt (fallback về full_name). */
+  nickname: string | null;
   avatar_url: string | null;
   team_name: string | null;
 }

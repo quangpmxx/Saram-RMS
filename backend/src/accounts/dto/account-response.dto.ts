@@ -4,6 +4,8 @@ import { Account, Team } from '../../../generated/prisma/client';
 export interface AccountResponseDto {
   id: string;
   full_name: string;
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ ở cột Sale/Đưa đón, null = chưa đặt. */
+  nickname: string | null;
   username: string;
   role: string;
   team_id: string | null;
@@ -40,6 +42,7 @@ export function toAccountResponse(
   return {
     id: account.id,
     full_name: account.fullName,
+    nickname: account.nickname,
     username: account.username,
     role: account.role,
     team_id: account.teamId,

@@ -21,6 +21,7 @@ export function InlineEditField({
   inputType = "text",
   alwaysEditable = false,
   onSave,
+  onDraftChange,
 }: {
   label: string;
   displayValue: string;
@@ -28,6 +29,14 @@ export function InlineEditField({
   inputType?: "text" | "number";
   alwaysEditable?: boolean;
   onSave: (value: string) => Promise<void>;
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-27): "khi ấn lưu thông tin thì
+   * mọi thứ sẽ được lưu lại luôn" — báo giá trị đang gõ dở (mỗi lần đổi)
+   * ra ngoài để nút "Lưu thông tin" ở trang cha gộp lưu cùng lúc, KHÔNG
+   * bắt buộc phải bấm Enter riêng từng ô như trước (Enter vẫn hoạt động
+   * bình thường, đây chỉ là thêm 1 đường lưu khác).
+   */
+  onDraftChange?: (value: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(alwaysEditable);
   const [draft, setDraft] = useState(editValue);
@@ -63,7 +72,10 @@ export function InlineEditField({
               uiSize="sm"
               type={inputType}
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                onDraftChange?.(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void handleSave();
                 if (event.key === "Escape" && !alwaysEditable) setIsEditing(false);

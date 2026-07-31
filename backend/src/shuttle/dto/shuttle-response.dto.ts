@@ -1,4 +1,5 @@
 import { Account, ShuttleRecord } from '../../../generated/prisma/client';
+import { AccountOptionItemDto } from './sale-account-response.dto';
 
 /** Đối tượng "ShuttleRecord" (Danh sách đưa đón) — dự án phụ, nâng cấp toàn diện. */
 export interface ShuttleResponseDto {
@@ -10,8 +11,9 @@ export interface ShuttleResponseDto {
   company_id: string | null;
   area: string | null;
   type: string | null;
-  sale: string | null;
-  driver: string | null;
+  /** Yêu cầu trực tiếp người dùng (2026-07-28): tham chiếu Account thật (role='sale'/'shuttle_staff'), không còn chuỗi tự do. */
+  sale: AccountOptionItemDto | null;
+  driver: AccountOptionItemDto | null;
   interview_time: string | null;
   contractor: string | null;
   status: string | null;
@@ -23,9 +25,24 @@ export interface ShuttleResponseDto {
   updated_at: string;
 }
 
+type AccountPick = Pick<Account, 'id' | 'fullName' | 'nickname'>;
+
+function toAccountOption(
+  account: AccountPick | null,
+): AccountOptionItemDto | null {
+  if (!account) return null;
+  return {
+    id: account.id,
+    full_name: account.fullName,
+    nickname: account.nickname,
+  };
+}
+
 export type ShuttleWithRelations = ShuttleRecord & {
   createdBy: Pick<Account, 'id' | 'fullName'>;
   updatedBy: Pick<Account, 'id' | 'fullName'>;
+  saleUser: AccountPick | null;
+  driverUser: AccountPick | null;
 };
 
 export function toShuttleResponse(
@@ -41,8 +58,8 @@ export function toShuttleResponse(
     company_id: record.companyId,
     area: record.area,
     type: record.type,
-    sale: record.sale,
-    driver: record.driver,
+    sale: toAccountOption(record.saleUser),
+    driver: toAccountOption(record.driverUser),
     interview_time: record.interviewTime,
     contractor: record.contractor,
     status: record.status,
@@ -58,4 +75,6 @@ export function toShuttleResponse(
 export const SHUTTLE_INCLUDE = {
   createdBy: { select: { id: true, fullName: true } },
   updatedBy: { select: { id: true, fullName: true } },
+  saleUser: { select: { id: true, fullName: true, nickname: true } },
+  driverUser: { select: { id: true, fullName: true, nickname: true } },
 } as const;

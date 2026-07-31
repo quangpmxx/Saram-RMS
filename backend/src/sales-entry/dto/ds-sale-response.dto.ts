@@ -27,6 +27,8 @@ export interface DsSaleRowResponseDto {
 export interface DsSaleAccountOptionDto {
   id: string;
   full_name: string;
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ, null = chưa đặt (frontend tự fallback về full_name). */
+  nickname: string | null;
   avatar_url: string | null;
   team_name: string | null;
 }
@@ -50,7 +52,10 @@ function toDateOnly(date: DateOnly): string | null {
   return date.toISOString().slice(0, 10);
 }
 
-type AccountPick = Pick<Account, 'id' | 'fullName' | 'avatarUrl'> & {
+type AccountPick = Pick<
+  Account,
+  'id' | 'fullName' | 'nickname' | 'avatarUrl'
+> & {
   team: { name: string } | null;
 };
 
@@ -61,6 +66,7 @@ function toAccountOption(
   return {
     id: account.id,
     full_name: account.fullName,
+    nickname: account.nickname,
     avatar_url: account.avatarUrl,
     team_name: account.team?.name ?? null,
   };
@@ -105,6 +111,7 @@ export const DS_SALE_INCLUDE = {
     select: {
       id: true,
       fullName: true,
+      nickname: true,
       avatarUrl: true,
       team: { select: { name: true } },
     },
@@ -113,6 +120,7 @@ export const DS_SALE_INCLUDE = {
     select: {
       id: true,
       fullName: true,
+      nickname: true,
       avatarUrl: true,
       team: { select: { name: true } },
     },

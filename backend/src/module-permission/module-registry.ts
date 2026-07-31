@@ -15,7 +15,6 @@ import { SalesEntryController } from '../sales-entry/sales-entry.controller';
 import { CalendarController } from '../calendar/calendar.controller';
 import { AuditLogController } from '../audit-log/audit-log.controller';
 import { AccountsController } from '../accounts/accounts.controller';
-import { TeamsController } from '../teams/teams.controller';
 import { OrderManagementController } from '../order-management/order-management.controller';
 
 /**
@@ -36,8 +35,16 @@ import { OrderManagementController } from '../order-management/order-management.
  * làm quyền chi tiết từng hành động) — các controller sau KHÔNG nằm trong
  * registry này, tiếp tục hoạt động y hệt hiện tại, không bị Guard này chặn:
  * - AuthController, NotificationController, BirthdayController,
- *   ColumnWidthController, PermissionController (hệ thống quyền CŨ, 5 hành
- *   động cụ thể ở trang Quản lý tài khoản — giữ nguyên, không đụng).
+ *   ColumnWidthController.
+ * - TeamsController: tự có @Roles() riêng ĐÚNG cho từng route (GET /team:
+ *   admin/manager/leader/mkt; GET /team/:id/member: admin/manager/leader) —
+ *   nhiều trang khác (Data lao động/Lịch hẹn/Chấm công/Báo cáo) gọi thẳng 2
+ *   route này cho Leader/MKT xem tên nhóm/thành viên. Từng bị gộp nhầm vào
+ *   module "accounts" (chỉ Admin), gây lỗi 403 sai cho Leader/MKT ở các
+ *   trang trên (phát hiện 2026-07-27, test thật với tài khoản không phải
+ *   Admin) — đã gỡ ra khỏi registry, chỉ còn AccountsController thật sự
+ *   thuộc module "accounts". POST/PUT/DELETE /team vẫn @Roles('admin')
+ *   riêng, không bị ảnh hưởng.
  * - CheckinController, LeaveRequestsController, LeaveAccrualController: có
  *   endpoint TỰ PHỤC VỤ (nhân viên tự check-in, tự tạo đơn nghỉ phép) lẫn
  *   endpoint quản trị trong CÙNG 1 controller — gate cả controller sẽ chặn
@@ -101,7 +108,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   {
     code: 'sales-entry',
     label: 'Nhập doanh số',
-    defaultRoles: ['admin'],
+    // Yêu cầu trực tiếp người dùng (2026-07-27): "Sale sẽ tự nhập doanh số
+    // cho chính mình... leader, quản lý, admin là được chọn sale như hiện
+    // tại". Mở rộng từ chỉ Admin sang cả 4 vai trò còn lại — phạm vi
+    // xem/sửa/xóa CHI TIẾT theo từng vai trò (Sale: chỉ dòng của mình;
+    // Leader: cả nhóm; Quản lý/Admin/Kế toán: toàn bộ) được enforce THẬT ở
+    // sales-entry.service.ts (buildWhere/createRow/updateRow/deleteRows),
+    // không chỉ dừng ở việc cho vào trang.
+    defaultRoles: ['admin', 'manager', 'leader', 'sale', 'accounting'],
     controllers: [SalesEntryController],
   },
   {
@@ -120,7 +134,18 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     code: 'accounts',
     label: 'Quản lý tài khoản',
     defaultRoles: ['admin'],
-    controllers: [AccountsController, TeamsController],
+    // Sửa lỗi (2026-07-27, phát hiện khi test thật với tài khoản Leader/MKT
+    // — không phải Admin): TeamsController KHÔNG được liệt kê ở đây nữa.
+    // TeamsController tự có @Roles() riêng biệt, ĐÚNG cho từng route
+    // (GET /team: admin/manager/leader/mkt; GET /team/:id/member:
+    // admin/manager/leader — các trang Data lao động/Lịch hẹn/Chấm
+    // công/Báo cáo đều gọi thẳng 2 route này cho Leader/MKT xem tên
+    // nhóm/thành viên). Gate cả TeamsController theo module "accounts"
+    // (chỉ Admin) đã chặn NHẦM các vai trò mà chính @Roles() của nó đã cho
+    // phép — sai với nguyên tắc "phân quyền module chỉ THÊM giới hạn,
+    // không thay thế @Roles() hiện có" (xem module-permission.guard.ts).
+    // POST/PUT/DELETE /team vẫn @Roles('admin') riêng, không bị ảnh hưởng.
+    controllers: [AccountsController],
   },
   // "Kế toán" — CHỈ khung sườn, chưa có controller backend (trang tĩnh "sắp
   // ra mắt") — không có gì để Guard kiểm tra, nhưng vẫn liệt kê ở đây

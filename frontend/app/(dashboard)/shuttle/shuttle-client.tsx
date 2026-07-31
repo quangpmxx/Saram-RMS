@@ -7,10 +7,10 @@ import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import type {
+  AccountOptionItem,
   AppRealtimeEvent,
   ModulePermissionLevel,
   PaginatedResult,
-  SaleAccountItem,
   ShuttleOptionItem,
   ShuttleOptions,
   ShuttleRecord,
@@ -53,7 +53,6 @@ const PLAIN_FIELD_CLASS_LEFT =
 const OPTION_FIELD_KEYS: Record<string, keyof ShuttleOptions> = {
   area: "areas",
   type: "types",
-  driver: "drivers",
   contractor: "contractors",
   status: "statuses",
   interview_result: "interviewResults",
@@ -130,8 +129,8 @@ interface Filters {
   date: DateRangeValue;
   company_id: string;
   type: string;
-  sale: string;
-  driver: string;
+  sale_user_id: string;
+  driver_user_id: string;
   status: string;
   interview_result: string;
 }
@@ -141,8 +140,8 @@ const EMPTY_FILTERS: Filters = {
   date: EMPTY_DATE_RANGE,
   company_id: "",
   type: "",
-  sale: "",
-  driver: "",
+  sale_user_id: "",
+  driver_user_id: "",
   status: "",
   interview_result: "",
 };
@@ -154,8 +153,8 @@ interface ShuttleFormValue {
   company_id: string;
   area: string;
   type: string;
-  sale: string;
-  driver: string;
+  sale_user_id: string;
+  driver_user_id: string;
   interview_time: string;
   contractor: string;
   status: string;
@@ -171,8 +170,8 @@ function emptyFormValue(): ShuttleFormValue {
     company_id: "",
     area: "",
     type: "",
-    sale: "",
-    driver: "",
+    sale_user_id: "",
+    driver_user_id: "",
     interview_time: "",
     contractor: "",
     status: "",
@@ -189,8 +188,8 @@ function formValueFromRecord(record: ShuttleRecord): ShuttleFormValue {
     company_id: record.company_id ?? "",
     area: record.area ?? "",
     type: record.type ?? "",
-    sale: record.sale ?? "",
-    driver: record.driver ?? "",
+    sale_user_id: record.sale?.id ?? "",
+    driver_user_id: record.driver?.id ?? "",
     interview_time: record.interview_time ?? "",
     contractor: record.contractor ?? "",
     status: record.status ?? "",
@@ -414,33 +413,40 @@ function ComboCell({
  * flex-wrap tự do như trước.
  */
 /**
- * Dự án phụ — nâng cấp toàn diện: popup CHỈ chỉnh màu nền cho cột Sale (yêu
- * cầu trực tiếp người dùng: "cho thêm 1 bảng màu cho phép sửa được màu nền
- * khi ấn vào chỉnh sửa") — KHÁC ShuttleOptionManagerModal bên dưới: không
- * cho đổi tên/thêm mới/xóa tài khoản (tên lấy thẳng từ tài khoản Sale thật,
+ * Dự án phụ — nâng cấp toàn diện: popup CHỈ chỉnh màu nền cho cột Sale/Đưa
+ * đón (yêu cầu trực tiếp người dùng: "cho thêm 1 bảng màu cho phép sửa được
+ * màu nền khi ấn vào chỉnh sửa") — KHÁC ShuttleOptionManagerModal bên dưới:
+ * không cho đổi tên/thêm mới/xóa tài khoản (tên lấy thẳng từ tài khoản thật,
  * để sau này làm báo cáo khớp đúng), mỗi tài khoản chỉ có 1 bảng màu để
- * chọn, lưu ngay khi bấm màu (không cần nút "Lưu" riêng).
+ * chọn, lưu ngay khi bấm màu (không cần nút "Lưu" riêng). Dùng chung cho cả
+ * Sale (role='sale') và Đưa đón (role='shuttle_staff', bổ sung 2026-07-28 —
+ * "chuyển cả 2 cột sang liên kết tài khoản thật") — trước đó chỉ có Sale
+ * (SaleColorManagerModal), giờ tổng quát hóa theo account.id thay vì tên.
  */
-function SaleColorManagerModal({
-  saleAccounts,
-  saleOptions,
+function AccountColorManagerModal({
+  title,
+  emptyLabel,
+  accounts,
+  colorOptions,
   onSetColor,
   onSetTextColor,
   onClose,
 }: {
-  saleAccounts: SaleAccountItem[];
-  saleOptions: ShuttleOptionItem[];
-  onSetColor: (accountName: string, colorKey: string | null) => Promise<void>;
+  title: string;
+  emptyLabel: string;
+  accounts: AccountOptionItem[];
+  colorOptions: ShuttleOptionItem[];
+  onSetColor: (accountId: string, colorKey: string | null) => Promise<void>;
   /** Dự án phụ — nâng cấp toàn diện: màu CHỮ riêng, độc lập với onSetColor (màu nền) — yêu cầu trực tiếp người dùng. */
-  onSetTextColor: (accountName: string, textColorKey: string | null) => Promise<void>;
+  onSetTextColor: (accountId: string, textColorKey: string | null) => Promise<void>;
   onClose: () => void;
 }) {
   const [pendingAccountId, setPendingAccountId] = useState<string | null>(null);
 
-  async function handlePick(account: SaleAccountItem, colorKey: string | null) {
+  async function handlePick(account: AccountOptionItem, colorKey: string | null) {
     setPendingAccountId(account.id);
     try {
-      await onSetColor(account.full_name, colorKey);
+      await onSetColor(account.id, colorKey);
     } catch {
       // Lỗi đã báo qua toast ở cha (handleAddOption) — không cần xử lý thêm ở đây.
     } finally {
@@ -448,10 +454,10 @@ function SaleColorManagerModal({
     }
   }
 
-  async function handlePickText(account: SaleAccountItem, textColorKey: string | null) {
+  async function handlePickText(account: AccountOptionItem, textColorKey: string | null) {
     setPendingAccountId(account.id);
     try {
-      await onSetTextColor(account.full_name, textColorKey);
+      await onSetTextColor(account.id, textColorKey);
     } catch {
       // Lỗi đã báo qua toast ở cha (handleAddOption) — không cần xử lý thêm ở đây.
     } finally {
@@ -461,7 +467,7 @@ function SaleColorManagerModal({
 
   return (
     <Modal
-      title="Chỉnh sửa màu — Sale"
+      title={title}
       maxWidth="max-w-lg"
       footer={
         <Button type="button" variant="outline" onClick={onClose}>
@@ -470,16 +476,15 @@ function SaleColorManagerModal({
       }
     >
       <div className="flex flex-col gap-3">
-        {saleAccounts.length === 0 && (
-          <p className="text-sm text-slate-400">Chưa có tài khoản Sale nào đang hoạt động.</p>
-        )}
-        {saleAccounts.map((account) => {
-          const option = saleOptions.find((o) => o.value === account.full_name);
+        {accounts.length === 0 && <p className="text-sm text-slate-400">{emptyLabel}</p>}
+        {accounts.map((account) => {
+          const option = colorOptions.find((o) => o.value === account.id);
           const colorKey = option?.color_key ?? null;
           const textColorKey = option?.text_color_key ?? null;
+          const label = account.nickname ?? account.full_name;
           return (
             <div key={account.id} className="rounded-lg border border-slate-200 p-2.5">
-              <span className="text-sm font-medium text-slate-800">{account.full_name}</span>
+              <span className="text-sm font-medium text-slate-800">{label}</span>
               <fieldset disabled={pendingAccountId === account.id} className="mt-2 flex flex-col gap-2">
                 <div>
                   <p className="mb-1 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Màu nền</p>
@@ -699,9 +704,11 @@ function ShuttleRowFormCells({
   onCommitField,
   options,
   saleOptions,
+  driverOptions,
   companyOptions,
   onManageOptions,
   onManageSaleColors,
+  onManageDriverColors,
 }: {
   value: ShuttleFormValue;
   onChange: (next: ShuttleFormValue) => void;
@@ -717,12 +724,16 @@ function ShuttleRowFormCells({
   options: ShuttleOptions;
   /** Danh sách tài khoản role=sale (từ /shuttle/sale-accounts), dựng lại thành dạng ShuttleOptionItem[] để dùng chung ComboCell — TÊN không cho tự thêm/sửa/xóa, chỉ MÀU chỉnh được (yêu cầu trực tiếp người dùng). */
   saleOptions: ShuttleOptionItem[];
+  /** Bổ sung 2026-07-28 — y hệt saleOptions nhưng nguồn là tài khoản role=shuttle_staff (/shuttle/driver-accounts), dùng cho cột "Đưa đón". */
+  driverOptions: ShuttleOptionItem[];
   /** Danh sách đơn hàng (từ /shuttle/companies, đọc từ OrderRecord) — yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng". Không cho tự thêm/sửa/xóa ở đây — quản lý riêng tại trang Quản lý đơn hàng. */
   companyOptions: ShuttleOptionItem[];
-  /** Mở popup quản lý danh sách gợi ý (thêm/sửa/xóa) của 1 trong 6 trường "chọn" (không áp dụng cho Sale/Công ty). */
+  /** Mở popup quản lý danh sách gợi ý (thêm/sửa/xóa) của 1 trong 5 trường "chọn" (không áp dụng cho Sale/Đưa đón/Công ty). */
   onManageOptions: (field: string, label: string) => void;
   /** Mở popup CHỈ chỉnh màu nền cho từng tài khoản Sale — không đổi tên/thêm/xóa tài khoản. */
   onManageSaleColors: () => void;
+  /** Bổ sung 2026-07-28 — y hệt onManageSaleColors nhưng cho tài khoản Đưa đón. */
+  onManageDriverColors: () => void;
 }) {
   function set<K extends keyof ShuttleFormValue>(key: K, val: string) {
     onChange({ ...value, [key]: val });
@@ -798,19 +809,21 @@ function ShuttleRowFormCells({
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <ComboCell
-          value={value.sale}
+          value={value.sale_user_id}
           options={saleOptions}
-          onSelect={(v) => selectCombo("sale", v)}
+          onSelect={(v) => selectCombo("sale_user_id", v)}
           onManageOptions={onManageSaleColors}
           textClassName="text-[10px]"
+          matchBy="id"
         />
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <ComboCell
-          value={value.driver}
-          options={options.drivers}
-          onSelect={(v) => selectCombo("driver", v)}
-          onManageOptions={() => onManageOptions("driver", "Nhân viên đưa đón")}
+          value={value.driver_user_id}
+          options={driverOptions}
+          onSelect={(v) => selectCombo("driver_user_id", v)}
+          onManageOptions={onManageDriverColors}
+          matchBy="id"
         />
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
@@ -865,12 +878,15 @@ export function ShuttleClient({
   initialResult,
   initialOptions,
   initialSaleAccounts,
+  initialDriverAccounts,
   initialCompanies,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialResult: PaginatedResult<ShuttleRecord>;
   initialOptions: ShuttleOptions;
-  initialSaleAccounts: SaleAccountItem[];
+  initialSaleAccounts: AccountOptionItem[];
+  /** Bổ sung 2026-07-28 (yêu cầu trực tiếp người dùng: "chuyển cả 2 cột sang liên kết tài khoản thật") — GET /shuttle/driver-accounts (role='shuttle_staff'). */
+  initialDriverAccounts: AccountOptionItem[];
   /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — GET /shuttle/companies, đọc từ OrderRecord (module Quản lý đơn hàng). */
   initialCompanies: ShuttleOptionItem[];
 }) {
@@ -895,17 +911,29 @@ export function ShuttleClient({
   // useState vì không có nơi nào trong file này setCompanies).
   const companies = initialCompanies;
   /**
-   * Dựng lại thành ShuttleOptionItem[] để tái dùng ComboCell — TÊN lấy từ
-   * tài khoản Sale thật (initialSaleAccounts), MÀU lấy từ options.sales
-   * (ShuttleOption field="sale", khớp theo value=họ tên — yêu cầu trực tiếp
-   * người dùng: "cho thêm 1 bảng màu cho phép sửa được màu nền"). Không cho
-   * gõ tay thêm tên mới — chỉ chọn màu cho tên đã có sẵn.
+   * Dựng lại thành ShuttleOptionItem[] để tái dùng ComboCell — TÊN (biệt
+   * danh nếu có, khớp Mục biệt danh 2026-07-26 — không thì họ tên đầy đủ)
+   * lấy từ tài khoản Sale thật (initialSaleAccounts), MÀU lấy từ
+   * options.sales (ShuttleOption field="sale", khớp theo value=account.id
+   * từ 2026-07-28 — trước đó khớp theo tên, xem "chuyển cả 2 cột sang liên
+   * kết tài khoản thật"). Không cho gõ tay thêm tên mới — chỉ chọn màu cho
+   * tài khoản đã có sẵn. `id` ở đây LÀ account.id thật (matchBy="id").
    */
   const saleOptions: ShuttleOptionItem[] = initialSaleAccounts.map((account) => {
-    const matched = options.sales.find((option) => option.value === account.full_name);
+    const matched = options.sales.find((option) => option.value === account.id);
     return {
       id: account.id,
-      value: account.full_name,
+      value: account.nickname ?? account.full_name,
+      color_key: matched?.color_key ?? null,
+      text_color_key: matched?.text_color_key ?? null,
+    };
+  });
+  /** Bổ sung 2026-07-28 — y hệt saleOptions nhưng cho tài khoản Đưa đón (role='shuttle_staff'), khớp ShuttleOption field="driver". */
+  const driverOptions: ShuttleOptionItem[] = initialDriverAccounts.map((account) => {
+    const matched = options.drivers.find((option) => option.value === account.id);
+    return {
+      id: account.id,
+      value: account.nickname ?? account.full_name,
       color_key: matched?.color_key ?? null,
       text_color_key: matched?.text_color_key ?? null,
     };
@@ -917,6 +945,7 @@ export function ShuttleClient({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [manageField, setManageField] = useState<{ field: string; label: string } | null>(null);
   const [isManagingSaleColors, setIsManagingSaleColors] = useState(false);
+  const [isManagingDriverColors, setIsManagingDriverColors] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<(typeof ZOOM_LEVELS)[number]>(100);
 
   /**
@@ -969,8 +998,8 @@ export function ShuttleClient({
     if (activeFilters.date.to) query.set("date_to", activeFilters.date.to);
     if (activeFilters.company_id) query.set("company_id", activeFilters.company_id);
     if (activeFilters.type) query.set("type", activeFilters.type);
-    if (activeFilters.sale) query.set("sale", activeFilters.sale);
-    if (activeFilters.driver) query.set("driver", activeFilters.driver);
+    if (activeFilters.sale_user_id) query.set("sale_user_id", activeFilters.sale_user_id);
+    if (activeFilters.driver_user_id) query.set("driver_user_id", activeFilters.driver_user_id);
     if (activeFilters.status) query.set("status", activeFilters.status);
     if (activeFilters.interview_result) query.set("interview_result", activeFilters.interview_result);
     return query;
@@ -1310,13 +1339,13 @@ export function ShuttleClient({
         <Field uiSize="xs" label="Sale" className="w-28">
           <Select
             uiSize="xs"
-            value={filters.sale}
-            onChange={(event) => setFilters((prev) => ({ ...prev, sale: event.target.value }))}
+            value={filters.sale_user_id}
+            onChange={(event) => setFilters((prev) => ({ ...prev, sale_user_id: event.target.value }))}
           >
             <option value="">Tất cả</option>
             {initialSaleAccounts.map((account) => (
-              <option key={account.id} value={account.full_name}>
-                {account.full_name}
+              <option key={account.id} value={account.id}>
+                {account.nickname ?? account.full_name}
               </option>
             ))}
           </Select>
@@ -1324,13 +1353,13 @@ export function ShuttleClient({
         <Field uiSize="xs" label="Nhân viên đưa đón" className="w-32">
           <Select
             uiSize="xs"
-            value={filters.driver}
-            onChange={(event) => setFilters((prev) => ({ ...prev, driver: event.target.value }))}
+            value={filters.driver_user_id}
+            onChange={(event) => setFilters((prev) => ({ ...prev, driver_user_id: event.target.value }))}
           >
             <option value="">Tất cả</option>
-            {options.drivers.map((item) => (
-              <option key={item.id} value={item.value}>
-                {item.value}
+            {initialDriverAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.nickname ?? account.full_name}
               </option>
             ))}
           </Select>
@@ -1430,9 +1459,11 @@ export function ShuttleClient({
                   onChange={setDraft}
                   options={options}
                   saleOptions={saleOptions}
+                  driverOptions={driverOptions}
                   companyOptions={companies}
                   onManageOptions={(field, label) => setManageField({ field, label })}
                   onManageSaleColors={() => setIsManagingSaleColors(true)}
+                  onManageDriverColors={() => setIsManagingDriverColors(true)}
                 />
                 <td className="px-2 py-1 align-middle">
                   <Button type="button" size="sm" disabled={isSavingDraft} onClick={() => void handleAddRow()}>
@@ -1461,9 +1492,11 @@ export function ShuttleClient({
                       onCommitField={(next) => void saveRowIfChanged(record, next)}
                       options={options}
                       saleOptions={saleOptions}
+                      driverOptions={driverOptions}
                       companyOptions={companies}
                       onManageOptions={(field, label) => setManageField({ field, label })}
                       onManageSaleColors={() => setIsManagingSaleColors(true)}
+                      onManageDriverColors={() => setIsManagingDriverColors(true)}
                     />
                     <td className="px-2 py-1 align-middle">
                       <div className="flex flex-col items-start gap-1">
@@ -1559,12 +1592,26 @@ export function ShuttleClient({
       )}
 
       {isManagingSaleColors && (
-        <SaleColorManagerModal
-          saleAccounts={initialSaleAccounts}
-          saleOptions={options.sales}
-          onSetColor={(accountName, colorKey) => handleAddOption("sale", accountName, colorKey)}
-          onSetTextColor={(accountName, textColorKey) => handleAddOption("sale", accountName, undefined, textColorKey)}
+        <AccountColorManagerModal
+          title="Chỉnh sửa màu — Sale"
+          emptyLabel="Chưa có tài khoản Sale nào đang hoạt động."
+          accounts={initialSaleAccounts}
+          colorOptions={options.sales}
+          onSetColor={(accountId, colorKey) => handleAddOption("sale", accountId, colorKey)}
+          onSetTextColor={(accountId, textColorKey) => handleAddOption("sale", accountId, undefined, textColorKey)}
           onClose={() => setIsManagingSaleColors(false)}
+        />
+      )}
+
+      {isManagingDriverColors && (
+        <AccountColorManagerModal
+          title="Chỉnh sửa màu — Đưa đón"
+          emptyLabel="Chưa có tài khoản Đưa đón nào đang hoạt động."
+          accounts={initialDriverAccounts}
+          colorOptions={options.drivers}
+          onSetColor={(accountId, colorKey) => handleAddOption("driver", accountId, colorKey)}
+          onSetTextColor={(accountId, textColorKey) => handleAddOption("driver", accountId, undefined, textColorKey)}
+          onClose={() => setIsManagingDriverColors(false)}
         />
       )}
     </div>

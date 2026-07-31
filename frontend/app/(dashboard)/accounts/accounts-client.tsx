@@ -297,6 +297,7 @@ export function AccountsClient({
                 remaining_leave_days: payload.remaining_leave_days ?? null,
                 citizen_id: payload.citizen_id ?? null,
                 bank_account_number: payload.bank_account_number ?? null,
+                nickname: payload.nickname ?? null,
               }),
             });
             setModal({ mode: "none" });
@@ -330,6 +331,8 @@ interface AccountFormPayload {
   /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK — cùng quy tắc như 5 field phía trên. */
   citizen_id?: string | null;
   bank_account_number?: string | null;
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ ở cột Sale/Đưa đón, cùng quy tắc CHỈ Admin sửa. */
+  nickname?: string | null;
 }
 
 function AccountModal({
@@ -361,6 +364,7 @@ function AccountModal({
   );
   const [citizenId, setCitizenId] = useState(initialAccount?.citizen_id ?? "");
   const [bankAccountNumber, setBankAccountNumber] = useState(initialAccount?.bank_account_number ?? "");
+  const [nickname, setNickname] = useState(initialAccount?.nickname ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -399,6 +403,7 @@ function AccountModal({
           remaining_leave_days: parsedLeaveDays,
           citizen_id: citizenId.trim() || null,
           bank_account_number: bankAccountNumber.trim() || null,
+          nickname: nickname.trim() || null,
         }),
       });
     } catch (err) {
@@ -426,6 +431,16 @@ function AccountModal({
         <Field label="Họ tên">
           <Input value={fullName} onChange={(event) => setFullName(event.target.value)} />
         </Field>
+
+        {isEdit && (
+          <Field label="Biệt danh (không bắt buộc)">
+            <Input
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              placeholder="Hiển thị thay họ tên ở cột Sale/Đưa đón nếu có"
+            />
+          </Field>
+        )}
 
         <Field label="Tên đăng nhập">
           <Input value={username} onChange={(event) => setUsername(event.target.value)} />

@@ -269,7 +269,7 @@ describe('DashboardService', () => {
 
     it('tách riêng no_show (Bùng PV)/failed (Trượt PV), employed=null (chưa có nguồn dữ liệu)', async () => {
       prisma.lead.count.mockResolvedValue(20); // new_leads
-      prisma.account.findMany.mockResolvedValue([{ fullName: 'Sale A' }]); // resolveSaleNamesInScope (admin)
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]); // resolveSaleAccountIdsInScope (admin)
       prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
 
       const result = await service.getSummary({}, adminUser);
@@ -290,14 +290,14 @@ describe('DashboardService', () => {
       });
       expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ sale: { in: ['Sale A'] } }),
+          where: expect.objectContaining({ saleUserId: { in: ['sale-a'] } }),
         }),
       );
     });
 
     it('"Hẹn lại"/để trống Tình trạng KHÔNG tính vào attended lẫn no_show (vẫn tính vào interview_scheduled)', async () => {
       prisma.lead.count.mockResolvedValue(5);
-      prisma.account.findMany.mockResolvedValue([{ fullName: 'Sale A' }]);
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
       prisma.shuttleRecord.findMany.mockResolvedValue([
         { status: 'Hẹn lại', interviewResult: null },
         { status: null, interviewResult: null },
@@ -319,7 +319,7 @@ describe('DashboardService', () => {
 
     it('lọc theo Nguồn (source_id) → 5 chỉ số Shuttle-based về 0 (yêu cầu trực tiếp người dùng)', async () => {
       prisma.lead.count.mockResolvedValue(20);
-      prisma.account.findMany.mockResolvedValue([{ fullName: 'Sale A' }]);
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
       prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
 
       const result = await service.getSummary(

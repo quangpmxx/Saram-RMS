@@ -6,8 +6,9 @@ import { toNotificationResponse } from '../notification/dto/notification-respons
 
 /**
  * Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
- * cảnh báo tự động 1 Sale không có bất kỳ bản ghi nào (trường "Sale" khớp
- * đúng họ tên tài khoản) trong "Danh sách đưa đón" suốt 3 ngày liên tiếp —
+ * cảnh báo tự động 1 Sale không có bất kỳ bản ghi nào (trường "Sale" —
+ * saleUserId, khóa ngoại Account thật từ 2026-07-28) trong "Danh sách đưa
+ * đón" suốt 3 ngày liên tiếp —
  * sang ngày thứ 4 tạo thông báo "Nhắc nhở lần 1..." (yêu cầu trực tiếp
  * người dùng). Dùng đúng nội dung message này — không tự đổi chữ.
  */
@@ -92,7 +93,7 @@ export class SaleReminderService {
 
     for (const sale of sales) {
       const lastRecord = await this.prisma.shuttleRecord.findFirst({
-        where: { sale: sale.fullName },
+        where: { saleUserId: sale.id },
         orderBy: { date: 'desc' },
         select: { date: true },
       });
@@ -178,7 +179,7 @@ export class SaleReminderService {
     // Xóa mọi bản ghi trong 4 ngày gần nhất của Sale này — đảm bảo đủ điều
     // kiện vi phạm (không đụng tới bản ghi cũ hơn/của Sale khác).
     await this.prisma.shuttleRecord.deleteMany({
-      where: { sale: sale.fullName, date: { gte: fourDaysAgo } },
+      where: { saleUserId: sale.id, date: { gte: fourDaysAgo } },
     });
 
     // Xóa mọi thông báo cảnh báo cũ của tài khoản này — test lại từ đầu, không bị chặn bởi chu kỳ trước.
@@ -192,7 +193,7 @@ export class SaleReminderService {
         date: fiveDaysAgo,
         fullName: `[TEST] Ứng viên mẫu — ${sale.fullName}`,
         phoneNumber: '0900000000',
-        sale: sale.fullName,
+        saleUserId: sale.id,
         createdById: sale.id,
         updatedById: sale.id,
       },

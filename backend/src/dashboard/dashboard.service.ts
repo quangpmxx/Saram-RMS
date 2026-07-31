@@ -84,7 +84,10 @@ export class DashboardService {
         }
       : null;
 
-    const saleNames = await this.resolveSaleNamesInScope(currentUser, query);
+    const saleAccountIds = await this.resolveSaleAccountIdsInScope(
+      currentUser,
+      query,
+    );
     const sourceFiltered = Boolean(query.source_id);
 
     const [
@@ -107,7 +110,7 @@ export class DashboardService {
       this.getCarePoolCount(currentUser, query.team_id),
       this.computeKpiBreakdown(
         baseWhere,
-        saleNames,
+        saleAccountIds,
         query.date_from,
         query.date_to,
         sourceFiltered,
@@ -115,7 +118,7 @@ export class DashboardService {
       previousRange && previousWhere
         ? this.computeKpiBreakdown(
             previousWhere,
-            saleNames,
+            saleAccountIds,
             previousRange.from,
             previousRange.to,
             sourceFiltered,
@@ -215,7 +218,7 @@ export class DashboardService {
             }),
             this.computeKpiBreakdown(
               leadWhere,
-              [sale.fullName],
+              [sale.id],
               query.date_from,
               query.date_to,
               sourceFiltered,
@@ -265,16 +268,16 @@ export class DashboardService {
         };
         // Sale trong nhóm này (thu hẹp thêm theo account_id nếu có lọc) —
         // dùng để tính 5 chỉ số Shuttle-based cho đúng nhóm (Mục "resolve
-        // sale names", computeShuttleKpi()).
+        // sale account ids", computeShuttleKpi()).
         const teamSales = await this.prisma.account.findMany({
           where: {
             role: 'sale',
             teamId: team.id,
             ...(query.account_id ? { id: query.account_id } : {}),
           },
-          select: { fullName: true },
+          select: { id: true },
         });
-        const teamSaleNames = teamSales.map((s) => s.fullName);
+        const teamSaleAccountIds = teamSales.map((s) => s.id);
 
         const [leadCount, funnel, carePoolCount, kpi] = await Promise.all([
           this.prisma.lead.count({ where }),
@@ -289,7 +292,7 @@ export class DashboardService {
           }),
           this.computeKpiBreakdown(
             where,
-            teamSaleNames,
+            teamSaleAccountIds,
             query.date_from,
             query.date_to,
             sourceFiltered,
@@ -475,14 +478,14 @@ export class DashboardService {
    */
   private async computeKpiBreakdown(
     leadWhere: Prisma.LeadWhereInput,
-    saleNames: string[],
+    saleAccountIds: string[],
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
   ): Promise<KpiBreakdown> {
     const [newLeads, shuttle] = await Promise.all([
       this.prisma.lead.count({ where: leadWhere }),
-      this.computeShuttleKpi(saleNames, dateFrom, dateTo, sourceFiltered),
+      this.computeShuttleKpi(saleAccountIds, dateFrom, dateTo, sourceFiltered),
     ]);
 
     const pct = (count: number) =>
@@ -505,15 +508,15 @@ export class DashboardService {
   }
 
   /**
-   * Hẹn/Đến/Bùng/Đỗ/Trượt PV — tính từ ShuttleRecord.sale (chuỗi tên, KHÔNG
-   * phải account_id — ghép theo đúng full_name, giống cách trang Đưa đón
-   * đang ghép màu cho ComboCell Sale). `sourceFiltered=true` (đang lọc theo
-   * Nguồn) → trả về 0 hết vì Đưa đón không lưu Nguồn (yêu cầu trực tiếp
-   * người dùng: "số về 0 khi có lọc Nguồn"). `saleNames` rỗng (vd MKT — MKT
-   * không phải Sale, không có bản ghi Đưa đón nào đứng tên MKT) → cũng 0.
+   * Hẹn/Đến/Bùng/Đỗ/Trượt PV — tính từ ShuttleRecord.saleUserId (khóa ngoại
+   * Account thật từ 2026-07-28, trước đó ghép theo chuỗi tên). `sourceFiltered
+   * =true` (đang lọc theo Nguồn) → trả về 0 hết vì Đưa đón không lưu Nguồn
+   * (yêu cầu trực tiếp người dùng: "số về 0 khi có lọc Nguồn"). `saleAccountIds`
+   * rỗng (vd MKT — MKT không phải Sale, không có bản ghi Đưa đón nào đứng
+   * tên MKT) → cũng 0.
    */
   private async computeShuttleKpi(
-    saleNames: string[],
+    saleAccountIds: string[],
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
@@ -523,7 +526,7 @@ export class DashboardService {
       'interview_scheduled' | 'attended' | 'no_show' | 'passed' | 'failed'
     >
   > {
-    if (sourceFiltered || saleNames.length === 0) {
+    if (sourceFiltered || saleAccountIds.length === 0) {
       return {
         interview_scheduled: 0,
         attended: 0,
@@ -535,7 +538,7 @@ export class DashboardService {
 
     const rows = await this.prisma.shuttleRecord.findMany({
       where: {
-        sale: { in: saleNames },
+        saleUserId: { in: saleAccountIds },
         date: {
           gte: dateFrom ? new Date(dateFrom) : undefined,
           lte: dateTo ? new Date(dateTo) : undefined,
@@ -556,24 +559,20 @@ export class DashboardService {
   }
 
   /**
-   * Danh sách tên Sale (full_name) đang trong phạm vi xem của currentUser +
+   * Danh sách account_id của Sale đang trong phạm vi xem của currentUser +
    * bộ lọc hiện tại — dùng cho computeShuttleKpi() ở mức công ty (getSummary).
    * Sale: chỉ chính mình. MKT: rỗng (MKT không phải Sale, không đứng tên
    * dòng Đưa đón nào). Leader: Sale trong đúng nhóm mình (ép cứng, giống
    * buildScope()). Admin/Quản lý: theo team_id/account_id nếu có lọc, không
    * thì toàn bộ Sale.
    */
-  private async resolveSaleNamesInScope(
+  private async resolveSaleAccountIdsInScope(
     currentUser: AuthenticatedUser,
     query: DashboardQueryDto,
   ): Promise<string[]> {
     if (currentUser.role === 'mkt') return [];
     if (currentUser.role === 'sale') {
-      const self = await this.prisma.account.findUnique({
-        where: { id: currentUser.id },
-        select: { fullName: true },
-      });
-      return self ? [self.fullName] : [];
+      return [currentUser.id];
     }
 
     const teamId = await this.resolveTeamIdForRestrictedRole(
@@ -586,9 +585,9 @@ export class DashboardService {
         ...(teamId ? { teamId } : {}),
         ...(query.account_id ? { id: query.account_id } : {}),
       },
-      select: { fullName: true },
+      select: { id: true },
     });
-    return sales.map((s) => s.fullName);
+    return sales.map((s) => s.id);
   }
 
   /**
@@ -1038,7 +1037,7 @@ export class DashboardService {
             fullName: `${randomFrom(FIRST_NAMES)} ${randomFrom(LAST_NAMES)}`,
             phoneNumber: `09${Math.floor(10000000 + Math.random() * 89999999)}`,
             companyId: randomFrom(partnerCompanyIds),
-            sale: sale.fullName,
+            saleUserId: sale.id,
             status,
             interviewResult,
             createdById: uploader.id,

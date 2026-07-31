@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -35,8 +36,9 @@ export class SalesEntryService {
 
   async list(
     query: ListDsSaleQueryDto,
+    currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<DsSaleRowResponseDto>> {
-    const where = this.buildWhere(query);
+    const where = await this.buildWhere(query, currentUser);
 
     const [total, records] = await this.prisma.$transaction([
       this.prisma.salesEntryRecord.count({ where }),
@@ -61,10 +63,17 @@ export class SalesEntryService {
    * Dùng chung cho GET (phân trang) và export Excel — CÙNG 1 phạm vi lọc,
    * tránh file xuất lệch với màn hình đang xem (Mục 12: "Dữ liệu xuất theo
    * bộ lọc hiện tại").
+   *
+   * Yêu cầu trực tiếp người dùng (2026-07-27): "Sale tự nhập doanh số cho
+   * chính mình... leader nhìn được doanh số của cả team, quản lý/admin/kế
+   * toán nhìn thấy full" — ÉP buộc scope theo vai trò ở đây (không phải chỉ
+   * gợi ý qua query param), để không ai xem được dữ liệu ngoài phạm vi dù
+   * có tự sửa query string.
    */
-  private buildWhere(
+  private async buildWhere(
     query: ListDsSaleQueryDto,
-  ): Prisma.SalesEntryRecordWhereInput {
+    currentUser: AuthenticatedUser,
+  ): Promise<Prisma.SalesEntryRecordWhereInput> {
     const where: Prisma.SalesEntryRecordWhereInput = {};
 
     if (query.keyword) {
@@ -85,11 +94,30 @@ export class SalesEntryService {
     if (query.sale_user_id) where.saleUserId = query.sale_user_id;
     if (query.pickup_user_id) where.pickupUserId = query.pickup_user_id;
 
+    if (currentUser.role === 'sale') {
+      // Ghi đè, KHÔNG cộng thêm điều kiện — Sale chỉ được xem đúng 1 phạm
+      // vi duy nhất (chính mình), bất kể query.sale_user_id gửi lên là gì.
+      where.saleUserId = currentUser.id;
+    } else if (currentUser.role === 'leader') {
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      // Chưa có nhóm — không thấy dòng nào, an toàn hơn là lộ hết dữ liệu.
+      // "saleUserId: { in: [] }" (không phải 1 UUID giả) để tránh lỗi kiểu
+      // dữ liệu UUID ở Postgres khi so sánh với chuỗi không hợp lệ.
+      if (teamId) {
+        where.saleUser = { teamId };
+      } else {
+        where.saleUserId = { in: [] };
+      }
+    }
+
     return where;
   }
 
-  async exportRows(query: ListDsSaleQueryDto): Promise<DsSaleRowResponseDto[]> {
-    const where = this.buildWhere(query);
+  async exportRows(
+    query: ListDsSaleQueryDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<DsSaleRowResponseDto[]> {
+    const where = await this.buildWhere(query, currentUser);
     const records = await this.prisma.salesEntryRecord.findMany({
       where,
       include: DS_SALE_INCLUDE,
@@ -98,8 +126,21 @@ export class SalesEntryService {
     return records.map(toDsSaleRowResponse);
   }
 
-  /** Mục 9/14: chặn tạo/lưu 1 dòng khi TẤT CẢ trường nghiệp vụ đều trống — an toàn ở tầng service dù frontend đã tự chặn trước. */
-  private isRowBlank(dto: UpsertDsSaleRowDto): boolean {
+  /**
+   * Mục 9/14: chặn tạo/lưu 1 dòng khi TẤT CẢ trường nghiệp vụ đều trống —
+   * an toàn ở tầng service dù frontend đã tự chặn trước.
+   * Yêu cầu trực tiếp người dùng (2026-07-27): Sale luôn bị ép sale_user_id
+   * = chính mình (xem resolveSaleUserId) — vì vậy KHÔNG tính trường này khi
+   * xét "trống" cho vai trò Sale, nếu không dòng nháp trống của Sale sẽ
+   * không bao giờ được coi là trống (luôn có sẵn sale_user_id), tự lưu
+   * thành dòng rác dù người dùng chưa gõ gì khác.
+   */
+  private isRowBlank(
+    dto: UpsertDsSaleRowDto,
+    currentUser: AuthenticatedUser,
+  ): boolean {
+    const saleFieldBlank =
+      currentUser.role === 'sale' ? true : !dto.sale_user_id;
     return (
       isBlank(dto.employee_code) &&
       isBlank(dto.full_name) &&
@@ -108,7 +149,7 @@ export class SalesEntryService {
       isBlank(dto.hometown) &&
       !dto.join_date &&
       !dto.company_id &&
-      !dto.sale_user_id &&
+      saleFieldBlank &&
       !dto.pickup_user_id &&
       isBlank(dto.note)
     );
@@ -118,15 +159,21 @@ export class SalesEntryService {
     dto: UpsertDsSaleRowDto,
     currentUser: AuthenticatedUser,
   ): Promise<DsSaleRowResponseDto> {
-    if (this.isRowBlank(dto)) {
+    if (this.isRowBlank(dto, currentUser)) {
       throw new BadRequestException('Không thể lưu 1 dòng hoàn toàn trống');
     }
+
+    const saleUserId = await this.resolveSaleUserId(
+      dto.sale_user_id ?? null,
+      currentUser,
+    );
 
     let record: DsSaleRowWithRelations;
     try {
       record = await this.prisma.salesEntryRecord.create({
         data: {
           ...this.toWriteData(dto),
+          saleUserId,
           createdById: currentUser.id,
           updatedById: currentUser.id,
         },
@@ -154,7 +201,7 @@ export class SalesEntryService {
     dto: UpsertDsSaleRowDto,
     currentUser: AuthenticatedUser,
   ): Promise<DsSaleRowResponseDto> {
-    if (this.isRowBlank(dto)) {
+    if (this.isRowBlank(dto, currentUser)) {
       throw new BadRequestException('Không thể lưu 1 dòng hoàn toàn trống');
     }
 
@@ -164,6 +211,12 @@ export class SalesEntryService {
     if (!existing) {
       throw new NotFoundException('Không tìm thấy dòng DS Sale');
     }
+    await this.assertCanModifyRow(existing.saleUserId, currentUser);
+
+    const saleUserId = await this.resolveSaleUserId(
+      dto.sale_user_id ?? null,
+      currentUser,
+    );
 
     let record: DsSaleRowWithRelations;
     try {
@@ -171,6 +224,7 @@ export class SalesEntryService {
         where: { id },
         data: {
           ...this.toWriteData(dto),
+          saleUserId,
           updatedById: currentUser.id,
         },
         include: DS_SALE_INCLUDE,
@@ -196,9 +250,19 @@ export class SalesEntryService {
     ids: string[],
     currentUser: AuthenticatedUser,
   ): Promise<{ deleted: number }> {
-    const result = await this.prisma.salesEntryRecord.deleteMany({
-      where: { id: { in: ids } },
-    });
+    const where: Prisma.SalesEntryRecordWhereInput = { id: { in: ids } };
+    if (currentUser.role === 'sale') {
+      where.saleUserId = currentUser.id;
+    } else if (currentUser.role === 'leader') {
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      if (teamId) {
+        where.saleUser = { teamId };
+      } else {
+        where.saleUserId = { in: [] };
+      }
+    }
+
+    const result = await this.prisma.salesEntryRecord.deleteMany({ where });
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -233,6 +297,69 @@ export class SalesEntryService {
     return error as Error;
   }
 
+  /**
+   * Yêu cầu trực tiếp người dùng (2026-07-27): "Sale sẽ tự nhập doanh số
+   * cho chính mình... không cần chọn sale ở cột này mà sẽ hiện luôn tên
+   * mình". Ép cứng ở tầng backend (không chỉ ẩn ô chọn ở frontend) —
+   * Sale KHÔNG THỂ tự gán dòng cho người khác dù có sửa request tay.
+   * Leader vẫn chọn được Sale như trước, nhưng CHỈ trong đúng nhóm mình.
+   */
+  private async resolveSaleUserId(
+    requested: string | null,
+    currentUser: AuthenticatedUser,
+  ): Promise<string | null> {
+    if (currentUser.role === 'sale') {
+      return currentUser.id;
+    }
+    if (currentUser.role === 'leader' && requested) {
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      const target = await this.prisma.account.findUnique({
+        where: { id: requested },
+        select: { teamId: true },
+      });
+      if (!teamId || !target || target.teamId !== teamId) {
+        throw new ForbiddenException('Bạn chỉ được chọn Sale trong nhóm mình');
+      }
+    }
+    return requested;
+  }
+
+  /** Chặn Sale/Leader sửa/xóa dòng NGOÀI phạm vi (chính mình/cả nhóm) — Quản lý/Admin/Kế toán không giới hạn. */
+  private async assertCanModifyRow(
+    existingSaleUserId: string | null,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    if (currentUser.role === 'sale') {
+      if (existingSaleUserId !== currentUser.id) {
+        throw new ForbiddenException(
+          'Bạn chỉ được sửa dòng doanh số của chính mình',
+        );
+      }
+      return;
+    }
+    if (currentUser.role === 'leader') {
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      if (!existingSaleUserId) return; // Chưa gán Sale — Leader vẫn nhận (gán) được, khớp resolveSaleUserId.
+      const target = await this.prisma.account.findUnique({
+        where: { id: existingSaleUserId },
+        select: { teamId: true },
+      });
+      if (!teamId || !target || target.teamId !== teamId) {
+        throw new ForbiddenException(
+          'Bạn chỉ được sửa dòng doanh số trong nhóm mình',
+        );
+      }
+    }
+  }
+
+  private async getOwnTeamId(accountId: string): Promise<string | null> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { teamId: true },
+    });
+    return account?.teamId ?? null;
+  }
+
   private toWriteData(dto: UpsertDsSaleRowDto) {
     return {
       employeeCode: isBlank(dto.employee_code) ? null : dto.employee_code,
@@ -242,15 +369,27 @@ export class SalesEntryService {
       hometown: isBlank(dto.hometown) ? null : dto.hometown,
       joinDate: dto.join_date ? new Date(dto.join_date) : null,
       companyId: dto.company_id ?? null,
-      saleUserId: dto.sale_user_id ?? null,
       pickupUserId: dto.pickup_user_id ?? null,
       note: isBlank(dto.note) ? null : dto.note,
     };
   }
 
-  /** Mục 5: nguồn Sale = tài khoản role 'sale' đang active — khớp đúng listSaleAccounts() ở shuttle.service.ts. */
-  async listSaleAccounts(): Promise<DsSaleAccountOptionDto[]> {
-    return this.listAccountOptions('sale');
+  /**
+   * Mục 5: nguồn Sale = tài khoản role 'sale' đang active — khớp đúng
+   * listSaleAccounts() ở shuttle.service.ts. Yêu cầu trực tiếp người dùng
+   * (2026-07-27): Leader chỉ thấy Sale TRONG NHÓM mình (khớp phạm vi
+   * xem/sửa đã ép ở buildWhere/resolveSaleUserId) — Quản lý/Admin/Kế toán
+   * vẫn thấy toàn bộ như trước. Sale không cần danh sách này (không hiện ô
+   * chọn ở frontend) nên không cần scope riêng.
+   */
+  async listSaleAccounts(
+    currentUser: AuthenticatedUser,
+  ): Promise<DsSaleAccountOptionDto[]> {
+    const teamId =
+      currentUser.role === 'leader'
+        ? await this.getOwnTeamId(currentUser.id)
+        : undefined;
+    return this.listAccountOptions('sale', teamId);
   }
 
   /**
@@ -265,12 +404,16 @@ export class SalesEntryService {
 
   private async listAccountOptions(
     role: 'sale' | 'shuttle_staff',
+    /** undefined = không lọc theo nhóm; null = có nhóm nhưng KHÔNG lọc được (an toàn: trả rỗng) — chỉ dùng cho Leader. */
+    teamId?: string | null,
   ): Promise<DsSaleAccountOptionDto[]> {
+    if (teamId === null) return [];
     const accounts = await this.prisma.account.findMany({
-      where: { role, status: 'active' },
+      where: { role, status: 'active', ...(teamId ? { teamId } : {}) },
       select: {
         id: true,
         fullName: true,
+        nickname: true,
         avatarUrl: true,
         team: { select: { name: true } },
       },
@@ -280,6 +423,7 @@ export class SalesEntryService {
     return accounts.map((account) => ({
       id: account.id,
       full_name: account.fullName,
+      nickname: account.nickname,
       avatar_url: account.avatarUrl,
       team_name: account.team?.name ?? null,
     }));

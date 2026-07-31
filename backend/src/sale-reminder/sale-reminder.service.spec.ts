@@ -174,7 +174,7 @@ describe('SaleReminderService', () => {
       where: { accountId: 'sale-1', type: 'sale_no_shuttle_reminder' },
     });
     expect(prisma.shuttleRecord.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ sale: 'Sale Demo Test' }),
+      data: expect.objectContaining({ saleUserId: 'sale-1' }),
     });
     expect(result.account).toBe('Sale Demo Test');
   });

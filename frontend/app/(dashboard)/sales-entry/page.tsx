@@ -35,6 +35,9 @@ export default async function SalesEntryPage() {
     <SalesEntryClient
       permissionLevel={permissionLevel}
       currentUserId={user.id}
+      currentUserRole={user.role}
+      currentUserFullName={user.full_name}
+      currentUserNickname={user.nickname}
       initialRows={initialRows}
       initialSaleAccounts={saleAccounts}
       initialPickupAccounts={pickupAccounts}

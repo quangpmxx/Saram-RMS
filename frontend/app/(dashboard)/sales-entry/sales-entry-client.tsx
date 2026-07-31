@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useSetPageTitle } from "@/lib/page-title-context";
-import type { DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, ModulePermissionLevel, PaginatedResult } from "@/lib/types";
+import type { AccountRole, DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, ModulePermissionLevel, PaginatedResult } from "@/lib/types";
 import { DsSaleClient } from "./ds-sale-client";
 
 /**
@@ -20,6 +20,9 @@ import { DsSaleClient } from "./ds-sale-client";
 export function SalesEntryClient({
   permissionLevel,
   currentUserId,
+  currentUserRole,
+  currentUserFullName,
+  currentUserNickname,
   initialRows,
   initialSaleAccounts,
   initialPickupAccounts,
@@ -27,6 +30,9 @@ export function SalesEntryClient({
 }: {
   permissionLevel: ModulePermissionLevel;
   currentUserId: string;
+  currentUserRole: AccountRole;
+  currentUserFullName: string;
+  currentUserNickname: string | null;
   initialRows: PaginatedResult<DsSaleRow>;
   initialSaleAccounts: DsSaleAccountOption[];
   initialPickupAccounts: DsSaleAccountOption[];
@@ -75,6 +81,9 @@ export function SalesEntryClient({
         <DsSaleClient
           permissionLevel={permissionLevel}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          currentUserFullName={currentUserFullName}
+          currentUserNickname={currentUserNickname}
           initialRows={initialRows}
           initialSaleAccounts={initialSaleAccounts}
           initialPickupAccounts={initialPickupAccounts}

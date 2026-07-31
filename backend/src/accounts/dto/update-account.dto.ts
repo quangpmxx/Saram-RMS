@@ -34,6 +34,13 @@ export class UpdateAccountDto {
   @MaxLength(150)
   full_name?: string;
 
+  /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh, CHỈ
+   * Admin sửa được — hiển thị thay họ tên đầy đủ ở cột Sale/Đưa đón. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  nickname?: string | null;
+
   @IsOptional()
   @IsString()
   @IsNotEmpty({ message: 'Tên đăng nhập không được để trống' })

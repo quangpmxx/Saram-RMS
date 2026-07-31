@@ -44,15 +44,16 @@ export class UpdateShuttleDto {
   @MaxLength(100)
   type?: string;
 
+  /** Yêu cầu trực tiếp người dùng (2026-07-28): "chuyển cả 2 cột sang liên kết tài khoản thật" — tham chiếu Account thật (role='sale'), không còn chuỗi tự do. */
   @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  sale?: string;
+  @Transform(emptyToNull)
+  @IsUUID()
+  sale_user_id?: string | null;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  driver?: string;
+  @Transform(emptyToNull)
+  @IsUUID()
+  driver_user_id?: string | null;
 
   // Xem ghi chú tương tự ở create-shuttle.dto.ts — "" = chưa nhập.
   @IsOptional()

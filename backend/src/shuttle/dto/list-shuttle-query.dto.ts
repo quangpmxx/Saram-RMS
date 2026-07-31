@@ -53,13 +53,14 @@ export class ListShuttleQueryDto {
   @IsString()
   type?: string;
 
+  /** Yêu cầu trực tiếp người dùng (2026-07-28): lọc theo Account.id thật, không còn chuỗi tự do. */
   @IsOptional()
-  @IsString()
-  sale?: string;
+  @IsUUID()
+  sale_user_id?: string;
 
   @IsOptional()
-  @IsString()
-  driver?: string;
+  @IsUUID()
+  driver_user_id?: string;
 
   @IsOptional()
   @IsString()

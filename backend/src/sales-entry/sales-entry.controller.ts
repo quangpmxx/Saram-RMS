@@ -45,17 +45,24 @@ export class SalesEntryController {
   ) {}
 
   @Get()
-  list(@Query() query: ListDsSaleQueryDto) {
-    return this.salesEntryService.list(query);
+  list(
+    @Query() query: ListDsSaleQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesEntryService.list(query, user);
   }
 
   /** Mục 12, yêu cầu người dùng: "Tải Excel" — xuất theo bộ lọc hiện tại, không chỉ trang đang xem. */
   @Get('export')
   async exportXlsx(
     @Query() query: ListDsSaleQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
   ): Promise<void> {
-    const { buffer, filename } = await this.exportService.exportXlsx(query);
+    const { buffer, filename } = await this.exportService.exportXlsx(
+      query,
+      user,
+    );
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -65,8 +72,8 @@ export class SalesEntryController {
   }
 
   @Get('sale-accounts')
-  listSaleAccounts() {
-    return this.salesEntryService.listSaleAccounts();
+  listSaleAccounts(@CurrentUser() user: AuthenticatedUser) {
+    return this.salesEntryService.listSaleAccounts(user);
   }
 
   @Get('pickup-accounts')

@@ -149,6 +149,7 @@ export class AccountsService {
         where: { id },
         data: {
           fullName: dto.full_name,
+          nickname: dto.nickname,
           username: dto.username,
           teamId: dto.team_id === undefined ? undefined : dto.team_id,
           status: dto.status,
@@ -280,6 +281,7 @@ export class AccountsService {
     entityId: string,
     before: {
       fullName: string;
+      nickname: string | null;
       username: string;
       teamId: string | null;
       status: string;
@@ -304,6 +306,13 @@ export class AccountsService {
         field: 'full_name',
         oldValue: before.fullName,
         newValue: dto.full_name,
+      });
+    }
+    if (dto.nickname !== undefined && dto.nickname !== before.nickname) {
+      changes.push({
+        field: 'nickname',
+        oldValue: before.nickname,
+        newValue: dto.nickname,
       });
     }
     if (dto.username !== undefined && dto.username !== before.username) {
