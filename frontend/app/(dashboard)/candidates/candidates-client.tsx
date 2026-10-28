@@ -214,6 +214,8 @@ export function CandidatesClient({
   const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  /** Người dùng đã tự bấm chọn tab — khôi phục trạng thái cũ (sessionStorage) không được đè lên. */
+  const userPickedViewRef = useRef(false);
 
   useSetPageTitle("Data lao động", "Thu thập, tìm kiếm và quản lý dữ liệu lao động.");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
@@ -240,12 +242,20 @@ export function CandidatesClient({
    * GET /candidate/:id/note cho từng dòng đang hiển thị, không thêm API mới.
    */
   useEffect(() => {
+    // Tab Kho chăm sóc không hiển thị bảng này — không tải ghi chú. Rời khỏi
+    // tab (hoặc danh sách đổi) thì HỦY các request còn xếp hàng: ~50 request
+    // ghi chú chạy dồn làm request của tab Kho phải chờ rất lâu (đo được
+    // ~9 giây trên DB dev chỉ 1 kết nối).
+    if (viewMode === "care") return;
     let cancelled = false;
+    const controller = new AbortController();
 
     void Promise.all(
       candidates.map(async (candidate) => {
         try {
-          const notes = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
+          const notes = await clientApi<Note[]>(`/candidate/${candidate.id}/note`, {
+            signal: controller.signal,
+          });
           const visible = notes.filter((note) => !note.is_deleted);
           return [candidate.id, visible] as const;
         } catch {
@@ -260,8 +270,9 @@ export function CandidatesClient({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [candidates]);
+  }, [candidates, viewMode]);
 
   function canModify(candidate: Candidate): boolean {
     if (currentUserRole === "admin" || currentUserRole === "manager") return true;
@@ -405,6 +416,9 @@ export function CandidatesClient({
       }
       try {
         const result = await fetchPage(saved.page, saved.viewMode, saved.pageSize, saved.filters);
+        // Người dùng đã tự chọn tab trong lúc chờ tải → KHÔNG đè lại bằng tab
+        // cũ đã lưu (lỗi: bấm "Kho chăm sóc" xong bị bật về "Tất cả").
+        if (userPickedViewRef.current) return;
         setCandidates(result.items);
         setTotal(result.total);
         setPage(saved.page);
@@ -536,6 +550,7 @@ export function CandidatesClient({
   }
 
   async function handleViewModeChange(mode: ViewMode) {
+    userPickedViewRef.current = true;
     setViewMode(mode);
     // Kho chăm sóc tự tải dữ liệu riêng (CareWarehousePanel).
     if (mode === "care") return;
