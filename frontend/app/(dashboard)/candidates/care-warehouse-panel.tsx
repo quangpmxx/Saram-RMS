@@ -194,10 +194,15 @@ export function CareWarehousePanel({
   const queryKey = buildQuery(applied, page, pageSize);
   const isLoading = loadedKey !== queryKey;
 
+  // Truy vấn mới nhất đã gửi — kết quả của truy vấn cũ về muộn (người dùng
+  // vừa đổi bộ lọc) bị bỏ qua, không đè lên kết quả mới (gây nhảy dữ liệu).
+  const latestKeyRef = useRef<string | null>(null);
   const load = useCallback(
-    (key: string, silent = false) =>
-      clientApi<CareWarehouseListResult>(`/care-warehouse?${key}`)
+    (key: string, silent = false) => {
+      latestKeyRef.current = key;
+      return clientApi<CareWarehouseListResult>(`/care-warehouse?${key}`)
         .then((result) => {
+          if (latestKeyRef.current !== key) return;
           setData(result);
           // Bỏ chọn những data không còn trên trang (vd vừa được giao/rời Kho).
           setSelected((prev) => {
@@ -207,9 +212,12 @@ export function CareWarehousePanel({
           });
         })
         .catch((error: unknown) => {
-          if (!silent) toast.error(errorText(error));
+          if (!silent && latestKeyRef.current === key) toast.error(errorText(error));
         })
-        .finally(() => setLoadedKey(key)),
+        .finally(() => {
+          if (latestKeyRef.current === key) setLoadedKey(key);
+        });
+    },
     [toast],
   );
 

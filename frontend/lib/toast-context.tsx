@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -71,12 +71,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 /** Dùng: const toast = useToast(); toast.success("Đã lưu"); toast.error("..."); toast.warning("..."). */
 export function useToast(): { success: (text: string) => void; error: (text: string) => void; warning: (text: string) => void } {
   const showToast = useContext(ShowToastContext);
-  if (!showToast) throw new Error("useToast phải được gọi bên trong ToastProvider");
-  return {
-    success: (text: string) => showToast("success", text),
-    error: (text: string) => showToast("error", text),
-    warning: (text: string) => showToast("warning", text),
-  };
+  // Trả về CÙNG 1 object giữa các lần render (showToast vốn ổn định nhờ
+  // useCallback). Trước đây mỗi lần render tạo object mới → hàm nào có
+  // `toast` trong deps (useCallback/useEffect) bị tạo lại liên tục → effect
+  // tải dữ liệu chạy lặp vô tận (vd tab Kho chăm sóc tự tải lại ~3 lần/giây).
+  const toast = useMemo(
+    () =>
+      showToast
+        ? {
+            success: (text: string) => showToast("success", text),
+            error: (text: string) => showToast("error", text),
+            warning: (text: string) => showToast("warning", text),
+          }
+        : null,
+    [showToast],
+  );
+  if (!toast) throw new Error("useToast phải được gọi bên trong ToastProvider");
+  return toast;
 }
 
 /**
