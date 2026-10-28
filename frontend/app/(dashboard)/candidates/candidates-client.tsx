@@ -751,15 +751,21 @@ export function CandidatesClient({
         </div>
       )}
 
-      {viewMode === "care" && (
-        <CareWarehousePanel
-          currentUserId={currentUserId}
-          currentUserRole={currentUserRole}
-          isReadOnly={isReadOnly}
-          teams={teams}
-          saleOptions={careSaleOptions}
-          initialAssigneeId={initialCareAssigneeId}
-        />
+      {/* Kho chăm sóc luôn được gắn sẵn (ẩn khi ở tab khác): tự tải ngầm ngay
+          khi mở trang và giữ nguyên dữ liệu/bộ lọc khi chuyển qua lại — bấm
+          sang tab Kho là hiện ngay, không phải chờ tải. */}
+      {canViewCare && (
+        <div className={viewMode === "care" ? undefined : "hidden"}>
+          <CareWarehousePanel
+            active={viewMode === "care"}
+            currentUserId={currentUserId}
+            currentUserRole={currentUserRole}
+            isReadOnly={isReadOnly}
+            teams={teams}
+            saleOptions={careSaleOptions}
+            initialAssigneeId={initialCareAssigneeId}
+          />
+        </div>
       )}
 
       {viewMode !== "care" && (

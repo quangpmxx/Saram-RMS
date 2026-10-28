@@ -142,6 +142,7 @@ function summarizeAssign(result: CareAssignResult): {
  * các tab Tất cả/Chờ phân chia/Cá nhân để không ảnh hưởng 3 tab đó.
  */
 export function CareWarehousePanel({
+  active,
   currentUserId,
   currentUserRole,
   isReadOnly,
@@ -149,6 +150,12 @@ export function CareWarehousePanel({
   saleOptions,
   initialAssigneeId,
 }: {
+  /**
+   * Tab Kho đang hiển thị. Panel được gắn sẵn (ẩn) từ lúc mở trang để tải
+   * ngầm trước; mỗi lần chuyển sang tab Kho thì làm mới nền, vẫn hiện dữ
+   * liệu cũ trong lúc chờ.
+   */
+  active: boolean;
   currentUserId: string;
   currentUserRole: AccountRole;
   isReadOnly: boolean;
@@ -206,9 +213,18 @@ export function CareWarehousePanel({
     [toast],
   );
 
+  // Đang ẩn (tải ngầm) thì không báo lỗi — tránh hiện thông báo lỗi Kho khi
+  // người dùng đang ở tab khác.
+  const activeRef = useRef(active);
   useEffect(() => {
-    void load(queryKey);
+    void load(queryKey, !activeRef.current);
   }, [load, queryKey]);
+
+  // Chuyển sang tab Kho: làm mới nền (dữ liệu tải ngầm/lần trước vẫn hiện ngay).
+  useEffect(() => {
+    if (active && !activeRef.current) void load(queryKey, true);
+    activeRef.current = active;
+  }, [active, load, queryKey]);
 
   // Realtime: mọi thay đổi có thể làm data vào/ra Kho hoặc đổi trạng thái
   // chăm sóc → tải lại nhẹ trang hiện tại (không reset bộ lọc/trang/lựa chọn).
