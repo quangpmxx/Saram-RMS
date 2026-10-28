@@ -179,4 +179,6 @@ export const CARE_RELEVANT_CHANGES = new Set([
   "care_revoked",
   "care_stopped",
   "care_resumed",
+  "care_stop_requested",
+  "care_stop_rejected",
 ]);

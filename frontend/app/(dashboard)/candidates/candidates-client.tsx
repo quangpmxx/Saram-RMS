@@ -1082,6 +1082,23 @@ export function CandidatesClient({
                     </td>
 
                     <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">
+                      {/* Kho chăm sóc: data đã dừng chăm sóc → sticker đỏ to "ĐÃ ĐÓNG";
+                          Sale đã đề nghị, đang chờ duyệt → nhãn vàng nhỏ. */}
+                      {candidate.care_stopped_at ? (
+                        <span
+                          title={`Đã dừng chăm sóc${candidate.care_stopped_by ? ` bởi ${candidate.care_stopped_by.name}` : ""} · ${new Date(candidate.care_stopped_at).toLocaleDateString("vi-VN")}`}
+                          className="mx-auto mb-1 block w-full rounded-md bg-red-600 px-0.5 py-1.5 text-center text-[11px] leading-tight font-extrabold tracking-wide text-white uppercase shadow-sm ring-2 ring-red-700/40"
+                        >
+                          Đã đóng
+                        </span>
+                      ) : candidate.care_stop_requested_at ? (
+                        <span
+                          title={`Chờ duyệt dừng chăm sóc${candidate.care_stop_requested_by ? ` — đề nghị bởi ${candidate.care_stop_requested_by.name}` : ""}`}
+                          className="mx-auto mb-1 block w-full rounded-md bg-amber-100 px-0.5 py-0.5 text-center text-[9px] leading-tight font-semibold text-amber-800 ring-1 ring-amber-300"
+                        >
+                          Chờ duyệt đóng
+                        </span>
+                      ) : null}
                       {canUpdateZaloStatus(candidate) ? (
                         // Chỉ 1 lựa chọn thật ("Đã gửi CCCD") nên bấm = đảo trạng thái
                         // (có/không) thay vì mở danh sách chọn — mũi tên chỉ là gợi ý

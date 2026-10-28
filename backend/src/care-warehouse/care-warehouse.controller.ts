@@ -121,4 +121,23 @@ export class CareWarehouseController {
   ) {
     return this.service.setCareStopped(leadId, false, user);
   }
+
+  /** Leader/Quản lý/Admin duyệt đề nghị dừng chăm sóc của Sale. */
+  @Post(':leadId/stop-request/approve')
+  @HttpCode(HttpStatus.OK)
+  approveStopRequest(
+    @Param('leadId', ParseUUIDPipe) leadId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.decideStopRequest(leadId, true, user);
+  }
+
+  @Post(':leadId/stop-request/reject')
+  @HttpCode(HttpStatus.OK)
+  rejectStopRequest(
+    @Param('leadId', ParseUUIDPipe) leadId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.decideStopRequest(leadId, false, user);
+  }
 }

@@ -542,6 +542,11 @@ export function CareWarehousePanel({
                           <Badge variant="warning">Chưa chăm sóc</Badge>
                         )}
                         {care.assigned_pending && <Badge variant="danger">Đã giao, chưa xử lý</Badge>}
+                        {item.care_stop_requested_at && (
+                          <Badge variant="warning" title="Sale đề nghị dừng chăm sóc — mở Chi tiết để duyệt">
+                            Chờ duyệt đóng
+                          </Badge>
+                        )}
                       </div>
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2">

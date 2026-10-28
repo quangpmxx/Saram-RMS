@@ -56,6 +56,9 @@ export interface CandidateResponseDto {
   /** Kho chăm sóc (2026-10-28): khác null = data đã bị "Dừng chăm sóc". */
   care_stopped_at: string | null;
   care_stopped_by: NamedRefWithRole | null;
+  /** Sale đề nghị dừng chăm sóc, đang chờ Leader/Quản lý/Admin duyệt. */
+  care_stop_requested_at: string | null;
+  care_stop_requested_by: NamedRefWithRole | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +73,10 @@ type LeadWithRelations = Lead & {
     'id' | 'fullName' | 'role' | 'avatarUrl'
   > | null;
   careStoppedBy?: Pick<
+    Account,
+    'id' | 'fullName' | 'role' | 'avatarUrl'
+  > | null;
+  careStopRequestedBy?: Pick<
     Account,
     'id' | 'fullName' | 'role' | 'avatarUrl'
   > | null;
@@ -167,6 +174,15 @@ export function toCandidateResponse(
           avatar_url: lead.careStoppedBy.avatarUrl,
         }
       : null,
+    care_stop_requested_at: lead.careStopRequestedAt?.toISOString() ?? null,
+    care_stop_requested_by: lead.careStopRequestedBy
+      ? {
+          id: lead.careStopRequestedBy.id,
+          name: lead.careStopRequestedBy.fullName,
+          role: lead.careStopRequestedBy.role,
+          avatar_url: lead.careStopRequestedBy.avatarUrl,
+        }
+      : null,
     created_at: lead.createdAt.toISOString(),
     updated_at: lead.updatedAt.toISOString(),
   };
@@ -186,6 +202,9 @@ export const CANDIDATE_INCLUDE = {
     select: { id: true, fullName: true, role: true, avatarUrl: true },
   },
   careStoppedBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
+  careStopRequestedBy: {
     select: { id: true, fullName: true, role: true, avatarUrl: true },
   },
   callStatus: { select: { id: true, name: true } },

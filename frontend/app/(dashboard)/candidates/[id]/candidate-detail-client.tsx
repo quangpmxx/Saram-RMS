@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarClock,
+  Check,
   Clock,
   Lock,
   MessageSquarePlus,
@@ -15,6 +16,7 @@ import {
   Phone,
   Save,
   Trash2,
+  X,
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -222,6 +224,14 @@ export function CandidateDetailClient({
       currentUserRole === "manager" ||
       (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId) ||
       (currentUserRole === "sale" && (candidate.assigned_to?.id === currentUserId || isCareAssignee)));
+  // Sale bấm "Dừng chăm sóc" chỉ tạo ĐỀ NGHỊ chờ duyệt; Leader (nhóm của
+  // data)/Quản lý/Admin duyệt hoặc từ chối — khớp decideStopRequest() ở backend.
+  const isStopPending = Boolean(candidate.care_stop_requested_at) && !candidate.care_stopped_at;
+  const canDecideStop =
+    !isReadOnly &&
+    (currentUserRole === "admin" ||
+      currentUserRole === "manager" ||
+      (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   // Sale: chỉ ghi chú của chính mình; Admin/Quản lý kế thừa quyền này, xóa được ghi chú bất kỳ.
   const canDeleteNote = (note: Note) =>
@@ -331,22 +341,48 @@ export function CandidateDetailClient({
 
   async function handleToggleCareStopped() {
     const stopping = !candidate.care_stopped_at;
+    const isRequest = stopping && currentUserRole === "sale";
     if (
       stopping &&
       !window.confirm(
-        "Dừng chăm sóc data này? Data sẽ rời khỏi Kho chăm sóc và lượt giao chăm sóc đang mở (nếu có) sẽ được đóng lại. Có thể bật lại bằng \"Tiếp tục chăm sóc\".",
+        isRequest
+          ? "Gửi đề nghị dừng chăm sóc data này? Leader sẽ nhận thông báo để duyệt. Trong lúc chờ duyệt, data vẫn được chăm sóc bình thường."
+          : "Dừng chăm sóc data này? Data sẽ rời khỏi Kho chăm sóc, hiện \"Đã đóng\" ở cột Kết quả và lượt giao chăm sóc đang mở (nếu có) sẽ được đóng lại. Có thể bật lại bằng \"Tiếp tục chăm sóc\".",
       )
     ) {
       return;
     }
+    await runCareAction(
+      `/care-warehouse/${candidate.id}/${stopping ? "stop" : "resume"}`,
+      isRequest
+        ? "Đã gửi đề nghị dừng chăm sóc — chờ Leader duyệt"
+        : stopping
+          ? "Đã dừng chăm sóc — data đã đóng"
+          : "Đã tiếp tục chăm sóc",
+    );
+  }
+
+  async function handleDecideStop(approve: boolean) {
+    if (
+      approve &&
+      !window.confirm(
+        "Duyệt dừng chăm sóc data này? Data sẽ rời khỏi Kho chăm sóc và hiện \"Đã đóng\" ở cột Kết quả.",
+      )
+    ) {
+      return;
+    }
+    await runCareAction(
+      `/care-warehouse/${candidate.id}/stop-request/${approve ? "approve" : "reject"}`,
+      approve ? "Đã duyệt — data đã đóng" : "Đã từ chối đề nghị dừng chăm sóc",
+    );
+  }
+
+  async function runCareAction(path: string, successText: string) {
     setIsCareSubmitting(true);
     try {
-      const updated = await clientApi<Candidate>(
-        `/care-warehouse/${candidate.id}/${stopping ? "stop" : "resume"}`,
-        { method: "POST" },
-      );
+      const updated = await clientApi<Candidate>(path, { method: "POST" });
       setCandidate(updated);
-      toast.success(stopping ? "Đã dừng chăm sóc" : "Đã tiếp tục chăm sóc");
+      toast.success(successText);
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
@@ -628,7 +664,7 @@ export function CandidateDetailClient({
         title={candidate.full_name}
         description={`${candidate.phone_number} · Nguồn: ${candidate.source.name}`}
         actions={
-          canUpdate || canToggleHold || canToggleCare ? (
+          canUpdate || canToggleHold || canToggleCare || (isStopPending && canDecideStop) ? (
             <div className="flex flex-wrap gap-2">
               {canToggleHold && (
                 <Button
@@ -647,7 +683,35 @@ export function CandidateDetailClient({
                   Đặt lịch gọi lại
                 </Button>
               )}
-              {canToggleCare && (
+              {isStopPending && canDecideStop && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isCareSubmitting}
+                    onClick={() => void handleDecideStop(false)}
+                  >
+                    <X className="h-4 w-4" strokeWidth={2} />
+                    Từ chối dừng
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isCareSubmitting}
+                    onClick={() => void handleDecideStop(true)}
+                  >
+                    <Check className="h-4 w-4" strokeWidth={2} />
+                    {isCareSubmitting ? "Đang lưu..." : "Duyệt dừng chăm sóc"}
+                  </Button>
+                </>
+              )}
+              {isStopPending && !canDecideStop && canToggleCare && (
+                <Button type="button" variant="outline" disabled>
+                  <PauseCircle className="h-4 w-4" strokeWidth={2} />
+                  Chờ duyệt dừng chăm sóc
+                </Button>
+              )}
+              {canToggleCare && !isStopPending && (
                 <Button
                   type="button"
                   variant={candidate.care_stopped_at ? "secondary" : "outline"}
@@ -697,6 +761,17 @@ export function CandidateDetailClient({
                   </>
                 )}
                 {` · ${new Date(candidate.care_stopped_at).toLocaleDateString("vi-VN")}`}
+              </Badge>
+            )}
+            {isStopPending && (
+              <Badge variant="warning">
+                Chờ duyệt dừng chăm sóc
+                {candidate.care_stop_requested_by && (
+                  <>
+                    {" — đề nghị bởi "}
+                    <NameWithRoleHint account={candidate.care_stop_requested_by} />
+                  </>
+                )}
               </Badge>
             )}
           </div>

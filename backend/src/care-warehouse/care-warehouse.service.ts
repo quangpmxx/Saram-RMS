@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CareAssignmentMethod, Prisma } from '../../generated/prisma/client';
@@ -14,6 +15,7 @@ import {
   toCandidateResponse,
 } from '../candidates/dto/candidate-response.dto';
 import { RealtimeService } from '../realtime/realtime.service';
+import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { LeadChangeType } from '../realtime/realtime-event.interface';
 import {
   AssignmentRow,
@@ -45,6 +47,8 @@ const ASSIGNER_ROLES = new Set(['admin', 'manager', 'leader']);
 
 /** field_changed của audit_logs dùng để dựng lại trạng thái Dừng chăm sóc theo thời gian. */
 export const CARE_STOP_AUDIT_FIELD = 'care_stopped_at';
+/** field_changed của audit_logs cho đề nghị dừng chăm sóc (requested/approved/rejected). */
+export const CARE_STOP_REQUEST_AUDIT_FIELD = 'care_stop_request';
 
 const ACCOUNT_REF_SELECT = {
   id: true,
@@ -109,6 +113,8 @@ function toAccountRef(a: {
  */
 @Injectable()
 export class CareWarehouseService {
+  private readonly logger = new Logger(CareWarehouseService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
@@ -852,6 +858,11 @@ export class CareWarehouseService {
   /**
    * Quyền: Quản lý/Admin mọi data; Leader data nhóm mình; Sale khi là người
    * phụ trách gốc HOẶC đang được giao chăm sóc data đó.
+   *
+   * Dừng chăm sóc (yêu cầu người dùng 2026-10-28): Sale bấm → chỉ tạo ĐỀ
+   * NGHỊ chờ duyệt + báo Leader nhóm (không có Leader thì Quản lý/Admin);
+   * Leader/Quản lý/Admin bấm → dừng ngay (họ là người duyệt). Tiếp tục chăm
+   * sóc giữ nguyên quyền cũ.
    */
   async setCareStopped(
     leadId: string,
@@ -861,27 +872,19 @@ export class CareWarehouseService {
     const now = new Date();
     const actorTeamId =
       user.role === 'leader' ? await this.actorTeamId(user) : null;
+    const isRequest = stopped && user.role === 'sale';
+    let pendingRequesterId: string | null = null;
+    let leadName = '';
+    let leadTeamId: string | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       await this.lockLeads(tx, [leadId]);
-      const lead = await tx.lead.findUnique({
-        where: { id: leadId },
-        select: {
-          assignedTeamId: true,
-          assignedToId: true,
-          deletedAt: true,
-          careStoppedAt: true,
-        },
-      });
-      if (!lead || lead.deletedAt) {
-        throw new NotFoundException('Không tìm thấy data');
-      }
-      const open = await this.loadOpenAssignments(
-        tx,
-        [leadId],
-        vnMonthStart(now),
-        now,
-      );
-      const current = open.get(leadId);
+      const lead = await this.loadLeadForStop(tx, leadId);
+      leadName = lead.fullName;
+      leadTeamId = lead.assignedTeamId;
+      const current = (
+        await this.loadOpenAssignments(tx, [leadId], vnMonthStart(now), now)
+      ).get(leadId);
       this.assertCanStop(user, actorTeamId, lead, current?.assigneeId ?? null);
 
       if (stopped === Boolean(lead.careStoppedAt)) {
@@ -892,44 +895,310 @@ export class CareWarehouseService {
         );
       }
 
-      await tx.lead.update({
-        where: { id: leadId },
-        data: stopped
-          ? { careStoppedAt: now, careStoppedById: user.id }
-          : { careStoppedAt: null, careStoppedById: null },
-      });
-      if (stopped && current) {
-        await tx.careAssignment.update({
-          where: { id: current.id },
-          data: { endedAt: now, endedById: user.id, endReason: 'stopped' },
+      if (isRequest) {
+        if (lead.careStopRequestedAt) {
+          throw new ConflictException(
+            'Data này đã có đề nghị dừng chăm sóc, đang chờ duyệt',
+          );
+        }
+        await tx.lead.update({
+          where: { id: leadId },
+          data: { careStopRequestedAt: now, careStopRequestedById: user.id },
+        });
+        await tx.auditLog.create({
+          data: {
+            accountId: user.id,
+            actionType: 'update',
+            entityType: 'lead',
+            entityId: leadId,
+            fieldChanged: CARE_STOP_REQUEST_AUDIT_FIELD,
+            newValue: 'requested',
+          },
+        });
+        return;
+      }
+
+      // Leader/Quản lý/Admin dừng trực tiếp: nếu đang có đề nghị chờ duyệt
+      // thì coi như đã duyệt đề nghị đó.
+      pendingRequesterId = stopped ? lead.careStopRequestedById : null;
+      if (stopped) {
+        await this.applyCareStop(tx, leadId, lead, current, user, now);
+      } else {
+        await tx.lead.update({
+          where: { id: leadId },
+          data: {
+            careStoppedAt: null,
+            careStoppedById: null,
+            careStopRequestedAt: null,
+            careStopRequestedById: null,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            accountId: user.id,
+            actionType: 'update',
+            entityType: 'lead',
+            entityId: leadId,
+            fieldChanged: CARE_STOP_AUDIT_FIELD,
+            oldValue: lead.careStoppedAt?.toISOString() ?? null,
+            newValue: null,
+          },
         });
       }
-      // Ghi TRONG transaction (không qua AuditLogService.log — hàm đó nuốt
-      // lỗi): nhật ký này là nguồn dựng lại trạng thái cho báo cáo tháng cũ.
+    }, TX_OPTIONS);
+
+    if (isRequest) {
+      await this.notifyStopApprovers(leadId, leadName, leadTeamId, user);
+    } else if (pendingRequesterId && pendingRequesterId !== user.id) {
+      await this.notifyAccounts(
+        [pendingRequesterId],
+        'care_stop_decided',
+        leadId,
+        `Đề nghị dừng chăm sóc "${leadName}" đã được duyệt — data đã đóng`,
+        user,
+      );
+    }
+
+    return this.emitStopChange(
+      leadId,
+      isRequest
+        ? 'care_stop_requested'
+        : stopped
+          ? 'care_stopped'
+          : 'care_resumed',
+      user,
+    );
+  }
+
+  /**
+   * Leader (nhóm của data)/Quản lý/Admin duyệt hoặc từ chối đề nghị dừng
+   * chăm sóc của Sale. Duyệt → dừng chăm sóc (giống dừng trực tiếp); từ chối
+   * → xóa đề nghị, data vẫn chăm sóc bình thường. Báo kết quả cho Sale.
+   */
+  async decideStopRequest(
+    leadId: string,
+    approve: boolean,
+    user: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    if (!ASSIGNER_ROLES.has(user.role)) {
+      throw new ForbiddenException(
+        'Chỉ Leader, Quản lý hoặc Admin mới duyệt đề nghị dừng chăm sóc',
+      );
+    }
+    const now = new Date();
+    const actorTeamId = await this.actorTeamId(user);
+    let requesterId: string | null = null;
+    let leadName = '';
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockLeads(tx, [leadId]);
+      const lead = await this.loadLeadForStop(tx, leadId);
+      this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
+      if (!lead.careStopRequestedAt) {
+        throw new ConflictException(
+          'Data này không có đề nghị dừng chăm sóc đang chờ duyệt',
+        );
+      }
+      requesterId = lead.careStopRequestedById;
+      leadName = lead.fullName;
+
+      if (approve) {
+        const current = (
+          await this.loadOpenAssignments(tx, [leadId], vnMonthStart(now), now)
+        ).get(leadId);
+        await this.applyCareStop(tx, leadId, lead, current, user, now);
+      } else {
+        await tx.lead.update({
+          where: { id: leadId },
+          data: { careStopRequestedAt: null, careStopRequestedById: null },
+        });
+      }
       await tx.auditLog.create({
         data: {
           accountId: user.id,
           actionType: 'update',
           entityType: 'lead',
           entityId: leadId,
-          fieldChanged: CARE_STOP_AUDIT_FIELD,
-          oldValue: lead.careStoppedAt?.toISOString() ?? null,
-          newValue: stopped ? now.toISOString() : null,
+          fieldChanged: CARE_STOP_REQUEST_AUDIT_FIELD,
+          oldValue: 'requested',
+          newValue: approve ? 'approved' : 'rejected',
         },
       });
     }, TX_OPTIONS);
 
+    if (requesterId) {
+      await this.notifyAccounts(
+        [requesterId],
+        'care_stop_decided',
+        leadId,
+        approve
+          ? `Đề nghị dừng chăm sóc "${leadName}" đã được duyệt — data đã đóng`
+          : `Đề nghị dừng chăm sóc "${leadName}" bị từ chối — tiếp tục chăm sóc`,
+        user,
+      );
+    }
+    return this.emitStopChange(
+      leadId,
+      approve ? 'care_stopped' : 'care_stop_rejected',
+      user,
+    );
+  }
+
+  private async loadLeadForStop(tx: Tx, leadId: string) {
+    const lead = await tx.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        fullName: true,
+        assignedTeamId: true,
+        assignedToId: true,
+        deletedAt: true,
+        careStoppedAt: true,
+        careStopRequestedAt: true,
+        careStopRequestedById: true,
+      },
+    });
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Không tìm thấy data');
+    }
+    return lead;
+  }
+
+  /**
+   * Dừng chăm sóc thật: điền care_stopped_*, xóa đề nghị chờ duyệt (nếu có),
+   * đóng lượt giao đang mở, ghi nhật ký (nguồn dựng lại trạng thái cho báo
+   * cáo tháng cũ — ghi TRONG transaction, không qua AuditLogService.log vốn
+   * nuốt lỗi).
+   */
+  private async applyCareStop(
+    tx: Tx,
+    leadId: string,
+    lead: { careStoppedAt: Date | null },
+    current: { id: string } | undefined,
+    user: AuthenticatedUser,
+    now: Date,
+  ): Promise<void> {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: {
+        careStoppedAt: now,
+        careStoppedById: user.id,
+        careStopRequestedAt: null,
+        careStopRequestedById: null,
+      },
+    });
+    if (current) {
+      await tx.careAssignment.update({
+        where: { id: current.id },
+        data: { endedAt: now, endedById: user.id, endReason: 'stopped' },
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        accountId: user.id,
+        actionType: 'update',
+        entityType: 'lead',
+        entityId: leadId,
+        fieldChanged: CARE_STOP_AUDIT_FIELD,
+        oldValue: lead.careStoppedAt?.toISOString() ?? null,
+        newValue: now.toISOString(),
+      },
+    });
+  }
+
+  private async emitStopChange(
+    leadId: string,
+    changeType: LeadChangeType,
+    user: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
     const final = await this.prisma.lead.findUniqueOrThrow({
       where: { id: leadId },
       include: CANDIDATE_INCLUDE,
     });
     const response = toCandidateResponse(final);
-    this.realtime.emitCandidateChange(
-      stopped ? 'care_stopped' : 'care_resumed',
-      response,
-      user,
-    );
+    this.realtime.emitCandidateChange(changeType, response, user);
     return response;
+  }
+
+  /** Báo Leader nhóm của data; nhóm không có Leader (đang hoạt động) thì báo mọi Quản lý/Admin. */
+  private async notifyStopApprovers(
+    leadId: string,
+    leadName: string,
+    teamId: string | null,
+    requester: AuthenticatedUser,
+  ): Promise<void> {
+    const team = teamId
+      ? await this.prisma.team.findUnique({
+          where: { id: teamId },
+          select: { leader: { select: { id: true, status: true } } },
+        })
+      : null;
+    let approverIds: string[];
+    if (team?.leader && team.leader.status === 'active') {
+      approverIds = [team.leader.id];
+    } else {
+      approverIds = (
+        await this.prisma.account.findMany({
+          where: { role: { in: ['admin', 'manager'] }, status: 'active' },
+          select: { id: true },
+        })
+      ).map((a) => a.id);
+    }
+    const requesterName =
+      (
+        await this.prisma.account.findUnique({
+          where: { id: requester.id },
+          select: { fullName: true },
+        })
+      )?.fullName ?? 'Sale';
+    await this.notifyAccounts(
+      approverIds,
+      'care_stop_requested',
+      leadId,
+      `${requesterName} đề nghị dừng chăm sóc "${leadName}" — chờ bạn duyệt`,
+      requester,
+    );
+  }
+
+  /** Thông báo chuông (in_app) gắn với 1 data — bấm vào mở trang Chi tiết. Lỗi gửi không làm hỏng thao tác chính. */
+  private async notifyAccounts(
+    accountIds: string[],
+    type: 'care_stop_requested' | 'care_stop_decided',
+    leadId: string,
+    content: string,
+    sender: AuthenticatedUser,
+  ): Promise<void> {
+    try {
+      const now = new Date();
+      for (const accountId of accountIds) {
+        const notification = await this.prisma.notification.create({
+          data: {
+            accountId,
+            leadId,
+            type,
+            channel: 'in_app',
+            content: content.slice(0, 500),
+            senderId: sender.id,
+            scheduledAt: now,
+            sentAt: now,
+            status: 'sent',
+          },
+          include: {
+            sender: {
+              select: { id: true, fullName: true, role: true, avatarUrl: true },
+            },
+          },
+        });
+        this.realtime.emitNotificationCreated(
+          toNotificationResponse(notification),
+          sender,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Gửi thông báo dừng chăm sóc thất bại (lead=${leadId})`,
+        error as Error,
+      );
+    }
   }
 
   private assertCanStop(

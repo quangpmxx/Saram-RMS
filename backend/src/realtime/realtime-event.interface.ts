@@ -28,7 +28,10 @@ export type LeadChangeType =
   | 'care_assigned'
   | 'care_revoked'
   | 'care_stopped'
-  | 'care_resumed';
+  | 'care_resumed'
+  // Đề nghị dừng chăm sóc của Sale (2026-10-28)
+  | 'care_stop_requested'
+  | 'care_stop_rejected';
 
 /**
  * Chỉ dùng NỘI BỘ ở server để tính phòng (room) cần phát tới — KHÔNG gửi

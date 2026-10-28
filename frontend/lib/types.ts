@@ -182,6 +182,9 @@ export interface Candidate {
   /** Kho chăm sóc (2026-10-28): khác null = data đã bị "Dừng chăm sóc". */
   care_stopped_at: string | null;
   care_stopped_by: NamedRefWithRole | null;
+  /** Sale đề nghị dừng chăm sóc, đang chờ Leader/Quản lý/Admin duyệt. */
+  care_stop_requested_at: string | null;
+  care_stop_requested_by: NamedRefWithRole | null;
   created_at: string;
   updated_at: string;
 }
@@ -312,7 +315,9 @@ export type LeadChangeType =
   | "care_assigned"
   | "care_revoked"
   | "care_stopped"
-  | "care_resumed";
+  | "care_resumed"
+  | "care_stop_requested"
+  | "care_stop_rejected";
 
 export interface LeadRealtimeEvent {
   lead_id: string;
@@ -776,7 +781,10 @@ export interface AppNotification {
     | "leave_request_pending_admin"
     | "leave_request_decided"
     /** Đơn phản ánh ẩn danh (2026-10-28) — sender luôn null. */
-    | "anonymous_feedback_created";
+    | "anonymous_feedback_created"
+    /** Kho chăm sóc: Sale đề nghị dừng chăm sóc (báo người duyệt) / kết quả duyệt (báo Sale). */
+    | "care_stop_requested"
+    | "care_stop_decided";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;

@@ -303,6 +303,7 @@ model Account {
 
   // Kho chăm sóc (2026-10-28): quan hệ ngược từ Lead.careStoppedBy/CareAssignment/CareAssignmentBatch
   careStoppedLeads        Lead[]                @relation("LeadCareStoppedBy")
+  careStopRequestedLeads  Lead[]                @relation("LeadCareStopRequestedBy")
   careAssignmentsReceived CareAssignment[]      @relation("CareAssignmentAssignee")
   careAssignmentsEnded    CareAssignment[]      @relation("CareAssignmentEndedBy")
   careAssignmentBatches   CareAssignmentBatch[] @relation("CareAssignmentBatchCreatedBy")
@@ -494,6 +495,11 @@ model Lead {
   /// cuối tháng bất kỳ khi tính báo cáo tháng cũ (xem care-metrics.ts).
   careStoppedAt   DateTime? @map("care_stopped_at")
   careStoppedById String?   @map("care_stopped_by") @db.Uuid
+  /// Sale đề nghị dừng chăm sóc, đang CHỜ Leader/Quản lý/Admin duyệt
+  /// (yêu cầu người dùng 2026-10-28). Duyệt → điền careStoppedAt/By và xóa
+  /// 2 cột này; từ chối → chỉ xóa 2 cột này. Lịch sử nằm trong audit_logs.
+  careStopRequestedAt   DateTime? @map("care_stop_requested_at")
+  careStopRequestedById String?   @map("care_stop_requested_by") @db.Uuid
 
   source                  LeadSource             @relation(fields: [sourceId], references: [id])
   uploadedBy              Account                @relation("LeadUploadedBy", fields: [uploadedById], references: [id])
@@ -513,6 +519,7 @@ model Lead {
   callbacks               CallbackSchedule[]
   notifications           Notification[]
   careStoppedBy           Account?               @relation("LeadCareStoppedBy", fields: [careStoppedById], references: [id])
+  careStopRequestedBy     Account?               @relation("LeadCareStopRequestedBy", fields: [careStopRequestedById], references: [id])
   careAssignments         CareAssignment[]
 
   @@index([phoneNumber])
@@ -784,6 +791,11 @@ enum NotificationType {
   /// Đơn phản ánh ẩn danh (2026-10-28): báo Quản lý/Admin có đơn mới.
   /// notifications.sender_id LUÔN null với loại này — không lộ người gửi.
   anonymous_feedback_created
+  /// Kho chăm sóc (2026-10-28): Sale đề nghị dừng chăm sóc 1 data — báo
+  /// Leader nhóm (không có Leader thì Quản lý/Admin) để duyệt.
+  care_stop_requested
+  /// Kho chăm sóc: báo Sale kết quả duyệt đề nghị dừng chăm sóc.
+  care_stop_decided
 
   @@map("notification_type")
 }

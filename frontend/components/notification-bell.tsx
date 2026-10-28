@@ -10,6 +10,7 @@ import {
   FileText,
   Megaphone,
   MessageSquareWarning,
+  PauseCircle,
   Phone,
   PhoneCall,
   X,
@@ -31,6 +32,8 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   leave_request_pending_admin: "Đơn xin nghỉ phép cần duyệt",
   leave_request_decided: "Kết quả đơn xin nghỉ phép",
   anonymous_feedback_created: "Đơn phản ánh ẩn danh mới",
+  care_stop_requested: "Đề nghị dừng chăm sóc cần duyệt",
+  care_stop_decided: "Kết quả đề nghị dừng chăm sóc",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -59,6 +62,8 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   leave_request_pending_admin: 60_000,
   leave_request_decided: 60_000,
   anonymous_feedback_created: 60_000,
+  care_stop_requested: 60_000,
+  care_stop_decided: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -91,6 +96,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type === "manual_callback_reminder") return <PhoneCall className={className} strokeWidth={2} />;
   if (type.startsWith("leave_request_")) return <FileText className={className} strokeWidth={2} />;
   if (type === "anonymous_feedback_created") return <MessageSquareWarning className={className} strokeWidth={2} />;
+  if (type.startsWith("care_stop_")) return <PauseCircle className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 

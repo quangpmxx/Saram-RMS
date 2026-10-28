@@ -57,6 +57,8 @@ describe('RealtimeService', () => {
     is_duplicate_flagged: false,
     care_stopped_at: null,
     care_stopped_by: null,
+    care_stop_requested_at: null,
+    care_stop_requested_by: null,
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-07-16T00:00:00.000Z',
   };
