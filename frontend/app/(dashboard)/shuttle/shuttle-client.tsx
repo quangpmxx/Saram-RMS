@@ -1193,6 +1193,10 @@ export function ShuttleClient({
   }
 
   async function handleDelete(record: ShuttleRecord) {
+    // Giữ hỏi lại: xóa không hoàn tác được (người dùng xác nhận giữ, 2026-10-28).
+    if (!window.confirm(`Xóa dòng đưa đón của "${record.full_name}"? Hành động này không thể hoàn tác.`)) {
+      return;
+    }
     setPendingId(record.id);
     try {
       await clientApi(`/shuttle/${record.id}`, { method: "DELETE" });

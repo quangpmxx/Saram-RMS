@@ -108,6 +108,8 @@ export function OrderManagementClient({
   }
 
   async function handleDelete(id: string) {
+    // Giữ hỏi lại: xóa không hoàn tác được (người dùng xác nhận giữ, 2026-10-28).
+    if (!window.confirm("Xóa đơn hàng này? Hành động này không thể hoàn tác.")) return;
     setPendingDeleteId(id);
     try {
       await clientApi(`/order-management/${id}`, { method: "DELETE" });

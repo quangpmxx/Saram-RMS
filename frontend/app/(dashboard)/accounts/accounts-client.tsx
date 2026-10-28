@@ -96,6 +96,14 @@ export function AccountsClient({
    * ngược lại trả lỗi gợi ý dùng "Vô hiệu hóa" — hiển thị nguyên message đó.
    */
   async function handleDeletePermanently(account: Account) {
+    // Giữ hỏi lại: xóa không hoàn tác được (người dùng xác nhận giữ, 2026-10-28).
+    if (
+      !window.confirm(
+        `Xóa VĨNH VIỄN tài khoản "${account.username}"? Hành động này không thể hoàn tác và chỉ thực hiện được khi tài khoản chưa có dữ liệu liên quan trong hệ thống.`,
+      )
+    ) {
+      return;
+    }
     setPendingId(account.id);
     try {
       await clientApi(`/account/${account.id}/permanent`, { method: "DELETE" });
