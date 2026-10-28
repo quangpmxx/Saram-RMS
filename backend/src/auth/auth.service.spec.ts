@@ -2,6 +2,7 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { join } from 'path';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { AuthService } from './auth.service';
@@ -311,7 +312,8 @@ describe('AuthService', () => {
       await service.updateAvatar(account.id, '/uploads/avatars/new.png');
 
       expect(fsPromises.unlink).toHaveBeenCalledWith(
-        expect.stringContaining('uploads/avatars/old.png'),
+        // path.join: dấu phân cách theo hệ điều hành ("\" trên Windows, "/" trên Mac/Linux).
+        expect.stringContaining(join('uploads', 'avatars', 'old.png')),
       );
     });
   });
