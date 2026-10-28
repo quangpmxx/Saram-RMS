@@ -9,7 +9,6 @@ const user = (role: AuthenticatedUser['role'], id = `${role}-1`) =>
   ({ id, role }) as AuthenticatedUser;
 
 const DTO = {
-  recipient: 'Ban Giám đốc',
   subject: 'Góp ý về ca làm việc',
   content: 'Nội dung phản ánh chi tiết',
 };
@@ -152,7 +151,7 @@ describe('AnonymousFeedbackService', () => {
       expect(select).not.toHaveProperty('senderId');
       expect(select).not.toHaveProperty('sender');
       expect(Object.keys(rows[0]).sort()).toEqual(
-        ['content', 'created_at', 'id', 'recipient', 'subject'].sort(),
+        ['content', 'created_at', 'id', 'subject'].sort(),
       );
     });
 

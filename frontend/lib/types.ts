@@ -793,7 +793,7 @@ export interface AppNotification {
  */
 export interface AnonymousFeedback {
   id: string;
-  recipient: string;
+  /** Tiêu đề đơn. */
   subject: string;
   content: string;
   created_at: string;

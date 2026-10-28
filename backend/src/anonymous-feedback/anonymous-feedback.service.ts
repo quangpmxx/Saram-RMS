@@ -51,17 +51,16 @@ export class AnonymousFeedbackService {
         'Quản lý/Admin là người nhận đơn phản ánh, không gửi đơn',
       );
     }
-    const recipient = dto.recipient.trim();
     const subject = dto.subject.trim();
     const content = dto.content.trim();
-    if (!recipient || !subject || !content) {
+    if (!subject || !content) {
       throw new BadRequestException(
-        'Vui lòng nhập đủ "Kính gửi", "Về việc" và nội dung phản ánh',
+        'Vui lòng nhập đủ tiêu đề và nội dung phản ánh',
       );
     }
 
     const created = await this.prisma.anonymousFeedback.create({
-      data: { senderId: currentUser.id, recipient, subject, content },
+      data: { senderId: currentUser.id, subject, content },
       select: { id: true, subject: true },
     });
 

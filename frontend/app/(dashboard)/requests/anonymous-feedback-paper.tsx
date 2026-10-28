@@ -13,14 +13,14 @@ export const PAPER_FONT = '"Times New Roman", Times, "Noto Serif", serif';
  * (ô nhập) lẫn lúc Quản lý/Admin xem lại (chữ tĩnh) — cùng cách
  * LeaveRequestPaper đã làm. Tỉ lệ khổ A4 (210×297) — nội dung dài thì tờ giấy
  * dài ra theo, không cắt chữ. Phần ký luôn là "(Ẩn danh)", không có tên.
+ * Chỉ gồm Tiêu đề + Nội dung — bỏ tên công ty và "Kính gửi" (yêu cầu người
+ * dùng, 2026-10-28).
  */
 export function AnonymousFeedbackPaper({
-  recipientSlot,
   subjectSlot,
   contentSlot,
   date,
 }: {
-  recipientSlot: ReactNode;
   subjectSlot: ReactNode;
   contentSlot: ReactNode;
   /** "YYYY-MM-DD" theo giờ Việt Nam — ngày gửi đơn. */
@@ -34,22 +34,13 @@ export function AnonymousFeedbackPaper({
       style={{ fontFamily: PAPER_FONT }}
     >
       <div className="flex h-full flex-col">
-        <p className="text-xs font-bold tracking-wide text-slate-900 uppercase sm:text-sm">
-          Công ty TNHH Thương mại Dịch vụ Saram Vina
-        </p>
-        <p className="text-[11px] text-slate-400 italic">Đơn được gửi ẩn danh</p>
-
-        <p className="mt-8 text-center text-lg font-bold tracking-wide text-slate-900 uppercase sm:text-xl">
+        <p className="text-center text-lg font-bold tracking-wide text-slate-900 uppercase sm:text-xl">
           Đơn phản ánh
         </p>
 
         <div className="mt-8 flex flex-col gap-3 text-[13px] leading-relaxed text-slate-800 sm:text-sm">
           <div className="flex items-baseline gap-2">
-            <span className="w-20 shrink-0 font-semibold">Kính gửi:</span>
-            <div className="min-w-0 flex-1">{recipientSlot}</div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="w-20 shrink-0 font-semibold">Về việc:</span>
+            <span className="w-20 shrink-0 font-semibold">Tiêu đề:</span>
             <div className="min-w-0 flex-1">{subjectSlot}</div>
           </div>
           <div className="mt-3">

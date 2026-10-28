@@ -73,8 +73,7 @@ export function AnonymousFeedbackList() {
             <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
                 <th className="px-4 py-3">Ngày gửi</th>
-                <th className="px-4 py-3">Kính gửi</th>
-                <th className="px-4 py-3">Về việc</th>
+                <th className="px-4 py-3">Tiêu đề</th>
                 <th className="px-4 py-3">Nội dung</th>
               </tr>
             </thead>
@@ -94,10 +93,7 @@ export function AnonymousFeedbackList() {
                       minute: "2-digit",
                     })}
                   </td>
-                  <td className="max-w-[160px] truncate px-4 py-3 text-slate-600" title={item.recipient}>
-                    {item.recipient}
-                  </td>
-                  <td className="max-w-[240px] truncate px-4 py-3 font-medium text-slate-800" title={item.subject}>
+                  <td className="max-w-[280px] truncate px-4 py-3 font-medium text-slate-800" title={item.subject}>
                     {item.subject}
                   </td>
                   <td className="max-w-[320px] truncate px-4 py-3 text-slate-500" title={item.content}>
@@ -129,7 +125,6 @@ export function AnonymousFeedbackList() {
         >
           <AnonymousFeedbackPaper
             date={vnDateOnly(openItem.created_at)}
-            recipientSlot={<span className="font-medium">{openItem.recipient}</span>}
             subjectSlot={<span className="font-medium">{openItem.subject}</span>}
             contentSlot={<p className="leading-7 break-words whitespace-pre-wrap">{openItem.content}</p>}
           />

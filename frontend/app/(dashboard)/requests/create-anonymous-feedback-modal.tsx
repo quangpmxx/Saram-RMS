@@ -23,7 +23,6 @@ export function CreateAnonymousFeedbackModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [recipient, setRecipient] = useState("Ban Giám đốc / Quản lý");
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,15 +30,15 @@ export function CreateAnonymousFeedbackModal({
 
   async function handleSubmit() {
     setError(null);
-    if (!recipient.trim() || !subject.trim() || !content.trim()) {
-      setError('Vui lòng nhập đủ "Kính gửi", "Về việc" và nội dung phản ánh');
+    if (!subject.trim() || !content.trim()) {
+      setError("Vui lòng nhập đủ tiêu đề và nội dung phản ánh");
       return;
     }
     setIsSubmitting(true);
     try {
       await clientApi("/anonymous-feedback", {
         method: "POST",
-        body: JSON.stringify({ recipient: recipient.trim(), subject: subject.trim(), content: content.trim() }),
+        body: JSON.stringify({ subject: subject.trim(), content: content.trim() }),
       });
       onCreated();
     } catch (err) {
@@ -74,15 +73,6 @@ export function CreateAnonymousFeedbackModal({
 
       <AnonymousFeedbackPaper
         date={vnDateOnly()}
-        recipientSlot={
-          <input
-            value={recipient}
-            maxLength={200}
-            onChange={(e) => setRecipient(e.target.value)}
-            className={lineInputClass}
-            placeholder="Ban Giám đốc / Quản lý ..."
-          />
-        }
         subjectSlot={
           <input
             value={subject}

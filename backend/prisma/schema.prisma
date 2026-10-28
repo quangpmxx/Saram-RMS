@@ -892,7 +892,7 @@ model LeaveRequest {
 model AnonymousFeedback {
   id        String   @id @default(uuid()) @db.Uuid
   senderId  String   @map("sender_id") @db.Uuid
-  recipient String   @db.VarChar(200)
+  /// Tiêu đề đơn (2026-10-28: bỏ "Kính gửi" theo yêu cầu người dùng — chỉ còn tiêu đề + nội dung).
   subject   String   @db.VarChar(300)
   content   String
   createdAt DateTime @default(now()) @map("created_at")
