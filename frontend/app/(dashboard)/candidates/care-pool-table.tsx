@@ -55,9 +55,6 @@ export function CarePoolTable({
   }
 
   async function handleRemove(candidate: Candidate) {
-    if (!window.confirm(`Gỡ "${candidate.full_name}" khỏi cột chăm sóc? Lao động không bị xóa, chỉ ẩn khỏi danh sách này.`)) {
-      return;
-    }
     setPendingId(candidate.id);
     try {
       await clientApi(`/care-pool/${candidate.id}`, { method: "DELETE" });

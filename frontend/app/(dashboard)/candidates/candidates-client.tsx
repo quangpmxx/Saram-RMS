@@ -563,9 +563,6 @@ export function CandidatesClient({
   }
 
   async function handleDelete(candidate: Candidate) {
-    if (!window.confirm(`Xóa lao động "${candidate.full_name}"? Hành động này không thể hoàn tác trên giao diện.`)) {
-      return;
-    }
     setPendingId(candidate.id);
     try {
       await clientApi(`/candidate/${candidate.id}`, { method: "DELETE" });

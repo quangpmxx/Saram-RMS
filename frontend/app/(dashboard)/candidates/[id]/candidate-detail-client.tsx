@@ -342,16 +342,6 @@ export function CandidateDetailClient({
   async function handleToggleCareStopped() {
     const stopping = !candidate.care_stopped_at;
     const isRequest = stopping && currentUserRole === "sale";
-    if (
-      stopping &&
-      !window.confirm(
-        isRequest
-          ? "Gửi đề nghị dừng chăm sóc data này? Leader sẽ nhận thông báo để duyệt. Trong lúc chờ duyệt, data vẫn được chăm sóc bình thường."
-          : "Dừng chăm sóc data này? Data sẽ rời khỏi Kho chăm sóc, hiện \"Đã đóng\" ở cột Kết quả và lượt giao chăm sóc đang mở (nếu có) sẽ được đóng lại. Có thể bật lại bằng \"Tiếp tục chăm sóc\".",
-      )
-    ) {
-      return;
-    }
     await runCareAction(
       `/care-warehouse/${candidate.id}/${stopping ? "stop" : "resume"}`,
       isRequest
@@ -363,14 +353,6 @@ export function CandidateDetailClient({
   }
 
   async function handleDecideStop(approve: boolean) {
-    if (
-      approve &&
-      !window.confirm(
-        "Duyệt dừng chăm sóc data này? Data sẽ rời khỏi Kho chăm sóc và hiện \"Đã đóng\" ở cột Kết quả.",
-      )
-    ) {
-      return;
-    }
     await runCareAction(
       `/care-warehouse/${candidate.id}/stop-request/${approve ? "approve" : "reject"}`,
       approve ? "Đã duyệt — data đã đóng" : "Đã từ chối đề nghị dừng chăm sóc",
@@ -391,9 +373,6 @@ export function CandidateDetailClient({
   }
 
   async function handleToggleHold() {
-    if (!candidate.is_held) {
-      if (!window.confirm("Đánh dấu giữ số lao động này? Các sale khác sẽ thấy cảnh báo bạn đang giữ số lao động này.")) return;
-    }
     setIsHoldSubmitting(true);
     try {
       const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/hold`, {
@@ -634,7 +613,6 @@ export function CandidateDetailClient({
   }
 
   async function handleDeleteNote(note: Note) {
-    if (!window.confirm("Xóa ghi chú này? Vẫn được lưu trong lịch sử hệ thống.")) return;
     setPendingNoteId(note.id);
     try {
       await clientApi(`/candidate/${candidate.id}/note/${note.id}`, { method: "DELETE" });

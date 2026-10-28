@@ -276,8 +276,6 @@ export function CareWarehousePanel({
   }
 
   async function handleRevoke(item: CareWarehouseItem) {
-    const assignee = item.care.open_assignment?.assignee?.name ?? "Sale";
-    if (!window.confirm(`Thu hồi "${item.full_name}" khỏi ${assignee}?`)) return;
     setPendingId(item.id);
     try {
       await clientApi(`/care-warehouse/${item.id}/revoke`, { method: "POST" });

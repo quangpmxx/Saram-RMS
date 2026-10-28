@@ -108,7 +108,6 @@ export function OrderManagementClient({
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm("Xóa đơn hàng này? Hành động này không thể hoàn tác.")) return;
     setPendingDeleteId(id);
     try {
       await clientApi(`/order-management/${id}`, { method: "DELETE" });

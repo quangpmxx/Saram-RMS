@@ -94,9 +94,8 @@ export function CheckinManagementPanel({
 
   // Yêu cầu trực tiếp người dùng (2026-07-16): Admin chuyển thủ công 1 bản
   // ghi "Ngoài công ty"/"Cần xác minh" sang "Hợp lệ" — vd GPS kém chính xác
-  // nhưng Admin xác nhận nhân viên có mặt thật. Xác nhận bằng window.confirm
-  // (khớp cách các hành động Admin khác trong hệ thống làm), không mở Modal
-  // riêng vì không cần nhập gì thêm.
+  // nhưng Admin xác nhận nhân viên có mặt thật. Bấm 1 lần là chuyển, không
+  // hỏi lại (yêu cầu người dùng 2026-10-28: bỏ mọi hộp xác nhận thao tác).
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const isAdmin = currentUserRole === "admin";
@@ -184,9 +183,6 @@ export function CheckinManagementPanel({
   }
 
   async function handleApprove(recordId: string, fullName: string) {
-    if (!window.confirm(`Xác nhận chuyển Check in của "${fullName}" sang trạng thái Hợp lệ?`)) {
-      return;
-    }
     setApprovingId(recordId);
     try {
       await clientApi(`/checkin/${recordId}/approve`, { method: "POST" });

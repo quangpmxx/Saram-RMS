@@ -40,13 +40,6 @@ export function TeamsClient({
    * xác nhận nếu nhóm còn thành viên để Admin không xóa nhầm.
    */
   async function handleDelete(team: Team) {
-    const memberWarning =
-      team.member_count > 0
-        ? ` Nhóm hiện có ${team.member_count} thành viên — các thành viên này sẽ tự động chuyển về trạng thái "chưa có nhóm".`
-        : "";
-    if (!window.confirm(`Xóa nhóm "${team.name}"? Hành động này không thể hoàn tác.${memberWarning}`)) {
-      return;
-    }
     setPendingId(team.id);
     try {
       await clientApi(`/team/${team.id}`, { method: "DELETE" });

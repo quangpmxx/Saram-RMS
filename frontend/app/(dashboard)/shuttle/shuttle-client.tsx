@@ -1193,9 +1193,6 @@ export function ShuttleClient({
   }
 
   async function handleDelete(record: ShuttleRecord) {
-    if (!window.confirm(`Xóa dòng đưa đón của "${record.full_name}"? Hành động này không thể hoàn tác.`)) {
-      return;
-    }
     setPendingId(record.id);
     try {
       await clientApi(`/shuttle/${record.id}`, { method: "DELETE" });
