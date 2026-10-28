@@ -774,7 +774,9 @@ export interface AppNotification {
     | "manual_callback_reminder"
     | "leave_request_pending_leader"
     | "leave_request_pending_admin"
-    | "leave_request_decided";
+    | "leave_request_decided"
+    /** Đơn phản ánh ẩn danh (2026-10-28) — sender luôn null. */
+    | "anonymous_feedback_created";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;
@@ -783,6 +785,18 @@ export interface AppNotification {
   scheduled_at: string;
   sent_at: string | null;
   status: "pending" | "sent" | "failed";
+}
+
+/**
+ * Đơn phản ánh ẩn danh (2026-10-28) — GET /anonymous-feedback (chỉ Quản
+ * lý/Admin). Cố ý KHÔNG có thông tin người gửi.
+ */
+export interface AnonymousFeedback {
+  id: string;
+  recipient: string;
+  subject: string;
+  content: string;
+  created_at: string;
 }
 
 // ── Dự án phụ — nâng cấp toàn diện: Tạo đơn — Đơn xin nghỉ phép ─────────

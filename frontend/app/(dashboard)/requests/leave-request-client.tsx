@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { FilePlus2 } from "lucide-react";
+import { FilePlus2, MessageSquareWarning } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account, LeaveRequest, LeaveRequestStatus } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -16,6 +16,8 @@ import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useToast } from "@/lib/toast-context";
 import { CreateLeaveRequestModal } from "./create-leave-request-modal";
 import { LeaveRequestDetailModal } from "./leave-request-detail-modal";
+import { CreateAnonymousFeedbackModal } from "./create-anonymous-feedback-modal";
+import { AnonymousFeedbackList } from "./anonymous-feedback-list";
 
 /**
  * Khớp CREATE_ROLES ở backend (leave-requests.service.ts). Yêu cầu trực
@@ -29,6 +31,11 @@ import { LeaveRequestDetailModal } from "./leave-request-detail-modal";
  * sidebar, không qua nút "Tạo đơn" đó.
  */
 const CREATE_ROLES = ["mkt", "sale", "leader"];
+/**
+ * Đơn phản ánh ẩn danh (2026-10-28): Quản lý/Admin xem (chỉ đọc), MỌI vai trò
+ * còn lại gửi — khớp VIEW_ROLES ở anonymous-feedback.service.ts.
+ */
+const FEEDBACK_VIEW_ROLES = ["admin", "manager"];
 
 const STATUS_FILTER_OPTIONS: Array<{ value: LeaveRequestStatus | "all"; label: string }> = [
   { value: "all", label: "Tất cả trạng thái" },
@@ -88,6 +95,9 @@ export function LeaveRequestClient({
   // effect (chỉ chạy ở trình duyệt, sau khi đã mount) để giữ SSR/hydrate
   // ban đầu luôn khớp nhau (null), rồi mới tự mở đúng đơn được nhắc tới.
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [showFeedbackCreate, setShowFeedbackCreate] = useState(false);
+  /** Quản lý/Admin: xem "Đơn nghỉ phép" hay "Phản ánh ẩn danh" (?view=feedback từ thông báo). */
+  const [view, setView] = useState<"leave" | "feedback">("leave");
 
   useEffect(() => {
     const openId = searchParams.get("open");
@@ -95,7 +105,14 @@ export function LeaveRequestClient({
     queueMicrotask(() => setDetailId(openId));
   }, [searchParams]);
 
+  useEffect(() => {
+    if (searchParams.get("view") !== "feedback") return;
+    queueMicrotask(() => setView("feedback"));
+  }, [searchParams]);
+
   const canCreate = CREATE_ROLES.includes(currentUser.role);
+  const canViewFeedback = FEEDBACK_VIEW_ROLES.includes(currentUser.role);
+  const canSendFeedback = !canViewFeedback;
   const isLeader = currentUser.role === "leader";
   const isAdmin = currentUser.role === "admin";
   // Sale/MKT chỉ bao giờ thấy đúng đơn của chính mình (1 người) — các vai
@@ -129,14 +146,55 @@ export function LeaveRequestClient({
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">{introText}</p>
-        {canCreate && (
-          <Button type="button" onClick={() => setShowCreate(true)}>
-            <FilePlus2 className="h-4 w-4" strokeWidth={2.5} />
-            Tạo đơn xin nghỉ phép
-          </Button>
+        {canViewFeedback ? (
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+            {(["leave", "feedback"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                  view === v ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {v === "leave" ? "Đơn xin nghỉ phép" : "Phản ánh ẩn danh"}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">{introText}</p>
         )}
+        <div className="flex flex-wrap gap-2">
+          {canSendFeedback && (
+            <Button type="button" variant="outline" onClick={() => setShowFeedbackCreate(true)}>
+              <MessageSquareWarning className="h-4 w-4" strokeWidth={2} />
+              Gửi phản ánh ẩn danh
+            </Button>
+          )}
+          {canCreate && (
+            <Button type="button" onClick={() => setShowCreate(true)}>
+              <FilePlus2 className="h-4 w-4" strokeWidth={2.5} />
+              Tạo đơn xin nghỉ phép
+            </Button>
+          )}
+        </div>
       </div>
+
+      {showFeedbackCreate && (
+        <CreateAnonymousFeedbackModal
+          onClose={() => setShowFeedbackCreate(false)}
+          onCreated={() => {
+            setShowFeedbackCreate(false);
+            toast.success("Đã gửi đơn phản ánh ẩn danh");
+          }}
+        />
+      )}
+
+      {view === "feedback" && canViewFeedback ? (
+        <AnonymousFeedbackList />
+      ) : (
+      <>
+      {canViewFeedback && <p className="mb-3 text-sm text-slate-500">{introText}</p>}
 
       <Card className="mb-3 p-2">
         <div className="flex flex-wrap items-end gap-2">
@@ -222,6 +280,8 @@ export function LeaveRequestClient({
           />
         )}
       </Card>
+      </>
+      )}
 
       {showCreate && (
         <CreateLeaveRequestModal

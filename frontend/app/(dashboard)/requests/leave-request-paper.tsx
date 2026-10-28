@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PAPER_FONT } from "./anonymous-feedback-paper";
 
 /**
  * Yêu cầu trực tiếp người dùng (2026-07-16): "mẫu đơn sẽ trình bày y hệt
@@ -37,7 +38,8 @@ export function LeaveRequestPaper({
   const [y, m, d] = signatureDate.split("-");
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 font-serif sm:p-8">
+    // PAPER_FONT thay cho class `font-serif` (Georgia thiếu glyph tiếng Việt 2 dấu — "đô´c", "kê´t").
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-8" style={{ fontFamily: PAPER_FONT }}>
       <div className="text-center">
         <p className="text-sm font-bold tracking-wide text-slate-900 uppercase sm:text-base">
           Công ty TNHH Thương mại Dịch vụ Saram Vina

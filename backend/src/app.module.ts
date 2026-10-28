@@ -27,6 +27,7 @@ import { LeaveAccrualModule } from './leave-accrual/leave-accrual.module';
 import { CheckinModule } from './checkin/checkin.module';
 import { ReportPenaltyModule } from './report-penalty/report-penalty.module';
 import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
+import { AnonymousFeedbackModule } from './anonymous-feedback/anonymous-feedback.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { SalesEntryModule } from './sales-entry/sales-entry.module';
@@ -67,6 +68,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CheckinModule,
     ReportPenaltyModule,
     LeaveRequestsModule,
+    AnonymousFeedbackModule,
     RealtimeModule,
     BirthdayModule,
     SalesEntryModule,

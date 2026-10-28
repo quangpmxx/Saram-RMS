@@ -55,6 +55,9 @@ import { OrderManagementController } from '../order-management/order-management.
  *   phiên bản đơn giản — chỉ gate đúng bảng "Chấm công thủ công" chính
  *   (AttendanceController). Có thể tách quyền riêng cho 2 tab này sau nếu
  *   cần độ chi tiết cao hơn.
+ * - AnonymousFeedbackController (Đơn phản ánh ẩn danh, 2026-10-28): MỌI
+ *   nhân viên được gửi, kể cả vai trò không vào được trang Chấm công — quyền
+ *   gửi/xem kiểm tra theo vai trò trong AnonymousFeedbackService.
  * - CatalogController, StatusController, SaleReminderController: dữ liệu
  *   danh mục dùng CHUNG bởi nhiều module (dropdown trạng thái/nguồn...) —
  *   gate theo 1 module sẽ chặn nhầm module khác đang dùng chung danh mục.

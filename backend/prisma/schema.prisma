@@ -307,6 +307,9 @@ model Account {
   careAssignmentsEnded    CareAssignment[]      @relation("CareAssignmentEndedBy")
   careAssignmentBatches   CareAssignmentBatch[] @relation("CareAssignmentBatchCreatedBy")
 
+  // Đơn phản ánh ẩn danh (2026-10-28): quan hệ ngược — CHỈ dùng nội bộ DB, không bao giờ trả ra API.
+  anonymousFeedbacks AnonymousFeedback[] @relation("AnonymousFeedbackSender")
+
   @@map("accounts")
 }
 
@@ -778,6 +781,9 @@ enum NotificationType {
   /// Dự án phụ — nâng cấp toàn diện (2026-07-16): báo người làm đơn biết kết
   /// quả cuối cùng (đã duyệt/từ chối, ở bước Leader hoặc Admin).
   leave_request_decided
+  /// Đơn phản ánh ẩn danh (2026-10-28): báo Quản lý/Admin có đơn mới.
+  /// notifications.sender_id LUÔN null với loại này — không lộ người gửi.
+  anonymous_feedback_created
 
   @@map("notification_type")
 }
@@ -877,6 +883,24 @@ model LeaveRequest {
   @@index([accountId])
   @@index([status])
   @@map("leave_requests")
+}
+
+/// Đơn phản ánh ẩn danh (2026-10-28, yêu cầu trực tiếp người dùng). Mọi
+/// nhân viên + Leader gửi, CHỈ Quản lý/Admin xem. `senderId` lưu trong DB
+/// nhưng KHÔNG BAO GIỜ trả ra API/giao diện/thông báo/nhật ký — người gửi
+/// cũng không xem lại được đơn đã gửi (xem anonymous-feedback.service.ts).
+model AnonymousFeedback {
+  id        String   @id @default(uuid()) @db.Uuid
+  senderId  String   @map("sender_id") @db.Uuid
+  recipient String   @db.VarChar(200)
+  subject   String   @db.VarChar(300)
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sender Account @relation("AnonymousFeedbackSender", fields: [senderId], references: [id])
+
+  @@index([createdAt])
+  @@map("anonymous_feedbacks")
 }
 
 enum LeaveRequestStatus {

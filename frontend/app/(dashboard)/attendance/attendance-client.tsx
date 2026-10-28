@@ -491,6 +491,13 @@ export function AttendanceClient({
     if (tab === "requests") return "requests";
     return "manual";
   });
+  // Bấm thông báo (đơn nghỉ phép/đơn phản ánh) khi ĐANG ở trang này: URL đổi
+  // `?tab=requests` nhưng component không mount lại, useState ở trên không
+  // đọc lại — tự chuyển sang đúng tab theo URL mới.
+  useEffect(() => {
+    if (searchParams.get("tab") !== "requests") return;
+    queueMicrotask(() => setActiveTab("requests"));
+  }, [searchParams]);
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);

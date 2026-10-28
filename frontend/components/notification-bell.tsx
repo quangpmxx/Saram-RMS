@@ -3,7 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Bell, CalendarClock, FileStack, FileText, Megaphone, Phone, PhoneCall, X } from "lucide-react";
+import {
+  Bell,
+  CalendarClock,
+  FileStack,
+  FileText,
+  Megaphone,
+  MessageSquareWarning,
+  Phone,
+  PhoneCall,
+  X,
+} from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type AppNotification, type AppRealtimeEvent, type PaginatedResult } from "@/lib/types";
 import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
@@ -20,6 +30,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   leave_request_pending_leader: "Đơn xin nghỉ phép cần duyệt",
   leave_request_pending_admin: "Đơn xin nghỉ phép cần duyệt",
   leave_request_decided: "Kết quả đơn xin nghỉ phép",
+  anonymous_feedback_created: "Đơn phản ánh ẩn danh mới",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -47,6 +58,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   leave_request_pending_leader: 60_000,
   leave_request_pending_admin: 60_000,
   leave_request_decided: 60_000,
+  anonymous_feedback_created: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -58,12 +70,27 @@ function notificationTitle(n: AppNotification): string {
   return n.content ?? TYPE_LABEL[n.type];
 }
 
+/**
+ * Trang mà 1 thông báo dẫn tới khi bấm — null = không điều hướng. Dùng chung
+ * cho handleNotificationClick() và kiểu con trỏ "bấm được" của từng dòng.
+ */
+function notificationTarget(n: AppNotification): string | null {
+  if (n.lead_id) return `/candidates/${n.lead_id}`;
+  // "Đơn xin nghỉ phép" không còn là trang riêng — nay là 1 tab trong
+  // "Chấm công" (xem attendance-client.tsx, tab "requests").
+  if (n.leave_request_id) return `/attendance?tab=requests&open=${n.leave_request_id}`;
+  // Đơn phản ánh ẩn danh — mục "Phản ánh ẩn danh" trong cùng tab đơn.
+  if (n.type === "anonymous_feedback_created") return "/attendance?tab=requests&view=feedback";
+  return null;
+}
+
 function NotificationIcon({ type, className }: { type: AppNotification["type"]; className: string }) {
   if (type === "callback_reminder") return <Phone className={className} strokeWidth={2} />;
   if (type === "admin_message") return <Megaphone className={className} strokeWidth={2} />;
   if (type === "new_data_uploaded") return <FileStack className={className} strokeWidth={2} />;
   if (type === "manual_callback_reminder") return <PhoneCall className={className} strokeWidth={2} />;
   if (type.startsWith("leave_request_")) return <FileText className={className} strokeWidth={2} />;
+  if (type === "anonymous_feedback_created") return <MessageSquareWarning className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 
@@ -249,13 +276,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   function handleNotificationClick(n: AppNotification) {
     markSeen([n.id]);
     dismissToast(n.id, false);
-    const target = n.lead_id
-      ? `/candidates/${n.lead_id}`
-      : n.leave_request_id
-        ? // "Đơn xin nghỉ phép" không còn là trang riêng — nay là 1 tab
-          // trong "Chấm công" (xem attendance-client.tsx, tab "requests").
-          `/attendance?tab=requests&open=${n.leave_request_id}`
-        : null;
+    const target = notificationTarget(n);
     if (!target) return;
     setIsOpen(false);
     router.push(target);
@@ -475,7 +496,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                       // Yêu cầu trực tiếp người dùng: đã ấn vào (đã xem) -> nền trắng
                       // (mặc định); chưa ấn vào -> nền đậm hơn để dễ nhận ra.
                       seenIds.has(n.id) ? "bg-white hover:bg-slate-50" : "bg-brand-100/70 hover:bg-brand-100",
-                      (n.lead_id || n.leave_request_id) && "cursor-pointer",
+                      notificationTarget(n) && "cursor-pointer",
                     )}
                   >
                     <NotificationSenderRow n={n} />
@@ -519,7 +540,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                   // hiệu (brand) + viền trái đậm 4px kiểu "alert" + viền/bóng đổ màu
                   // thương hiệu, chữ vẫn giữ màu tối để không giảm độ đọc.
                   "rounded-xl border border-brand-200 border-l-4 border-l-brand-500 bg-gradient-to-br from-brand-50 to-white p-3 shadow-lg shadow-brand-900/20 ring-1 ring-brand-500/10",
-                  (n.lead_id || n.leave_request_id) && "cursor-pointer",
+                  notificationTarget(n) && "cursor-pointer",
                 )}
               >
                 <NotificationSenderRow n={n} />
