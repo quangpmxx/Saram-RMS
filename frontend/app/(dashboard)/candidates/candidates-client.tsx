@@ -886,17 +886,20 @@ export function CandidatesClient({
               thuộc nội dung/data dài ngắn). */}
           <table className="w-full table-fixed border-collapse text-left text-xs">
             <colgroup>
+              {/* STT (yêu cầu người dùng 2026-10-28) — vừa 4 chữ số, lấy bớt từ cột "Tình trạng cuộc gọi". */}
+              <col className="w-[26px] min-w-[26px] max-w-[26px]" />
               {viewMode === "pending" && canAssign && <col className="w-10 min-w-10 max-w-10" />}
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[108px] min-w-[108px] max-w-[108px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[64px] min-w-[64px] max-w-[64px]" />
-              <col className="w-[353px] min-w-[353px] max-w-[353px]" />
+              <col className="w-[327px] min-w-[327px] max-w-[327px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[21px] min-w-[21px] max-w-[21px]" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
+                <th className="border-r border-slate-100 px-0 py-2 text-center">STT</th>
                 {viewMode === "pending" && canAssign && <th className="border-r border-slate-100 px-4 py-2" />}
                 <th className="border-r border-slate-100 px-0.5 py-2 text-center">Ngày</th>
                 <th className="border-r border-slate-100 px-1.5 py-2 text-center">Thông tin lao động</th>
@@ -931,6 +934,9 @@ export function CandidatesClient({
                     // hàng cao bằng nhau tuyệt đối.
                     className={`h-28 align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
                   >
+                    <td className="border-r border-slate-100 px-0 py-2 text-center text-[10px] text-slate-500 tabular-nums">
+                      {(page - 1) * pageSize + index + 1}
+                    </td>
                     {viewMode === "pending" && canAssign && (
                       <td className="border-r border-slate-100 px-4 py-2">
                         <Checkbox checked={selectedIds.has(candidate.id)} onChange={() => toggleSelected(candidate.id)} />

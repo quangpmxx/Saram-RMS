@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -10,7 +10,7 @@ import type {
   AccountOptionItem,
   AppRealtimeEvent,
   ModulePermissionLevel,
-  PaginatedResult,
+  ShuttleListResult,
   ShuttleOptionItem,
   ShuttleOptions,
   ShuttleRecord,
@@ -699,6 +699,7 @@ function ShuttleOptionManagerModal({
  */
 function ShuttleRowFormCells({
   value,
+  stt,
   onChange,
   onBlurField,
   onCommitField,
@@ -711,6 +712,8 @@ function ShuttleRowFormCells({
   onManageDriverColors,
 }: {
   value: ShuttleFormValue;
+  /** STT trong ngày — undefined ở dòng nháp thêm mới (ô để trống). */
+  stt?: number;
   onChange: (next: ShuttleFormValue) => void;
   /** Gọi khi rời khỏi 1 ô nhập tay — undefined ở dòng nháp thêm mới (chỉ lưu khi bấm "Thêm"). */
   onBlurField?: () => void;
@@ -762,6 +765,7 @@ function ShuttleRowFormCells({
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <DateShortInput value={value.date} onCommit={(iso) => selectCombo("date", iso)} />
       </td>
+      <td className="border-r border-slate-100 px-1 py-1 align-middle text-xs text-slate-500 tabular-nums">{stt ?? ""}</td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <div className="flex flex-col gap-0">
           <input
@@ -882,7 +886,7 @@ export function ShuttleClient({
   initialCompanies,
 }: {
   permissionLevel: ModulePermissionLevel;
-  initialResult: PaginatedResult<ShuttleRecord>;
+  initialResult: ShuttleListResult;
   initialOptions: ShuttleOptions;
   initialSaleAccounts: AccountOptionItem[];
   /** Bổ sung 2026-07-28 (yêu cầu trực tiếp người dùng: "chuyển cả 2 cột sang liên kết tài khoản thật") — GET /shuttle/driver-accounts (role='shuttle_staff'). */
@@ -903,6 +907,26 @@ export function ShuttleClient({
   const [total, setTotal] = useState(initialResult.total);
   const [page, setPage] = useState(initialResult.page);
   const [pageSize, setPageSize] = useState(initialResult.page_size);
+  const [firstDayOffset, setFirstDayOffset] = useState(initialResult.first_day_offset ?? 0);
+  /**
+   * Cột STT (yêu cầu người dùng 2026-10-28): đánh số riêng theo từng ngày
+   * (28/10: 1,2,3...; 29/10: 1,2...) theo đúng thứ tự đang hiển thị. Ngày
+   * của dòng đầu trang có thể đã bắt đầu ở trang trước → nối tiếp từ
+   * first_day_offset của backend.
+   */
+  const sttByRecordId = useMemo(() => {
+    const map = new Map<string, number>();
+    let currentDate: string | null = null;
+    let n = 0;
+    records.forEach((record, index) => {
+      if (record.date !== currentDate) {
+        currentDate = record.date;
+        n = index === 0 ? firstDayOffset : 0;
+      }
+      map.set(record.id, ++n);
+    });
+    return map;
+  }, [records, firstDayOffset]);
   const [options, setOptions] = useState(initialOptions);
   // Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
   // — KHÔNG có cơ chế thêm/sửa/xóa nào trong trang Đưa đón nữa (quản lý
@@ -1007,8 +1031,9 @@ export function ShuttleClient({
 
   async function refresh(targetPage: number, targetPageSize: number, activeFilters: Filters) {
     const query = buildShuttleQuery(targetPage, targetPageSize, activeFilters);
-    const result = await clientApi<PaginatedResult<ShuttleRecord>>(`/shuttle?${query.toString()}`);
+    const result = await clientApi<ShuttleListResult>(`/shuttle?${query.toString()}`);
     setRecords(result.items);
+    setFirstDayOffset(result.first_day_offset ?? 0);
     setRowDrafts(buildRowDrafts(result.items));
     setTotal(result.total);
     setPage(result.page);
@@ -1026,9 +1051,10 @@ export function ShuttleClient({
   async function silentRefreshPreservingDrafts() {
     try {
       const query = buildShuttleQuery(page, pageSize, filters);
-      const result = await clientApi<PaginatedResult<ShuttleRecord>>(`/shuttle?${query.toString()}`);
+      const result = await clientApi<ShuttleListResult>(`/shuttle?${query.toString()}`);
       const priorRecordById = new Map(records.map((r) => [r.id, r]));
       setRecords(result.items);
+      setFirstDayOffset(result.first_day_offset ?? 0);
       setTotal(result.total);
       setRowDrafts((prev) => {
         const next: Record<string, ShuttleFormValue> = {};
@@ -1422,6 +1448,7 @@ export function ShuttleClient({
           >
             <colgroup>
               <col className="w-[66px]" />
+              <col className="w-[38px]" />
               <col className="w-[190px]" />
               <col className="w-[130px]" />
               <col className="w-[120px]" />
@@ -1438,6 +1465,7 @@ export function ShuttleClient({
             <thead className="sticky top-0 z-10 bg-[#3f5d52] text-[11px] font-bold tracking-wide text-white uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)]">
               <tr>
                 <th className="border-r border-slate-100 px-3 py-2.5">Ngày</th>
+                <th className="border-r border-slate-100 px-1 py-2.5">STT</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Thông tin lao động</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Công ty</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Khu vực</th>
@@ -1488,6 +1516,7 @@ export function ShuttleClient({
                   >
                     <ShuttleRowFormCells
                       value={value}
+                      stt={sttByRecordId.get(record.id)}
                       onChange={(next) => setRowDrafts((prev) => ({ ...prev, [record.id]: next }))}
                       onBlurField={() => void handleBlurRow(record)}
                       onCommitField={(next) => void saveRowIfChanged(record, next)}

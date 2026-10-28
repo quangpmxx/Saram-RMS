@@ -109,6 +109,22 @@ describe('ShuttleService', () => {
       expect(result.items).toHaveLength(1);
       expect(result.items[0].full_name).toBe('Nguyễn Văn A');
       expect(result.items[0].date).toBe('2026-07-13');
+      expect(result.first_day_offset).toBe(0);
+      // Trang 1 không cần đếm thêm (chỉ 1 lần count tổng trong transaction).
+      expect(prisma.shuttleRecord.count).toHaveBeenCalledTimes(1);
+    });
+
+    it('trang sau: first_day_offset = số dòng cùng ngày đầu trang đã ở các trang trước', async () => {
+      prisma.$transaction.mockResolvedValue([45, [record]]);
+      // 20 dòng đã bỏ qua, 17 dòng thuộc các ngày mới hơn → 3 dòng của ngày này ở trang 1.
+      prisma.shuttleRecord.count.mockResolvedValue(17);
+
+      const result = await service.list({ page: 2, page_size: 20 });
+
+      expect(result.first_day_offset).toBe(3);
+      expect(prisma.shuttleRecord.count).toHaveBeenCalledWith({
+        where: { AND: [{}, { date: { gt: record.date } }] },
+      });
     });
 
     it('lọc theo keyword (tên hoặc SĐT), company_id, type, sale_user_id, driver_user_id, status, khoảng ngày', async () => {

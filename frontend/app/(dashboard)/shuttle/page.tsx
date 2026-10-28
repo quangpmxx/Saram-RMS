@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
 import { requirePageAccess } from "@/lib/module-permission";
-import type { AccountOptionItem, PaginatedResult, ShuttleOptionItem, ShuttleOptions, ShuttleRecord } from "@/lib/types";
+import type { AccountOptionItem, ShuttleListResult, ShuttleOptionItem, ShuttleOptions } from "@/lib/types";
 import { ShuttleClient } from "./shuttle-client";
 
 /**
@@ -19,7 +19,7 @@ export default async function ShuttlePage() {
   const permissionLevel = await requirePageAccess("shuttle");
 
   const [listResult, options, saleAccounts, driverAccounts, companies] = await Promise.all([
-    serverApi<PaginatedResult<ShuttleRecord>>("/shuttle?page=1&page_size=20"),
+    serverApi<ShuttleListResult>("/shuttle?page=1&page_size=20"),
     serverApi<ShuttleOptions>("/shuttle/options"),
     serverApi<AccountOptionItem[]>("/shuttle/sale-accounts"),
     // Bổ sung 2026-07-28 (yêu cầu trực tiếp người dùng: "chuyển cả 2 cột

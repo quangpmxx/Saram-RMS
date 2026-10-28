@@ -575,6 +575,7 @@ export function CareWarehousePanel({
           <table className="w-full min-w-[960px] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
+                <th className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap">STT</th>
                 {canAssign && (
                   <th className="w-8 border-r border-slate-100 px-2 py-2 text-center">
                     <Checkbox
@@ -606,6 +607,9 @@ export function CareWarehousePanel({
                     key={item.id}
                     className={cn("align-top hover:bg-brand-50/50", index % 2 === 1 ? "bg-slate-50/60" : "bg-white")}
                   >
+                    <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">
+                      {((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
+                    </td>
                     {canAssign && (
                       <td className="border-r border-slate-100 px-2 py-2 text-center">
                         <Checkbox

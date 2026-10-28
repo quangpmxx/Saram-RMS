@@ -55,9 +55,16 @@ export class ShuttleService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  async list(
-    query: ListShuttleQueryDto,
-  ): Promise<PaginatedResult<ShuttleResponseDto>> {
+  async list(query: ListShuttleQueryDto): Promise<
+    PaginatedResult<ShuttleResponseDto> & {
+      /**
+       * Cột STT đánh số riêng theo từng ngày (yêu cầu người dùng 2026-10-28):
+       * số dòng CÙNG NGÀY với dòng đầu trang đã nằm ở các trang trước — để
+       * STT của ngày đó nối tiếp đúng thay vì bắt đầu lại từ 1 khi sang trang.
+       */
+      first_day_offset: number;
+    }
+  > {
     const where: Prisma.ShuttleRecordWhereInput = {};
 
     if (query.keyword) {
@@ -90,10 +97,23 @@ export class ShuttleService {
       }),
     ]);
 
+    // Sắp theo ngày giảm dần → chỉ ngày của dòng đầu trang mới có thể bị
+    // chia sang trang trước: offset = số dòng đã bỏ qua − số dòng của các
+    // ngày mới hơn.
+    let firstDayOffset = 0;
+    const skipped = (query.page - 1) * query.page_size;
+    if (skipped > 0 && records.length > 0) {
+      const newerDays = await this.prisma.shuttleRecord.count({
+        where: { AND: [where, { date: { gt: records[0].date } }] },
+      });
+      firstDayOffset = Math.max(0, skipped - newerDays);
+    }
+
     return {
       total,
       page: query.page,
       page_size: query.page_size,
+      first_day_offset: firstDayOffset,
       items: records.map(toShuttleResponse),
     };
   }

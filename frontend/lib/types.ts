@@ -852,6 +852,12 @@ export interface LeaveRequest {
  * Đối tượng "ShuttleRecord" (Danh sách đưa đón) — module ĐỘC LẬP, nhập tay
  * tự do, không liên kết Lead/module nghiệp vụ khác.
  */
+/** GET /shuttle — kèm first_day_offset để cột STT (đánh số theo từng ngày) nối tiếp đúng khi sang trang. */
+export interface ShuttleListResult extends PaginatedResult<ShuttleRecord> {
+  /** Số dòng cùng ngày với dòng đầu trang đã nằm ở các trang trước. */
+  first_day_offset?: number;
+}
+
 export interface ShuttleRecord {
   id: string;
   date: string;
