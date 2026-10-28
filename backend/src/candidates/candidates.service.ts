@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Account, Lead } from '../../generated/prisma/client';
+import { Account, Lead, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
@@ -1185,6 +1185,34 @@ export class CandidatesService {
     }
 
     return where;
+  }
+
+  /**
+   * Bản "nhiều lead" của assertInScope() — trả về đúng các id người dùng
+   * được XEM (lead chưa xóa), cùng quy tắc, chỉ 1 truy vấn. Dùng cho
+   * GET /candidate/notes (tải ghi chú cho cả trang danh sách 1 lần).
+   */
+  async filterViewableLeadIds(
+    ids: string[],
+    currentUser: AuthenticatedUser,
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const where: Prisma.LeadWhereInput = { id: { in: ids }, deletedAt: null };
+    if (!FULL_ACCESS_ROLES.has(currentUser.role)) {
+      if (currentUser.role !== 'leader' && currentUser.role !== 'sale') {
+        return [];
+      }
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      where.OR = [
+        { assignedTeamId: null },
+        ...(teamId ? [{ assignedTeamId: teamId }] : []),
+      ];
+    }
+    const leads = await this.prisma.lead.findMany({
+      where,
+      select: { id: true },
+    });
+    return leads.map((lead) => lead.id);
   }
 
   private async assertInScope(

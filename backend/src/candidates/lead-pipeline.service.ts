@@ -255,6 +255,34 @@ export class LeadPipelineService {
     return notes.map(toNoteResponse);
   }
 
+  /**
+   * GET /candidate/notes?ids=... — ghi chú của NHIỀU lead trong 1 lần (thay
+   * cho ~50 lần GET /candidate/:id/note khi mở danh sách). Cùng phạm vi xem
+   * như listNotes() (CandidatesService.filterViewableLeadIds — bản nhiều lead
+   * của assertInScope); lead ngoài phạm vi/đã xóa bị bỏ qua (không có key).
+   * Trả về giống hệt listNotes(): mọi ghi chú (kể cả đã xóa mềm), cũ → mới.
+   */
+  async listNotesBatch(
+    ids: string[],
+    currentUser: AuthenticatedUser,
+  ): Promise<Record<string, NoteResponseDto[]>> {
+    const allowed = await this.candidatesService.filterViewableLeadIds(
+      ids,
+      currentUser,
+    );
+    const result: Record<string, NoteResponseDto[]> = {};
+    for (const id of allowed) result[id] = [];
+    if (allowed.length === 0) return result;
+
+    const notes = await this.prisma.leadNote.findMany({
+      where: { leadId: { in: allowed } },
+      include: NOTE_INCLUDE,
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const note of notes) result[note.leadId].push(toNoteResponse(note));
+    return result;
+  }
+
   async createNote(
     id: string,
     dto: CreateNoteDto,

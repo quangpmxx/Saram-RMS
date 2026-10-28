@@ -238,35 +238,24 @@ export function CandidatesClient({
    * UI Polish (bổ sung) — "Tình trạng cuộc gọi" cần hiện TOÀN BỘ lịch sử
    * chăm sóc (không chỉ ghi chú gần nhất như trước), nhưng GET /candidate
    * (danh sách) không trả về nội dung ghi chú (Mục 0.1, docs/13 — đối tượng
-   * Candidate không có trường note). Tái dùng đúng API đã có
-   * GET /candidate/:id/note cho từng dòng đang hiển thị, không thêm API mới.
+   * Candidate không có trường note). Tải ghi chú của CẢ TRANG bằng 1 request
+   * GET /candidate/notes?ids=... (2026-10-28) — trước đây gọi
+   * GET /candidate/:id/note cho từng dòng (~50 request, mất ~20 giây trên DB
+   * dev chỉ 1 kết nối, kéo chậm cả tab Kho chăm sóc). Cùng phạm vi quyền xem.
    */
   useEffect(() => {
-    // Tab Kho chăm sóc không hiển thị bảng này — không tải ghi chú. Rời khỏi
-    // tab (hoặc danh sách đổi) thì HỦY các request còn xếp hàng: ~50 request
-    // ghi chú chạy dồn làm request của tab Kho phải chờ rất lâu (đo được
-    // ~9 giây trên DB dev chỉ 1 kết nối).
-    if (viewMode === "care") return;
+    // Tab Kho chăm sóc không hiển thị bảng này — không tải ghi chú.
+    if (viewMode === "care" || candidates.length === 0) return;
     let cancelled = false;
     const controller = new AbortController();
+    const ids = candidates.map((candidate) => candidate.id);
 
-    void Promise.all(
-      candidates.map(async (candidate) => {
-        try {
-          const notes = await clientApi<Note[]>(`/candidate/${candidate.id}/note`, {
-            signal: controller.signal,
-          });
-          const visible = notes.filter((note) => !note.is_deleted);
-          return [candidate.id, visible] as const;
-        } catch {
-          return [candidate.id, [] as Note[]] as const;
-        }
-      }),
-    ).then((entries) => {
-      if (!cancelled) {
-        setNotesByLeadId(new Map(entries));
-      }
-    });
+    clientApi<Record<string, Note[]>>(`/candidate/notes?ids=${ids.join(",")}`, { signal: controller.signal })
+      .catch(() => ({}) as Record<string, Note[]>)
+      .then((byLead) => {
+        if (cancelled) return;
+        setNotesByLeadId(new Map(ids.map((id) => [id, (byLead[id] ?? []).filter((note) => !note.is_deleted)])));
+      });
 
     return () => {
       cancelled = true;

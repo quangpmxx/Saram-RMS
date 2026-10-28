@@ -1513,4 +1513,62 @@ describe('CandidatesService', () => {
       expect(result.items).toHaveLength(1);
     });
   });
+  describe('filterViewableLeadIds — bản nhiều lead của assertInScope (GET /candidate/notes)', () => {
+    beforeEach(() => {
+      prisma.lead.findMany.mockResolvedValue([{ id: 'lead-1' }]);
+    });
+
+    it.each([adminUser, managerUser, mktUser])(
+      '%o: xem toàn bộ — chỉ lọc id + chưa xóa',
+      async (user) => {
+        await expect(
+          service.filterViewableLeadIds(['lead-1', 'lead-2'], user),
+        ).resolves.toEqual(['lead-1']);
+        expect(prisma.lead.findMany).toHaveBeenCalledWith({
+          where: { id: { in: ['lead-1', 'lead-2'] }, deletedAt: null },
+          select: { id: true },
+        });
+      },
+    );
+
+    it('Sale/Leader: lead nhóm mình + lead chưa có nhóm (khớp assertInScope)', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      for (const user of [saleUser, leaderUser]) {
+        prisma.lead.findMany.mockClear();
+        await service.filterViewableLeadIds(['lead-1'], user);
+        expect(prisma.lead.findMany.mock.calls[0][0].where).toEqual({
+          id: { in: ['lead-1'] },
+          deletedAt: null,
+          OR: [{ assignedTeamId: null }, { assignedTeamId: 'team-1' }],
+        });
+      }
+    });
+
+    it('Sale chưa thuộc nhóm nào: chỉ lead chưa có nhóm', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: null });
+      await service.filterViewableLeadIds(['lead-1'], saleUser);
+      expect(prisma.lead.findMany.mock.calls[0][0].where.OR).toEqual([
+        { assignedTeamId: null },
+      ]);
+    });
+
+    it('vai trò khác (vd Kế toán) không xem được gì, không truy vấn', async () => {
+      const accounting = {
+        id: 'acc-1',
+        role: 'accounting' as const,
+        sessionId: 's',
+      };
+      await expect(
+        service.filterViewableLeadIds(['lead-1'], accounting),
+      ).resolves.toEqual([]);
+      expect(prisma.lead.findMany).not.toHaveBeenCalled();
+    });
+
+    it('danh sách rỗng → không truy vấn', async () => {
+      await expect(
+        service.filterViewableLeadIds([], adminUser),
+      ).resolves.toEqual([]);
+      expect(prisma.lead.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

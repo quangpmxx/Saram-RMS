@@ -31,6 +31,7 @@ import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
+import { ListNotesBatchQueryDto } from './dto/list-notes-batch-query.dto';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { CreateCallbackDto } from './dto/create-callback.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -80,6 +81,15 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.candidatesService.listDuplicates(query, user);
+  }
+
+  /** Ghi chú của nhiều lead 1 lần — khai báo TRƯỚC ":id" (xem lưu ý thứ tự route ở trên). */
+  @Get('notes')
+  listNotesBatch(
+    @Query() query: ListNotesBatchQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.listNotesBatch(query.ids, user);
   }
 
   @Post()
