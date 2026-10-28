@@ -538,6 +538,15 @@ export function CandidatesClient({
     setTeamMembers(members);
   }
 
+  // ?view=care (bấm thông báo Kho chăm sóc) khi ĐANG ở trang này: URL đổi
+  // nhưng component không mount lại → tự chuyển sang tab Kho.
+  const urlView = searchParams.get("view");
+  useEffect(() => {
+    if (urlView !== "care" || !canViewCare) return;
+    userPickedViewRef.current = true;
+    queueMicrotask(() => setViewMode("care"));
+  }, [urlView, canViewCare]);
+
   async function handleViewModeChange(mode: ViewMode) {
     userPickedViewRef.current = true;
     setViewMode(mode);

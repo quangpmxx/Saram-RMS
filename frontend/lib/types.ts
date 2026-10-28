@@ -784,7 +784,9 @@ export interface AppNotification {
     | "anonymous_feedback_created"
     /** Kho chăm sóc: Sale đề nghị dừng chăm sóc (báo người duyệt) / kết quả duyệt (báo Sale). */
     | "care_stop_requested"
-    | "care_stop_decided";
+    | "care_stop_decided"
+    /** Kho chăm sóc: Sale được giao data chăm sóc (giao 1 data thì có lead_id). */
+    | "care_assigned";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;

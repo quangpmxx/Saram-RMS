@@ -13,6 +13,7 @@ import {
   PauseCircle,
   Phone,
   PhoneCall,
+  UserCheck,
   X,
 } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
@@ -34,6 +35,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   anonymous_feedback_created: "Đơn phản ánh ẩn danh mới",
   care_stop_requested: "Đề nghị dừng chăm sóc cần duyệt",
   care_stop_decided: "Kết quả đề nghị dừng chăm sóc",
+  care_assigned: "Được giao data chăm sóc",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -64,6 +66,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   anonymous_feedback_created: 60_000,
   care_stop_requested: 60_000,
   care_stop_decided: 60_000,
+  care_assigned: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -86,6 +89,8 @@ function notificationTarget(n: AppNotification): string | null {
   if (n.leave_request_id) return `/attendance?tab=requests&open=${n.leave_request_id}`;
   // Đơn phản ánh ẩn danh — mục "Phản ánh ẩn danh" trong cùng tab đơn.
   if (n.type === "anonymous_feedback_created") return "/attendance?tab=requests&view=feedback";
+  // Được giao nhiều data chăm sóc 1 lần — mở Kho, lọc sẵn "Được giao".
+  if (n.type === "care_assigned") return "/candidates?view=care&care_scope=assigned";
   return null;
 }
 
@@ -97,6 +102,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type.startsWith("leave_request_")) return <FileText className={className} strokeWidth={2} />;
   if (type === "anonymous_feedback_created") return <MessageSquareWarning className={className} strokeWidth={2} />;
   if (type.startsWith("care_stop_")) return <PauseCircle className={className} strokeWidth={2} />;
+  if (type === "care_assigned") return <UserCheck className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 

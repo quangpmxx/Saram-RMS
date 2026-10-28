@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -257,6 +258,20 @@ export function CareWarehousePanel({
     setApplied(next);
     setPage(1);
   }
+
+  // ?care_scope=assigned (bấm thông báo "được giao data chăm sóc") → bật bộ
+  // lọc "Được giao", kể cả khi đang đứng sẵn ở trang này (URL đổi, panel
+  // không mount lại).
+  const searchParams = useSearchParams();
+  const urlScope = searchParams.get("care_scope");
+  useEffect(() => {
+    if (urlScope !== "assigned") return;
+    queueMicrotask(() => {
+      setFilters((prev) => ({ ...prev, scope: "assigned" }));
+      setApplied((prev) => ({ ...prev, scope: "assigned" }));
+      setPage(1);
+    });
+  }, [urlScope, searchParams]);
 
   async function reloadNow() {
     await load(queryKey, true);

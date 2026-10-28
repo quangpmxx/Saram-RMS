@@ -796,6 +796,9 @@ enum NotificationType {
   care_stop_requested
   /// Kho chăm sóc: báo Sale kết quả duyệt đề nghị dừng chăm sóc.
   care_stop_decided
+  /// Kho chăm sóc: báo Sale được Leader/Quản lý/Admin giao data chăm sóc
+  /// (1 thông báo/Sale/đợt giao — giao 1 data thì gắn lead_id).
+  care_assigned
 
   @@map("notification_type")
 }

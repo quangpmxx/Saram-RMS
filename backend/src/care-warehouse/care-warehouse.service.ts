@@ -738,6 +738,8 @@ export class CareWarehouseService {
       'care_assigned',
       user,
     );
+    // Sale tự nhận thì không cần báo chính mình.
+    if (method !== 'self') await this.notifyAssignees(outcome.accepted, user);
 
     return {
       batch_id: outcome.batchId,
@@ -848,6 +850,7 @@ export class CareWarehouseService {
       return batch.id;
     }, TX_OPTIONS);
     await this.emitForLeads([leadId], 'care_assigned', user);
+    await this.notifyAssignees([{ leadId, assigneeId }], user);
     return { batch_id: batchId, lead_id: leadId, assignee_id: assigneeId };
   }
 
@@ -1159,11 +1162,75 @@ export class CareWarehouseService {
     );
   }
 
-  /** Thông báo chuông (in_app) gắn với 1 data — bấm vào mở trang Chi tiết. Lỗi gửi không làm hỏng thao tác chính. */
+  /**
+   * Báo Sale được giao data chăm sóc (giao thủ công/ngẫu nhiên/giao lại — Sale
+   * tự nhận thì không báo). Gộp 1 thông báo/Sale/đợt: giao 1 data thì gắn
+   * lead_id (bấm mở trang Chi tiết), nhiều data thì không gắn (bấm mở Kho,
+   * lọc "Được giao").
+   */
+  private async notifyAssignees(
+    pairs: { leadId: string; assigneeId: string }[],
+    assigner: AuthenticatedUser,
+  ): Promise<void> {
+    if (pairs.length === 0) return;
+    try {
+      const byAssignee = new Map<string, string[]>();
+      for (const p of pairs) {
+        byAssignee.set(p.assigneeId, [
+          ...(byAssignee.get(p.assigneeId) ?? []),
+          p.leadId,
+        ]);
+      }
+      const singleLeadIds = [...byAssignee.values()]
+        .filter((ids) => ids.length === 1)
+        .map((ids) => ids[0]);
+      const names = new Map(
+        (
+          await this.prisma.lead.findMany({
+            where: { id: { in: singleLeadIds } },
+            select: { id: true, fullName: true },
+          })
+        ).map((l) => [l.id, l.fullName]),
+      );
+      const assignerName =
+        (
+          await this.prisma.account.findUnique({
+            where: { id: assigner.id },
+            select: { fullName: true },
+          })
+        )?.fullName ?? 'Leader';
+      for (const [assigneeId, leadIds] of byAssignee) {
+        if (leadIds.length === 1) {
+          await this.notifyAccounts(
+            [assigneeId],
+            'care_assigned',
+            leadIds[0],
+            `${assignerName} giao cho bạn data chăm sóc "${names.get(leadIds[0]) ?? ''}"`,
+            assigner,
+          );
+        } else {
+          await this.notifyAccounts(
+            [assigneeId],
+            'care_assigned',
+            null,
+            `${assignerName} giao cho bạn ${leadIds.length} data chăm sóc`,
+            assigner,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        'Gửi thông báo giao data chăm sóc thất bại',
+        error as Error,
+      );
+    }
+  }
+
+  /** Thông báo chuông (in_app). Có lead_id thì bấm vào mở trang Chi tiết. Lỗi gửi không làm hỏng thao tác chính. */
   private async notifyAccounts(
     accountIds: string[],
-    type: 'care_stop_requested' | 'care_stop_decided',
-    leadId: string,
+    type: 'care_stop_requested' | 'care_stop_decided' | 'care_assigned',
+    leadId: string | null,
     content: string,
     sender: AuthenticatedUser,
   ): Promise<void> {
@@ -1195,7 +1262,7 @@ export class CareWarehouseService {
       }
     } catch (error) {
       this.logger.error(
-        `Gửi thông báo dừng chăm sóc thất bại (lead=${leadId})`,
+        `Gửi thông báo Kho chăm sóc thất bại (type=${type}, lead=${leadId ?? '-'})`,
         error as Error,
       );
     }
