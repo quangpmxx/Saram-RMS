@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { bootstrapTestApp } from './utils/bootstrap-app';
+import { teamOf } from './utils/team-of';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hashPassword } from '../src/common/utils/password.util';
 
@@ -52,6 +53,9 @@ describe('Fix inline notes and role permissions (e2e)', () => {
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -224,6 +228,7 @@ describe('Fix inline notes and role permissions (e2e)', () => {
         full_name: fullName,
         phone_number: phone,
         source_id: facebookSourceId,
+        team_id: await teamOf(prisma, assigneeId),
       })
       .expect(201);
     const leadId = createRes.body.candidate.id as string;

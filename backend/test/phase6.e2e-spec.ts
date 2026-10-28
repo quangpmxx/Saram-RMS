@@ -15,6 +15,7 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
   let prisma: PrismaService;
   let facebookSourceId: string;
   let team1Id: string;
+  let team2Id: string;
   let saleAId: string;
   let saleBId: string;
   let saleCId: string;
@@ -50,6 +51,9 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.importJob.deleteMany({
       where: { uploadedBy: { username: { in: USERNAMES } } },
@@ -80,6 +84,7 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
     const team1 = await prisma.team.create({ data: { name: 'P6 Nhóm 1' } });
     const team2 = await prisma.team.create({ data: { name: 'P6 Nhóm 2' } });
     team1Id = team1.id;
+    team2Id = team2.id;
 
     await prisma.account.create({
       data: {
@@ -218,13 +223,20 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
     await app.close();
   });
 
-  async function createLead(fullName: string, phone: string) {
+  async function createLead(
+    fullName: string,
+    phone: string,
+    // Bắt buộc chọn nhóm khi up data (CreateCandidateDto); phân chia tự động
+    // chỉ áp dụng quy tắc của đúng nhóm này (DistributionRuleService).
+    teamId: string = team1Id,
+  ) {
     const res = await mktAgent
       .post('/candidate')
       .send({
         full_name: fullName,
         phone_number: phone,
         source_id: facebookSourceId,
+        team_id: teamId,
       })
       .expect(201);
     return res.body.candidate as {
@@ -321,7 +333,11 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
   });
 
   it('Chạy song song không phá vỡ Phase 2: nhóm chưa bật auto vẫn phân chia thủ công bình thường', async () => {
-    const lead = await createLead('RR Nhóm Khác Chưa Bật Auto', '0990000006');
+    const lead = await createLead(
+      'RR Nhóm Khác Chưa Bật Auto',
+      '0990000006',
+      team2Id,
+    );
     expect(lead.assigned_to).toBeNull(); // team2 chưa từng cấu hình — vẫn "Chờ phân chia"
 
     const assigned = await leader2Agent

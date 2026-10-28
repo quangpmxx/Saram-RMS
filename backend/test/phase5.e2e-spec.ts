@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { bootstrapTestApp } from './utils/bootstrap-app';
+import { teamOf } from './utils/team-of';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hashPassword } from '../src/common/utils/password.util';
 
@@ -69,6 +70,9 @@ describe('Phase 5 — Cột chăm sóc (Care Pool) (e2e)', () => {
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -197,6 +201,7 @@ describe('Phase 5 — Cột chăm sóc (Care Pool) (e2e)', () => {
         full_name: fullName,
         phone_number: phone,
         source_id: facebookSourceId,
+        team_id: await teamOf(prisma, assigneeId),
       })
       .expect(201);
     const leadId = createRes.body.candidate.id as string;
@@ -207,7 +212,7 @@ describe('Phase 5 — Cột chăm sóc (Care Pool) (e2e)', () => {
     return leadId;
   }
 
-  it('2 Sale cùng mở 1 lead trong cột chăm sóc → người thứ 2 bị chặn (409) tới khi người thứ 1 giải phóng', async () => {
+  it('2 Sale cùng chiếm khóa 1 lead trong cột chăm sóc → người thứ 2 bị chặn (409) tới khi người thứ 1 giải phóng', async () => {
     const leadId = await createAssignedLead(
       'Cạnh Tranh Khóa',
       '0970000004',
@@ -248,11 +253,15 @@ describe('Phase 5 — Cột chăm sóc (Care Pool) (e2e)', () => {
       .expect(409);
     expect(conflict.body.message).toContain('Sale B Phase5');
 
-    // Sale C cũng không sửa được vì chưa chiếm khóa (và không phải chủ sở hữu).
+    // Sửa trực tiếp KHÔNG còn bị khóa chặn: quy tắc "Sale cùng nhóm được xử
+    // lý tiếp lead đã có người xử lý" (loadLeadForUpdate) được kiểm tra trước
+    // khóa Cột chăm sóc, mà lead trong Cột chăm sóc luôn đã được xử lý. Người
+    // dùng xác nhận giữ nguyên hành vi này (2026-10-28) — Cột chăm sóc đã ẩn
+    // khỏi giao diện, thay bằng Kho chăm sóc. Khóa vẫn chặn ở API lock (409).
     await saleCAgent
       .put(`/candidate/${leadId}/call-status`)
       .send({ call_status_id: calledStatusId })
-      .expect(409);
+      .expect(200);
 
     // Sale B giải phóng khóa.
     await saleBAgent.post(`/care-pool/${leadId}/release`).expect(200);

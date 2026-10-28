@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { bootstrapTestApp } from './utils/bootstrap-app';
+import { teamOf } from './utils/team-of';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hashPassword } from '../src/common/utils/password.util';
 
@@ -51,6 +52,9 @@ describe('Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar (e2e)'
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -214,6 +218,7 @@ describe('Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar (e2e)'
         full_name: 'Ứng viên Phase4',
         phone_number: '0950000001',
         source_id: facebookSourceId,
+        team_id: await teamOf(prisma, saleAId),
       })
       .expect(201);
     leadId = createRes.body.candidate.id as string;
@@ -261,9 +266,27 @@ describe('Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar (e2e)'
     expect(event.candidate.full_name).toBe('Ứng viên Phase4');
   });
 
-  it('Sale B không được đặt lịch PV cho lead không phải của mình', async () => {
+  it('Sale B không được đặt lịch PV cho lead của Sale A khi lead chưa được xử lý lần nào', async () => {
+    // Sale cùng nhóm ĐƯỢC xử lý tiếp lead đã có người xử lý ít nhất 1 lần
+    // (lastActivityAt khác null — xem loadLeadForUpdate). leadId dùng chung
+    // đã được Sale A xử lý nên dùng 1 lead mới, chưa xử lý lần nào.
+    const freshRes = await mktAgent
+      .post('/candidate')
+      .send({
+        full_name: 'Ứng viên Phase4 chưa xử lý',
+        phone_number: '0950000099',
+        source_id: facebookSourceId,
+        team_id: await teamOf(prisma, saleAId),
+      })
+      .expect(201);
+    const freshId = freshRes.body.candidate.id as string;
+    await leaderAgent
+      .post(`/candidate/${freshId}/assign`)
+      .send({ account_id: saleAId })
+      .expect(200);
+
     await saleBAgent
-      .post(`/candidate/${leadId}/interview`)
+      .post(`/candidate/${freshId}/interview`)
       .send({
         partner_company_name: 'Công ty X',
         scheduled_at: '2026-08-01T09:00:00.000Z',
