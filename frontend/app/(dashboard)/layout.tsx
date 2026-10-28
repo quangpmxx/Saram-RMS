@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
@@ -14,6 +15,8 @@ import { SendNotificationButton } from "@/components/send-notification-button";
 import { ClockInButton } from "@/components/clock-in-button";
 import { PageTitleProvider, PageTitleSlot } from "@/lib/page-title-context";
 import { ToastProvider, ToastSlot } from "@/lib/toast-context";
+import { APP_SCROLL_CONTAINER_ID } from "@/lib/app-scroll-container";
+import { NavigationTracker } from "@/lib/navigation-history";
 import { BirthdayThemeProvider } from "@/lib/birthday-theme-context";
 import { BirthdayLayoutBackground } from "@/components/birthday/birthday-layout-background";
 import { BirthdayHeaderStrip } from "@/components/birthday/birthday-header-strip";
@@ -68,6 +71,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <ToastProvider>
         <BirthdayThemeProvider initialData={birthdayToday}>
           <ToastSlot />
+          {/* Ghi nhớ trang trước + vị trí cuộn để "Quay lại" về đúng màn hình cũ. */}
+          <Suspense fallback={null}>
+            <NavigationTracker />
+          </Suspense>
           {/*
             Sidebar cố định (yêu cầu tinh chỉnh trang đăng nhập/giao diện):
             từ breakpoint md trở lên, khóa toàn bộ khung ứng dụng đúng bằng chiều
@@ -88,7 +95,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <BirthdayLayoutBackground>
             <CollapsibleSidebar navItems={navItems} />
 
-            <div className="flex min-w-0 flex-1 flex-col md:h-screen md:overflow-y-auto">
+            <div id={APP_SCROLL_CONTAINER_ID} className="flex min-w-0 flex-1 flex-col md:h-screen md:overflow-y-auto">
               {/*
                 Dự án phụ — nâng cấp toàn diện: z-50 — LUÔN LÀ LỚP NỔI CAO NHẤT
                 toàn ứng dụng (yêu cầu trực tiếp người dùng: "thanh header này

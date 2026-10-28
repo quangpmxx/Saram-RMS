@@ -84,6 +84,31 @@ const ASSIGNER_ROLES: AccountRole[] = ["admin", "manager", "leader"];
 /** Gộp nhiều sự kiện realtime liên tiếp (vd giao 50 data 1 lần) thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 600;
 
+/**
+ * Mở 1 data từ Kho rồi bấm "Quay lại"/"Lưu thông tin" → về đúng bộ lọc,
+ * trang, vị trí cuộn cũ (yêu cầu người dùng 2026-10-28). Cùng cơ chế
+ * sessionStorage với danh sách chính (LIST_STATE_SESSION_KEY).
+ */
+const CARE_STATE_SESSION_KEY = "saram_rms_care_warehouse_state";
+
+interface SavedCareState {
+  filters: CareFilters;
+  page: number;
+  pageSize: (typeof PAGE_SIZE_OPTIONS)[number];
+  scrollTop: number;
+  /** Query string lúc lưu — chỉ khôi phục khi quay lại đúng URL này (hoặc URL không có query). */
+  search: string;
+}
+
+/** Mở data từ tab khác (không phải Kho) → bỏ trạng thái Kho đã lưu, quay lại không bị đè bộ lọc cũ. */
+export function clearSavedCareState() {
+  try {
+    sessionStorage.removeItem(CARE_STATE_SESSION_KEY);
+  } catch {
+    // sessionStorage không khả dụng — bỏ qua.
+  }
+}
+
 function errorText(error: unknown): string {
   return error instanceof ApiError ? error.message : "Có lỗi xảy ra";
 }
@@ -150,6 +175,7 @@ export function CareWarehousePanel({
   teams,
   saleOptions,
   initialAssigneeId,
+  onOpenLead,
 }: {
   /**
    * Tab Kho đang hiển thị. Panel được gắn sẵn (ẩn) từ lúc mở trang để tải
@@ -164,6 +190,8 @@ export function CareWarehousePanel({
   saleOptions: CareSaleOption[];
   /** Mở sẵn Kho đã lọc theo 1 Sale (bấm từ bảng Tiến độ chăm sóc). */
   initialAssigneeId?: string;
+  /** Sắp mở trang Chi tiết 1 data — trang cha lưu tab hiện tại để quay lại đúng Kho. */
+  onOpenLead?: () => void;
 }) {
   const toast = useToast();
   const canAssign = ASSIGNER_ROLES.includes(currentUserRole) && !isReadOnly;
@@ -194,6 +222,59 @@ export function CareWarehousePanel({
 
   const queryKey = buildQuery(applied, page, pageSize);
   const isLoading = loadedKey !== queryKey;
+
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  /** Vị trí cuộn bảng cần đặt lại sau khi khôi phục xong dữ liệu. */
+  const pendingScrollRef = useRef<number | null>(null);
+  /** Vừa khôi phục trạng thái cũ → lần chạy đầu của hiệu ứng ?care_scope không đè lên. */
+  const skipUrlScopeRef = useRef(false);
+
+  function saveStateForReturn() {
+    try {
+      const state: SavedCareState = {
+        filters: applied,
+        page,
+        pageSize,
+        scrollTop: tableScrollRef.current?.scrollTop ?? 0,
+        search: window.location.search,
+      };
+      sessionStorage.setItem(CARE_STATE_SESSION_KEY, JSON.stringify(state));
+    } catch {
+      // sessionStorage không khả dụng — bỏ qua, không chặn điều hướng.
+    }
+    onOpenLead?.();
+  }
+
+  // Quay lại từ trang Chi tiết → khôi phục bộ lọc/trang/vị trí cuộn đã lưu.
+  useEffect(() => {
+    if (initialAssigneeId) return;
+    let saved: SavedCareState;
+    try {
+      const raw = sessionStorage.getItem(CARE_STATE_SESSION_KEY);
+      if (!raw) return;
+      saved = JSON.parse(raw) as SavedCareState;
+    } catch {
+      return;
+    }
+    if (window.location.search && saved.search !== window.location.search) return;
+    skipUrlScopeRef.current = true;
+    pendingScrollRef.current = saved.scrollTop;
+    queueMicrotask(() => {
+      setFilters(saved.filters);
+      setApplied(saved.filters);
+      setPage(saved.page);
+      setPageSize(saved.pageSize);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Dữ liệu đã khôi phục tải xong và tab Kho đang hiện → cuộn về chỗ cũ.
+  useEffect(() => {
+    if (pendingScrollRef.current === null || !active || isLoading) return;
+    const top = pendingScrollRef.current;
+    pendingScrollRef.current = null;
+    requestAnimationFrame(() => tableScrollRef.current?.scrollTo({ top }));
+  }, [active, isLoading, data]);
 
   // Truy vấn mới nhất đã gửi — kết quả của truy vấn cũ về muộn (người dùng
   // vừa đổi bộ lọc) bị bỏ qua, không đè lên kết quả mới (gây nhảy dữ liệu).
@@ -265,6 +346,10 @@ export function CareWarehousePanel({
   const searchParams = useSearchParams();
   const urlScope = searchParams.get("care_scope");
   useEffect(() => {
+    if (skipUrlScopeRef.current) {
+      skipUrlScopeRef.current = false;
+      return;
+    }
     if (urlScope !== "assigned") return;
     queueMicrotask(() => {
       setFilters((prev) => ({ ...prev, scope: "assigned" }));
@@ -486,7 +571,7 @@ export function CareWarehousePanel({
       )}
 
       <Card className="overflow-hidden p-0">
-        <div className="max-h-[calc(100vh-260px)] overflow-auto">
+        <div ref={tableScrollRef} className="max-h-[calc(100vh-260px)] overflow-auto">
           <table className="w-full min-w-[960px] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
@@ -540,6 +625,7 @@ export function CareWarehousePanel({
                     <td className="border-r border-slate-100 px-2 py-2">
                       <Link
                         href={`/candidates/${item.id}`}
+                        onClick={saveStateForReturn}
                         className="font-medium text-slate-800 hover:text-brand-700 hover:underline"
                       >
                         {item.full_name}

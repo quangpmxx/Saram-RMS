@@ -23,6 +23,7 @@ import { cn } from "@/lib/cn";
 import { callStatusVariant } from "@/lib/call-status-variant";
 import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
 import { useToast } from "@/lib/toast-context";
+import { goBackInApp } from "@/lib/navigation-history";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type { AccountRole, Candidate, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
@@ -492,7 +493,8 @@ export function CandidateDetailClient({
         });
       }
       savedCallInfoRef.current = { callStatusId, callResultId, zaloStatusId };
-      router.push("/candidates");
+      // Về đúng màn hình đã mở data này (tab/bộ lọc/vị trí cuộn cũ).
+      goBackInApp(router, "/candidates");
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
       setIsSavingCallInfo(false);
@@ -627,9 +629,18 @@ export function CandidateDetailClient({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <Link href="/candidates" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700">
+      <Link
+        href="/candidates"
+        onClick={(e) => {
+          // Bấm thường: về đúng màn hình trước (Kho chăm sóc, Lịch, Trùng lặp...). Ctrl/giữa chuột vẫn mở link như cũ.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          goBackInApp(router, "/candidates");
+        }}
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+      >
         <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-        Quay lại danh sách lao động
+        Quay lại
       </Link>
 
       {isReadOnly && (

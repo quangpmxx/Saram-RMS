@@ -68,7 +68,7 @@ import { CareNoteCell } from "./care-note-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
 import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
-import { CareWarehousePanel, type CareSaleOption } from "./care-warehouse-panel";
+import { CareWarehousePanel, clearSavedCareState, type CareSaleOption } from "./care-warehouse-panel";
 
 const PAGE_SIZE = 50;
 /** Dự án phụ — nâng cấp toàn diện: cho chọn số dòng/trang, y hệt trang Đưa đón (yêu cầu trực tiếp người dùng). */
@@ -124,6 +124,8 @@ interface SavedListState {
   viewMode: ViewMode;
   filters: Filters;
   scrollTop: number;
+  /** Query string lúc lưu — quay lại đúng URL này (vd mở từ thông báo/Dashboard) vẫn khôi phục được. */
+  search?: string;
 }
 
 function callResultVariant(name: string): "success" | "warning" | "neutral" {
@@ -355,8 +357,10 @@ export function CandidatesClient({
         viewMode,
         filters,
         scrollTop: scrollContainerRef.current?.scrollTop ?? 0,
+        search: window.location.search,
       };
       sessionStorage.setItem(LIST_STATE_SESSION_KEY, JSON.stringify(state));
+      if (viewMode !== "care") clearSavedCareState();
     } catch {
       // sessionStorage không khả dụng (chế độ ẩn danh chặn...) — bỏ qua, không chặn điều hướng.
     }
@@ -381,7 +385,6 @@ export function CandidatesClient({
       "assigned_to",
       "keyword",
     ].some((key) => searchParams.has(key));
-    if (hasExplicitFilterParams) return;
     let raw: string | null = null;
     try {
       raw = sessionStorage.getItem(LIST_STATE_SESSION_KEY);
@@ -396,6 +399,9 @@ export function CandidatesClient({
     } catch {
       return;
     }
+    // Có bộ lọc trên URL thì chỉ khôi phục khi quay lại ĐÚNG URL đã lưu
+    // (Quay lại từ trang Chi tiết) — mở mới từ Dashboard/thông báo vẫn theo URL.
+    if (hasExplicitFilterParams && saved.search !== window.location.search) return;
 
     void (async () => {
       // Kho chăm sóc tự tải dữ liệu riêng — chỉ cần mở lại đúng tab.
@@ -759,6 +765,7 @@ export function CandidatesClient({
             teams={teams}
             saleOptions={careSaleOptions}
             initialAssigneeId={initialCareAssigneeId}
+            onOpenLead={saveListStateForReturn}
           />
         </div>
       )}
