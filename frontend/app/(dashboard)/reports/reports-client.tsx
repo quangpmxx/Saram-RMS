@@ -41,6 +41,8 @@ import { type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { CheckPenaltyPanel } from "./check-penalty-panel";
+import { CareProgressPanel } from "./care-progress-panel";
+import { CARE_PROGRESS_ROLES } from "@/components/care-progress/care-progress-block";
 
 type MetricKey = keyof DailyReportTotals;
 
@@ -232,6 +234,7 @@ export function ReportsClient({
   initialDateTo,
   initialSummary,
   initialRows,
+  initialTab,
 }: {
   permissionLevel: ModulePermissionLevel;
   currentUserRole: AccountRole;
@@ -244,6 +247,8 @@ export function ReportsClient({
   initialDateTo: string;
   initialSummary: DailyReportSummary;
   initialRows: DailyReportRow[];
+  /** ?tab=care — mở thẳng tab Tiến độ chăm sóc. */
+  initialTab?: "care";
 }) {
   useSetPageTitle("Báo cáo hằng ngày", "Theo dõi hiệu suất từng nhóm và từng nhân viên theo ngày.");
 
@@ -254,7 +259,7 @@ export function ReportsClient({
    * tại." — thêm 1 tab bên cạnh nội dung Báo cáo hằng ngày hiện có, y hệt
    * cách tab "Check in GPS" đã làm trong module Chấm công.
    */
-  const [activeTab, setActiveTab] = useState<"daily" | "penalty">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "penalty" | "care">(initialTab ?? "daily");
 
   const [dateRange, setDateRange] = useState<DateRangeValue>({
     preset: "today",
@@ -395,7 +400,29 @@ export function ReportsClient({
         >
           Check phạt
         </button>
+        {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("care")}
+            className={cn(
+              "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+              activeTab === "care" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+            )}
+          >
+            Tiến độ chăm sóc
+          </button>
+        )}
       </div>
+
+      {activeTab === "care" && (
+        <CareProgressPanel
+          currentUserRole={currentUserRole}
+          canFilterByTeam={canFilterByTeam}
+          canFilterBySale={canFilterBySale}
+          teams={teams}
+          saleMembers={saleMembers}
+        />
+      )}
 
       {activeTab === "penalty" && (
         <div className={cn(isReadOnly && "pointer-events-none opacity-60")}>

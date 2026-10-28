@@ -68,6 +68,7 @@ import { CareNoteCell } from "./care-note-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
 import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
+import { CareWarehousePanel, type CareSaleOption } from "./care-warehouse-panel";
 
 const PAGE_SIZE = 50;
 /** Dự án phụ — nâng cấp toàn diện: cho chọn số dòng/trang, y hệt trang Đưa đón (yêu cầu trực tiếp người dùng). */
@@ -104,7 +105,10 @@ type ModalState =
   | { mode: "transfer"; candidate: Candidate }
   | { mode: "remind"; candidate: Candidate };
 
-type ViewMode = "all" | "pending" | "care_pool" | "mine";
+/** "care" = Kho chăm sóc (2026-10-28) — khác "care_pool" (Cột chăm sóc cũ, đã ẩn khỏi UI). */
+type ViewMode = "all" | "pending" | "care_pool" | "mine" | "care";
+/** Vai trò xem được tab Kho chăm sóc — MKT chỉ xem (toàn công ty), khớp backend. */
+const CARE_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "mkt"];
 
 interface Filters {
   keyword: string;
@@ -162,6 +166,7 @@ export function CandidatesClient({
   zaloStatuses,
   initialViewMode,
   initialFilters,
+  initialCareAssigneeId,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialCandidates: Candidate[];
@@ -181,6 +186,8 @@ export function CandidatesClient({
    */
   initialViewMode?: ViewMode;
   initialFilters?: Filters;
+  /** Kho chăm sóc — mở sẵn đã lọc theo 1 Sale (?view=care&care_assignee=...). */
+  initialCareAssigneeId?: string;
 }) {
   const teamNameById = new Map(teams.map((team) => [team.id, team.name]));
   const router = useRouter();
@@ -219,6 +226,11 @@ export function CandidatesClient({
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
   const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
   const canClaim = currentUserRole === "sale";
+  const canViewCare = CARE_VIEW_ROLES.includes(currentUserRole);
+  // Leader: Sale nhóm mình (initialTeamMembers); Quản lý/Admin: mọi Sale.
+  const careSaleOptions: CareSaleOption[] = (currentUserRole === "leader" ? teamMembers : allSaleMembers)
+    .filter((m) => m.role === "sale" && m.status === "active")
+    .map((m) => ({ id: m.id, name: m.full_name, team_id: m.team_id, team_name: m.team_name }));
 
   /**
    * UI Polish (bổ sung) — "Tình trạng cuộc gọi" cần hiện TOÀN BỘ lịch sử
@@ -386,6 +398,11 @@ export function CandidatesClient({
     }
 
     void (async () => {
+      // Kho chăm sóc tự tải dữ liệu riêng — chỉ cần mở lại đúng tab.
+      if (saved.viewMode === "care") {
+        setViewMode("care");
+        return;
+      }
       try {
         const result = await fetchPage(saved.page, saved.viewMode, saved.pageSize, saved.filters);
         setCandidates(result.items);
@@ -424,6 +441,7 @@ export function CandidatesClient({
    * cũ vẫn hiển thị, sự kiện tiếp theo hoặc lần refetch sau sẽ tự sửa.
    */
   async function silentRefetchCurrentPage() {
+    if (viewMode === "care") return;
     try {
       const result = await fetchPage(page, viewMode, pageSize);
       setCandidates(result.items);
@@ -448,6 +466,8 @@ export function CandidatesClient({
    * hổng phân quyền).
    */
   function handleRealtimeEvent(event: LeadRealtimeEvent) {
+    // Tab Kho chăm sóc tự lắng nghe realtime riêng (CareWarehousePanel).
+    if (viewMode === "care") return;
     if (event.note) {
       const note = event.note;
       setNotesByLeadId((prev) => {
@@ -517,6 +537,8 @@ export function CandidatesClient({
 
   async function handleViewModeChange(mode: ViewMode) {
     setViewMode(mode);
+    // Kho chăm sóc tự tải dữ liệu riêng (CareWarehousePanel).
+    if (mode === "care") return;
     await refresh(1, mode);
   }
 
@@ -669,6 +691,17 @@ export function CandidatesClient({
                   Cá nhân
                 </button>
               )}
+              {canViewCare && (
+                <button
+                  type="button"
+                  onClick={() => void handleViewModeChange("care")}
+                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    viewMode === "care" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  Kho chăm sóc
+                </button>
+              )}
             </div>
           )}
 
@@ -703,6 +736,19 @@ export function CandidatesClient({
         </div>
       )}
 
+      {viewMode === "care" && (
+        <CareWarehousePanel
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          isReadOnly={isReadOnly}
+          teams={teams}
+          saleOptions={careSaleOptions}
+          initialAssigneeId={initialCareAssigneeId}
+        />
+      )}
+
+      {viewMode !== "care" && (
+      <>
       {viewMode !== "care_pool" && (
       // UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng.
       <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
@@ -1156,6 +1202,8 @@ export function CandidatesClient({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {modal.mode === "create" && (
         <CandidateFormModal

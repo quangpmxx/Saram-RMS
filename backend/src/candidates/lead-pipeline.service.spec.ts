@@ -34,6 +34,7 @@ describe('LeadPipelineService', () => {
     emitCandidateChange: jest.Mock;
     emitNoteChange: jest.Mock;
     emitLeadDeleted: jest.Mock;
+    emitDashboardInvalidate: jest.Mock;
   };
 
   const baseLead = {
@@ -144,6 +145,7 @@ describe('LeadPipelineService', () => {
       emitCandidateChange: jest.fn(),
       emitNoteChange: jest.fn(),
       emitLeadDeleted: jest.fn(),
+      emitDashboardInvalidate: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -626,6 +628,8 @@ describe('LeadPipelineService', () => {
 
       expect(prisma.leadNote.create).toHaveBeenCalledTimes(3);
       expect([n1.id, n2.id, n3.id]).toEqual(['note-1', 'note-2', 'note-3']);
+      // Kho chăm sóc: mỗi ghi chú = 1 lần chăm sóc → Dashboard (Tiến độ chăm sóc) phải cập nhật.
+      expect(realtimeService.emitDashboardInvalidate).toHaveBeenCalledTimes(3);
     });
 
     it('snapshot call_status_id/call_result_id hiện tại của lead vào note', async () => {

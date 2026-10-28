@@ -19,7 +19,12 @@ import { ReportsClient } from "./reports-client";
  * roles của mục nav "/reports" ở layout.tsx (chỉ đúng 1 dòng, không đụng
  * mục nav nào khác).
  */
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { tab } = await searchParams;
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
@@ -63,6 +68,7 @@ export default async function ReportsPage() {
       initialDateTo={today}
       initialSummary={initialSummary}
       initialRows={initialRows}
+      initialTab={tab === "care" ? "care" : undefined}
     />
   );
 }

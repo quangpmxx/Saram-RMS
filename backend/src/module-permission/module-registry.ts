@@ -6,6 +6,8 @@ import { CandidatesController } from '../candidates/candidates.controller';
 import { ImportsController } from '../imports/imports.controller';
 import { InterviewCallbackController } from '../candidates/interview-callback.controller';
 import { CarePoolController } from '../care-pool/care-pool.controller';
+import { CareWarehouseController } from '../care-warehouse/care-warehouse.controller';
+import { CareProgressController } from '../care-warehouse/care-progress.controller';
 import { DistributionRuleController } from '../distribution/distribution-rule.controller';
 import { ShuttleController } from '../shuttle/shuttle.controller';
 import { DailyReportsController } from '../daily-reports/daily-reports.controller';
@@ -69,7 +71,9 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     code: 'dashboard',
     label: 'Trang chủ Dashboard',
     defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale'],
-    controllers: [DashboardController],
+    // CareProgressController: khối "Tiến độ chăm sóc" (Kho chăm sóc) trên
+    // Dashboard — tab cùng tên trong Báo cáo gọi chung API này.
+    controllers: [DashboardController, CareProgressController],
   },
   {
     code: 'candidates',
@@ -80,6 +84,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
       ImportsController,
       InterviewCallbackController,
       CarePoolController,
+      CareWarehouseController,
       DistributionRuleController,
     ],
   },

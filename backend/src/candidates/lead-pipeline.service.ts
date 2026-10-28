@@ -300,6 +300,9 @@ export class LeadPipelineService {
       currentUser,
       await this.reloadCandidateSilently(id),
     );
+    // Kho chăm sóc: ghi chú = 1 lần chăm sóc thực tế — chỉ số Tiến độ chăm
+    // sóc trên Dashboard đổi theo.
+    this.realtime.emitDashboardInvalidate(currentUser);
     return noteResponse;
   }
 
@@ -433,6 +436,8 @@ export class LeadPipelineService {
         currentUser,
       );
     }
+    // Kho chăm sóc: ghi chú đã xóa không còn tính là lần chăm sóc.
+    this.realtime.emitDashboardInvalidate(currentUser);
   }
 
   /**

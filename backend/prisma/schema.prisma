@@ -301,6 +301,12 @@ model Account {
   modulePermissions        UserModulePermission[] @relation("UserModulePermissionAccount")
   updatedModulePermissions UserModulePermission[] @relation("UserModulePermissionUpdatedBy")
 
+  // Kho chăm sóc (2026-10-28): quan hệ ngược từ Lead.careStoppedBy/CareAssignment/CareAssignmentBatch
+  careStoppedLeads        Lead[]                @relation("LeadCareStoppedBy")
+  careAssignmentsReceived CareAssignment[]      @relation("CareAssignmentAssignee")
+  careAssignmentsEnded    CareAssignment[]      @relation("CareAssignmentEndedBy")
+  careAssignmentBatches   CareAssignmentBatch[] @relation("CareAssignmentBatchCreatedBy")
+
   @@map("accounts")
 }
 
@@ -478,6 +484,14 @@ model Lead {
   deletedAt          DateTime? @map("deleted_at")
   deletedById        String?   @map("deleted_by") @db.Uuid
 
+  /// Kho chăm sóc (2026-10-28, yêu cầu trực tiếp người dùng): "Dừng chăm
+  /// sóc" thủ công — khác NULL = data bị loại khỏi Kho chăm sóc. Chỉ lưu
+  /// trạng thái hiện tại; mỗi lần dừng/tiếp tục đều ghi audit_logs
+  /// (field_changed = 'care_stopped_at') để dựng lại trạng thái tại mốc
+  /// cuối tháng bất kỳ khi tính báo cáo tháng cũ (xem care-metrics.ts).
+  careStoppedAt   DateTime? @map("care_stopped_at")
+  careStoppedById String?   @map("care_stopped_by") @db.Uuid
+
   source                  LeadSource             @relation(fields: [sourceId], references: [id])
   uploadedBy              Account                @relation("LeadUploadedBy", fields: [uploadedById], references: [id])
   assignedTo              Account?               @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
@@ -495,6 +509,8 @@ model Lead {
   interviews              InterviewAppointment[]
   callbacks               CallbackSchedule[]
   notifications           Notification[]
+  careStoppedBy           Account?               @relation("LeadCareStoppedBy", fields: [careStoppedById], references: [id])
+  careAssignments         CareAssignment[]
 
   @@index([phoneNumber])
   @@index([uploadedAt])
@@ -600,6 +616,70 @@ model CallbackSchedule {
   @@index([leadId])
   @@index([scheduledAt])
   @@map("callback_schedules")
+}
+
+// ── Kho chăm sóc (2026-10-28, yêu cầu trực tiếp người dùng) ──────────────
+//
+// Lớp "nhiệm vụ chăm sóc" tách riêng khỏi người phụ trách gốc
+// (leads.assigned_to giữ nguyên). Lần chăm sóc thực tế = lead_notes (không
+// tạo bảng riêng). Trạng thái/chỉ số KHÔNG lưu thành cột — luôn tính lại từ
+// lead_notes + care_assignments (xem src/care-warehouse/care-metrics.ts).
+
+/// Hình thức tạo lượt giao: Leader chọn tay / giao ngẫu nhiên / Sale tự nhận.
+enum CareAssignmentMethod {
+  manual
+  random
+  self
+
+  @@map("care_assignment_method")
+}
+
+/// Lý do đóng lượt giao. Lượt giao còn mở (ended_at NULL) tự hết hạn khi
+/// sang tháng mới — tính lúc truy vấn, không ghi giá trị nào ở đây.
+enum CareAssignmentEndReason {
+  revoked
+  reassigned
+  stopped
+
+  @@map("care_assignment_end_reason")
+}
+
+/// Mỗi lần bấm xác nhận phân công = 1 đợt.
+model CareAssignmentBatch {
+  id          String               @id @default(uuid()) @db.Uuid
+  method      CareAssignmentMethod
+  createdById String               @map("created_by") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at")
+  leadCount   Int                  @map("lead_count")
+
+  createdBy   Account          @relation("CareAssignmentBatchCreatedBy", fields: [createdById], references: [id])
+  assignments CareAssignment[]
+
+  @@index([createdAt])
+  @@map("care_assignment_batches")
+}
+
+/// 1 dòng = 1 data giao cho 1 Sale trong 1 đợt. Không bao giờ xóa — thu
+/// hồi/giao lại/dừng chăm sóc chỉ điền ended_at/ended_by/end_reason.
+model CareAssignment {
+  id         String                   @id @default(uuid()) @db.Uuid
+  batchId    String                   @map("batch_id") @db.Uuid
+  leadId     String                   @map("lead_id") @db.Uuid
+  assigneeId String                   @map("assignee_id") @db.Uuid
+  assignedAt DateTime                 @default(now()) @map("assigned_at")
+  endedAt    DateTime?                @map("ended_at")
+  endedById  String?                  @map("ended_by") @db.Uuid
+  endReason  CareAssignmentEndReason? @map("end_reason")
+
+  batch    CareAssignmentBatch @relation(fields: [batchId], references: [id])
+  lead     Lead                @relation(fields: [leadId], references: [id])
+  assignee Account             @relation("CareAssignmentAssignee", fields: [assigneeId], references: [id])
+  endedBy  Account?            @relation("CareAssignmentEndedBy", fields: [endedById], references: [id])
+
+  @@index([leadId, assignedAt])
+  @@index([assigneeId, assignedAt])
+  @@index([batchId])
+  @@map("care_assignments")
 }
 
 // ── Phase 5 — Cột chăm sóc tự động (Care Pool) ───────────────────────────

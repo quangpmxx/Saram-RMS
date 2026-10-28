@@ -1,0 +1,1432 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { CareAssignmentMethod, Prisma } from '../../generated/prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
+import {
+  CANDIDATE_INCLUDE,
+  CandidateResponseDto,
+  toCandidateResponse,
+} from '../candidates/dto/candidate-response.dto';
+import { RealtimeService } from '../realtime/realtime.service';
+import { LeadChangeType } from '../realtime/realtime-event.interface';
+import {
+  AssignmentRow,
+  LeadMonthSummary,
+  NoteIndex,
+  assignmentProcessedAt,
+  computeSaleDaily,
+  computeSaleMonthly,
+  pickRandomAssignments,
+  rate,
+  summarizeLeadMonth,
+  wasCareStoppedAt,
+} from './care-metrics';
+import {
+  vnDateOnly,
+  vnDayRange,
+  vnMonthKey,
+  vnMonthRange,
+  vnMonthStart,
+} from './care-time.util';
+import { ListCareWarehouseQueryDto } from './dto/list-care-warehouse-query.dto';
+import { RandomPreviewDto } from './dto/random-assign.dto';
+import { CareProgressQueryDto } from './dto/care-progress-query.dto';
+import { ListBatchesQueryDto } from './dto/list-batches-query.dto';
+
+/** Quản lý/Admin thao tác trên mọi nhóm (Câu 4 đã chốt — giống mọi module hiện nay). */
+const FULL_ACCESS_ROLES = new Set(['admin', 'manager']);
+const ASSIGNER_ROLES = new Set(['admin', 'manager', 'leader']);
+
+/** field_changed của audit_logs dùng để dựng lại trạng thái Dừng chăm sóc theo thời gian. */
+export const CARE_STOP_AUDIT_FIELD = 'care_stopped_at';
+
+const ACCOUNT_REF_SELECT = {
+  id: true,
+  fullName: true,
+  nickname: true,
+  role: true,
+  avatarUrl: true,
+} as const;
+
+type Tx = Prisma.TransactionClient;
+
+/** Đợt giao tới 500 data trên PGlite (dev) có thể vượt mặc định 5 giây của Prisma. */
+const TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 };
+
+export type SkipReason =
+  | 'not_eligible'
+  | 'out_of_scope'
+  | 'team_mismatch'
+  | 'duplicate_in_request'
+  | 'already_assigned_same'
+  | 'assigned_to_other';
+
+const SKIP_MESSAGES: Record<SkipReason, string> = {
+  not_eligible: 'Data không còn đủ điều kiện trong Kho chăm sóc',
+  out_of_scope: 'Data không thuộc nhóm bạn quản lý',
+  team_mismatch: 'Sale nhận không cùng nhóm với data',
+  duplicate_in_request: 'Data bị chọn trùng trong cùng 1 đợt',
+  already_assigned_same: 'Data đang được giao cho chính Sale này',
+  assigned_to_other:
+    'Data đang được giao cho Sale khác và chưa xử lý — dùng "Giao lại" nếu muốn đổi người',
+};
+
+export interface AccountRef {
+  id: string;
+  name: string;
+  nickname: string | null;
+  role: string;
+  avatar_url: string | null;
+}
+
+function toAccountRef(a: {
+  id: string;
+  fullName: string;
+  nickname: string | null;
+  role: string;
+  avatarUrl: string | null;
+}): AccountRef {
+  return {
+    id: a.id,
+    name: a.fullName,
+    nickname: a.nickname,
+    role: a.role,
+    avatar_url: a.avatarUrl,
+  };
+}
+
+/**
+ * Kho chăm sóc (2026-10-28, yêu cầu trực tiếp người dùng). Không sao chép
+ * data: Kho là một "góc nhìn" trên bảng leads theo điều kiện
+ * `eligibleWhere()`. Phân công là lớp "nhiệm vụ chăm sóc" riêng
+ * (care_assignments) — KHÔNG đổi leads.assigned_to (người phụ trách gốc).
+ */
+@Injectable()
+export class CareWarehouseService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
+
+  // ===========================================================================
+  // Điều kiện vào Kho + phạm vi xem
+  // ===========================================================================
+
+  /**
+   * Điều kiện đã chốt: đã có người phụ trách, có ≥1 ghi chú chưa xóa, chưa bị
+   * xóa, chưa bị "Dừng chăm sóc", và KHÔNG có lịch gọi lại chưa hoàn thành
+   * trong hôm nay (trường hợp đó vẫn ở luồng Data lao động).
+   */
+  eligibleWhere(now: Date): Prisma.LeadWhereInput {
+    const today = vnDayRange(vnDateOnly(now));
+    return {
+      deletedAt: null,
+      assignedToId: { not: null },
+      careStoppedAt: null,
+      notes: { some: { isDeleted: false } },
+      callbacks: {
+        none: {
+          isCompleted: false,
+          scheduledAt: { gte: today.start, lt: today.end },
+        },
+      },
+    };
+  }
+
+  /**
+   * Nhóm được xem: Quản lý/Admin/MKT = mọi nhóm (hoặc nhóm đang lọc), Leader/
+   * Sale = CHỈ nhóm mình (bỏ qua team_id client gửi lên). Các vai trò khác
+   * không dùng Kho.
+   * Trả về null = không giới hạn nhóm.
+   */
+  private async resolveTeamScope(
+    user: AuthenticatedUser,
+    requestedTeamId?: string,
+  ): Promise<string | null> {
+    // MKT xem Kho toàn công ty (yêu cầu người dùng 2026-10-28) — CHỈ xem:
+    // mọi thao tác giao/nhận/dừng đều chặn MKT ở các hàm tương ứng.
+    if (FULL_ACCESS_ROLES.has(user.role) || user.role === 'mkt') {
+      return requestedTeamId ?? null;
+    }
+    if (user.role !== 'leader' && user.role !== 'sale') {
+      throw new ForbiddenException('Bạn không có quyền xem Kho chăm sóc');
+    }
+    const teamId = await this.getOwnTeamId(user.id);
+    if (!teamId) {
+      throw new ForbiddenException('Tài khoản của bạn chưa thuộc nhóm nào');
+    }
+    return teamId;
+  }
+
+  private async getOwnTeamId(accountId: string): Promise<string | null> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { teamId: true },
+    });
+    return account?.teamId ?? null;
+  }
+
+  // ===========================================================================
+  // Danh sách Kho + thống kê
+  // ===========================================================================
+
+  async list(query: ListCareWarehouseQueryDto, user: AuthenticatedUser) {
+    const now = new Date();
+    const monthStart = vnMonthStart(now);
+    const teamId = await this.resolveTeamScope(user, query.team_id);
+
+    const scopeWhere: Prisma.LeadWhereInput = {
+      ...this.eligibleWhere(now),
+      ...(teamId ? { assignedTeamId: teamId } : {}),
+    };
+    const search = query.search?.trim();
+    const leadWhere: Prisma.LeadWhereInput = search
+      ? {
+          ...scopeWhere,
+          OR: [
+            { fullName: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search } },
+          ],
+        }
+      : scopeWhere;
+
+    const leads = await this.prisma.lead.findMany({
+      where: leadWhere,
+      select: { id: true },
+    });
+    const ids = leads.map((l) => l.id);
+
+    const { summaries, totals, lastAssigned } = await this.loadLeadSummaries(
+      leadWhere,
+      ids,
+      monthStart,
+      now,
+    );
+
+    // Thống kê lấy trên TOÀN BỘ data trong phạm vi (trước khi áp các bộ lọc
+    // trạng thái/Sale/số lần...), để thanh thống kê ổn định khi đổi bộ lọc.
+    const stats = {
+      total: ids.length,
+      cared: 0,
+      not_cared: 0,
+      assigned_pending: 0,
+      care_turns_month: 0,
+      care_turns_total: 0,
+      mine_assigned: 0,
+      mine_pending: 0,
+    };
+    for (const id of ids) {
+      const s = summaries.get(id)!;
+      if (s.month_status === 'cared') stats.cared++;
+      else stats.not_cared++;
+      if (s.assigned_pending) stats.assigned_pending++;
+      stats.care_turns_month += s.month_care_count;
+      stats.care_turns_total += totals.get(id)?.count ?? 0;
+      if (s.open_assignment?.assignee_id === user.id) {
+        stats.mine_assigned++;
+        if (!s.open_assignment.processed) stats.mine_pending++;
+      }
+    }
+
+    const lastCareFrom = query.last_care_from
+      ? vnDayRange(query.last_care_from).start
+      : null;
+    const lastCareTo = query.last_care_to
+      ? vnDayRange(query.last_care_to).end
+      : null;
+    const assignedFrom = query.assigned_from
+      ? vnDayRange(query.assigned_from).start
+      : null;
+    const assignedTo = query.assigned_to
+      ? vnDayRange(query.assigned_to).end
+      : null;
+
+    const filtered = ids.filter((id) => {
+      const s = summaries.get(id)!;
+      const total = totals.get(id);
+      const lastAt = lastAssigned.get(id) ?? null;
+      if (
+        query.scope === 'assigned' &&
+        s.open_assignment?.assignee_id !== user.id
+      ) {
+        return false;
+      }
+      if (query.status === 'cared' && s.month_status !== 'cared') return false;
+      if (query.status === 'not_cared' && s.month_status !== 'not_cared') {
+        return false;
+      }
+      if (query.status === 'assigned_pending' && !s.assigned_pending) {
+        return false;
+      }
+      if (
+        query.assignee_id &&
+        s.open_assignment?.assignee_id !== query.assignee_id
+      ) {
+        return false;
+      }
+      const count = total?.count ?? 0;
+      if (query.care_count_min !== undefined && count < query.care_count_min) {
+        return false;
+      }
+      if (query.care_count_max !== undefined && count > query.care_count_max) {
+        return false;
+      }
+      const lastCare = total?.lastAt ?? null;
+      if (lastCareFrom && (!lastCare || lastCare < lastCareFrom)) return false;
+      if (lastCareTo && (!lastCare || lastCare >= lastCareTo)) return false;
+      if (assignedFrom && (!lastAt || lastAt < assignedFrom)) return false;
+      if (assignedTo && (!lastAt || lastAt >= assignedTo)) return false;
+      return true;
+    });
+
+    // Data lâu chưa được chăm sóc nhất lên đầu.
+    filtered.sort((a, b) => {
+      const ta = totals.get(a)?.lastAt?.getTime() ?? 0;
+      const tb = totals.get(b)?.lastAt?.getTime() ?? 0;
+      return ta - tb || a.localeCompare(b);
+    });
+
+    const pageIds = filtered.slice(
+      (query.page - 1) * query.page_size,
+      query.page * query.page_size,
+    );
+    const items = await this.buildItems(
+      pageIds,
+      summaries,
+      totals,
+      lastAssigned,
+    );
+
+    return {
+      total: filtered.length,
+      page: query.page,
+      page_size: query.page_size,
+      month: vnMonthKey(now),
+      stats,
+      items,
+    };
+  }
+
+  /**
+   * Tải 1 lần toàn bộ ghi chú/lượt giao của tập data, rồi tính trạng thái
+   * từng data bằng hàm thuần. Lọc theo quan hệ `lead: leadWhere` thay vì
+   * danh sách id để không đụng giới hạn số tham số của Postgres.
+   */
+  private async loadLeadSummaries(
+    leadWhere: Prisma.LeadWhereInput,
+    ids: string[],
+    monthStart: Date,
+    now: Date,
+  ) {
+    const monthNotes = await this.prisma.leadNote.findMany({
+      where: {
+        isDeleted: false,
+        createdAt: { gte: monthStart },
+        lead: leadWhere,
+      },
+      select: { leadId: true, createdById: true, createdAt: true },
+    });
+    const monthAssignments = await this.prisma.careAssignment.findMany({
+      where: { assignedAt: { gte: monthStart }, lead: leadWhere },
+      select: {
+        id: true,
+        leadId: true,
+        assigneeId: true,
+        assignedAt: true,
+        endedAt: true,
+      },
+    });
+    const noteTotals = await this.prisma.leadNote.groupBy({
+      by: ['leadId'],
+      where: { isDeleted: false, lead: leadWhere },
+      _count: { _all: true },
+      _max: { createdAt: true },
+    });
+    const assignmentMax = await this.prisma.careAssignment.groupBy({
+      by: ['leadId'],
+      where: { lead: leadWhere },
+      _max: { assignedAt: true },
+    });
+
+    const noteIndex = new NoteIndex(monthNotes);
+    const assignmentsByLead = new Map<string, AssignmentRow[]>();
+    for (const a of monthAssignments) {
+      const list = assignmentsByLead.get(a.leadId);
+      if (list) list.push(a);
+      else assignmentsByLead.set(a.leadId, [a]);
+    }
+
+    const summaries = new Map<string, LeadMonthSummary>();
+    for (const id of ids) {
+      summaries.set(
+        id,
+        summarizeLeadMonth(
+          id,
+          assignmentsByLead.get(id) ?? [],
+          noteIndex,
+          monthStart,
+          now,
+        ),
+      );
+    }
+    const totals = new Map(
+      noteTotals.map((t) => [
+        t.leadId,
+        { count: t._count._all, lastAt: t._max.createdAt },
+      ]),
+    );
+    const lastAssigned = new Map(
+      assignmentMax.map((a) => [a.leadId, a._max.assignedAt]),
+    );
+    return { summaries, totals, lastAssigned };
+  }
+
+  private async buildItems(
+    pageIds: string[],
+    summaries: Map<string, LeadMonthSummary>,
+    totals: Map<string, { count: number; lastAt: Date | null }>,
+    lastAssigned: Map<string, Date | null>,
+  ) {
+    if (pageIds.length === 0) return [];
+    const [leads, latestNotes] = await this.prisma.$transaction([
+      this.prisma.lead.findMany({
+        where: { id: { in: pageIds } },
+        include: CANDIDATE_INCLUDE,
+      }),
+      this.prisma.leadNote.findMany({
+        where: { leadId: { in: pageIds }, isDeleted: false },
+        orderBy: [{ leadId: 'asc' }, { createdAt: 'desc' }],
+        distinct: ['leadId'],
+        select: {
+          leadId: true,
+          content: true,
+          createdAt: true,
+          createdBy: { select: ACCOUNT_REF_SELECT },
+          callStatus: { select: { id: true, name: true } },
+          callResult: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
+    const assigneeIds = [
+      ...new Set(
+        pageIds
+          .map((id) => summaries.get(id)?.open_assignment?.assignee_id)
+          .filter((x): x is string => Boolean(x)),
+      ),
+    ];
+    const assignees = assigneeIds.length
+      ? await this.prisma.account.findMany({
+          where: { id: { in: assigneeIds } },
+          select: ACCOUNT_REF_SELECT,
+        })
+      : [];
+    const assigneeById = new Map(assignees.map((a) => [a.id, toAccountRef(a)]));
+    const leadById = new Map(leads.map((l) => [l.id, l]));
+    const noteByLead = new Map(latestNotes.map((n) => [n.leadId, n]));
+
+    return pageIds
+      .filter((id) => leadById.has(id))
+      .map((id) => {
+        const s = summaries.get(id)!;
+        const note = noteByLead.get(id);
+        return {
+          ...toCandidateResponse(leadById.get(id)!),
+          care: {
+            month_status: s.month_status,
+            month_care_count: s.month_care_count,
+            total_care_count: totals.get(id)?.count ?? 0,
+            last_care_at: note?.createdAt.toISOString() ?? null,
+            last_care_by: note ? toAccountRef(note.createdBy) : null,
+            last_care_result: note
+              ? {
+                  call_status: note.callStatus,
+                  call_result: note.callResult,
+                  content: note.content,
+                }
+              : null,
+            open_assignment: s.open_assignment
+              ? {
+                  id: s.open_assignment.id,
+                  assignee:
+                    assigneeById.get(s.open_assignment.assignee_id) ?? null,
+                  assigned_at: s.open_assignment.assigned_at.toISOString(),
+                  processed: s.open_assignment.processed,
+                }
+              : null,
+            assigned_pending: s.assigned_pending,
+            last_assigned_at: lastAssigned.get(id)?.toISOString() ?? null,
+          },
+        };
+      });
+  }
+
+  // ===========================================================================
+  // Phân công (thủ công / ngẫu nhiên / Sale tự nhận) — dùng chung 1 lõi
+  // ===========================================================================
+
+  async assignManual(
+    leadIds: string[],
+    assigneeId: string,
+    user: AuthenticatedUser,
+  ) {
+    this.assertAssigner(user);
+    return this.assignPairs(
+      leadIds.map((leadId) => ({ leadId, assigneeId })),
+      'manual',
+      user,
+    );
+  }
+
+  async randomConfirm(
+    pairs: { lead_id: string; assignee_id: string }[],
+    user: AuthenticatedUser,
+  ) {
+    this.assertAssigner(user);
+    return this.assignPairs(
+      pairs.map((p) => ({ leadId: p.lead_id, assigneeId: p.assignee_id })),
+      'random',
+      user,
+    );
+  }
+
+  /**
+   * Xem trước giao ngẫu nhiên — KHÔNG ghi gì. Danh sách trả về được gửi lại
+   * nguyên vẹn ở bước xác nhận, backend kiểm tra lại từng data lúc đó.
+   */
+  async randomPreview(dto: RandomPreviewDto, user: AuthenticatedUser) {
+    this.assertAssigner(user);
+    if ((dto.per_assignee === undefined) === (dto.total === undefined)) {
+      throw new BadRequestException(
+        'Nhập số lượng cho từng Sale HOẶC tổng số lượng (chỉ 1 trong 2)',
+      );
+    }
+    const assigneeIds = [...new Set(dto.assignee_ids)];
+    const assignees = await this.loadValidAssignees(assigneeIds, user);
+
+    const quotas = new Map<string, number>();
+    assigneeIds.forEach((id, i) => {
+      if (dto.per_assignee !== undefined) quotas.set(id, dto.per_assignee);
+      else {
+        const base = Math.floor(dto.total! / assigneeIds.length);
+        quotas.set(id, base + (i < dto.total! % assigneeIds.length ? 1 : 0));
+      }
+    });
+
+    const now = new Date();
+    const monthStart = vnMonthStart(now);
+    const teamIds = [...new Set(assignees.map((a) => a.teamId!))];
+    const leadWhere: Prisma.LeadWhereInput = {
+      ...this.eligibleWhere(now),
+      assignedTeamId: { in: teamIds },
+    };
+    const leads = await this.prisma.lead.findMany({
+      where: leadWhere,
+      select: { id: true, assignedTeamId: true },
+    });
+    const { summaries } = await this.loadLeadSummaries(
+      leadWhere,
+      leads.map((l) => l.id),
+      monthStart,
+      now,
+    );
+
+    const candidates = leads.flatMap((l) => {
+      const priority = summaries.get(l.id)?.random_priority ?? null;
+      return priority === null
+        ? []
+        : [{ leadId: l.id, teamId: l.assignedTeamId!, priority }];
+    });
+    const picks = pickRandomAssignments(
+      candidates,
+      assigneeIds.map((id) => {
+        const a = assignees.find((x) => x.id === id)!;
+        return { id, teamId: a.teamId!, quota: quotas.get(id)! };
+      }),
+    );
+
+    const pickedLeads = picks.length
+      ? await this.prisma.lead.findMany({
+          where: { id: { in: picks.map((p) => p.leadId) } },
+          select: { id: true, fullName: true, phoneNumber: true },
+        })
+      : [];
+    const leadInfo = new Map(pickedLeads.map((l) => [l.id, l]));
+
+    const requestedTotal = [...quotas.values()].reduce((a, b) => a + b, 0);
+    return {
+      requested_total: requestedTotal,
+      available_total: candidates.length,
+      picked_total: picks.length,
+      shortage: picks.length < requestedTotal,
+      by_priority: {
+        1: picks.filter((p) => p.priority === 1).length,
+        2: picks.filter((p) => p.priority === 2).length,
+        3: picks.filter((p) => p.priority === 3).length,
+      },
+      per_assignee: assigneeIds.map((id) => {
+        const a = assignees.find((x) => x.id === id)!;
+        return {
+          assignee: toAccountRef(a),
+          requested: quotas.get(id)!,
+          picked: picks.filter((p) => p.assigneeId === id).length,
+        };
+      }),
+      pairs: picks.map((p) => ({
+        lead_id: p.leadId,
+        assignee_id: p.assigneeId,
+        priority: p.priority,
+        full_name: leadInfo.get(p.leadId)?.fullName ?? '',
+        phone_number: leadInfo.get(p.leadId)?.phoneNumber ?? '',
+      })),
+    };
+  }
+
+  /** Sale tự nhận 1 data trong Kho của nhóm mình. */
+  async claim(leadId: string, user: AuthenticatedUser) {
+    if (user.role !== 'sale') {
+      throw new ForbiddenException('Chỉ Sale mới tự nhận data trong Kho');
+    }
+    const result = await this.assignPairs(
+      [{ leadId, assigneeId: user.id }],
+      'self',
+      user,
+    );
+    if (result.assigned.length === 0) {
+      const reason = result.skipped[0]?.reason;
+      if (reason === 'already_assigned_same') return result;
+      if (reason === 'assigned_to_other') {
+        throw new ConflictException(SKIP_MESSAGES.assigned_to_other);
+      }
+      throw new BadRequestException(
+        result.skipped[0]?.message ?? 'Không nhận được data này',
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Lõi phân công. Chống trùng khi nhiều người thao tác cùng lúc: khóa các
+   * dòng leads liên quan (`SELECT ... FOR UPDATE`, theo thứ tự id để không
+   * deadlock) trong 1 transaction, rồi kiểm tra lại điều kiện ngay trong
+   * transaction đó. Data không hợp lệ bị BỎ QUA và báo lại, không làm hỏng
+   * cả đợt.
+   */
+  private async assignPairs(
+    pairs: { leadId: string; assigneeId: string }[],
+    method: CareAssignmentMethod,
+    user: AuthenticatedUser,
+  ) {
+    const assigneeIds = [...new Set(pairs.map((p) => p.assigneeId))];
+    const assignees =
+      method === 'self'
+        ? await this.loadSelfAsAssignee(user)
+        : await this.loadValidAssignees(assigneeIds, user);
+    const assigneeById = new Map(assignees.map((a) => [a.id, a]));
+    const actorTeamId = await this.actorTeamId(user);
+
+    const now = new Date();
+    const monthStart = vnMonthStart(now);
+    const leadIds = [...new Set(pairs.map((p) => p.leadId))];
+
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      await this.lockLeads(tx, leadIds);
+
+      const eligible = await tx.lead.findMany({
+        where: { id: { in: leadIds }, ...this.eligibleWhere(now) },
+        select: { id: true, assignedTeamId: true },
+      });
+      const eligibleById = new Map(eligible.map((l) => [l.id, l]));
+      const open = await this.loadOpenAssignments(tx, leadIds, monthStart, now);
+
+      const skipped: {
+        lead_id: string;
+        assignee_id: string;
+        reason: SkipReason;
+      }[] = [];
+      const accepted: { leadId: string; assigneeId: string }[] = [];
+      const toClose: string[] = [];
+      const seen = new Set<string>();
+
+      for (const p of pairs) {
+        const skip = (reason: SkipReason) =>
+          skipped.push({
+            lead_id: p.leadId,
+            assignee_id: p.assigneeId,
+            reason,
+          });
+        if (seen.has(p.leadId)) {
+          skip('duplicate_in_request');
+          continue;
+        }
+        seen.add(p.leadId);
+        const lead = eligibleById.get(p.leadId);
+        if (!lead) {
+          skip('not_eligible');
+          continue;
+        }
+        if (actorTeamId !== null && lead.assignedTeamId !== actorTeamId) {
+          skip('out_of_scope');
+          continue;
+        }
+        if (lead.assignedTeamId !== assigneeById.get(p.assigneeId)?.teamId) {
+          skip('team_mismatch');
+          continue;
+        }
+        const current = open.get(p.leadId);
+        if (current && !current.processed) {
+          skip(
+            current.assigneeId === p.assigneeId
+              ? 'already_assigned_same'
+              : 'assigned_to_other',
+          );
+          continue;
+        }
+        // Lượt giao cũ ĐÃ được xử lý thì đóng lại để chỉ còn 1 lượt mở/data.
+        if (current) toClose.push(current.id);
+        accepted.push(p);
+      }
+
+      if (accepted.length === 0) return { batchId: null, accepted, skipped };
+
+      if (toClose.length) {
+        await tx.careAssignment.updateMany({
+          where: { id: { in: toClose } },
+          data: { endedAt: now, endedById: user.id, endReason: 'reassigned' },
+        });
+      }
+      const batch = await tx.careAssignmentBatch.create({
+        data: { method, createdById: user.id, leadCount: accepted.length },
+      });
+      await tx.careAssignment.createMany({
+        data: accepted.map((p) => ({
+          batchId: batch.id,
+          leadId: p.leadId,
+          assigneeId: p.assigneeId,
+          assignedAt: now,
+        })),
+      });
+      await tx.auditLog.create({
+        data: {
+          accountId: user.id,
+          actionType: 'assign',
+          entityType: 'care_assignment_batch',
+          entityId: batch.id,
+          newValue: JSON.stringify({
+            method,
+            lead_count: accepted.length,
+            assignees: [...new Set(accepted.map((p) => p.assigneeId))],
+          }),
+        },
+      });
+      return { batchId: batch.id, accepted, skipped };
+    }, TX_OPTIONS);
+
+    await this.emitForLeads(
+      outcome.accepted.map((p) => p.leadId),
+      'care_assigned',
+      user,
+    );
+
+    return {
+      batch_id: outcome.batchId,
+      assigned: outcome.accepted.map((p) => ({
+        lead_id: p.leadId,
+        assignee_id: p.assigneeId,
+      })),
+      skipped: outcome.skipped.map((s) => ({
+        ...s,
+        message: SKIP_MESSAGES[s.reason],
+      })),
+    };
+  }
+
+  /** Thu hồi lượt giao đang mở của 1 data (không cần lý do — đã chốt). */
+  async revoke(leadId: string, user: AuthenticatedUser) {
+    this.assertAssigner(user);
+    const actorTeamId = await this.actorTeamId(user);
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockLeads(tx, [leadId]);
+      const lead = await tx.lead.findUnique({
+        where: { id: leadId },
+        select: { assignedTeamId: true, deletedAt: true },
+      });
+      if (!lead || lead.deletedAt) {
+        throw new NotFoundException('Không tìm thấy data');
+      }
+      this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
+      const open = await this.loadOpenAssignments(
+        tx,
+        [leadId],
+        vnMonthStart(now),
+        now,
+      );
+      const current = open.get(leadId);
+      if (!current) {
+        throw new NotFoundException('Data này không có lượt giao đang mở');
+      }
+      await tx.careAssignment.update({
+        where: { id: current.id },
+        data: { endedAt: now, endedById: user.id, endReason: 'revoked' },
+      });
+      await tx.auditLog.create({
+        data: {
+          accountId: user.id,
+          actionType: 'update',
+          entityType: 'care_assignment',
+          entityId: current.id,
+          fieldChanged: 'end_reason',
+          newValue: 'revoked',
+        },
+      });
+    }, TX_OPTIONS);
+    await this.emitForLeads([leadId], 'care_revoked', user);
+    return { lead_id: leadId };
+  }
+
+  /** Giao lại: đóng lượt đang mở (nếu có) và giao cho Sale khác trong 1 bước. */
+  async reassign(leadId: string, assigneeId: string, user: AuthenticatedUser) {
+    this.assertAssigner(user);
+    const [assignee] = await this.loadValidAssignees([assigneeId], user);
+    const actorTeamId = await this.actorTeamId(user);
+    const now = new Date();
+    const batchId = await this.prisma.$transaction(async (tx) => {
+      await this.lockLeads(tx, [leadId]);
+      const lead = await tx.lead.findFirst({
+        where: { id: leadId, ...this.eligibleWhere(now) },
+        select: { assignedTeamId: true },
+      });
+      if (!lead) throw new BadRequestException(SKIP_MESSAGES.not_eligible);
+      this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
+      if (lead.assignedTeamId !== assignee.teamId) {
+        throw new BadRequestException(SKIP_MESSAGES.team_mismatch);
+      }
+      const open = await this.loadOpenAssignments(
+        tx,
+        [leadId],
+        vnMonthStart(now),
+        now,
+      );
+      const current = open.get(leadId);
+      if (current && !current.processed && current.assigneeId === assigneeId) {
+        throw new BadRequestException(SKIP_MESSAGES.already_assigned_same);
+      }
+      if (current) {
+        await tx.careAssignment.update({
+          where: { id: current.id },
+          data: { endedAt: now, endedById: user.id, endReason: 'reassigned' },
+        });
+      }
+      const batch = await tx.careAssignmentBatch.create({
+        data: { method: 'manual', createdById: user.id, leadCount: 1 },
+      });
+      await tx.careAssignment.create({
+        data: { batchId: batch.id, leadId, assigneeId, assignedAt: now },
+      });
+      await tx.auditLog.create({
+        data: {
+          accountId: user.id,
+          actionType: 'transfer',
+          entityType: 'care_assignment_batch',
+          entityId: batch.id,
+          oldValue: current?.assigneeId,
+          newValue: assigneeId,
+        },
+      });
+      return batch.id;
+    }, TX_OPTIONS);
+    await this.emitForLeads([leadId], 'care_assigned', user);
+    return { batch_id: batchId, lead_id: leadId, assignee_id: assigneeId };
+  }
+
+  // ===========================================================================
+  // Dừng / Tiếp tục chăm sóc
+  // ===========================================================================
+
+  /**
+   * Quyền: Quản lý/Admin mọi data; Leader data nhóm mình; Sale khi là người
+   * phụ trách gốc HOẶC đang được giao chăm sóc data đó.
+   */
+  async setCareStopped(
+    leadId: string,
+    stopped: boolean,
+    user: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const now = new Date();
+    const actorTeamId =
+      user.role === 'leader' ? await this.actorTeamId(user) : null;
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockLeads(tx, [leadId]);
+      const lead = await tx.lead.findUnique({
+        where: { id: leadId },
+        select: {
+          assignedTeamId: true,
+          assignedToId: true,
+          deletedAt: true,
+          careStoppedAt: true,
+        },
+      });
+      if (!lead || lead.deletedAt) {
+        throw new NotFoundException('Không tìm thấy data');
+      }
+      const open = await this.loadOpenAssignments(
+        tx,
+        [leadId],
+        vnMonthStart(now),
+        now,
+      );
+      const current = open.get(leadId);
+      this.assertCanStop(user, actorTeamId, lead, current?.assigneeId ?? null);
+
+      if (stopped === Boolean(lead.careStoppedAt)) {
+        throw new ConflictException(
+          stopped
+            ? 'Data này đã được dừng chăm sóc'
+            : 'Data này đang được chăm sóc',
+        );
+      }
+
+      await tx.lead.update({
+        where: { id: leadId },
+        data: stopped
+          ? { careStoppedAt: now, careStoppedById: user.id }
+          : { careStoppedAt: null, careStoppedById: null },
+      });
+      if (stopped && current) {
+        await tx.careAssignment.update({
+          where: { id: current.id },
+          data: { endedAt: now, endedById: user.id, endReason: 'stopped' },
+        });
+      }
+      // Ghi TRONG transaction (không qua AuditLogService.log — hàm đó nuốt
+      // lỗi): nhật ký này là nguồn dựng lại trạng thái cho báo cáo tháng cũ.
+      await tx.auditLog.create({
+        data: {
+          accountId: user.id,
+          actionType: 'update',
+          entityType: 'lead',
+          entityId: leadId,
+          fieldChanged: CARE_STOP_AUDIT_FIELD,
+          oldValue: lead.careStoppedAt?.toISOString() ?? null,
+          newValue: stopped ? now.toISOString() : null,
+        },
+      });
+    }, TX_OPTIONS);
+
+    const final = await this.prisma.lead.findUniqueOrThrow({
+      where: { id: leadId },
+      include: CANDIDATE_INCLUDE,
+    });
+    const response = toCandidateResponse(final);
+    this.realtime.emitCandidateChange(
+      stopped ? 'care_stopped' : 'care_resumed',
+      response,
+      user,
+    );
+    return response;
+  }
+
+  private assertCanStop(
+    user: AuthenticatedUser,
+    actorTeamId: string | null,
+    lead: { assignedTeamId: string | null; assignedToId: string | null },
+    openAssigneeId: string | null,
+  ): void {
+    if (FULL_ACCESS_ROLES.has(user.role)) return;
+    if (user.role === 'leader') {
+      this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
+      return;
+    }
+    if (
+      user.role === 'sale' &&
+      (lead.assignedToId === user.id || openAssigneeId === user.id)
+    ) {
+      return;
+    }
+    throw new ForbiddenException(
+      'Bạn không có quyền dừng/tiếp tục chăm sóc data này',
+    );
+  }
+
+  // ===========================================================================
+  // Lịch sử phân công
+  // ===========================================================================
+
+  async listBatches(query: ListBatchesQueryDto, user: AuthenticatedUser) {
+    this.assertAssigner(user);
+    const teamId = await this.resolveTeamScope(user, query.team_id);
+    const where: Prisma.CareAssignmentBatchWhereInput = teamId
+      ? { assignments: { some: { lead: { assignedTeamId: teamId } } } }
+      : {};
+    const [total, batches] = await this.prisma.$transaction([
+      this.prisma.careAssignmentBatch.count({ where }),
+      this.prisma.careAssignmentBatch.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.page_size,
+        take: query.page_size,
+        include: {
+          createdBy: { select: ACCOUNT_REF_SELECT },
+          assignments: {
+            orderBy: { assignedAt: 'asc' },
+            include: {
+              lead: {
+                select: { id: true, fullName: true, phoneNumber: true },
+              },
+              assignee: { select: ACCOUNT_REF_SELECT },
+              endedBy: { select: ACCOUNT_REF_SELECT },
+            },
+          },
+        },
+      }),
+    ]);
+    return {
+      total,
+      page: query.page,
+      page_size: query.page_size,
+      items: batches.map((b) => ({
+        id: b.id,
+        method: b.method,
+        created_at: b.createdAt.toISOString(),
+        created_by: toAccountRef(b.createdBy),
+        lead_count: b.leadCount,
+        assignments: b.assignments.map((a) => this.toAssignmentResponse(a)),
+      })),
+    };
+  }
+
+  /** Lịch sử lượt giao của 1 data (mọi tháng). */
+  async leadAssignments(leadId: string, user: AuthenticatedUser) {
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { assignedTeamId: true, deletedAt: true },
+    });
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Không tìm thấy data');
+    }
+    const teamId = await this.resolveTeamScope(user);
+    if (teamId !== null && lead.assignedTeamId !== teamId) {
+      throw new ForbiddenException('Data không thuộc nhóm của bạn');
+    }
+    const rows = await this.prisma.careAssignment.findMany({
+      where: { leadId },
+      orderBy: { assignedAt: 'desc' },
+      include: {
+        batch: {
+          select: { method: true, createdBy: { select: ACCOUNT_REF_SELECT } },
+        },
+        lead: { select: { id: true, fullName: true, phoneNumber: true } },
+        assignee: { select: ACCOUNT_REF_SELECT },
+        endedBy: { select: ACCOUNT_REF_SELECT },
+      },
+    });
+    return rows.map((a) => ({
+      ...this.toAssignmentResponse(a),
+      method: a.batch.method,
+      assigned_by: toAccountRef(a.batch.createdBy),
+    }));
+  }
+
+  private toAssignmentResponse(a: {
+    id: string;
+    batchId: string;
+    assignedAt: Date;
+    endedAt: Date | null;
+    endReason: string | null;
+    lead: { id: string; fullName: string; phoneNumber: string };
+    assignee: Parameters<typeof toAccountRef>[0];
+    endedBy: Parameters<typeof toAccountRef>[0] | null;
+  }) {
+    return {
+      id: a.id,
+      batch_id: a.batchId,
+      lead: {
+        id: a.lead.id,
+        full_name: a.lead.fullName,
+        phone_number: a.lead.phoneNumber,
+      },
+      assignee: toAccountRef(a.assignee),
+      assigned_at: a.assignedAt.toISOString(),
+      ended_at: a.endedAt?.toISOString() ?? null,
+      ended_by: a.endedBy ? toAccountRef(a.endedBy) : null,
+      end_reason: a.endReason,
+    };
+  }
+
+  // ===========================================================================
+  // Tiến độ chăm sóc (khối Dashboard + tab Báo cáo dùng chung API này)
+  // ===========================================================================
+
+  async progress(query: CareProgressQueryDto, user: AuthenticatedUser) {
+    const now = new Date();
+    const date = query.date ?? vnDateOnly(now);
+    const month = query.month ?? date.slice(0, 7);
+    const day = vnDayRange(date);
+    const monthRange = vnMonthRange(month);
+
+    let teamId: string | null;
+    let accountId = query.account_id;
+    if (user.role === 'sale') {
+      teamId = await this.resolveTeamScope(user);
+      accountId = user.id;
+    } else if (ASSIGNER_ROLES.has(user.role)) {
+      teamId = await this.resolveTeamScope(user, query.team_id);
+    } else {
+      throw new ForbiddenException('Bạn không có quyền xem tiến độ chăm sóc');
+    }
+
+    const dayMonthStart = vnMonthStart(day.start);
+    const windowStart =
+      dayMonthStart < monthRange.start ? dayMonthStart : monthRange.start;
+    const windowEnd = day.end > monthRange.end ? day.end : monthRange.end;
+
+    const accountWhere: Prisma.AccountWhereInput = {
+      role: 'sale',
+      ...(teamId ? { teamId } : {}),
+      ...(accountId ? { id: accountId } : {}),
+      OR: [
+        { status: 'active' },
+        {
+          careAssignmentsReceived: {
+            some: { assignedAt: { gte: windowStart, lt: windowEnd } },
+          },
+        },
+      ],
+    };
+    const sales = await this.prisma.account.findMany({
+      where: accountWhere,
+      select: {
+        ...ACCOUNT_REF_SELECT,
+        team: { select: { id: true, name: true } },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    const saleIds = sales.map((s) => s.id);
+
+    const assignments = saleIds.length
+      ? await this.prisma.careAssignment.findMany({
+          where: {
+            assigneeId: { in: saleIds },
+            assignedAt: { gte: windowStart, lt: windowEnd },
+            lead: { deletedAt: null },
+          },
+          select: {
+            id: true,
+            leadId: true,
+            assigneeId: true,
+            assignedAt: true,
+            endedAt: true,
+          },
+        })
+      : [];
+    const notes = saleIds.length
+      ? await this.prisma.leadNote.findMany({
+          where: {
+            isDeleted: false,
+            createdById: { in: saleIds },
+            createdAt: { gte: windowStart },
+            lead: {
+              careAssignments: {
+                some: {
+                  assigneeId: { in: saleIds },
+                  assignedAt: { gte: windowStart, lt: windowEnd },
+                },
+              },
+            },
+          },
+          select: { leadId: true, createdById: true, createdAt: true },
+        })
+      : [];
+    const noteIndex = new NoteIndex(notes);
+
+    const bySale = new Map<string, AssignmentRow[]>();
+    for (const a of assignments) {
+      const list = bySale.get(a.assigneeId);
+      if (list) list.push(a);
+      else bySale.set(a.assigneeId, [a]);
+    }
+
+    let rows = sales.map((s) => {
+      const own = bySale.get(s.id) ?? [];
+      const daily = computeSaleDaily(own, noteIndex, day.start, day.end, now);
+      const monthly = computeSaleMonthly(
+        own,
+        noteIndex,
+        monthRange.start,
+        monthRange.end,
+        now,
+      );
+      return {
+        account: toAccountRef(s),
+        team: s.team,
+        daily,
+        monthly: {
+          ...monthly,
+          last_care_at: monthly.last_care_at?.toISOString() ?? null,
+        },
+      };
+    });
+
+    if (query.status) {
+      rows = rows.filter((r) => {
+        const hasWork = r.daily.today.assigned + r.daily.backlog.start > 0;
+        const pending = r.daily.today.pending + r.daily.backlog.remaining > 0;
+        return query.status === 'pending' ? pending : hasWork && !pending;
+      });
+    }
+
+    // Dòng tổng đếm theo DATA KHÁC NHAU trên toàn bộ lượt giao (không cộng
+    // dồn từng Sale) — 1 data giao lại từ A sang B không bị tính 2 lần. Lượt
+    // chăm sóc là số ghi chú nên cộng dồn được.
+    const shownIds = new Set(rows.map((r) => r.account.id));
+    const shownAssignments = assignments.filter((a) =>
+      shownIds.has(a.assigneeId),
+    );
+    const totalDaily = computeSaleDaily(
+      shownAssignments,
+      noteIndex,
+      day.start,
+      day.end,
+      now,
+    );
+    const totalMonthly = computeSaleMonthly(
+      shownAssignments,
+      noteIndex,
+      monthRange.start,
+      monthRange.end,
+      now,
+    );
+    totalDaily.care_turns = rows.reduce((n, r) => n + r.daily.care_turns, 0);
+    totalMonthly.care_turns = rows.reduce(
+      (n, r) => n + r.monthly.care_turns,
+      0,
+    );
+
+    return {
+      date,
+      month,
+      rows,
+      totals: {
+        daily: totalDaily,
+        monthly: {
+          ...totalMonthly,
+          last_care_at: totalMonthly.last_care_at?.toISOString() ?? null,
+        },
+      },
+      target: await this.monthlyTarget(teamId, monthRange, now),
+    };
+  }
+
+  /**
+   * Mục tiêu tháng: mẫu số = data đủ điều kiện Kho TẠI MỐC cuối tháng (hoặc
+   * hiện tại nếu tháng chưa hết), tử số = data trong đó có ≥1 ghi chú chưa
+   * xóa (của bất kỳ ai) trong tháng. Data vào Kho giữa tháng tính luôn vào
+   * tháng đó (Câu 3 = A). Điều kiện "lịch gọi lại hôm nay" là điều kiện theo
+   * ngày nên không áp cho mục tiêu tháng. Trạng thái Dừng chăm sóc dựng lại
+   * từ audit_logs (Câu 6 = A).
+   */
+  private async monthlyTarget(
+    teamId: string | null,
+    monthRange: { start: Date; end: Date },
+    now: Date,
+  ) {
+    const cutoff = now < monthRange.end ? now : monthRange.end;
+    if (cutoff <= monthRange.start) {
+      return { eligible: 0, cared: 0, not_cared: 0, rate: null };
+    }
+    const leadWhere: Prisma.LeadWhereInput = {
+      assignedToId: { not: null },
+      OR: [{ deletedAt: null }, { deletedAt: { gte: cutoff } }],
+      ...(teamId ? { assignedTeamId: teamId } : {}),
+      notes: { some: { isDeleted: false, createdAt: { lt: cutoff } } },
+    };
+    const leads = await this.prisma.lead.findMany({
+      where: leadWhere,
+      select: { id: true },
+    });
+    const stopLogs = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: 'lead',
+        fieldChanged: CARE_STOP_AUDIT_FIELD,
+        createdAt: { lt: cutoff },
+      },
+      select: { entityId: true, createdAt: true, newValue: true },
+    });
+    const logsByLead = new Map<
+      string,
+      { createdAt: Date; newValue: string | null }[]
+    >();
+    for (const log of stopLogs) {
+      if (!log.entityId) continue;
+      const list = logsByLead.get(log.entityId);
+      if (list) list.push(log);
+      else logsByLead.set(log.entityId, [log]);
+    }
+    const eligible = leads.filter(
+      (l) => !wasCareStoppedAt(logsByLead.get(l.id) ?? [], cutoff),
+    );
+    const caredRows = await this.prisma.leadNote.findMany({
+      where: {
+        isDeleted: false,
+        createdAt: { gte: monthRange.start, lt: cutoff },
+        lead: leadWhere,
+      },
+      distinct: ['leadId'],
+      select: { leadId: true },
+    });
+    const caredSet = new Set(caredRows.map((r) => r.leadId));
+    const cared = eligible.filter((l) => caredSet.has(l.id)).length;
+    return {
+      eligible: eligible.length,
+      cared,
+      not_cared: eligible.length - cared,
+      rate: rate(cared, eligible.length),
+    };
+  }
+
+  // ===========================================================================
+  // Tiện ích dùng chung
+  // ===========================================================================
+
+  private assertAssigner(user: AuthenticatedUser): void {
+    if (!ASSIGNER_ROLES.has(user.role)) {
+      throw new ForbiddenException(
+        'Chỉ Leader, Quản lý hoặc Admin mới được phân công trong Kho',
+      );
+    }
+  }
+
+  /**
+   * Nhóm giới hạn thao tác của người dùng: null = không giới hạn (Quản lý/
+   * Admin). Leader/Sale chưa thuộc nhóm nào bị chặn luôn — KHÔNG được hiểu
+   * null là "không giới hạn". Gọi TRƯỚC transaction: với DATABASE_POOL_MAX=1
+   * mọi truy vấn qua this.prisma bên trong transaction sẽ chờ mãi.
+   */
+  private async actorTeamId(user: AuthenticatedUser): Promise<string | null> {
+    if (FULL_ACCESS_ROLES.has(user.role)) return null;
+    const teamId = await this.getOwnTeamId(user.id);
+    if (!teamId) {
+      throw new ForbiddenException('Tài khoản của bạn chưa thuộc nhóm nào');
+    }
+    return teamId;
+  }
+
+  private assertLeadInTeam(
+    actorTeamId: string | null,
+    leadTeamId: string | null,
+  ): void {
+    if (actorTeamId !== null && leadTeamId !== actorTeamId) {
+      throw new ForbiddenException('Data không thuộc nhóm bạn quản lý');
+    }
+  }
+
+  /** Sale nhận phải là Sale đang hoạt động, có nhóm; Leader chỉ giao cho Sale nhóm mình. */
+  private async loadValidAssignees(ids: string[], user: AuthenticatedUser) {
+    const accounts = await this.prisma.account.findMany({
+      where: { id: { in: ids } },
+      select: { ...ACCOUNT_REF_SELECT, teamId: true, status: true },
+    });
+    const ownTeamId = await this.actorTeamId(user);
+    for (const id of ids) {
+      const a = accounts.find((x) => x.id === id);
+      if (!a || a.role !== 'sale' || a.status !== 'active' || !a.teamId) {
+        throw new BadRequestException(
+          'Người nhận phải là Sale đang hoạt động và đã thuộc 1 nhóm',
+        );
+      }
+      if (ownTeamId !== null && a.teamId !== ownTeamId) {
+        throw new ForbiddenException(
+          'Bạn chỉ được giao cho Sale trong nhóm mình',
+        );
+      }
+    }
+    return accounts;
+  }
+
+  private async loadSelfAsAssignee(user: AuthenticatedUser) {
+    const me = await this.prisma.account.findUnique({
+      where: { id: user.id },
+      select: { ...ACCOUNT_REF_SELECT, teamId: true, status: true },
+    });
+    if (!me?.teamId) {
+      throw new ForbiddenException('Tài khoản của bạn chưa thuộc nhóm nào');
+    }
+    return [me];
+  }
+
+  private async lockLeads(tx: Tx, leadIds: string[]): Promise<void> {
+    if (leadIds.length === 0) return;
+    await tx.$queryRaw`SELECT id FROM leads WHERE id = ANY(${leadIds}::uuid[]) ORDER BY id FOR UPDATE`;
+  }
+
+  /** Lượt giao còn hiệu lực tại `now` của từng data, kèm đã xử lý hay chưa. */
+  private async loadOpenAssignments(
+    tx: Tx,
+    leadIds: string[],
+    monthStart: Date,
+    now: Date,
+  ): Promise<
+    Map<string, { id: string; assigneeId: string; processed: boolean }>
+  > {
+    const rows = await tx.careAssignment.findMany({
+      where: {
+        leadId: { in: leadIds },
+        endedAt: null,
+        assignedAt: { gte: monthStart, lte: now },
+      },
+      orderBy: { assignedAt: 'desc' },
+      select: { id: true, leadId: true, assigneeId: true, assignedAt: true },
+    });
+    const result = new Map<
+      string,
+      { id: string; assigneeId: string; processed: boolean }
+    >();
+    if (rows.length === 0) return result;
+    const notes = new NoteIndex(
+      await tx.leadNote.findMany({
+        where: {
+          leadId: { in: [...new Set(rows.map((r) => r.leadId))] },
+          createdById: { in: [...new Set(rows.map((r) => r.assigneeId))] },
+          isDeleted: false,
+          createdAt: { gte: monthStart },
+        },
+        select: { leadId: true, createdById: true, createdAt: true },
+      }),
+    );
+    for (const r of rows) {
+      if (result.has(r.leadId)) continue;
+      result.set(r.leadId, {
+        id: r.id,
+        assigneeId: r.assigneeId,
+        processed:
+          assignmentProcessedAt({ ...r, endedAt: null }, notes) !== null,
+      });
+    }
+    return result;
+  }
+
+  private async emitForLeads(
+    leadIds: string[],
+    changeType: LeadChangeType,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    if (leadIds.length === 0) return;
+    const leads = await this.prisma.lead.findMany({
+      where: { id: { in: leadIds } },
+      include: CANDIDATE_INCLUDE,
+    });
+    for (const lead of leads) {
+      this.realtime.emitCandidateChange(
+        changeType,
+        toCandidateResponse(lead),
+        user,
+      );
+    }
+  }
+}

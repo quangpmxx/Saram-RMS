@@ -9,7 +9,9 @@ import {
   Clock,
   Lock,
   MessageSquarePlus,
+  PauseCircle,
   Pencil,
+  PlayCircle,
   Phone,
   Save,
   Trash2,
@@ -209,6 +211,17 @@ export function CandidateDetailClient({
     currentUserRole === "admin" ||
     currentUserRole === "manager" ||
     (currentUserRole === "sale" && candidate.assigned_to?.id === currentUserId);
+  // Kho chăm sóc (2026-10-28) — "Dừng/Tiếp tục chăm sóc", khớp
+  // assertCanStop() ở backend: Admin/Quản lý mọi data; Leader data nhóm
+  // mình; Sale khi là người phụ trách gốc HOẶC đang được giao chăm sóc.
+  const [isCareAssignee, setIsCareAssignee] = useState(false);
+  const [isCareSubmitting, setIsCareSubmitting] = useState(false);
+  const canToggleCare =
+    !isReadOnly &&
+    (currentUserRole === "admin" ||
+      currentUserRole === "manager" ||
+      (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId) ||
+      (currentUserRole === "sale" && (candidate.assigned_to?.id === currentUserId || isCareAssignee)));
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   // Sale: chỉ ghi chú của chính mình; Admin/Quản lý kế thừa quyền này, xóa được ghi chú bất kỳ.
   const canDeleteNote = (note: Note) =>
@@ -289,6 +302,57 @@ export function CandidateDetailClient({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate.id]);
+
+  // Sale không phụ trách gốc: kiểm tra xem có đang được giao chăm sóc data
+  // này không (lượt giao chưa đóng, trong tháng hiện tại).
+  useEffect(() => {
+    if (currentUserRole !== "sale" || candidate.assigned_to?.id === currentUserId) return;
+    let cancelled = false;
+    clientApi<{ assignee: { id: string }; assigned_at: string; ended_at: string | null }[]>(
+      `/care-warehouse/${candidate.id}/assignments`,
+    )
+      .then((rows) => {
+        if (cancelled) return;
+        const month = (d: Date) =>
+          new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(d);
+        const now = month(new Date());
+        setIsCareAssignee(
+          rows.some((r) => r.assignee.id === currentUserId && !r.ended_at && month(new Date(r.assigned_at)) === now),
+        );
+      })
+      .catch(() => {
+        // Không xem được lịch sử giao (khác nhóm...) — coi như không được giao.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidate.id, candidate.updated_at]);
+
+  async function handleToggleCareStopped() {
+    const stopping = !candidate.care_stopped_at;
+    if (
+      stopping &&
+      !window.confirm(
+        "Dừng chăm sóc data này? Data sẽ rời khỏi Kho chăm sóc và lượt giao chăm sóc đang mở (nếu có) sẽ được đóng lại. Có thể bật lại bằng \"Tiếp tục chăm sóc\".",
+      )
+    ) {
+      return;
+    }
+    setIsCareSubmitting(true);
+    try {
+      const updated = await clientApi<Candidate>(
+        `/care-warehouse/${candidate.id}/${stopping ? "stop" : "resume"}`,
+        { method: "POST" },
+      );
+      setCandidate(updated);
+      toast.success(stopping ? "Đã dừng chăm sóc" : "Đã tiếp tục chăm sóc");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setIsCareSubmitting(false);
+    }
+  }
 
   async function handleToggleHold() {
     if (!candidate.is_held) {
@@ -564,7 +628,7 @@ export function CandidateDetailClient({
         title={candidate.full_name}
         description={`${candidate.phone_number} · Nguồn: ${candidate.source.name}`}
         actions={
-          canUpdate || canToggleHold ? (
+          canUpdate || canToggleHold || canToggleCare ? (
             <div className="flex flex-wrap gap-2">
               {canToggleHold && (
                 <Button
@@ -581,6 +645,25 @@ export function CandidateDetailClient({
                 <Button type="button" variant="outline" onClick={() => setIsCallbackModalOpen(true)}>
                   <CalendarClock className="h-4 w-4" strokeWidth={2} />
                   Đặt lịch gọi lại
+                </Button>
+              )}
+              {canToggleCare && (
+                <Button
+                  type="button"
+                  variant={candidate.care_stopped_at ? "secondary" : "outline"}
+                  disabled={isCareSubmitting}
+                  onClick={() => void handleToggleCareStopped()}
+                >
+                  {candidate.care_stopped_at ? (
+                    <PlayCircle className="h-4 w-4" strokeWidth={2} />
+                  ) : (
+                    <PauseCircle className="h-4 w-4" strokeWidth={2} />
+                  )}
+                  {isCareSubmitting
+                    ? "Đang lưu..."
+                    : candidate.care_stopped_at
+                      ? "Tiếp tục chăm sóc"
+                      : "Dừng chăm sóc"}
                 </Button>
               )}
               {canUpdate && (
@@ -602,6 +685,18 @@ export function CandidateDetailClient({
               <Badge variant="warning">
                 Số được giữ lại bởi{" "}
                 {candidate.held_by ? <NameWithRoleHint account={candidate.held_by} /> : "—"}
+              </Badge>
+            )}
+            {candidate.care_stopped_at && (
+              <Badge variant="neutral">
+                Đã dừng chăm sóc
+                {candidate.care_stopped_by && (
+                  <>
+                    {" bởi "}
+                    <NameWithRoleHint account={candidate.care_stopped_by} />
+                  </>
+                )}
+                {` · ${new Date(candidate.care_stopped_at).toLocaleDateString("vi-VN")}`}
               </Badge>
             )}
           </div>

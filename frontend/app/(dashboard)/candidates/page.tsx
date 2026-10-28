@@ -57,13 +57,20 @@ export default async function CandidatesPage({
   const canViewPending = ["admin", "manager", "leader", "mkt", "sale"].includes(user.role);
   const canViewMine = user.role === "sale";
 
+  // Kho chăm sóc (2026-10-28): ?view=care[&care_assignee=<id>] — mở sẵn tab
+  // Kho (vd bấm 1 Sale ở bảng Tiến độ chăm sóc). MKT chỉ xem.
+  const canViewCare = ["admin", "manager", "leader", "sale", "mkt"].includes(user.role);
+
   const requestedView = getParam("view");
   const initialViewMode =
     requestedView === "pending" && canViewPending
       ? ("pending" as const)
       : requestedView === "mine" && canViewMine
         ? ("mine" as const)
-        : ("all" as const);
+        : requestedView === "care" && canViewCare
+          ? ("care" as const)
+          : ("all" as const);
+  const careAssignee = getParam("care_assignee");
 
   const sourceId = getParam("source_id");
   const dateFrom = getParam("date_from");
@@ -139,6 +146,7 @@ export default async function CandidatesPage({
       zaloStatuses={zaloStatuses}
       initialViewMode={initialViewMode}
       initialFilters={initialFilters}
+      initialCareAssigneeId={initialViewMode === "care" ? careAssignee : undefined}
     />
   );
 }

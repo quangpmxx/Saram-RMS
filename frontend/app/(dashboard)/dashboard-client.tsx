@@ -42,6 +42,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { computeDateRange, type DatePreset, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { CARE_PROGRESS_ROLES, CareProgressBlock } from "@/components/care-progress/care-progress-block";
 
 /**
  * Dự án phụ — nâng cấp toàn diện (riêng giao diện Dashboard, ngoài phạm vi
@@ -530,6 +531,16 @@ export function DashboardClient({
           );
         })}
       </div>
+
+      {/* Kho chăm sóc (2026-10-28): Tiến độ chăm sóc — dùng chung bộ lọc Nhóm/Nhân viên ở trên;
+          ngày/tháng chọn riêng trong khối vì chỉ số chăm sóc tính theo ngày/tháng, không theo khoảng. */}
+      {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
+        <CareProgressBlock
+          currentUserRole={currentUserRole}
+          teamId={canFilterByTeam ? teamId : ""}
+          accountId={accountId}
+        />
+      )}
 
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">

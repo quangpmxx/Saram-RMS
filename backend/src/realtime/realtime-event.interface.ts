@@ -23,7 +23,12 @@ export type LeadChangeType =
   | 'care_pool_locked'
   | 'care_pool_released'
   | 'care_pool_removed'
-  | 'care_pool_entered';
+  | 'care_pool_entered'
+  // Kho chăm sóc (2026-10-28) — xem care-warehouse.service.ts
+  | 'care_assigned'
+  | 'care_revoked'
+  | 'care_stopped'
+  | 'care_resumed';
 
 /**
  * Chỉ dùng NỘI BỘ ở server để tính phòng (room) cần phát tới — KHÔNG gửi

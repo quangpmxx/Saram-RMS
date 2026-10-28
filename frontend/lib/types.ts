@@ -179,6 +179,9 @@ export interface Candidate {
   entered_care_pool_at: string | null;
   care_pool_locked_by: NamedRefWithRole | null;
   is_duplicate_flagged: boolean;
+  /** Kho chăm sóc (2026-10-28): khác null = data đã bị "Dừng chăm sóc". */
+  care_stopped_at: string | null;
+  care_stopped_by: NamedRefWithRole | null;
   created_at: string;
   updated_at: string;
 }
@@ -304,7 +307,12 @@ export type LeadChangeType =
   | "care_pool_locked"
   | "care_pool_released"
   | "care_pool_removed"
-  | "care_pool_entered";
+  | "care_pool_entered"
+  // Kho chăm sóc (2026-10-28)
+  | "care_assigned"
+  | "care_revoked"
+  | "care_stopped"
+  | "care_resumed";
 
 export interface LeadRealtimeEvent {
   lead_id: string;

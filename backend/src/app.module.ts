@@ -14,6 +14,7 @@ import { ImportsModule } from './imports/imports.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { CarePoolModule } from './care-pool/care-pool.module';
+import { CareWarehouseModule } from './care-warehouse/care-warehouse.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
@@ -53,6 +54,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CatalogModule,
     CalendarModule,
     CarePoolModule,
+    CareWarehouseModule,
     DistributionModule,
     DashboardModule,
     NotificationModule,

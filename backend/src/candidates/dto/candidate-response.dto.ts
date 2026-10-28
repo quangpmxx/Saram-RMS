@@ -53,6 +53,9 @@ export interface CandidateResponseDto {
   entered_care_pool_at: string | null;
   care_pool_locked_by: NamedRefWithRole | null;
   is_duplicate_flagged: boolean;
+  /** Kho chăm sóc (2026-10-28): khác null = data đã bị "Dừng chăm sóc". */
+  care_stopped_at: string | null;
+  care_stopped_by: NamedRefWithRole | null;
   created_at: string;
   updated_at: string;
 }
@@ -63,6 +66,10 @@ type LeadWithRelations = Lead & {
   assignedTo?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
   heldBy?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
   carePoolLockedBy?: Pick<
+    Account,
+    'id' | 'fullName' | 'role' | 'avatarUrl'
+  > | null;
+  careStoppedBy?: Pick<
     Account,
     'id' | 'fullName' | 'role' | 'avatarUrl'
   > | null;
@@ -151,6 +158,15 @@ export function toCandidateResponse(
         }
       : null,
     is_duplicate_flagged: lead.isDuplicateFlagged,
+    care_stopped_at: lead.careStoppedAt?.toISOString() ?? null,
+    care_stopped_by: lead.careStoppedBy
+      ? {
+          id: lead.careStoppedBy.id,
+          name: lead.careStoppedBy.fullName,
+          role: lead.careStoppedBy.role,
+          avatar_url: lead.careStoppedBy.avatarUrl,
+        }
+      : null,
     created_at: lead.createdAt.toISOString(),
     updated_at: lead.updatedAt.toISOString(),
   };
@@ -167,6 +183,9 @@ export const CANDIDATE_INCLUDE = {
   },
   heldBy: { select: { id: true, fullName: true, role: true, avatarUrl: true } },
   carePoolLockedBy: {
+    select: { id: true, fullName: true, role: true, avatarUrl: true },
+  },
+  careStoppedBy: {
     select: { id: true, fullName: true, role: true, avatarUrl: true },
   },
   callStatus: { select: { id: true, name: true } },
