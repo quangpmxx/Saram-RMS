@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Note } from "@/lib/types";
 
@@ -24,6 +24,7 @@ export function NoteTimeline({
   collapsedMaxHeight,
   expanded: expandedProp,
   onToggleExpanded,
+  collapseByHeight = false,
 }: {
   notes: Note[];
   previewCount?: number;
@@ -35,9 +36,28 @@ export function NoteTimeline({
   /** Điều khiển trạng thái mở rộng từ bên ngoài (vd. để bọc thêm khung giới hạn chiều cao ở nơi gọi) — bỏ qua thì tự quản lý nội bộ. */
   expanded?: boolean;
   onToggleExpanded?: (next: boolean) => void;
+  /**
+   * Hiện TẤT CẢ ghi chú (bỏ qua previewCount); nút Xem thêm chỉ xuất hiện
+   * khi tổng nội dung cao hơn collapsedMaxHeight (yêu cầu người dùng
+   * 2026-10-29: không cắt từng ghi chú, chỉ mở rộng khi tràn khung).
+   */
+  collapseByHeight?: boolean;
 }) {
   const [internalExpanded, setInternalExpanded] = useState(false);
   const isExpanded = expandedProp ?? internalExpanded;
+  const listRef = useRef<HTMLUListElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  // Đo xem nội dung có cao hơn khung thu gọn không (cập nhật khi đổi cỡ/nội dung).
+  useLayoutEffect(() => {
+    if (!collapseByHeight || !collapsedMaxHeight || !listRef.current) return;
+    const el = listRef.current;
+    const check = () => setIsOverflowing(el.scrollHeight > collapsedMaxHeight + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [collapseByHeight, collapsedMaxHeight, notes]);
 
   function toggle() {
     const next = !isExpanded;
@@ -54,8 +74,9 @@ export function NoteTimeline({
   if (sorted.length === 0) {
     return null;
   }
-  const hasMore = sorted.length > previewCount;
-  const visible = isExpanded ? sorted : sorted.slice(0, previewCount);
+  const showAll = collapseByHeight || isExpanded;
+  const visible = showAll ? sorted : sorted.slice(0, previewCount);
+  const hasMore = collapseByHeight ? isOverflowing || isExpanded : sorted.length > previewCount;
 
   // UI Polish — tinh chỉnh mật độ hiển thị: chỉ thu hẹp thêm khoảng cách ở
   // chế độ compact (cột "Tình trạng cuộc gọi" trong danh sách) — chế độ
@@ -73,7 +94,7 @@ export function NoteTimeline({
         className={!isExpanded && collapsedMaxHeight ? "overflow-hidden" : undefined}
         style={!isExpanded && collapsedMaxHeight ? { maxHeight: collapsedMaxHeight } : undefined}
       >
-        <ul className={`relative flex flex-col ${gapClass}`}>
+        <ul ref={listRef} className={`relative flex flex-col ${gapClass}`}>
           {visible.length > 1 && (
             <div className={`absolute top-2 bottom-2 w-px bg-slate-200 ${lineOffsetClass}`} aria-hidden="true" />
           )}
@@ -101,7 +122,7 @@ export function NoteTimeline({
           ) : (
             <>
               <ChevronDown className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} strokeWidth={2} />
-              Xem thêm (còn {sorted.length - previewCount} ghi chú)
+              {collapseByHeight ? "Xem thêm" : `Xem thêm (còn ${sorted.length - previewCount} ghi chú)`}
             </>
           )}
         </button>

@@ -7,14 +7,12 @@ import type { Note } from "@/lib/types";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { NoteTimeline } from "./note-timeline";
 
-/** Bảng "Data lao động" — chiều cao hàng cố định, ô ghi chú chỉ hiện bản tóm tắt (Mục 6, yêu cầu tối ưu bảng); lịch sử đầy đủ xem tại trang Chi tiết ứng viên. */
-const PREVIEW_COUNT = 3;
-/** Chiều cao tối đa vùng danh sách note khi thu gọn — giảm ~40% so với bản trước (130px) theo yêu cầu tinh chỉnh bổ sung. */
-/** 2026-10-29: thu gọn khoảng cách để mặc định thấy 3 ghi chú (trước 2 ghi chú / 78px). */
+/**
+ * Bảng "Data lao động" — chiều cao khung ghi chú khi thu gọn. Mọi ghi chú
+ * hiện đủ nội dung; chỉ khi tổng nội dung cao hơn khung này mới có nút
+ * "Xem thêm" (yêu cầu người dùng 2026-10-29).
+ */
 const COLLAPSED_MAX_HEIGHT = 96;
-/** Note dài hơn ngưỡng này (ký tự hoặc số dòng) mới cần cắt còn 3 dòng + nút "Xem thêm" riêng. */
-const CONTENT_LENGTH_THRESHOLD = 120;
-const CONTENT_LINE_THRESHOLD = 3;
 
 function formatNoteTimestamp(value: string): string {
   const parsed = new Date(value);
@@ -42,31 +40,9 @@ function MiniStatusBadge({ label, tone }: { label: string; tone: keyof typeof MI
   );
 }
 
+/** Nội dung 1 ghi chú — luôn hiện đủ (không cắt dòng, không nút Xem thêm riêng). */
 function NoteContent({ content }: { content: string }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const lineCount = content.split("\n").length;
-  const isLong = content.length > CONTENT_LENGTH_THRESHOLD || lineCount > CONTENT_LINE_THRESHOLD;
-
-  return (
-    <>
-      <p
-        className={`text-[11px] leading-tight whitespace-pre-line text-slate-700 ${
-          !isExpanded && isLong ? "line-clamp-3" : ""
-        }`}
-      >
-        {content}
-      </p>
-      {isLong && (
-        <button
-          type="button"
-          onClick={() => setIsExpanded((prev) => !prev)}
-          className="mt-0.5 text-[10px] font-medium text-brand-600 hover:text-brand-700"
-        >
-          {isExpanded ? "Thu gọn" : "Xem thêm"}
-        </button>
-      )}
-    </>
-  );
+  return <p className="text-[11px] leading-tight whitespace-pre-line text-slate-700">{content}</p>;
 }
 
 /**
@@ -94,7 +70,7 @@ export function CareNoteCell({ notes }: { notes: Note[] | undefined }) {
     <div>
       <NoteTimeline
         notes={notes}
-        previewCount={PREVIEW_COUNT}
+        collapseByHeight
         compact
         collapsedMaxHeight={COLLAPSED_MAX_HEIGHT}
         expanded={isRowExpanded}
