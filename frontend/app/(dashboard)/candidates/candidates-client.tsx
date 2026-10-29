@@ -949,7 +949,11 @@ export function CandidatesClient({
                     </td>
 
                     <td
-                      className="cursor-pointer border-r border-slate-100 px-1.5 py-2"
+                      // Data đã đóng (dừng chăm sóc) → tô đỏ nhạt cả ô thông tin (yêu cầu người dùng 2026-10-29).
+                      className={cn(
+                        "cursor-pointer border-r border-slate-100 px-1.5 py-2",
+                        candidate.care_stopped_at && "bg-red-100",
+                      )}
                       onClick={(event) => {
                         // UI Polish — cả ô mở được chi tiết ứng viên, không chỉ riêng tên
                         // nữa. Bỏ qua nếu click trúng chính link tên hoặc nhãn "Trùng SĐT"
