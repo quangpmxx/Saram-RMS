@@ -231,6 +231,7 @@ export function CandidatesClient({
   const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
   const canClaim = currentUserRole === "sale";
   const canViewCare = CARE_VIEW_ROLES.includes(currentUserRole);
+  const [careTotal, setCareTotal] = useState<number | null>(null);
   // Leader: Sale nhóm mình (initialTeamMembers); Quản lý/Admin: mọi Sale.
   const careSaleOptions: CareSaleOption[] = (currentUserRole === "leader" ? teamMembers : allSaleMembers)
     .filter((m) => m.role === "sale" && m.status === "active")
@@ -714,7 +715,7 @@ export function CandidatesClient({
                     viewMode === "care" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  Kho chăm sóc
+                  {careTotal === null ? "Chăm sóc" : `Chăm sóc (${careTotal})`}
                 </button>
               )}
             </div>
@@ -758,6 +759,7 @@ export function CandidatesClient({
         <div className={viewMode === "care" ? undefined : "hidden"}>
           <CareWarehousePanel
             active={viewMode === "care"}
+            onWarehouseTotal={setCareTotal}
             currentUserId={currentUserId}
             currentUserRole={currentUserRole}
             isReadOnly={isReadOnly}

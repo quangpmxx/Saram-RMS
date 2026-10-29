@@ -237,6 +237,10 @@ export class CareWarehouseService {
       }
     }
     const range = await this.assignmentRangeStats(query, user, teamId, now);
+    // Tổng data trong Kho (không tính ô tìm kiếm) — hiện trên thẻ "Chăm sóc (N)".
+    const warehouseTotal = searchWhere
+      ? await this.prisma.lead.count({ where: scopeWhere })
+      : ids.length;
 
     const lastCareFrom = query.last_care_from
       ? vnDayRange(query.last_care_from).start
@@ -312,7 +316,7 @@ export class CareWarehouseService {
       page: query.page,
       page_size: query.page_size,
       month: vnMonthKey(now),
-      stats: { ...stats, range },
+      stats: { ...stats, range, warehouse_total: warehouseTotal },
       items,
     };
   }

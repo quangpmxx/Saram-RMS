@@ -178,6 +178,7 @@ function summarizeAssign(result: CareAssignResult): {
  */
 export function CareWarehousePanel({
   active,
+  onWarehouseTotal,
   currentUserId,
   currentUserRole,
   isReadOnly,
@@ -192,6 +193,8 @@ export function CareWarehousePanel({
    * liệu cũ trong lúc chờ.
    */
   active: boolean;
+  /** Báo tổng data trong Kho lên thẻ "Chăm sóc (N)" mỗi lần tải xong. */
+  onWarehouseTotal?: (total: number) => void;
   currentUserId: string;
   currentUserRole: AccountRole;
   isReadOnly: boolean;
@@ -295,6 +298,7 @@ export function CareWarehousePanel({
         .then((result) => {
           if (latestKeyRef.current !== key) return;
           setData(result);
+          onWarehouseTotal?.(result.stats.warehouse_total);
           // Bỏ chọn những data không còn trên trang (vd vừa được giao/rời Kho).
           setSelected((prev) => {
             const visible = new Set(result.items.map((i) => i.id));
@@ -309,7 +313,7 @@ export function CareWarehousePanel({
           if (latestKeyRef.current === key) setLoadedKey(key);
         });
     },
-    [toast],
+    [toast, onWarehouseTotal],
   );
 
   // Đang ẩn (tải ngầm) thì không báo lỗi — tránh hiện thông báo lỗi Kho khi

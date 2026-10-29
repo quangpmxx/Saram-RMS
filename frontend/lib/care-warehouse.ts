@@ -47,6 +47,8 @@ export interface CareWarehouseStats {
   care_turns_total: number;
   mine_assigned: number;
   mine_pending: number;
+  /** Tổng data trong Kho trong phạm vi xem, không tính ô tìm kiếm. */
+  warehouse_total: number;
   /** Được giao / Đã xử lý / Chưa xử lý theo khoảng ngày đã chọn (Sale: của chính mình). */
   range: {
     from: string | null;
