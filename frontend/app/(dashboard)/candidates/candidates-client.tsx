@@ -1,7 +1,8 @@
 "use client";
 
 import { formatDMY } from "@/lib/date-format";
-import { useEffect, useRef, useState } from "react";
+import { DaySeparatorRow } from "@/components/day-separator-row";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -976,10 +977,13 @@ export function CandidatesClient({
                 const uploadedAt = formatUploadedAt(candidate.uploaded_at);
                 const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
                 const candidateNotes = notesByLeadId.get(candidate.id);
+                // Sang ngày mới (theo cột Ngày) → dải xanh đậm ngăn cách.
+                const isNewDay = index > 0 && formatUploadedAt(candidates[index - 1].uploaded_at).date !== uploadedAt.date;
 
                 return (
+                  <Fragment key={candidate.id}>
+                  {isNewDay && <DaySeparatorRow colSpan={viewMode === "pending" && canAssign ? 10 : 9} />}
                   <tr
-                    key={candidate.id}
                     // UI Polish — h-28 (thay vì h-24): với tên/địa chỉ đã cố định 1 dòng ở
                     // trên, 96px hơi thiếu 1 chút khiến vài hàng vẫn bị đẩy cao hơn — 112px
                     // đủ chỗ cho đúng 4 dòng cố định (tên + SĐT + năm sinh + địa chỉ), mọi
@@ -1268,6 +1272,7 @@ export function CandidatesClient({
                       </div>
                     </td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

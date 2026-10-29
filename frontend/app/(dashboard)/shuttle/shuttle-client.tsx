@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
+import { DaySeparatorRow } from "@/components/day-separator-row";
 import { cn } from "@/lib/cn";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import type {
@@ -1553,12 +1554,15 @@ export function ShuttleClient({
               </tr>
 
               {/* Mọi dòng dữ liệu đã có đều ở dạng nhập được ngay — không cần bấm "Sửa". */}
-              {records.map((record) => {
+              {records.map((record, index) => {
                 const value = rowDrafts[record.id] ?? formValueFromRecord(record);
                 const hasConflict = conflictRowIds.has(record.id);
+                // Sang ngày mới → dải xanh đậm ngăn cách (không chèn giữa dòng nháp và dòng đầu).
+                const isNewDay = index > 0 && records[index - 1].date !== record.date;
                 return (
+                  <Fragment key={record.id}>
+                  {isNewDay && <DaySeparatorRow colSpan={14} />}
                   <tr
-                    key={record.id}
                     className={cn(
                       "align-top transition-colors hover:bg-slate-50",
                       hasConflict && "bg-amber-50 hover:bg-amber-100",
@@ -1603,6 +1607,7 @@ export function ShuttleClient({
                       </div>
                     </td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>
