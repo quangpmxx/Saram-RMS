@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
+// Giao diện Tối (html.dark) — tự sinh, xem scripts/generate-dark-theme.mjs. Nạp
+// riêng ở đây vì @import trong globals.css không được Turbopack (next dev) nạp.
+import "./dark-theme.css";
 
 const beVietnamPro = Be_Vietnam_Pro({
   variable: "--font-be-vietnam-pro",

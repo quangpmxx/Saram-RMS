@@ -1,6 +1,4 @@
 @import "tailwindcss";
-/* Giao diện Tối (html.dark) — tự sinh, xem scripts/generate-dark-theme.mjs. */
-@import "./dark-theme.css";
 
 :root {
   --background: #f4f7fb;
