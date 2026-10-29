@@ -209,6 +209,29 @@ function sameFormValue(a: ShuttleFormValue, b: ShuttleFormValue): boolean {
 }
 
 /**
+ * Gộp bản cập nhật realtime vào dòng đang hiển thị theo TỪNG Ô (yêu cầu
+ * người dùng 2026-10-29: sửa xong tự cập nhật, không phải bấm "Tải lại").
+ * - Ô mình không sửa (draft = base) → lấy giá trị mới.
+ * - Ô mình đã sửa và giá trị mới trùng (chính mình vừa lưu) → xong.
+ * - Ô mình đang sửa, người khác không đụng (remote = base) → giữ chữ đang gõ.
+ * - Chỉ khi người khác đổi ĐÚNG ô mình đang gõ sang giá trị khác → xung đột.
+ */
+function mergeRemoteFormValue(
+  draft: ShuttleFormValue,
+  base: ShuttleFormValue,
+  remote: ShuttleFormValue,
+): { value: ShuttleFormValue; conflict: boolean } {
+  const value = { ...remote };
+  let conflict = false;
+  for (const key of Object.keys(remote) as Array<keyof ShuttleFormValue>) {
+    if (draft[key] === base[key] || draft[key] === remote[key]) continue;
+    (value as Record<keyof ShuttleFormValue, unknown>)[key] = draft[key];
+    if (remote[key] !== base[key]) conflict = true;
+  }
+  return { value, conflict };
+}
+
+/**
  * Dự án phụ — nâng cấp toàn diện: ô "chọn" (không gõ tay trực tiếp) — bấm mở
  * trình đơn thả xuống liệt kê các giá trị đã có (dạng chip màu), có nút
  * "Chỉnh sửa" ở cuối mở popup quản lý danh sách (ShuttleOptionManagerModal)
@@ -1125,13 +1148,19 @@ export function ShuttleClient({
     const existing = records.find((r) => r.id === updated.id);
     if (existing) {
       setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      const remote = formValueFromRecord(updated);
       const localDraft = rowDrafts[updated.id];
-      const isDirty = localDraft ? !sameFormValue(localDraft, formValueFromRecord(existing)) : false;
-      if (isDirty) {
-        setConflictRowIds((prev) => new Set(prev).add(updated.id));
-      } else {
-        setRowDrafts((prev) => ({ ...prev, [updated.id]: formValueFromRecord(updated) }));
-      }
+      const { value, conflict } = localDraft
+        ? mergeRemoteFormValue(localDraft, formValueFromRecord(existing), remote)
+        : { value: remote, conflict: false };
+      setRowDrafts((prev) => ({ ...prev, [updated.id]: value }));
+      setConflictRowIds((prev) => {
+        if (conflict === prev.has(updated.id)) return prev;
+        const next = new Set(prev);
+        if (conflict) next.add(updated.id);
+        else next.delete(updated.id);
+        return next;
+      });
       return;
     }
 
