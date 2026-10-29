@@ -102,10 +102,14 @@ describe('NotificationScannerService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             isCompleted: false,
-            scheduledAt: expect.objectContaining({
-              lte: expect.any(Date),
-              gte: expect.any(Date),
-            }),
+            deletedAt: null,
+            OR: [
+              {
+                repeatDaily: false,
+                scheduledAt: { lte: expect.any(Date), gte: expect.any(Date) },
+              },
+              { repeatDaily: true, scheduledAt: { lte: expect.any(Date) } },
+            ],
           }),
         }),
       );
@@ -126,6 +130,61 @@ describe('NotificationScannerService', () => {
         },
       ]);
       prisma.notification.findFirst.mockResolvedValueOnce({ id: 'existing' });
+
+      const sent = await service.runInAppCallbackTick();
+
+      expect(sent).toBe(0);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('lịch "Mỗi ngày" bắt đầu từ 3 ngày trước: nhắc theo lần hôm nay (cùng giờ), chống trùng theo mốc đó', async () => {
+      const DAY = 24 * 60 * 60 * 1000;
+      const todayAt = new Date(Date.now() - 10 * 60 * 1000);
+      const start = new Date(todayAt.getTime() - 3 * DAY);
+      prisma.callbackSchedule.findMany.mockResolvedValue([
+        {
+          id: 'cb-daily',
+          scheduledAt: start,
+          repeatDaily: true,
+          lead: {
+            id: 'lead-9',
+            fullName: 'Lặp Hằng Ngày',
+            phoneNumber: '0901000009',
+            assignedToId: 'sale-9',
+          },
+        },
+      ]);
+
+      const sent = await service.runInAppCallbackTick();
+
+      expect(sent).toBe(1);
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({ scheduledAt: todayAt }),
+      });
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          accountId: 'sale-9',
+          scheduledAt: todayAt,
+        }),
+      });
+    });
+
+    it('lịch "Mỗi ngày" mà lần hôm nay đã quá 1 giờ — không nhắc bù', async () => {
+      const DAY = 24 * 60 * 60 * 1000;
+      const start = new Date(Date.now() - 2 * DAY - 3 * 60 * 60 * 1000);
+      prisma.callbackSchedule.findMany.mockResolvedValue([
+        {
+          id: 'cb-daily-late',
+          scheduledAt: start,
+          repeatDaily: true,
+          lead: {
+            id: 'lead-10',
+            fullName: 'Trễ',
+            phoneNumber: '0901000010',
+            assignedToId: 'sale-10',
+          },
+        },
+      ]);
 
       const sent = await service.runInAppCallbackTick();
 

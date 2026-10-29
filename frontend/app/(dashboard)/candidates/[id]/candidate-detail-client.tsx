@@ -12,6 +12,7 @@ import {
   PauseCircle,
   Pencil,
   PlayCircle,
+  Plus,
   Phone,
   Save,
   Trash2,
@@ -32,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { PageHeader } from "@/components/ui/page-header";
@@ -1096,9 +1097,9 @@ export function CandidateDetailClient({
           <ScheduleCallbackModal
             candidateId={candidate.id}
             onClose={() => setIsCallbackModalOpen(false)}
-            onCreated={() => {
+            onCreated={(count) => {
               setIsCallbackModalOpen(false);
-              toast.success("Đã đặt lịch gọi lại");
+              toast.success(count > 1 ? `Đã đặt ${count} lịch gọi lại` : "Đã đặt lịch gọi lại");
             }}
           />
         )}
@@ -1111,6 +1112,18 @@ export function CandidateDetailClient({
   );
 }
 
+type CallbackRepeat = "once" | "daily";
+interface CallbackRow {
+  key: number;
+  scheduledAt: string;
+  repeat: CallbackRepeat;
+}
+
+/**
+ * Đặt lịch gọi lại — nhiều lịch cùng lúc (nút "+") và lựa chọn "Một lần" /
+ * "Mỗi ngày" cho từng lịch (yêu cầu người dùng 2026-10-29). "Mỗi ngày" = lặp
+ * cùng giờ hằng ngày bắt đầu từ thời điểm chọn, tới khi xoá ở Lịch hẹn.
+ */
 function ScheduleCallbackModal({
   candidateId,
   onClose,
@@ -1118,27 +1131,44 @@ function ScheduleCallbackModal({
 }: {
   candidateId: string;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (count: number) => void;
 }) {
-  const [scheduledAt, setScheduledAt] = useState("");
+  const nextKey = useRef(1);
+  const [rows, setRows] = useState<CallbackRow[]>([{ key: 0, scheduledAt: "", repeat: "once" }]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  function updateRow(key: number, patch: Partial<CallbackRow>) {
+    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    setError(null);
+  }
+
+  function addRow() {
+    setRows((prev) => [...prev, { key: nextKey.current++, scheduledAt: "", repeat: "once" }]);
+  }
+
   async function handleSubmit() {
-    if (!scheduledAt) {
-      setError("Vui lòng chọn thời điểm cần gọi lại");
+    if (rows.some((row) => !row.scheduledAt)) {
+      setError("Vui lòng chọn thời điểm cần gọi lại cho tất cả các lịch");
       return;
     }
     setError(null);
     setIsSubmitting(true);
+    let created = 0;
     try {
-      await clientApi(`/candidate/${candidateId}/callback`, {
-        method: "POST",
-        body: JSON.stringify({ scheduled_at: new Date(scheduledAt).toISOString() }),
-      });
-      onCreated();
+      // Tạo lần lượt — lỗi ở lịch nào thì dừng và giữ lại các lịch chưa tạo.
+      for (const row of rows) {
+        await clientApi(`/candidate/${candidateId}/callback`, {
+          method: "POST",
+          body: JSON.stringify({ scheduled_at: new Date(row.scheduledAt).toISOString(), repeat: row.repeat }),
+        });
+        created++;
+      }
+      onCreated(created);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
+      setRows((prev) => prev.slice(created));
+      const reason = err instanceof ApiError ? err.message : "Có lỗi xảy ra";
+      setError(created > 0 ? `Đã đặt ${created} lịch, các lịch còn lại chưa đặt được: ${reason}` : reason);
     } finally {
       setIsSubmitting(false);
     }
@@ -1154,20 +1184,55 @@ function ScheduleCallbackModal({
             Hủy
           </Button>
           <Button type="button" disabled={isSubmitting} onClick={() => void handleSubmit()}>
-            {isSubmitting ? "Đang lưu..." : "Đặt lịch"}
+            {isSubmitting ? "Đang lưu..." : rows.length > 1 ? `Đặt ${rows.length} lịch` : "Đặt lịch"}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Thời điểm cần gọi lại">
-          <Input
-            type="datetime-local"
-            value={scheduledAt}
-            onChange={(event) => setScheduledAt(event.target.value)}
-            autoFocus
-          />
-        </Field>
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-slate-700">Thời điểm cần gọi lại</span>
+          {rows.map((row, index) => (
+            <div key={row.key} className="flex items-center gap-2">
+              <Input
+                type="datetime-local"
+                aria-label={`Thời điểm gọi lại ${index + 1}`}
+                value={row.scheduledAt}
+                onChange={(event) => updateRow(row.key, { scheduledAt: event.target.value })}
+                autoFocus={index === 0}
+                className="min-w-0 flex-1"
+              />
+              <Select
+                aria-label={`Lặp lại ${index + 1}`}
+                value={row.repeat}
+                onChange={(event) => updateRow(row.key, { repeat: event.target.value as CallbackRepeat })}
+                className="w-32! shrink-0"
+              >
+                <option value="once">Một lần</option>
+                <option value="daily">Mỗi ngày</option>
+              </Select>
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  title="Bỏ lịch này"
+                  aria-label={`Bỏ lịch ${index + 1}`}
+                  onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                  className="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                  <X className="h-4 w-4" strokeWidth={2} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addRow}
+            className="flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Thêm lịch
+          </button>
+        </div>
 
         {error && (
           <p role="alert" className="text-sm text-red-600">

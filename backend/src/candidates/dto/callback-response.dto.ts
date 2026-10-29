@@ -7,6 +7,8 @@ export interface CallbackResponseDto {
   lead_id: string;
   scheduled_at: string;
   is_completed: boolean;
+  /** true = lặp mỗi ngày cùng giờ. */
+  repeat_daily: boolean;
   created_by: NamedRefWithRole;
   created_at: string;
 }
@@ -23,6 +25,7 @@ export function toCallbackResponse(
     lead_id: callback.leadId,
     scheduled_at: callback.scheduledAt.toISOString(),
     is_completed: callback.isCompleted,
+    repeat_daily: callback.repeatDaily,
     created_by: {
       id: callback.createdBy.id,
       name: callback.createdBy.fullName,

@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { toNotificationResponse } from './dto/notification-response.dto';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Yêu cầu trực tiếp người dùng (2026-07-24): đã gỡ bỏ hẳn worker nhắc lịch
  * qua Zalo (Phase 8, dùng tham số cấu hình NOTIFICATION_LEAD_MINUTES) —
@@ -56,7 +58,13 @@ export class NotificationScannerService {
       where: {
         isCompleted: false,
         deletedAt: null,
-        scheduledAt: { lte: now, gte: graceWindowStart },
+        OR: [
+          {
+            repeatDaily: false,
+            scheduledAt: { lte: now, gte: graceWindowStart },
+          },
+          { repeatDaily: true, scheduledAt: { lte: now } },
+        ],
         lead: { deletedAt: null, assignedToId: { not: null } },
       },
       include: {
@@ -74,13 +82,25 @@ export class NotificationScannerService {
     let sentCount = 0;
     for (const callback of dueCallbacks) {
       if (!callback.lead.assignedToId) continue;
+      // Lịch "Mỗi ngày": lần gần nhất đã tới giờ (cùng giờ mỗi ngày); dedupe
+      // theo đúng mốc lần đó nên mỗi ngày nhắc đúng 1 lần.
+      const dueAt = callback.repeatDaily
+        ? new Date(
+            callback.scheduledAt.getTime() +
+              Math.floor(
+                (now.getTime() - callback.scheduledAt.getTime()) / DAY_MS,
+              ) *
+                DAY_MS,
+          )
+        : callback.scheduledAt;
+      if (dueAt < graceWindowStart) continue;
 
       const existing = await this.prisma.notification.findFirst({
         where: {
           leadId: callback.lead.id,
           type: 'callback_reminder',
           channel: 'in_app',
-          scheduledAt: callback.scheduledAt,
+          scheduledAt: dueAt,
         },
       });
       if (existing) continue;
@@ -94,9 +114,9 @@ export class NotificationScannerService {
           content: this.buildInAppCallbackMessage(
             callback.lead.fullName,
             callback.lead.phoneNumber,
-            callback.scheduledAt,
+            dueAt,
           ),
-          scheduledAt: callback.scheduledAt,
+          scheduledAt: dueAt,
           sentAt: new Date(),
           status: 'sent',
         },

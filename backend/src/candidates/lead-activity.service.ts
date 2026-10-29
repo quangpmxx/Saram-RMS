@@ -382,7 +382,8 @@ export function describeLog(
   if (log.entityType === 'callback_schedule') {
     if (actionType === 'create') {
       const at = /scheduled_at=(\S+)/.exec(newValue ?? '')?.[1];
-      return `đã đặt lịch gọi lại${at ? ` lúc ${formatVnDateTime(at)}` : ''}`;
+      const daily = /repeat=daily/.test(newValue ?? '');
+      return `đã đặt lịch gọi lại${at ? ` lúc ${formatVnDateTime(at)}` : ''}${daily ? ' (lặp mỗi ngày)' : ''}`;
     }
     if (actionType === 'delete') {
       const at = /scheduled_at=(\S+)/.exec(oldValue ?? '')?.[1];

@@ -15,6 +15,35 @@ export interface CalendarEventDto {
    * Note/Interview/Callback (dùng chung NameWithRoleHint ở frontend).
    */
   created_by: { id: string; name: string; role: string };
+  /** Lịch gọi lại lặp mỗi ngày — mỗi ngày là 1 dòng, cùng id (xoá = xoá cả chuỗi). */
+  repeat_daily: boolean;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Chặn trải quá nhiều ngày khi xem khoảng rất dài. */
+const MAX_DAILY_OCCURRENCES = 400;
+
+/**
+ * Các lần của 1 lịch "Mỗi ngày" rơi trong [from, to] — cùng giờ mỗi ngày
+ * (giờ Việt Nam không đổi giờ mùa hè nên cộng đúng 24h).
+ */
+export function dailyOccurrences(
+  start: Date,
+  from: Date | undefined,
+  to: Date | undefined,
+): Date[] {
+  const first =
+    from && from > start
+      ? Math.ceil((from.getTime() - start.getTime()) / DAY_MS)
+      : 0;
+  const result: Date[] = [];
+  for (let k = first; result.length < MAX_DAILY_OCCURRENCES; k++) {
+    const at = new Date(start.getTime() + k * DAY_MS);
+    if (to && at > to) break;
+    result.push(at);
+    if (!to && result.length >= 31) break;
+  }
+  return result;
 }
 
 /** Mục 2.6 & 8, docs/09: Admin/Quản lý/MKT xem toàn bộ, không giới hạn nhóm. */
@@ -62,10 +91,19 @@ export class CalendarService {
       }),
       this.prisma.callbackSchedule.findMany({
         where: {
-          scheduledAt,
           deletedAt: null,
           lead: leadWhere,
           ...createdByWhere,
+          OR: [
+            { repeatDaily: false, scheduledAt },
+            {
+              repeatDaily: true,
+              isCompleted: false,
+              ...(scheduledAt.lte
+                ? { scheduledAt: { lte: scheduledAt.lte } }
+                : {}),
+            },
+          ],
         },
         include: {
           lead: { select: { id: true, fullName: true, phoneNumber: true } },
@@ -91,24 +129,35 @@ export class CalendarService {
               name: interview.createdBy.fullName,
               role: interview.createdBy.role,
             },
+            repeat_daily: false,
           }))),
       ...(query.type === 'interview'
         ? []
-        : callbacks.map((callback) => ({
-            type: 'callback' as const,
-            id: callback.id,
-            scheduled_at: callback.scheduledAt.toISOString(),
-            candidate: {
-              id: callback.lead.id,
-              full_name: callback.lead.fullName,
-              phone_number: callback.lead.phoneNumber,
-            },
-            created_by: {
-              id: callback.createdBy.id,
-              name: callback.createdBy.fullName,
-              role: callback.createdBy.role,
-            },
-          }))),
+        : callbacks.flatMap((callback) =>
+            (callback.repeatDaily
+              ? dailyOccurrences(
+                  callback.scheduledAt,
+                  scheduledAt.gte,
+                  scheduledAt.lte,
+                )
+              : [callback.scheduledAt]
+            ).map((at) => ({
+              type: 'callback' as const,
+              id: callback.id,
+              scheduled_at: at.toISOString(),
+              candidate: {
+                id: callback.lead.id,
+                full_name: callback.lead.fullName,
+                phone_number: callback.lead.phoneNumber,
+              },
+              created_by: {
+                id: callback.createdBy.id,
+                name: callback.createdBy.fullName,
+                role: callback.createdBy.role,
+              },
+              repeat_daily: callback.repeatDaily,
+            })),
+          )),
     ];
 
     return events.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));

@@ -392,6 +392,8 @@ export interface Callback {
   lead_id: string;
   scheduled_at: string;
   is_completed: boolean;
+  /** true = lặp mỗi ngày cùng giờ (2026-10-29). */
+  repeat_daily: boolean;
   created_by: NamedRefWithRole;
   created_at: string;
 }
@@ -404,6 +406,8 @@ export interface CalendarEvent {
   candidate: { id: string; full_name: string; phone_number: string };
   /** Dự án phụ — nâng cấp toàn diện: Sale nào đặt lịch hẹn này — yêu cầu trực tiếp người dùng (2026-07-14). */
   created_by: NamedRefWithRole;
+  /** Lịch gọi lại lặp mỗi ngày — mỗi ngày 1 dòng, cùng id (xoá = xoá cả chuỗi). */
+  repeat_daily: boolean;
 }
 
 // ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────

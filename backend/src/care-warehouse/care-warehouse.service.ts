@@ -142,7 +142,11 @@ export class CareWarehouseService {
         none: {
           deletedAt: null,
           isCompleted: false,
-          scheduledAt: { gte: today.start, lt: today.end },
+          OR: [
+            { scheduledAt: { gte: today.start, lt: today.end } },
+            // Lịch "Mỗi ngày" đã bắt đầu = hôm nay cũng có lịch gọi lại.
+            { repeatDaily: true, scheduledAt: { lt: today.end } },
+          ],
         },
       },
     };

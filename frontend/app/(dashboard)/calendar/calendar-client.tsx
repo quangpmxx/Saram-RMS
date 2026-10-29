@@ -117,11 +117,10 @@ export function CalendarClient({
 
   async function handleDelete(event: CalendarEvent) {
     const label = event.type === "interview" ? "lịch hẹn phỏng vấn" : "lịch gọi lại";
-    if (
-      !window.confirm(
-        `Xoá ${label} của ${event.candidate.full_name} lúc ${formatDateTime(event.scheduled_at)}?`,
-      )
-    ) {
+    const question = event.repeat_daily
+      ? `Xoá lịch gọi lại MỖI NGÀY của ${event.candidate.full_name}? Tất cả các ngày của lịch này sẽ bị xoá.`
+      : `Xoá ${label} của ${event.candidate.full_name} lúc ${formatDateTime(event.scheduled_at)}?`;
+    if (!window.confirm(question)) {
       return;
     }
     const key = `${event.type}-${event.id}`;
@@ -196,7 +195,7 @@ export function CalendarClient({
               </div>
               <ul className="divide-y divide-slate-100">
                 {group.events.map((event) => (
-                  <li key={`${event.type}-${event.id}`} className="flex items-center transition-colors hover:bg-slate-50">
+                  <li key={`${event.type}-${event.id}-${event.scheduled_at}`} className="flex items-center transition-colors hover:bg-slate-50">
                     <Link
                       href={`/candidates/${event.candidate.id}`}
                       className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 p-4"
@@ -205,6 +204,7 @@ export function CalendarClient({
                         <Badge variant={event.type === "interview" ? "info" : "accent"}>
                           {event.type === "interview" ? "Phỏng vấn" : "Gọi lại"}
                         </Badge>
+                        {event.repeat_daily && <Badge variant="neutral">Mỗi ngày</Badge>}
                         <div>
                           <p className="text-sm font-medium text-slate-800">{event.candidate.full_name}</p>
                           <p className="text-xs text-slate-500">{event.candidate.phone_number}</p>

@@ -612,6 +612,7 @@ export class LeadPipelineService {
       data: {
         leadId: id,
         scheduledAt: new Date(dto.scheduled_at),
+        repeatDaily: dto.repeat === 'daily',
         createdById: currentUser.id,
       },
       include: CALLBACK_INCLUDE,
@@ -627,7 +628,7 @@ export class LeadPipelineService {
       actionType: 'create',
       entityType: 'callback_schedule',
       entityId: created.id,
-      newValue: `scheduled_at=${created.scheduledAt.toISOString()}`,
+      newValue: `scheduled_at=${created.scheduledAt.toISOString()}${created.repeatDaily ? ' repeat=daily' : ''}`,
     });
 
     this.realtime.emitCandidateChange(

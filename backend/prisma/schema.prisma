@@ -623,6 +623,8 @@ model CallbackSchedule {
   leadId      String    @map("lead_id") @db.Uuid
   scheduledAt DateTime  @map("scheduled_at")
   isCompleted Boolean   @default(false) @map("is_completed")
+  /// "Mỗi ngày" (2026-10-29): lặp lại hằng ngày cùng giờ, bắt đầu từ scheduledAt, tới khi bị xoá.
+  repeatDaily Boolean   @default(false) @map("repeat_daily")
   createdById String    @map("created_by") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at")
   /// Xoá mềm từ module Lịch hẹn (2026-10-29) — mọi truy vấn phải lọc deletedAt: null.
