@@ -909,7 +909,7 @@ function CareStatsBar({
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-1.5 font-semibold text-slate-800">
           <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
-          Kho chăm sóc
+          Tiến độ
         </span>
         <div className="w-40">
           <DateRangePicker value={statsRange} onChange={onStatsRangeChange} />
