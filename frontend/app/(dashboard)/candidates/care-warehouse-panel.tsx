@@ -30,7 +30,7 @@ import {
   type CareWarehouseItem,
   type CareWarehouseListResult,
 } from "@/lib/care-warehouse";
-import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
+import { EMPTY_DATE_RANGE, computeDateRange, toDateOnly, type DateRangeValue } from "@/lib/date-range";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { useToast } from "@/lib/toast-context";
 import { cn } from "@/lib/cn";
@@ -65,6 +65,8 @@ interface CareFilters {
   last_care: DateRangeValue;
   assigned: DateRangeValue;
   scope: "all" | "assigned";
+  /** Khoảng ngày cho thanh thống kê Được giao / Đã xử lý / Chưa xử lý. */
+  stats_range: DateRangeValue;
 }
 
 const EMPTY_FILTERS: CareFilters = {
@@ -77,6 +79,7 @@ const EMPTY_FILTERS: CareFilters = {
   last_care: EMPTY_DATE_RANGE,
   assigned: EMPTY_DATE_RANGE,
   scope: "all",
+  stats_range: { preset: "this_month", ...computeDateRange("this_month") },
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
@@ -144,6 +147,12 @@ function buildQuery(filters: CareFilters, page: number, pageSize: number): strin
   if (filters.last_care.to) q.set("last_care_to", filters.last_care.to);
   if (filters.assigned.from) q.set("assigned_from", filters.assigned.from);
   if (filters.assigned.to) q.set("assigned_to", filters.assigned.to);
+  // Preset (vd "Tháng này") tính lại mỗi lần tải để không bị cũ khi qua ngày.
+  // "Tối đa" = không có from → backend không giới hạn đầu (vẫn gửi to).
+  const range =
+    filters.stats_range.preset === "custom" ? filters.stats_range : computeDateRange(filters.stats_range.preset);
+  if (range.from) q.set("stats_from", range.from);
+  q.set("stats_to", range.to || toDateOnly(new Date()));
   return q.toString();
 }
 
@@ -260,8 +269,8 @@ export function CareWarehousePanel({
     skipUrlScopeRef.current = true;
     pendingScrollRef.current = saved.scrollTop;
     queueMicrotask(() => {
-      setFilters(saved.filters);
-      setApplied(saved.filters);
+      setFilters({ ...EMPTY_FILTERS, ...saved.filters });
+      setApplied({ ...EMPTY_FILTERS, ...saved.filters });
       setPage(saved.page);
       setPageSize(saved.pageSize);
     });
@@ -401,8 +410,8 @@ export function CareWarehousePanel({
           stats={stats}
           month={data.month}
           isSale={currentUserRole === "sale"}
-          activeStatus={applied.status}
-          onPickStatus={(status) => applyFilters({ ...filters, status })}
+          statsRange={applied.stats_range}
+          onStatsRangeChange={(stats_range) => applyFilters({ ...filters, stats_range })}
         />
       )}
 
@@ -856,88 +865,63 @@ export function CareWarehousePanel({
   );
 }
 
+/**
+ * Thanh thống kê đầu Kho (yêu cầu người dùng 2026-10-29):
+ * - Sale: Được giao / Đã xử lý / Chưa xử lý của chính mình theo khoảng ngày.
+ * - Leader/Quản lý/Admin: Tổng đã giao / Đã xử lý / Chưa xử lý theo khoảng
+ *   ngày + Đã chăm sóc / Data trong Kho (đếm theo data, reset mỗi tháng).
+ * Lọc trạng thái danh sách dùng ô "Trạng thái" ở thanh bộ lọc bên dưới.
+ */
 function CareStatsBar({
   stats,
   month,
   isSale,
-  activeStatus,
-  onPickStatus,
+  statsRange,
+  onStatsRangeChange,
 }: {
   stats: CareWarehouseListResult["stats"];
   month: string;
   isSale: boolean;
-  activeStatus: StatusFilter;
-  onPickStatus: (status: StatusFilter) => void;
+  statsRange: DateRangeValue;
+  onStatsRangeChange: (value: DateRangeValue) => void;
 }) {
   const [year, mm] = month.split("-");
-  const tiles: {
-    key: StatusFilter;
-    label: string;
-    value: number;
-    tone: string;
-  }[] = [
+  const tiles: { key: string; label: string; value: string; tone: string }[] = [
     {
-      key: "",
-      label: "Data trong Kho",
-      value: stats.total,
+      key: "assigned",
+      label: isSale ? "Được giao" : "Tổng đã giao",
+      value: String(stats.range.assigned),
       tone: "text-slate-900",
     },
-    {
-      key: "not_cared",
-      label: "Chưa chăm sóc",
-      value: stats.not_cared,
-      tone: "text-amber-700",
-    },
-    {
-      key: "cared",
-      label: "Đã chăm sóc",
-      value: stats.cared,
-      tone: "text-emerald-700",
-    },
-    {
-      key: "assigned_pending",
-      label: "Đã giao, chưa xử lý",
-      value: stats.assigned_pending,
-      tone: "text-red-700",
-    },
+    { key: "processed", label: "Đã xử lý", value: String(stats.range.processed), tone: "text-emerald-700" },
+    { key: "pending", label: "Chưa xử lý", value: String(stats.range.pending), tone: "text-red-700" },
   ];
+  if (!isSale) {
+    tiles.push({
+      key: "cared",
+      label: `Đã chăm sóc / Data trong Kho (T${Number(mm)}/${year})`,
+      value: `${stats.cared} / ${stats.total}`,
+      tone: "text-brand-700",
+    });
+  }
   return (
     <Card className="mb-2 p-2.5">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-1.5 font-semibold text-slate-800">
           <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
-          Kho chăm sóc — tháng {mm}/{year}
+          Kho chăm sóc
         </span>
+        <div className="w-40">
+          <DateRangePicker value={statsRange} onChange={onStatsRangeChange} />
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         {tiles.map((t) => (
-          <button
-            key={t.key || "all"}
-            type="button"
-            onClick={() => onPickStatus(t.key)}
-            className={cn(
-              "min-w-[120px] rounded-lg border px-3 py-1.5 text-left transition-colors",
-              activeStatus === t.key ? "border-brand-500 bg-brand-50" : "border-slate-200 bg-white hover:bg-slate-50",
-            )}
-          >
+          <div key={t.key} className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5">
             <p className="text-[11px] text-slate-500">{t.label}</p>
             <p className={cn("text-lg font-bold tabular-nums", t.tone)}>{t.value}</p>
-          </button>
-        ))}
-        <div className="min-w-[150px] rounded-lg border border-dashed border-slate-300 px-3 py-1.5">
-          <p className="text-[11px] text-slate-500">Lượt chăm sóc tháng / tổng</p>
-          <p className="text-lg font-bold text-slate-900 tabular-nums">
-            {stats.care_turns_month} / {stats.care_turns_total}
-          </p>
-        </div>
-        {isSale && (
-          <div className="min-w-[150px] rounded-lg border border-dashed border-brand-300 px-3 py-1.5">
-            <p className="text-[11px] text-slate-500">Bạn đang được giao / chưa xử lý</p>
-            <p className="text-lg font-bold text-brand-700 tabular-nums">
-              {stats.mine_assigned} / {stats.mine_pending}
-            </p>
           </div>
-        )}
+        ))}
       </div>
     </Card>
   );

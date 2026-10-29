@@ -2,6 +2,7 @@ import {
   AssignmentRow,
   NoteIndex,
   NoteRow,
+  computeAssignmentRange,
   computeSaleDaily,
   computeSaleMonthly,
   isAssignmentAliveAt,
@@ -209,6 +210,46 @@ describe('computeSaleDaily', () => {
       vn('2026-11-02 10:00'),
     );
     expect(m1.backlog.start).toBe(0);
+  });
+});
+
+describe('computeAssignmentRange — thống kê đầu Kho theo khoảng ngày', () => {
+  const from = vn('2026-10-10 00:00');
+  const to = vn('2026-10-21 00:00');
+  const now = vn('2026-10-29 12:00');
+
+  it('đếm data giao trong khoảng, đã xử lý = Sale được giao đã ghi chú', () => {
+    const assignments = [
+      asg('L1', SALE_A, '2026-10-12 09:00'),
+      asg('L2', SALE_A, '2026-10-15 09:00'),
+      asg('L3', SALE_B, '2026-10-20 09:00'),
+      asg('L4', SALE_A, '2026-10-05 09:00'), // trước khoảng
+      asg('L5', SALE_A, '2026-10-22 09:00'), // sau khoảng
+    ];
+    const notes = new NoteIndex([
+      note('L1', SALE_A, '2026-10-12 10:00'),
+      note('L2', SALE_B, '2026-10-15 10:00'), // người khác ghi chú → chưa xử lý
+      note('L3', SALE_B, '2026-10-25 10:00'), // xử lý sau khoảng → chưa xử lý
+    ]);
+    expect(computeAssignmentRange(assignments, notes, from, to, now)).toEqual({
+      assigned: 3,
+      processed: 1,
+      pending: 2,
+    });
+  });
+
+  it('1 data giao 2 lần chỉ đếm 1; lượt bị thu hồi chưa xử lý không tính', () => {
+    const assignments = [
+      asg('L1', SALE_A, '2026-10-12 09:00', '2026-10-13 09:00'),
+      asg('L1', SALE_B, '2026-10-13 09:00'),
+      asg('L2', SALE_A, '2026-10-14 09:00', '2026-10-15 09:00'),
+    ];
+    const notes = new NoteIndex([note('L1', SALE_B, '2026-10-14 09:00')]);
+    expect(computeAssignmentRange(assignments, notes, from, to, now)).toEqual({
+      assigned: 1,
+      processed: 1,
+      pending: 0,
+    });
   });
 });
 

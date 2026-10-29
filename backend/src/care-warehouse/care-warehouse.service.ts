@@ -23,6 +23,7 @@ import {
   LeadMonthSummary,
   NoteIndex,
   assignmentProcessedAt,
+  computeAssignmentRange,
   computeSaleDaily,
   computeSaleMonthly,
   pickRandomAssignments,
@@ -235,6 +236,7 @@ export class CareWarehouseService {
         if (!s.open_assignment.processed) stats.mine_pending++;
       }
     }
+    const range = await this.assignmentRangeStats(query, user, teamId, now);
 
     const lastCareFrom = query.last_care_from
       ? vnDayRange(query.last_care_from).start
@@ -310,8 +312,69 @@ export class CareWarehouseService {
       page: query.page,
       page_size: query.page_size,
       month: vnMonthKey(now),
-      stats,
+      stats: { ...stats, range },
       items,
+    };
+  }
+
+  /**
+   * Được giao / Đã xử lý / Chưa xử lý theo khoảng ngày (mặc định tháng này)
+   * cho thanh thống kê đầu Kho. Sale chỉ tính lượt giao của chính mình;
+   * Leader/Quản lý/Admin/MKT tính cả phạm vi nhóm đang xem. Không phụ thuộc
+   * điều kiện "đang trong Kho" — data đã rời Kho sau khi xử lý vẫn được đếm.
+   */
+  private async assignmentRangeStats(
+    query: ListCareWarehouseQueryDto,
+    user: AuthenticatedUser,
+    teamId: string | null,
+    now: Date,
+  ) {
+    const from = query.stats_from
+      ? vnDayRange(query.stats_from).start
+      : query.stats_to
+        ? null
+        : vnMonthStart(now);
+    const to = query.stats_to ? vnDayRange(query.stats_to).end : now;
+    const leadWhere: Prisma.LeadWhereInput = {
+      deletedAt: null,
+      ...(teamId ? { assignedTeamId: teamId } : {}),
+    };
+    const assignmentWhere: Prisma.CareAssignmentWhereInput = {
+      assignedAt: { ...(from ? { gte: from } : {}), lt: to },
+      ...(user.role === 'sale' ? { assigneeId: user.id } : {}),
+    };
+    const assignments = await this.prisma.careAssignment.findMany({
+      where: { ...assignmentWhere, lead: leadWhere },
+      select: {
+        id: true,
+        leadId: true,
+        assigneeId: true,
+        assignedAt: true,
+        endedAt: true,
+      },
+    });
+    // Lọc theo quan hệ thay vì danh sách id — tránh giới hạn tham số Postgres.
+    const notes = assignments.length
+      ? await this.prisma.leadNote.findMany({
+          where: {
+            isDeleted: false,
+            ...(from ? { createdAt: { gte: from } } : {}),
+            lead: { ...leadWhere, careAssignments: { some: assignmentWhere } },
+          },
+          select: { leadId: true, createdById: true, createdAt: true },
+        })
+      : [];
+    const metrics = computeAssignmentRange(
+      assignments,
+      new NoteIndex(notes),
+      from ?? new Date(0),
+      to,
+      now,
+    );
+    return {
+      from: from ? vnDateOnly(from) : null,
+      to: vnDateOnly(new Date(to.getTime() - 1)),
+      ...metrics,
     };
   }
 

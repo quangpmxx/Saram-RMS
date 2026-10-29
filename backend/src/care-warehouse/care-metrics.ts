@@ -249,6 +249,45 @@ export function computeSaleMonthly(
   };
 }
 
+export interface AssignmentRangeMetrics {
+  /** Số data được giao trong khoảng (đếm theo data, không theo lượt giao). */
+  assigned: number;
+  /** Số data trong đó đã được Sale được giao ghi chú. */
+  processed: number;
+  /** assigned - processed. */
+  pending: number;
+}
+
+/**
+ * Thống kê đầu Kho chăm sóc theo khoảng ngày [from, to) (yêu cầu người dùng
+ * 2026-10-29): data được giao trong khoảng, đã/chưa xử lý tính tới
+ * min(now, to). Cùng quy tắc isCounted với chỉ số ngày — lượt bị thu hồi/
+ * giao lại mà chưa xử lý thì không tính.
+ */
+export function computeAssignmentRange(
+  assignments: AssignmentRow[],
+  notes: NoteIndex,
+  from: Date,
+  to: Date,
+  now: Date,
+): AssignmentRangeMetrics {
+  const cutoff = now < to ? now : to;
+  const assigned = new Set<string>();
+  const processed = new Set<string>();
+  for (const a of assignments) {
+    if (a.assignedAt < from || a.assignedAt >= cutoff) continue;
+    const p = assignmentProcessedAt(a, notes);
+    if (!isCounted(a, p, cutoff)) continue;
+    assigned.add(a.leadId);
+    if (p !== null && p < cutoff) processed.add(a.leadId);
+  }
+  return {
+    assigned: assigned.size,
+    processed: processed.size,
+    pending: assigned.size - processed.size,
+  };
+}
+
 export type MonthCareStatus = 'cared' | 'not_cared';
 
 export interface LeadMonthSummary {

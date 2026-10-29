@@ -67,6 +67,15 @@ export class ListCareWarehouseQueryDto {
   @Matches(DATE_ONLY)
   last_care_to?: string;
 
+  /** Khoảng ngày cho thống kê Được giao / Đã xử lý / Chưa xử lý ở đầu Kho. Bỏ trống from = không giới hạn đầu. */
+  @IsOptional()
+  @Matches(DATE_ONLY)
+  stats_from?: string;
+
+  @IsOptional()
+  @Matches(DATE_ONLY)
+  stats_to?: string;
+
   /** Lọc theo ngày phân công gần nhất. */
   @IsOptional()
   @Matches(DATE_ONLY)

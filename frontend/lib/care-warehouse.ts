@@ -47,6 +47,14 @@ export interface CareWarehouseStats {
   care_turns_total: number;
   mine_assigned: number;
   mine_pending: number;
+  /** Được giao / Đã xử lý / Chưa xử lý theo khoảng ngày đã chọn (Sale: của chính mình). */
+  range: {
+    from: string | null;
+    to: string;
+    assigned: number;
+    processed: number;
+    pending: number;
+  };
 }
 
 export interface CareWarehouseListResult {
