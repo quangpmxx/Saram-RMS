@@ -412,7 +412,6 @@ export function CareWarehousePanel({
       {stats && (
         <CareStatsBar
           stats={stats}
-          month={data.month}
           isSale={currentUserRole === "sale"}
           statsRange={applied.stats_range}
           onStatsRangeChange={(stats_range) => applyFilters({ ...filters, stats_range })}
@@ -878,18 +877,15 @@ export function CareWarehousePanel({
  */
 function CareStatsBar({
   stats,
-  month,
   isSale,
   statsRange,
   onStatsRangeChange,
 }: {
   stats: CareWarehouseListResult["stats"];
-  month: string;
   isSale: boolean;
   statsRange: DateRangeValue;
   onStatsRangeChange: (value: DateRangeValue) => void;
 }) {
-  const [year, mm] = month.split("-");
   const tiles: { key: string; label: string; value: string; tone: string }[] = [
     {
       key: "assigned",
@@ -903,7 +899,7 @@ function CareStatsBar({
   if (!isSale) {
     tiles.push({
       key: "cared",
-      label: `Đã chăm sóc / Data trong Kho (T${Number(mm)}/${year})`,
+      label: "Đã CS/Data",
       value: `${stats.cared} / ${stats.total}`,
       tone: "text-brand-700",
     });
