@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDMYHM } from "@/lib/date-format";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -22,7 +23,6 @@ import {
   CARE_METHOD_LABEL,
   CARE_PRIORITY_LABEL,
   CARE_RELEVANT_CHANGES,
-  formatCareDateTime,
   type CareAccountRef,
   type CareAssignResult,
   type CareBatch,
@@ -1374,7 +1374,7 @@ function BatchHistoryModal({ teamId, onClose }: { teamId: string; onClose: () =>
                   className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
                 >
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-800">{formatCareDateTime(batch.created_at)}</span>
+                    <span className="font-medium text-slate-800">{formatDMYHM(batch.created_at)}</span>
                     <Badge variant="info">{CARE_METHOD_LABEL[batch.method]}</Badge>
                     <span className="text-slate-500">
                       bởi <NameWithRoleHint account={batch.created_by} />
@@ -1398,7 +1398,7 @@ function BatchHistoryModal({ teamId, onClose }: { teamId: string; onClose: () =>
                           <td className="px-3 py-1">{a.assignee.name}</td>
                           <td className="px-3 py-1 text-slate-500">
                             {a.end_reason
-                              ? `${CARE_END_REASON_LABEL[a.end_reason]} ${formatCareDateTime(a.ended_at)}${
+                              ? `${CARE_END_REASON_LABEL[a.end_reason]} ${formatDMYHM(a.ended_at)}${
                                   a.ended_by ? ` (${a.ended_by.name})` : ""
                                 }`
                               : isSameVnMonth(a.assigned_at)

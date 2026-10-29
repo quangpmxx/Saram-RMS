@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDMY } from "@/lib/date-format";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -131,8 +132,7 @@ interface SavedListState {
 function formatUploadedAt(value: string): { date: string; time: string } {
   const parsed = new Date(value);
   return {
-    // dd/mm/yy (yêu cầu người dùng 2026-10-29).
-    date: parsed.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "2-digit" }),
+    date: formatDMY(parsed),
     time: parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
   };
 }
@@ -1397,7 +1397,7 @@ function buildCreateBanner(result: CreateCandidateResult): { type: "warning" | "
   }
   const warning: DuplicateWarning = result.duplicate_warning;
   const details = warning.matches
-    .map((match) => `- ${new Date(match.uploaded_at).toLocaleDateString("vi-VN")} bởi ${match.uploaded_by}`)
+    .map((match) => `- ${formatDMY(match.uploaded_at)} bởi ${match.uploaded_by}`)
     .join("\n");
   return {
     type: "warning",

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDMY } from "@/lib/date-format";
 import { useState } from "react";
 import type { Note } from "@/lib/types";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
@@ -16,7 +17,7 @@ const CONTENT_LINE_THRESHOLD = 3;
 function formatNoteTimestamp(value: string): string {
   const parsed = new Date(value);
   const time = parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  const date = parsed.toLocaleDateString("vi-VN");
+  const date = formatDMY(parsed);
   return `${time} ${date}`;
 }
 

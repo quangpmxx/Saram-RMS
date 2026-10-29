@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDMY } from "@/lib/date-format";
 import { useEffect, useRef, useState } from "react";
 import { clientApi } from "@/lib/api-client";
 import type { DuplicateDetail } from "@/lib/types";
@@ -98,7 +99,7 @@ export function DuplicateDetailBadge({ candidateId, className }: { candidateId: 
               {detail.matches.map((match) => (
                 <div key={match.lead_id} className="rounded-lg bg-slate-50 p-2">
                   <p className="font-medium text-slate-800">{match.full_name}</p>
-                  <p className="text-slate-500">Ngày up: {new Date(match.uploaded_at).toLocaleDateString("vi-VN")}</p>
+                  <p className="text-slate-500">Ngày up: {formatDMY(match.uploaded_at)}</p>
                   <p className="text-slate-500">
                     Sale phụ trách: {match.assigned_to?.name ?? "Chưa phân chia"}
                     {match.team_name ? ` (${match.team_name})` : ""}

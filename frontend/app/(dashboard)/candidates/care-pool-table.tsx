@@ -1,5 +1,6 @@
 "use client";
 
+import { formatHMDMY } from "@/lib/date-format";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,7 +21,7 @@ import { SourceBadge } from "./source-badge";
  * sách (không xóa ứng viên).
  */
 function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("vi-VN");
+  return formatHMDMY(value);
 }
 
 export function CarePoolTable({

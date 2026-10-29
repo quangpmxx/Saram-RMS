@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDMY, formatHMDMY } from "@/lib/date-format";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -91,7 +92,7 @@ function canEditCandidate(
 }
 
 function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("vi-VN");
+  return formatHMDMY(value);
 }
 
 
@@ -753,7 +754,7 @@ export function CandidateDetailClient({
                       <NameWithRoleHint account={candidate.care_stopped_by} />
                     </>
                   )}
-                  {` · ${new Date(candidate.care_stopped_at).toLocaleDateString("vi-VN")}`}
+                  {` · ${formatDMY(candidate.care_stopped_at)}`}
                 </Badge>
               )}
               {isStopPending && (
