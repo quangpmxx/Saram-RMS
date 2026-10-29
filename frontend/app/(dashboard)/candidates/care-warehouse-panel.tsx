@@ -648,10 +648,10 @@ export function CareWarehousePanel({
                     />
                   </th>
                 )}
-                <th className="border-r border-slate-100 px-2 py-2">Lao động</th>
-                <th className="border-r border-slate-100 px-2 py-2">Trạng thái tháng</th>
-                <th className="border-r border-slate-100 px-2 py-2">Sale được giao</th>
-                <th className="min-w-[300px] border-r border-slate-100 px-2 py-2">Nội dung ghi chú</th>
+                <th className="border-r border-slate-100 px-2 py-2 text-center">Lao động</th>
+                <th className="border-r border-slate-100 px-2 py-2 text-center">Trạng thái tháng</th>
+                <th className="border-r border-slate-100 px-2 py-2 text-center">Sale được giao</th>
+                <th className="min-w-[300px] border-r border-slate-100 px-2 py-2 text-center">Nội dung ghi chú</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lần CS tháng / tổng</th>
                 {hasActions && <th className="px-2 py-2 text-center">Hành động</th>}
               </tr>
