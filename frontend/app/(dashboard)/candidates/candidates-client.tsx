@@ -980,13 +980,15 @@ export function CandidatesClient({
                           nhãn nhỏ chéo ở góc phải trên cùng của cụm tên + SĐT (thay vì chiếm
                           chỗ ngang bên cạnh tên) — cần bọc relative đúng vùng này. */}
                       <div className="relative">
-                        <div className={cn(candidate.is_duplicate_flagged && "pr-4")}>
+                        {/* Tên to hơn 1 cỡ + căn giữa ô (yêu cầu người dùng 2026-10-29); có nhãn
+                            "Trùng" ở góc phải thì chừa đều 2 bên để tên vẫn nằm giữa. */}
+                        <div className={cn(candidate.is_duplicate_flagged && "px-4")}>
                           <Link
                             href={`/candidates/${candidate.id}`}
                             title={candidate.full_name}
                             onClick={saveListStateForReturn}
                             className={cn(
-                              "line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline",
+                              "line-clamp-2 text-center text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline",
                               candidate.is_held && "bg-orange-200",
                             )}
                           >

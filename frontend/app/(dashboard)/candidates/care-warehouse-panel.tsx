@@ -661,7 +661,8 @@ export function CareWarehousePanel({
                       <Link
                         href={`/candidates/${item.id}`}
                         onClick={saveStateForReturn}
-                        className="font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                        // Tên to hơn 1 cỡ + căn giữa ô — giống tab Tất cả (yêu cầu người dùng 2026-10-29).
+                        className="block text-center text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline"
                       >
                         {item.full_name}
                       </Link>
