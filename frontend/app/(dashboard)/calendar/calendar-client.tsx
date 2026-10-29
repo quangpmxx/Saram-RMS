@@ -151,13 +151,13 @@ export function CalendarClient({
         </Button>
       </div>
 
-      <Card className="mb-4 flex flex-wrap items-end gap-3 p-4">
-        <Field label="Khoảng thời gian" className="w-44">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
+      <Card className="mb-4 flex flex-wrap items-end gap-2 p-3">
+        <Field uiSize="xs" label="Khoảng thời gian" className="w-44">
+          <DateRangePicker value={dateRange} onChange={setDateRange} className="h-7" />
         </Field>
         {canFilterBySale && (
-          <Field label="Nhân viên" className="w-44">
-            <Select value={createdById} onChange={(event) => setCreatedById(event.target.value)}>
+          <Field uiSize="xs" label="Nhân viên" className="w-44">
+            <Select uiSize="xs" className="h-7" value={createdById} onChange={(event) => setCreatedById(event.target.value)}>
               <option value="">Tất cả nhân viên</option>
               {saleMembers.map((member) => (
                 <option key={member.id} value={member.id}>
@@ -167,15 +167,15 @@ export function CalendarClient({
             </Select>
           </Field>
         )}
-        <Field label="Loại lịch" className="w-40">
-          <Select value={eventType} onChange={(event) => setEventType(event.target.value as "" | "interview" | "callback")}>
+        <Field uiSize="xs" label="Loại lịch" className="w-36">
+          <Select uiSize="xs" className="h-7" value={eventType} onChange={(event) => setEventType(event.target.value as "" | "interview" | "callback")}>
             <option value="">Tất cả</option>
             <option value="interview">Phỏng vấn</option>
             <option value="callback">Gọi lại</option>
           </Select>
         </Field>
-        <Button type="button" variant="outline" onClick={() => void refresh()}>
-          <Search className="h-4 w-4" strokeWidth={2} />
+        <Button type="button" size="xs" variant="secondary" className="h-7" onClick={() => void refresh()}>
+          <Search className="h-3.5 w-3.5" strokeWidth={2} />
           Lọc
         </Button>
       </Card>
