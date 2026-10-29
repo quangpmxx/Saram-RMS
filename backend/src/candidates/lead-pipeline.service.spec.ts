@@ -644,6 +644,59 @@ describe('LeadPipelineService', () => {
       expect(realtimeService.emitDashboardInvalidate).toHaveBeenCalledTimes(3);
     });
 
+    it('trang Chi tiết gửi kèm tình trạng/kết quả của lần này → ghi chú dùng đúng giá trị gửi lên (null = không chọn)', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        callStatusId: 'status-old',
+        callResultId: 'result-old',
+      });
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'status-sai-so',
+        category: 'call_status',
+      });
+      prisma.leadNote.create.mockResolvedValue({
+        id: 'note-1',
+        createdBy: { id: 's', fullName: 'Sale A' },
+        createdAt: new Date('2026-01-01T10:00:00'),
+      });
+
+      await service.createNote(
+        'lead-1',
+        {
+          content: 'Gọi lần 2',
+          call_status_id: 'status-sai-so',
+          call_result_id: null,
+        },
+        saleUser,
+      );
+
+      expect(prisma.leadNote.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            callStatusId: 'status-sai-so',
+            callResultId: null,
+          }),
+        }),
+      );
+    });
+
+    it('gửi kèm giá trị sai nhóm trạng thái → từ chối, không tạo ghi chú', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.statusCatalog.findUnique.mockResolvedValue({
+        id: 'x',
+        category: 'call_result',
+      });
+
+      await expect(
+        service.createNote(
+          'lead-1',
+          { content: 'x', call_status_id: 'x' },
+          saleUser,
+        ),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(prisma.leadNote.create).not.toHaveBeenCalled();
+    });
+
     it('snapshot call_status_id/call_result_id hiện tại của lead vào note', async () => {
       prisma.lead.findUnique.mockResolvedValue({
         ...baseLead,

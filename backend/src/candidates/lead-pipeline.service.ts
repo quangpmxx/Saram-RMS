@@ -289,15 +289,29 @@ export class LeadPipelineService {
     currentUser: AuthenticatedUser,
   ): Promise<NoteResponseDto> {
     const lead = await this.loadLeadForUpdate(id, currentUser);
+    if (dto.call_status_id) {
+      await this.assertStatusInCategory(dto.call_status_id, 'call_status');
+    }
+    if (dto.call_result_id) {
+      await this.assertStatusInCategory(dto.call_result_id, 'call_result');
+    }
 
     const created = await this.prisma.leadNote.create({
       data: {
         leadId: id,
         createdById: currentUser.id,
         content: dto.content,
-        // Snapshot tình trạng/kết quả cuộc gọi tại thời điểm ghi (Mục 2.9, docs/11).
-        callStatusId: lead.callStatusId,
-        callResultId: lead.callResultId,
+        // Snapshot tình trạng/kết quả cuộc gọi tại thời điểm ghi (Mục 2.9,
+        // docs/11). Trang Chi tiết gửi kèm giá trị của CHÍNH lần chăm sóc này
+        // (2026-10-29) — có gửi (kể cả null) thì dùng, không gửi thì lấy của data.
+        callStatusId:
+          dto.call_status_id !== undefined
+            ? dto.call_status_id
+            : lead.callStatusId,
+        callResultId:
+          dto.call_result_id !== undefined
+            ? dto.call_result_id
+            : lead.callResultId,
         // Dự án phụ — nâng cấp toàn diện: snapshot Tình trạng Zalo cùng cơ chế.
         zaloFriendStatusId: lead.zaloFriendStatusId,
       },

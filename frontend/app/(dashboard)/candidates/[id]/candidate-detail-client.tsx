@@ -137,8 +137,11 @@ export function CandidateDetailClient({
   // tiếp người dùng), nút này gộp lưu LUÔN cả Năm sinh/Địa chỉ đang gõ dở
   // (2 ô đó vốn chỉ lưu được bằng Enter) — xem handleSaveCallInfo() và
   // birthYearDraft/addressDraft bên dưới.
-  const [callStatusId, setCallStatusId] = useState(initialCandidate.call_status?.id ?? "");
-  const [callResultId, setCallResultId] = useState(initialCandidate.call_result?.id ?? "");
+  // Mỗi lần mở trang, 2 ô này để TRỐNG cho Sale chọn lại theo đúng lần chăm
+  // sóc này (yêu cầu người dùng 2026-10-29) — giá trị cũ của data vẫn giữ
+  // nguyên trong hệ thống, chỉ không điền sẵn; để trống = không đổi.
+  const [callStatusId, setCallStatusId] = useState("");
+  const [callResultId, setCallResultId] = useState("");
   const [zaloStatusId, setZaloStatusId] = useState(initialCandidate.zalo_status?.id ?? "");
   const [zaloFriendStatusId, setZaloFriendStatusId] = useState(
     initialCandidate.zalo_friend_status?.id ?? "",
@@ -154,8 +157,8 @@ export function CandidateDetailClient({
    * trang ngay sau khi vừa bấm lưu thủ công.
    */
   const savedCallInfoRef = useRef({
-    callStatusId: initialCandidate.call_status?.id ?? "",
-    callResultId: initialCandidate.call_result?.id ?? "",
+    callStatusId: "",
+    callResultId: "",
     zaloStatusId: initialCandidate.zalo_status?.id ?? "",
   });
   const liveCallInfoRef = useRef({ candidateId: candidate.id, callStatusId, callResultId, zaloStatusId });
@@ -437,70 +440,92 @@ export function CandidateDetailClient({
    * Dự án phụ — nâng cấp toàn diện: sau khi lưu, đóng ngay trang chi tiết và
    * quay lại danh sách ứng viên (không ở lại trang để xem kết quả).
    */
+  /**
+   * Lưu TẤT CẢ thay đổi đang có trên trang (yêu cầu người dùng 2026-10-29):
+   * Năm sinh/Địa chỉ đang gõ, Tình trạng cuộc gọi, Kết quả cuộc gọi, Kết quả
+   * — chỉ gọi API cho ô thật sự đổi. Dùng chung cho "Lưu ghi chú" (kể cả
+   * Enter), "Quay lại", "Lưu thông tin" và Enter ở ô Năm sinh/Địa chỉ. Báo lỗi
+   * bằng cách ném Error (nơi gọi tự hiện lỗi). Không tự rời trang.
+   */
+  async function saveAllChanges(): Promise<void> {
+    const trimmedBirthYear = birthYearDraft.trim();
+    const currentBirthYear = candidate.birth_year?.toString() ?? "";
+    let birthYearToSave: number | null | undefined;
+    if (trimmedBirthYear !== currentBirthYear) {
+      if (!trimmedBirthYear) {
+        birthYearToSave = null;
+      } else {
+        const parsed = Number(trimmedBirthYear);
+        const currentYear = new Date().getFullYear();
+        if (!Number.isInteger(parsed) || parsed < 1900 || parsed > currentYear) {
+          throw new Error("Năm sinh không hợp lệ (1900 – năm hiện tại)");
+        }
+        birthYearToSave = parsed;
+      }
+    }
+
+    const trimmedAddress = addressDraft.trim();
+    const currentAddress = candidate.address ?? "";
+    const addressToSave: string | null | undefined = trimmedAddress !== currentAddress ? trimmedAddress || null : undefined;
+
+    let latest: Candidate | null = null;
+    if (birthYearToSave !== undefined || addressToSave !== undefined) {
+      latest = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...(birthYearToSave !== undefined ? { birth_year: birthYearToSave } : {}),
+          ...(addressToSave !== undefined ? { address: addressToSave } : {}),
+        }),
+      });
+    }
+    if (callStatusId && callStatusId !== candidate.call_status?.id) {
+      latest = await clientApi<Candidate>(`/candidate/${candidate.id}/call-status`, {
+        method: "PUT",
+        body: JSON.stringify({ call_status_id: callStatusId }),
+      });
+    }
+    if (callResultId && callResultId !== candidate.call_result?.id) {
+      latest = await clientApi<Candidate>(`/candidate/${candidate.id}/call-result`, {
+        method: "PUT",
+        body: JSON.stringify({ call_result_id: callResultId }),
+      });
+    }
+    if (zaloStatusId && zaloStatusId !== candidate.zalo_status?.id) {
+      latest = await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-status`, {
+        method: "PUT",
+        body: JSON.stringify({ zalo_status_id: zaloStatusId }),
+      });
+    }
+    savedCallInfoRef.current = { callStatusId, callResultId, zaloStatusId };
+    if (latest) setCandidate(latest);
+  }
+
+  function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : "Có lỗi xảy ra";
+  }
+
+  /** "Lưu thông tin": lưu tất cả rồi quay về danh sách (như cũ). */
   async function handleSaveCallInfo() {
     setIsSavingCallInfo(true);
     try {
-      // Yêu cầu trực tiếp người dùng (2026-07-27): gộp lưu luôn Năm sinh/Địa
-      // chỉ đang gõ dở (nếu có đổi so với giá trị hiện tại) — validate y hệt
-      // logic trong inline-edit-field.tsx#onSave cho Năm sinh, chặn lưu cả
-      // trang nếu không hợp lệ (khớp cách các ô khác báo lỗi tại chỗ).
-      const trimmedBirthYear = birthYearDraft.trim();
-      const currentBirthYear = candidate.birth_year?.toString() ?? "";
-      let birthYearToSave: number | null | undefined;
-      if (trimmedBirthYear !== currentBirthYear) {
-        if (!trimmedBirthYear) {
-          birthYearToSave = null;
-        } else {
-          const parsed = Number(trimmedBirthYear);
-          const currentYear = new Date().getFullYear();
-          if (!Number.isInteger(parsed) || parsed < 1900 || parsed > currentYear) {
-            toast.error("Năm sinh không hợp lệ (1900 – năm hiện tại)");
-            setIsSavingCallInfo(false);
-            return;
-          }
-          birthYearToSave = parsed;
-        }
-      }
-
-      const trimmedAddress = addressDraft.trim();
-      const currentAddress = candidate.address ?? "";
-      const addressToSave: string | null | undefined = trimmedAddress !== currentAddress ? trimmedAddress || null : undefined;
-
-      if (birthYearToSave !== undefined || addressToSave !== undefined) {
-        await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
-          method: "PUT",
-          body: JSON.stringify({
-            ...(birthYearToSave !== undefined ? { birth_year: birthYearToSave } : {}),
-            ...(addressToSave !== undefined ? { address: addressToSave } : {}),
-          }),
-        });
-      }
-
-      if (callStatusId && callStatusId !== candidate.call_status?.id) {
-        await clientApi<Candidate>(`/candidate/${candidate.id}/call-status`, {
-          method: "PUT",
-          body: JSON.stringify({ call_status_id: callStatusId }),
-        });
-      }
-      if (callResultId && callResultId !== candidate.call_result?.id) {
-        await clientApi<Candidate>(`/candidate/${candidate.id}/call-result`, {
-          method: "PUT",
-          body: JSON.stringify({ call_result_id: callResultId }),
-        });
-      }
-      if (zaloStatusId && zaloStatusId !== candidate.zalo_status?.id) {
-        await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-status`, {
-          method: "PUT",
-          body: JSON.stringify({ zalo_status_id: zaloStatusId }),
-        });
-      }
-      savedCallInfoRef.current = { callStatusId, callResultId, zaloStatusId };
+      await saveAllChanges();
       // Về đúng màn hình đã mở data này (tab/bộ lọc/vị trí cuộn cũ).
       goBackInApp(router, "/candidates");
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+      toast.error(errorMessage(error));
       setIsSavingCallInfo(false);
     }
+  }
+
+  /** "Quay lại": lưu tất cả thay đổi rồi mới rời trang; lỗi thì ở lại để sửa. */
+  async function handleBack() {
+    try {
+      await saveAllChanges();
+    } catch (error) {
+      toast.error(errorMessage(error));
+      return;
+    }
+    goBackInApp(router, "/candidates");
   }
 
   /**
@@ -567,9 +592,12 @@ export function CandidateDetailClient({
   }, []);
 
   async function handleAddNote(content: string) {
+    await saveAllChanges();
     await clientApi(`/candidate/${candidate.id}/note`, {
       method: "POST",
-      body: JSON.stringify({ content }),
+      // Nhãn của ghi chú = đúng tình trạng/kết quả đang chọn ở lần chăm sóc
+      // này (để trống = không gắn), không lấy giá trị cũ của data.
+      body: JSON.stringify({ content, call_status_id: callStatusId || null, call_result_id: callResultId || null }),
     });
     await refreshNotes();
   }
@@ -640,7 +668,7 @@ export function CandidateDetailClient({
             // Bấm thường: về đúng màn hình trước (Kho chăm sóc, Lịch, Trùng lặp...). Ctrl/giữa chuột vẫn mở link như cũ.
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
             e.preventDefault();
-            goBackInApp(router, "/candidates");
+            void handleBack();
           }}
           className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
         >
@@ -806,22 +834,10 @@ export function CandidateDetailClient({
                 inputType="number"
                 alwaysEditable
                 onDraftChange={setBirthYearDraft}
-                onSave={async (value) => {
-                  const trimmed = value.trim();
-                  let birthYear: number | null = null;
-                  if (trimmed) {
-                    birthYear = Number(trimmed);
-                    const currentYear = new Date().getFullYear();
-                    if (!Number.isInteger(birthYear) || birthYear < 1900 || birthYear > currentYear) {
-                      throw new Error("Năm sinh không hợp lệ (1900 – năm hiện tại)");
-                    }
-                  }
-                  const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
-                    method: "PUT",
-                    body: JSON.stringify({ birth_year: birthYear }),
-                  });
-                  setCandidate(updated);
-                  toast.success("Đã cập nhật năm sinh");
+                onSave={async () => {
+                  // Enter = lưu tất cả thay đổi trên trang (yêu cầu người dùng 2026-10-29).
+                  await saveAllChanges();
+                  toast.success("Đã lưu thay đổi");
                 }}
               />
               <InlineEditField
@@ -831,14 +847,9 @@ export function CandidateDetailClient({
                 editValue={candidate.address ?? ""}
                 alwaysEditable
                 onDraftChange={setAddressDraft}
-                onSave={async (value) => {
-                  const address = value.trim() || null;
-                  const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-edit`, {
-                    method: "PUT",
-                    body: JSON.stringify({ address }),
-                  });
-                  setCandidate(updated);
-                  toast.success("Đã cập nhật địa chỉ");
+                onSave={async () => {
+                  await saveAllChanges();
+                  toast.success("Đã lưu thay đổi");
                 }}
               />
               <div className="flex justify-between gap-3">
