@@ -894,7 +894,7 @@ export function ShuttleClient({
   /** Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng" — GET /shuttle/companies, đọc từ OrderRecord (module Quản lý đơn hàng). */
   initialCompanies: ShuttleOptionItem[];
 }) {
-  useSetPageTitle("Danh sách đưa đón", "Quản lý lịch đưa đón lao động.");
+  useSetPageTitle("Danh sách đưa đón");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ khối bảng bằng pointer-events
   // (chặn click/gõ chuột vào MỌI ô nhập/ComboCell/nút trong bảng mà không

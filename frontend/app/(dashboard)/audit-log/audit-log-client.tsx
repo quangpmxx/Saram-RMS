@@ -67,7 +67,7 @@ export function AuditLogClient({
   canPickAccount: boolean;
   accounts: Account[];
 }) {
-  useSetPageTitle("Nhật ký", "Tra cứu toàn bộ lịch sử truy cập/thao tác trong hệ thống.");
+  useSetPageTitle("Nhật ký");
 
   const [result, setResult] = useState(initialLogs);
   const [filters, setFilters] = useState<Filters>({

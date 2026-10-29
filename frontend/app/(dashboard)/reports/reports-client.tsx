@@ -250,7 +250,7 @@ export function ReportsClient({
   /** ?tab=care — mở thẳng tab Tiến độ chăm sóc. */
   initialTab?: "care";
 }) {
-  useSetPageTitle("Báo cáo hằng ngày", "Theo dõi hiệu suất từng nhóm và từng nhân viên theo ngày.");
+  useSetPageTitle("Báo cáo hằng ngày");
 
   /**
    * Tab "Check phạt" (2026-07-15, yêu cầu trực tiếp người dùng, Mục 1):

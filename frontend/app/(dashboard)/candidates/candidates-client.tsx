@@ -219,7 +219,7 @@ export function CandidatesClient({
   /** Người dùng đã tự bấm chọn tab — khôi phục trạng thái cũ (sessionStorage) không được đè lên. */
   const userPickedViewRef = useRef(false);
 
-  useSetPageTitle("Data lao động", "Thu thập, tìm kiếm và quản lý dữ liệu lao động.");
+  useSetPageTitle("Data lao động");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ bảng bằng pointer-events (rất
   // nhiều điểm nhập trực tiếp/inline khắp bảng). Backend
@@ -635,7 +635,6 @@ export function CandidatesClient({
       <div className="mb-1 flex items-start justify-between gap-3 md:hidden">
         <div>
           <h1 className="text-base font-bold text-slate-900">Data lao động</h1>
-          <p className="mt-0.5 text-xs text-slate-500">Thu thập, tìm kiếm và quản lý dữ liệu lao động.</p>
         </div>
       </div>
 

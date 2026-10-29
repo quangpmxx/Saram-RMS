@@ -59,7 +59,7 @@ export function CalendarClient({
   canFilterBySale: boolean;
   saleMembers: TeamMember[];
 }) {
-  useSetPageTitle("Lịch hẹn", "Lịch hẹn phỏng vấn và lịch gọi lại — theo phạm vi quyền của bạn.");
+  useSetPageTitle("Lịch hẹn");
   const [events, setEvents] = useState(initialEvents);
   /**
    * Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng

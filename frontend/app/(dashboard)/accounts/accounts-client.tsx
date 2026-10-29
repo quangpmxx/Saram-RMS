@@ -31,7 +31,7 @@ export function AccountsClient({
   initialAccounts: Account[];
   teams: Team[];
 }) {
-  useSetPageTitle("Quản lý tài khoản", "Tạo và phân quyền tài khoản nhân viên trong hệ thống.");
+  useSetPageTitle("Quản lý tài khoản");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ khối bảng/tab Quản lý nhóm
   // bằng pointer-events (rất nhiều nút/hành động rải rác, không disable
