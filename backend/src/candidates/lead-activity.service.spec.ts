@@ -241,7 +241,7 @@ describe('describeLog', () => {
         actionType: 'create',
         newValue: 'scheduled_at=2026-10-29T03:30:00.000Z',
       }),
-      'đã đặt lịch gọi lại lúc 10:30 29/10/2026',
+      'đã đặt lịch gọi lại lúc 10:30 29/10/26',
     ],
   ])('%o → %s', (input, expected) => {
     expect(describeLog(input, names)).toBe(expected);

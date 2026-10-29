@@ -29,8 +29,11 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: "action", label: "Thao tác" },
 ];
 
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** dd/mm/yy (yêu cầu người dùng 2026-10-29). */
 function dayKey(date: Date): string {
-  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${pad2(date.getFullYear() % 100)}`;
 }
 
 function dayLabel(date: Date): string {
@@ -195,7 +198,9 @@ export function ActivityPanel({ candidateId, className }: { candidateId: string;
                       )}{" "}
                       {item.text}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">lúc {timeLabel(new Date(item.at))}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      lúc {timeLabel(new Date(item.at))} {dayKey(new Date(item.at))}
+                    </p>
                   </div>
                 </li>
               ))}
