@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Upload } from "lucide-react";
+import { Moon, Sun, Upload } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import type { Account } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,6 +12,9 @@ import { Field, Input } from "@/components/ui/form";
 import { BirthdayPreviewPanel } from "@/components/birthday/birthday-preview-panel";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { useUiTheme } from "@/lib/ui-theme";
+import { cn } from "@/lib/cn";
+import type { UiTheme } from "@/lib/types";
 import { CheckinLocationSettings } from "./checkin-location-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -165,6 +168,8 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
             )}
           </section>
 
+          <ThemeSection />
+
           {/* Tên người dùng — readonly, chỉ Admin đổi được cho tài khoản khác qua Quản lý tài khoản */}
           <section>
             <Field label="Tên người dùng">
@@ -274,5 +279,66 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
         </div>
       </Card>
     </div>
+  );
+}
+
+const THEME_OPTIONS: { value: UiTheme; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Mặc định", icon: Sun },
+  { value: "dark", label: "Tối", icon: Moon },
+];
+
+/**
+ * Giao diện Sáng/Tối (yêu cầu người dùng 2026-10-29) — đổi là áp dụng và lưu
+ * ngay (không chờ nút Lưu), chỉ cho chính tài khoản này.
+ */
+function ThemeSection() {
+  const { theme, birthdayOverride, setTheme } = useUiTheme();
+  const toast = useToast();
+  const [pending, setPending] = useState(false);
+
+  async function pick(next: UiTheme) {
+    if (next === theme || pending) return;
+    setPending(true);
+    try {
+      await setTheme(next);
+      toast.success(next === "dark" ? "Đã chuyển sang giao diện Tối" : "Đã chuyển về giao diện mặc định");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-slate-900">Giao diện</h3>
+      <div role="radiogroup" aria-label="Giao diện" className="mt-3 flex gap-2">
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+          const selected = theme === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              disabled={pending}
+              onClick={() => void pick(value)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60",
+                selected
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+              )}
+            >
+              <Icon className="h-4 w-4" strokeWidth={2} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {birthdayOverride && (
+        <p className="mt-2 text-xs text-slate-500">Hôm nay có sinh nhật nên đang dùng giao diện sinh nhật.</p>
+      )}
+    </section>
   );
 }

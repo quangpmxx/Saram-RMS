@@ -212,6 +212,9 @@ model Account {
   /// khởi động lại (so sánh tháng theo giờ Việt Nam, không so đúng giờ
   /// phút). NULL = chưa từng được cộng.
   lastLeaveAccrualAt DateTime?     @map("last_leave_accrual_at")
+  /// Giao diện Sáng ('light', mặc định) / Tối ('dark') — riêng từng tài
+  /// khoản, tự chọn ở trang Cài đặt tài khoản (yêu cầu người dùng 2026-10-29).
+  uiTheme            String        @default("light") @map("ui_theme") @db.VarChar(10)
   createdById        String?       @map("created_by") @db.Uuid
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")

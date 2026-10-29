@@ -49,6 +49,9 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   shuttle_staff: "NV Đưa đón",
 };
 
+/** Giao diện Sáng (mặc định) / Tối — riêng từng tài khoản (xem lib/ui-theme.tsx). */
+export type UiTheme = "light" | "dark";
+
 export interface Account {
   id: string;
   full_name: string;
@@ -77,6 +80,8 @@ export interface Account {
   /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK — cùng quy tắc CHỈ Admin sửa/Nhân viên chỉ xem như 4 field phía trên. */
   citizen_id: string | null;
   bank_account_number: string | null;
+  /** Giao diện Sáng/Tối riêng của tài khoản (PUT /me/theme). */
+  ui_theme: UiTheme;
   created_at: string;
   updated_at: string;
 }

@@ -20,6 +20,7 @@ import {
 } from '../common/interfaces/jwt-payload.interface';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import type { UiTheme } from './dto/update-theme.dto';
 
 export interface LoginResult {
   token: string;
@@ -163,6 +164,23 @@ export class AuthService {
    * phục vụ tĩnh qua useStaticAssets() trong main.ts. Dọn file ảnh cũ theo
    * kiểu best-effort (không chặn request nếu xóa thất bại).
    */
+  /** Giao diện Sáng/Tối của CHÍNH tài khoản đang đăng nhập — không ảnh hưởng tài khoản khác. */
+  async updateTheme(
+    userId: string,
+    theme: UiTheme,
+  ): Promise<AccountResponseDto> {
+    const updated = await this.prisma.account
+      .update({
+        where: { id: userId },
+        data: { uiTheme: theme },
+        include: { team: { select: TEAM_SELECT } },
+      })
+      .catch(() => {
+        throw new UnauthorizedException('Phiên đăng nhập không hợp lệ');
+      });
+    return toAccountResponse(updated);
+  }
+
   async updateAvatar(
     userId: string,
     avatarPath: string,

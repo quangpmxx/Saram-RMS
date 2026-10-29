@@ -21,6 +21,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateThemeDto } from './dto/update-theme.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -90,6 +91,15 @@ export class AuthController {
   ) {
     await this.authService.changePassword(user.id, dto);
     return { message: 'Đã đổi mật khẩu thành công' };
+  }
+
+  @Put('me/theme')
+  @HttpCode(HttpStatus.OK)
+  async updateTheme(
+    @Body() dto: UpdateThemeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.authService.updateTheme(user.id, dto.theme);
   }
 
   @Post('me/avatar')

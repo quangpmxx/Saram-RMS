@@ -30,6 +30,8 @@ export interface AccountResponseDto {
   /** Bổ sung 2026-07-15 (yêu cầu trực tiếp người dùng): CCCD + STK — cùng quy tắc CHỈ Admin sửa/Nhân viên chỉ xem như 4 field phía trên. */
   citizen_id: string | null;
   bank_account_number: string | null;
+  /** Giao diện Sáng/Tối riêng của tài khoản (PUT /me/theme). */
+  ui_theme: 'light' | 'dark';
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +63,7 @@ export function toAccountResponse(
     remaining_leave_days: account.remainingLeaveDays,
     citizen_id: account.citizenId,
     bank_account_number: account.bankAccountNumber,
+    ui_theme: account.uiTheme === 'dark' ? 'dark' : 'light',
     created_at: account.createdAt.toISOString(),
     updated_at: account.updatedAt.toISOString(),
   };

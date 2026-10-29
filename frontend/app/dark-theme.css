@@ -1,0 +1,132 @@
+/*
+ * TỰ SINH bởi scripts/generate-dark-theme.mjs — không sửa tay.
+ * Giao diện Tối riêng từng tài khoản (yêu cầu người dùng 2026-10-29), bật
+ * bằng class "dark" trên <html> (xem lib/ui-theme.tsx). Ngày sinh nhật luôn
+ * dùng giao diện sinh nhật (sáng) nên class này bị gỡ trong ngày đó.
+ */
+html.dark {
+  color-scheme: dark;
+  --background: #0b1120;
+  --foreground: #e2e8f0;
+  --color-slate-50: #0b1120;
+  --color-gray-50: #0b1120;
+  --color-slate-100: #1a2436;
+  --color-gray-100: #1a2436;
+  --color-slate-200: #263247;
+  --color-gray-200: #263247;
+  --color-slate-300: #3b4a63;
+  --color-gray-300: #3b4a63;
+  --color-slate-400: #7a8aa3;
+  --color-gray-400: #7a8aa3;
+  --color-slate-500: #94a3b8;
+  --color-gray-500: #94a3b8;
+  --color-slate-600: #b4c0d0;
+  --color-gray-600: #b4c0d0;
+  --color-slate-700: #cbd5e1;
+  --color-gray-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-gray-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  --color-gray-900: #f1f5f9;
+  --color-slate-950: #f8fafc;
+  --color-gray-950: #f8fafc;
+}
+html.dark * {
+  scrollbar-color: #3b4a63 transparent;
+}
+/* Nền tối dạng tooltip/lớp phủ: thang slate đã đảo nên giữ lại nền tối. */
+html.dark .bg-slate-900 { background-color: #1e293b; }
+html.dark .bg-slate-900\/50 { background-color: rgb(2 6 23 / 0.6); }
+html.dark .bg-slate-800 { background-color: #273449; }
+/* Logo/ảnh nền trắng: giảm chói. */
+html.dark img { filter: brightness(0.92); }
+
+html.dark .bg-accent-50 { background-color: color-mix(in srgb, #f97316 12%, #111a2b); }
+html.dark .bg-accent-50\/60 { background-color: color-mix(in srgb, color-mix(in srgb, #f97316 12%, #111a2b) 60%, transparent); }
+html.dark .bg-amber-100 { background-color: color-mix(in srgb, #f59e0b 20%, #111a2b); }
+html.dark .bg-amber-50 { background-color: color-mix(in srgb, #f59e0b 12%, #111a2b); }
+html.dark .bg-amber-50\/50 { background-color: color-mix(in srgb, color-mix(in srgb, #f59e0b 12%, #111a2b) 50%, transparent); }
+html.dark .bg-blue-100 { background-color: color-mix(in srgb, #3b82f6 20%, #111a2b); }
+html.dark .bg-blue-50 { background-color: color-mix(in srgb, #3b82f6 12%, #111a2b); }
+html.dark .bg-brand-100\/70 { background-color: color-mix(in srgb, color-mix(in srgb, #3b82f6 20%, #111a2b) 70%, transparent); }
+html.dark .bg-brand-50 { background-color: color-mix(in srgb, #3b82f6 12%, #111a2b); }
+html.dark .bg-brand-50\/60 { background-color: color-mix(in srgb, color-mix(in srgb, #3b82f6 12%, #111a2b) 60%, transparent); }
+html.dark .bg-brand-50\/95 { background-color: color-mix(in srgb, color-mix(in srgb, #3b82f6 12%, #111a2b) 95%, transparent); }
+html.dark .bg-emerald-100 { background-color: color-mix(in srgb, #10b981 20%, #111a2b); }
+html.dark .bg-emerald-50 { background-color: color-mix(in srgb, #10b981 12%, #111a2b); }
+html.dark .bg-indigo-100 { background-color: color-mix(in srgb, #6366f1 20%, #111a2b); }
+html.dark .bg-indigo-50 { background-color: color-mix(in srgb, #6366f1 12%, #111a2b); }
+html.dark .bg-orange-100 { background-color: color-mix(in srgb, #f97316 20%, #111a2b); }
+html.dark .bg-orange-200 { background-color: color-mix(in srgb, #f97316 30%, #111a2b); }
+html.dark .bg-orange-50 { background-color: color-mix(in srgb, #f97316 12%, #111a2b); }
+html.dark .bg-pink-50 { background-color: color-mix(in srgb, #ec4899 12%, #111a2b); }
+html.dark .bg-pink-50\/90 { background-color: color-mix(in srgb, color-mix(in srgb, #ec4899 12%, #111a2b) 90%, transparent); }
+html.dark .bg-purple-100 { background-color: color-mix(in srgb, #a855f7 20%, #111a2b); }
+html.dark .bg-red-100 { background-color: color-mix(in srgb, #ef4444 20%, #111a2b); }
+html.dark .bg-red-50 { background-color: color-mix(in srgb, #ef4444 12%, #111a2b); }
+html.dark .bg-red-50\/60 { background-color: color-mix(in srgb, color-mix(in srgb, #ef4444 12%, #111a2b) 60%, transparent); }
+html.dark .bg-rose-50 { background-color: color-mix(in srgb, #f43f5e 12%, #111a2b); }
+html.dark .bg-sky-100 { background-color: color-mix(in srgb, #0ea5e9 20%, #111a2b); }
+html.dark .bg-sky-50 { background-color: color-mix(in srgb, #0ea5e9 12%, #111a2b); }
+html.dark .bg-teal-50 { background-color: color-mix(in srgb, #14b8a6 12%, #111a2b); }
+html.dark .bg-violet-50 { background-color: color-mix(in srgb, #8b5cf6 12%, #111a2b); }
+html.dark .bg-white { background-color: #111a2b; }
+html.dark .bg-white\/70 { background-color: color-mix(in srgb, #111a2b 70%, transparent); }
+html.dark .bg-white\/90 { background-color: color-mix(in srgb, #111a2b 90%, transparent); }
+html.dark .bg-white\/95 { background-color: color-mix(in srgb, #111a2b 95%, transparent); }
+html.dark .border-accent-200 { border-color: color-mix(in srgb, #f97316 36%, #111a2b); }
+html.dark .border-amber-200 { border-color: color-mix(in srgb, #f59e0b 36%, #111a2b); }
+html.dark .border-amber-300 { border-color: color-mix(in srgb, #f59e0b 48%, #111a2b); }
+html.dark .border-brand-200 { border-color: color-mix(in srgb, #3b82f6 36%, #111a2b); }
+html.dark .border-brand-300 { border-color: color-mix(in srgb, #3b82f6 48%, #111a2b); }
+html.dark .border-pink-200 { border-color: color-mix(in srgb, #ec4899 36%, #111a2b); }
+html.dark .border-pink-200\/70 { border-color: color-mix(in srgb, color-mix(in srgb, #ec4899 36%, #111a2b) 70%, transparent); }
+html.dark .focus\:bg-white:focus { background-color: #111a2b; }
+html.dark .focus\:border-brand-300:focus { border-color: color-mix(in srgb, #3b82f6 48%, #111a2b); }
+html.dark .hover\:bg-amber-100:hover { background-color: color-mix(in srgb, #f59e0b 20%, #111a2b); }
+html.dark .hover\:bg-amber-200:hover { background-color: color-mix(in srgb, #f59e0b 30%, #111a2b); }
+html.dark .hover\:bg-brand-100:hover { background-color: color-mix(in srgb, #3b82f6 20%, #111a2b); }
+html.dark .hover\:bg-brand-50:hover { background-color: color-mix(in srgb, #3b82f6 12%, #111a2b); }
+html.dark .hover\:bg-brand-50\/40:hover { background-color: color-mix(in srgb, color-mix(in srgb, #3b82f6 12%, #111a2b) 40%, transparent); }
+html.dark .hover\:bg-brand-50\/50:hover { background-color: color-mix(in srgb, color-mix(in srgb, #3b82f6 12%, #111a2b) 50%, transparent); }
+html.dark .hover\:bg-emerald-50:hover { background-color: color-mix(in srgb, #10b981 12%, #111a2b); }
+html.dark .hover\:bg-red-100\/70:hover { background-color: color-mix(in srgb, color-mix(in srgb, #ef4444 20%, #111a2b) 70%, transparent); }
+html.dark .hover\:bg-red-50:hover { background-color: color-mix(in srgb, #ef4444 12%, #111a2b); }
+html.dark .hover\:text-amber-900:hover { color: #fde68a; }
+html.dark .hover\:text-brand-600:hover { color: #60a5fa; }
+html.dark .hover\:text-brand-700:hover { color: #93c5fd; }
+html.dark .hover\:text-red-600:hover { color: #f87171; }
+html.dark .hover\:text-red-700:hover { color: #fca5a5; }
+html.dark .ring-amber-200 { --tw-ring-color: color-mix(in srgb, #f59e0b 36%, #111a2b); }
+html.dark .ring-amber-300 { --tw-ring-color: color-mix(in srgb, #f59e0b 48%, #111a2b); }
+html.dark .ring-pink-200 { --tw-ring-color: color-mix(in srgb, #ec4899 36%, #111a2b); }
+html.dark .text-accent-600 { color: #fb923c; }
+html.dark .text-accent-600\/70 { color: color-mix(in srgb, #fb923c 70%, transparent); }
+html.dark .text-accent-700 { color: #fdba74; }
+html.dark .text-accent-800 { color: #fdba74; }
+html.dark .text-amber-600 { color: #fbbf24; }
+html.dark .text-amber-700 { color: #fcd34d; }
+html.dark .text-amber-800 { color: #fcd34d; }
+html.dark .text-blue-700 { color: #93c5fd; }
+html.dark .text-brand-600 { color: #60a5fa; }
+html.dark .text-brand-600\/70 { color: color-mix(in srgb, #60a5fa 70%, transparent); }
+html.dark .text-brand-700 { color: #93c5fd; }
+html.dark .text-brand-800 { color: #93c5fd; }
+html.dark .text-brand-900 { color: #bfdbfe; }
+html.dark .text-brand-900\/50 { color: color-mix(in srgb, #bfdbfe 50%, transparent); }
+html.dark .text-emerald-600 { color: #34d399; }
+html.dark .text-emerald-600\/70 { color: color-mix(in srgb, #34d399 70%, transparent); }
+html.dark .text-emerald-700 { color: #6ee7b7; }
+html.dark .text-emerald-700\/70 { color: color-mix(in srgb, #6ee7b7 70%, transparent); }
+html.dark .text-indigo-700 { color: #a5b4fc; }
+html.dark .text-orange-700 { color: #fdba74; }
+html.dark .text-pink-600 { color: #f472b6; }
+html.dark .text-purple-700 { color: #d8b4fe; }
+html.dark .text-red-600 { color: #f87171; }
+html.dark .text-red-700 { color: #fca5a5; }
+html.dark .text-rose-700 { color: #fda4af; }
+html.dark .text-rose-900 { color: #fecdd3; }
+html.dark .text-sky-700 { color: #7dd3fc; }
+html.dark .text-teal-700 { color: #5eead4; }
+html.dark .text-violet-700 { color: #c4b5fd; }
+

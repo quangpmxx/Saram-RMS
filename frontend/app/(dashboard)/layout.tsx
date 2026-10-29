@@ -19,6 +19,7 @@ import { APP_SCROLL_CONTAINER_ID } from "@/lib/app-scroll-container";
 import { NavigationTracker } from "@/lib/navigation-history";
 import { BrowserSessionGuard } from "@/lib/browser-session";
 import { BirthdayThemeProvider } from "@/lib/birthday-theme-context";
+import { UiThemeProvider } from "@/lib/ui-theme";
 import { BirthdayLayoutBackground } from "@/components/birthday/birthday-layout-background";
 import { BirthdayHeaderStrip } from "@/components/birthday/birthday-header-strip";
 import { BirthdayHeaderBackground } from "@/components/birthday/birthday-header-background";
@@ -71,6 +72,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <PageTitleProvider>
       <ToastProvider>
         <BirthdayThemeProvider initialData={birthdayToday}>
+          {/* Giao diện Sáng/Tối riêng từng tài khoản; ngày sinh nhật luôn dùng giao diện sinh nhật. */}
+          <UiThemeProvider initialTheme={user.ui_theme === "dark" ? "dark" : "light"}>
           <ToastSlot />
           {/* Ghi nhớ trang trước + vị trí cuộn để "Quay lại" về đúng màn hình cũ. */}
           <Suspense fallback={null}>
@@ -165,6 +168,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </main>
             </div>
           </BirthdayLayoutBackground>
+          </UiThemeProvider>
         </BirthdayThemeProvider>
       </ToastProvider>
     </PageTitleProvider>

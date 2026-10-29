@@ -13,13 +13,23 @@ export const metadata: Metadata = {
   description: "Hệ thống quản lý tuyển dụng nội bộ",
 };
 
+/**
+ * Bật sẵn giao diện Tối (nếu tài khoản dùng lần trước chọn Tối) TRƯỚC khi
+ * trang hiện ra để không nháy trắng; UiThemeProvider sẽ chỉnh lại đúng theo
+ * tài khoản đang đăng nhập ngay sau đó. Trang đăng nhập luôn sáng.
+ */
+const THEME_BOOT_SCRIPT = `try{if(!location.pathname.startsWith("/login")&&localStorage.getItem("saram_rms_ui_theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${beVietnamPro.variable} h-full antialiased`}>
+    <html lang="vi" className={`${beVietnamPro.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">{children}</body>
     </html>
   );
