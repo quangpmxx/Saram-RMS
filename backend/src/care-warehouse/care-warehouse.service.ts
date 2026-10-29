@@ -236,7 +236,13 @@ export class CareWarehouseService {
         if (!s.open_assignment.processed) stats.mine_pending++;
       }
     }
-    const range = await this.assignmentRangeStats(query, user, teamId, now);
+    const range = await this.progressStats(
+      query,
+      user,
+      now,
+      teamId,
+      searchWhere ? null : { cared: stats.cared, total: stats.total },
+    );
     // Tổng data trong Kho (không tính ô tìm kiếm) — hiện trên thẻ "Chăm sóc (N)".
     const warehouseTotal = searchWhere
       ? await this.prisma.lead.count({ where: scopeWhere })
@@ -327,10 +333,89 @@ export class CareWarehouseService {
    * Leader/Quản lý/Admin/MKT tính cả phạm vi nhóm đang xem. Không phụ thuộc
    * điều kiện "đang trong Kho" — data đã rời Kho sau khi xử lý vẫn được đếm.
    */
-  private async assignmentRangeStats(
+  /**
+   * Số liệu thanh "Tiến độ" — có bộ lọc Nhóm/Nhân viên riêng, độc lập với
+   * bộ lọc danh sách (yêu cầu người dùng 2026-10-29). Nhóm: chỉ Quản lý/
+   * Admin/MKT chọn được; Leader/Sale luôn là nhóm mình. Nhân viên: Sale luôn
+   * là chính mình.
+   * - assigned/processed/pending: theo khoảng ngày (assignmentRangeStats).
+   * - cared_month/in_warehouse ("Đã CS/Data"): data đang trong Kho đã được
+   *   chăm sóc trong tháng / tổng; lọc nhân viên = data đang giao cho người đó.
+   * `listCounts`: số của danh sách khi cùng phạm vi, dùng lại khỏi tính lại.
+   */
+  private async progressStats(
     query: ListCareWarehouseQueryDto,
     user: AuthenticatedUser,
+    now: Date,
+    listTeamId: string | null,
+    listCounts: { cared: number; total: number } | null,
+  ) {
+    const teamId =
+      FULL_ACCESS_ROLES.has(user.role) || user.role === 'mkt'
+        ? (query.stats_team_id ?? null)
+        : await this.resolveTeamScope(user);
+    const assigneeId =
+      user.role === 'sale' ? user.id : (query.stats_assignee_id ?? null);
+
+    const range = await this.assignmentRangeStats(
+      query,
+      teamId,
+      assigneeId,
+      now,
+    );
+
+    let cared = listCounts?.cared ?? 0;
+    let total = listCounts?.total ?? 0;
+    if (
+      user.role !== 'sale' &&
+      (!listCounts || teamId !== listTeamId || assigneeId)
+    ) {
+      const monthStart = vnMonthStart(now);
+      const where: Prisma.LeadWhereInput = {
+        ...this.eligibleWhere(now),
+        ...(teamId ? { assignedTeamId: teamId } : {}),
+        // Lượt giao còn hiệu lực luôn nằm trong tháng này và chưa đóng.
+        ...(assigneeId
+          ? {
+              careAssignments: {
+                some: {
+                  assigneeId,
+                  endedAt: null,
+                  assignedAt: { gte: monthStart },
+                },
+              },
+            }
+          : {}),
+      };
+      const leads = await this.prisma.lead.findMany({
+        where,
+        select: { id: true },
+      });
+      const ids = leads.map((l) => l.id);
+      const { summaries } = await this.loadLeadSummaries(
+        where,
+        ids,
+        monthStart,
+        now,
+      );
+      cared = 0;
+      total = 0;
+      for (const id of ids) {
+        const s = summaries.get(id)!;
+        if (assigneeId && s.open_assignment?.assignee_id !== assigneeId) {
+          continue;
+        }
+        total++;
+        if (s.month_status === 'cared') cared++;
+      }
+    }
+    return { ...range, cared_month: cared, in_warehouse: total };
+  }
+
+  private async assignmentRangeStats(
+    query: ListCareWarehouseQueryDto,
     teamId: string | null,
+    assigneeId: string | null,
     now: Date,
   ) {
     const from = query.stats_from
@@ -345,7 +430,7 @@ export class CareWarehouseService {
     };
     const assignmentWhere: Prisma.CareAssignmentWhereInput = {
       assignedAt: { ...(from ? { gte: from } : {}), lt: to },
-      ...(user.role === 'sale' ? { assigneeId: user.id } : {}),
+      ...(assigneeId ? { assigneeId } : {}),
     };
     const assignments = await this.prisma.careAssignment.findMany({
       where: { ...assignmentWhere, lead: leadWhere },

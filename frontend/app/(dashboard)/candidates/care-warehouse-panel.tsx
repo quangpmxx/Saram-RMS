@@ -67,6 +67,9 @@ interface CareFilters {
   scope: "all" | "assigned";
   /** Khoảng ngày cho thanh thống kê Được giao / Đã xử lý / Chưa xử lý. */
   stats_range: DateRangeValue;
+  /** Bộ lọc Nhóm/Nhân viên riêng của thanh Tiến độ (không ảnh hưởng danh sách). */
+  stats_team_id: string;
+  stats_assignee_id: string;
 }
 
 const EMPTY_FILTERS: CareFilters = {
@@ -80,6 +83,8 @@ const EMPTY_FILTERS: CareFilters = {
   assigned: EMPTY_DATE_RANGE,
   scope: "all",
   stats_range: { preset: "this_month", ...computeDateRange("this_month") },
+  stats_team_id: "",
+  stats_assignee_id: "",
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
@@ -153,6 +158,8 @@ function buildQuery(filters: CareFilters, page: number, pageSize: number): strin
     filters.stats_range.preset === "custom" ? filters.stats_range : computeDateRange(filters.stats_range.preset);
   if (range.from) q.set("stats_from", range.from);
   q.set("stats_to", range.to || toDateOnly(new Date()));
+  if (filters.stats_team_id) q.set("stats_team_id", filters.stats_team_id);
+  if (filters.stats_assignee_id) q.set("stats_assignee_id", filters.stats_assignee_id);
   return q.toString();
 }
 
@@ -413,8 +420,11 @@ export function CareWarehousePanel({
         <CareStatsBar
           stats={stats}
           isSale={currentUserRole === "sale"}
-          statsRange={applied.stats_range}
-          onStatsRangeChange={(stats_range) => applyFilters({ ...filters, stats_range })}
+          canPickTeam={canPickTeam}
+          teams={teams}
+          saleOptions={saleOptions}
+          statsFilters={applied}
+          onStatsFiltersChange={(patch) => applyFilters({ ...filters, ...patch })}
         />
       )}
 
@@ -878,14 +888,26 @@ export function CareWarehousePanel({
 function CareStatsBar({
   stats,
   isSale,
-  statsRange,
-  onStatsRangeChange,
+  canPickTeam,
+  teams,
+  saleOptions,
+  statsFilters,
+  onStatsFiltersChange,
 }: {
   stats: CareWarehouseListResult["stats"];
   isSale: boolean;
-  statsRange: DateRangeValue;
-  onStatsRangeChange: (value: DateRangeValue) => void;
+  /** Quản lý/Admin/MKT: chọn Nhóm hoặc Tất cả. */
+  canPickTeam: boolean;
+  teams: { id: string; name: string }[];
+  saleOptions: CareSaleOption[];
+  statsFilters: Pick<CareFilters, "stats_range" | "stats_team_id" | "stats_assignee_id">;
+  onStatsFiltersChange: (
+    patch: Partial<Pick<CareFilters, "stats_range" | "stats_team_id" | "stats_assignee_id">>,
+  ) => void;
 }) {
+  const staffOptions = saleOptions.filter(
+    (s) => !statsFilters.stats_team_id || s.team_id === statsFilters.stats_team_id,
+  );
   const tiles: { key: string; label: string; value: string; tone: string }[] = [
     {
       key: "assigned",
@@ -900,7 +922,7 @@ function CareStatsBar({
     tiles.push({
       key: "cared",
       label: "Đã CS/Data",
-      value: `${stats.cared} / ${stats.total}`,
+      value: `${stats.range.cared_month} / ${stats.range.in_warehouse}`,
       tone: "text-brand-700",
     });
   }
@@ -911,8 +933,54 @@ function CareStatsBar({
           <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
           Tiến độ
         </span>
-        <div className="w-40">
-          <DateRangePicker value={statsRange} onChange={onStatsRangeChange} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {canPickTeam && (
+            <Select
+              uiSize="xs"
+              className="w-40!"
+              aria-label="Nhóm"
+              value={statsFilters.stats_team_id}
+              onChange={(e) => {
+                const teamId = e.target.value;
+                const keep = saleOptions.some(
+                  (s) => s.id === statsFilters.stats_assignee_id && (!teamId || s.team_id === teamId),
+                );
+                onStatsFiltersChange({
+                  stats_team_id: teamId,
+                  stats_assignee_id: keep ? statsFilters.stats_assignee_id : "",
+                });
+              }}
+            >
+              <option value="">Tất cả nhóm</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          {!isSale && (
+            <Select
+              uiSize="xs"
+              className="w-44!"
+              aria-label="Nhân viên"
+              value={statsFilters.stats_assignee_id}
+              onChange={(e) => onStatsFiltersChange({ stats_assignee_id: e.target.value })}
+            >
+              <option value="">Tất cả nhân viên</option>
+              {staffOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {canPickTeam && !statsFilters.stats_team_id ? saleLabel(s) : s.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          <div className="w-40">
+            <DateRangePicker
+              value={statsFilters.stats_range}
+              onChange={(stats_range) => onStatsFiltersChange({ stats_range })}
+            />
+          </div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2">

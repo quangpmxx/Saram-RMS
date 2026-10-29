@@ -76,6 +76,16 @@ export class ListCareWarehouseQueryDto {
   @Matches(DATE_ONLY)
   stats_to?: string;
 
+  /** Lọc nhóm riêng cho thanh Tiến độ — chỉ Quản lý/Admin/MKT (vai trò khác luôn là nhóm mình). */
+  @IsOptional()
+  @IsUUID('4')
+  stats_team_id?: string;
+
+  /** Lọc nhân viên riêng cho thanh Tiến độ — Sale luôn là chính mình. */
+  @IsOptional()
+  @IsUUID('4')
+  stats_assignee_id?: string;
+
   /** Lọc theo ngày phân công gần nhất. */
   @IsOptional()
   @Matches(DATE_ONLY)

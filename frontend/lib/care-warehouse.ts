@@ -56,6 +56,9 @@ export interface CareWarehouseStats {
     assigned: number;
     processed: number;
     pending: number;
+    /** "Đã CS/Data": data trong Kho đã chăm sóc trong tháng / tổng — theo bộ lọc Nhóm/Nhân viên của thanh Tiến độ. */
+    cared_month: number;
+    in_warehouse: number;
   };
 }
 
