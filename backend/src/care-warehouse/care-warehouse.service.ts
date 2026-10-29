@@ -243,10 +243,15 @@ export class CareWarehouseService {
       teamId,
       searchWhere ? null : { cared: stats.cared, total: stats.total },
     );
-    // Tổng data trong Kho (không tính ô tìm kiếm) — hiện trên thẻ "Chăm sóc (N)".
-    const warehouseTotal = searchWhere
-      ? await this.prisma.lead.count({ where: scopeWhere })
-      : ids.length;
+    // Thẻ "Chăm sóc (N)": tổng data trong Kho theo bộ lọc Nhóm/Nhân viên của
+    // thanh Tiến độ (yêu cầu người dùng 2026-10-29), không tính ô tìm kiếm.
+    // Sale không có bộ lọc đó → tổng Kho của nhóm mình.
+    const warehouseTotal =
+      user.role !== 'sale'
+        ? range.in_warehouse
+        : searchWhere
+          ? await this.prisma.lead.count({ where: scopeWhere })
+          : ids.length;
 
     const lastCareFrom = query.last_care_from
       ? vnDayRange(query.last_care_from).start
