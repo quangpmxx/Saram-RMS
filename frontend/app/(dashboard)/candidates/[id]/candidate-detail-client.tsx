@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   CalendarClock,
   Check,
-  Clock,
   Lock,
   MessageSquarePlus,
   PauseCircle,
@@ -841,16 +840,6 @@ export function CandidateDetailClient({
                 }}
               />
               <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">MKT nhập</dt>
-                <dd className="text-slate-800">
-                  <NameWithRoleHint account={candidate.uploaded_by} />
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Ngày up</dt>
-                <dd className="text-slate-800">{formatDateTime(candidate.uploaded_at)}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">Sale phụ trách</dt>
                 <dd className="text-slate-800">
                   {candidate.assigned_to ? <NameWithRoleHint account={candidate.assigned_to} /> : "Chờ phân chia"}
@@ -971,15 +960,6 @@ export function CandidateDetailClient({
                   Số lần ghi nhận
                 </span>
                 <span className="font-medium text-slate-800">{visibleNotes.length}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-slate-500">
-                  <Clock className="h-3.5 w-3.5" strokeWidth={2} />
-                  Xử lý gần nhất
-                </span>
-                <span className="font-medium text-slate-800">
-                  {candidate.last_activity_at ? formatDateTime(candidate.last_activity_at) : "—"}
-                </span>
               </div>
             </div>
           </Card>
