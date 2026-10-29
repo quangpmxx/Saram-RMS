@@ -952,19 +952,22 @@ export function CandidatesClient({
               thuộc nội dung/data dài ngắn). */}
           <table className="w-full table-fixed border-collapse text-left text-xs">
             <colgroup>
-              {/* Ô tick chọn data trước STT, mọi tab (yêu cầu người dùng 2026-10-29, giống tab Chăm sóc). */}
-              {canAssign && <col className="w-[26px] min-w-[26px] max-w-[26px]" />}
-              {/* STT (yêu cầu người dùng 2026-10-28) — vừa 4 chữ số, lấy bớt từ cột "Tình trạng cuộc gọi". */}
-              <col className="w-[26px] min-w-[26px] max-w-[26px]" />
-              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
-              <col className="w-[108px] min-w-[108px] max-w-[108px]" />
-              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
-              <col className="w-[64px] min-w-[64px] max-w-[64px]" />
-              {/* Cột "Zalo" (2026-10-29) rộng bằng cột "Kết quả", lấy 38px từ cột "Tình trạng cuộc gọi" (327 → 289). */}
-              <col className="w-[289px] min-w-[289px] max-w-[289px]" />
-              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
-              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
-              <col className="w-[21px] min-w-[21px] max-w-[21px]" />
+              {/* Ô tick + STT: rộng CỐ ĐỊNH vừa nội dung (yêu cầu người dùng 2026-10-30).
+                  Các cột còn lại giữ đúng tỉ lệ cũ bằng %; cột "Tình trạng cuộc gọi" để
+                  tự động nên nhận toàn bộ phần còn lại (trước đây mọi cột đều px nên
+                  bảng phóng to đều tất cả, kể cả ô tick/STT). */}
+              {canAssign && <col className="w-6" />}
+              <col className="w-7" />
+              <col className="w-[6%]" />
+              <col className="w-[17%]" />
+              <col className="w-[6%]" />
+              <col className="w-[10%]" />
+              {/* Tình trạng cuộc gọi — tự động (phần còn lại). */}
+              <col />
+              {/* Cột "Zalo" (2026-10-29) rộng bằng cột "Kết quả". */}
+              <col className="w-[6%]" />
+              <col className="w-[6%]" />
+              <col className="w-[3.3%]" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>

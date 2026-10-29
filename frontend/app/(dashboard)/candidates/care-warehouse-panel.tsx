@@ -638,9 +638,9 @@ export function CareWarehousePanel({
           <table className="w-full min-w-[960px] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
-                <th className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap">STT</th>
+                {/* Ô tick đứng trước STT (yêu cầu người dùng 2026-10-30, giống tab Tất cả). */}
                 {canAssign && (
-                  <th className="w-8 border-r border-slate-100 px-2 py-2 text-center">
+                  <th className="w-px border-r border-slate-100 px-1 py-2 text-center">
                     <Checkbox
                       aria-label="Chọn tất cả trên trang"
                       checked={allOnPageSelected}
@@ -648,6 +648,7 @@ export function CareWarehousePanel({
                     />
                   </th>
                 )}
+                <th className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap">STT</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lao động</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Trạng thái tháng</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Sale được giao</th>
@@ -677,11 +678,9 @@ export function CareWarehousePanel({
                       router.push(`/candidates/${item.id}`);
                     }}
                   >
-                    <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">
-                      {((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
-                    </td>
                     {canAssign && (
-                      <td className="border-r border-slate-100 px-2 py-2 text-center">
+                      // Bấm vào ô (kể cả khoảng trống quanh ô tick) không mở trang Chi tiết.
+                      <td className="border-r border-slate-100 px-1 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           aria-label={`Chọn ${item.full_name}`}
                           checked={selected.has(item.id)}
@@ -696,6 +695,9 @@ export function CareWarehousePanel({
                         />
                       </td>
                     )}
+                    <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">
+                      {((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
+                    </td>
                     <td className="border-r border-slate-100 px-2 py-2">
                       <Link
                         href={`/candidates/${item.id}`}
