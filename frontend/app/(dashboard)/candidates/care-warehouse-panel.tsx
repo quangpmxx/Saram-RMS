@@ -1187,7 +1187,6 @@ function RandomAssignModal({
   return (
     <Modal
       title="Giao ngẫu nhiên"
-      description="Ưu tiên: (1) chưa chăm sóc, chưa giao trong tháng → (2) đã giao nhưng chưa chăm sóc → (3) đã chăm sóc trong tháng. Data đang giao cho Sale khác mà chưa xử lý không bị lấy."
       maxWidth="max-w-2xl"
       footer={footer}
     >
