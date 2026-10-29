@@ -599,6 +599,10 @@ export function CandidateDetailClient({
       // này (để trống = không gắn), không lấy giá trị cũ của data.
       body: JSON.stringify({ content, call_status_id: callStatusId || null, call_result_id: callResultId || null }),
     });
+    // Gửi xong thì để trống lại 2 ô cho lần ghi chú tiếp theo (yêu cầu người dùng 2026-10-29).
+    setCallStatusId("");
+    setCallResultId("");
+    savedCallInfoRef.current = { ...savedCallInfoRef.current, callStatusId: "", callResultId: "" };
     await refreshNotes();
   }
 
