@@ -7,11 +7,17 @@ import { InterviewCallbackController } from './interview-callback.controller';
 import { CandidatesService } from './candidates.service';
 import { LeadDuplicateService } from './lead-duplicate.service';
 import { LeadPipelineService } from './lead-pipeline.service';
+import { LeadActivityService } from './lead-activity.service';
 
 @Module({
   imports: [AuditLogModule, DistributionModule, RealtimeModule],
   controllers: [CandidatesController, InterviewCallbackController],
-  providers: [CandidatesService, LeadDuplicateService, LeadPipelineService],
+  providers: [
+    CandidatesService,
+    LeadDuplicateService,
+    LeadPipelineService,
+    LeadActivityService,
+  ],
   exports: [CandidatesService, LeadDuplicateService, LeadPipelineService],
 })
 export class CandidatesModule {}

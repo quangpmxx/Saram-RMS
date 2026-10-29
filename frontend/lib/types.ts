@@ -277,6 +277,16 @@ export interface StatusCatalogItem {
   sort_order: number;
 }
 
+/** 1 dòng lịch sử truy cập/thao tác của data — GET /candidate/:id/activity. */
+export interface LeadActivityItem {
+  id: string;
+  kind: "view" | "action";
+  at: string;
+  actor: NamedRefWithRole | null;
+  /** Phần mô tả sau tên người làm, vd "đã cập nhật Tình trạng cuộc gọi: Chưa gọi → Đã gọi". */
+  text: string;
+}
+
 /** Đối tượng "Note" — Mục 0.1, docs/13-api-design.md. */
 export interface Note {
   id: string;

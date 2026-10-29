@@ -37,6 +37,7 @@ import { CreateCallbackDto } from './dto/create-callback.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
+import { LeadActivityService } from './lead-activity.service';
 
 /**
  * Mục 4-6, docs/13-api-design.md. POST / gắn @Roles('mkt', 'admin') cố định
@@ -57,6 +58,7 @@ export class CandidatesController {
   constructor(
     private readonly candidatesService: CandidatesService,
     private readonly pipelineService: LeadPipelineService,
+    private readonly activityService: LeadActivityService,
   ) {}
 
   @Get()
@@ -116,6 +118,28 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.candidatesService.findOne(id, user);
+  }
+
+  /**
+   * Trang Chi tiết data: ghi 1 lượt truy cập (gọi khi mở trang) và đọc lịch
+   * sử truy cập + thao tác công khai của data (yêu cầu người dùng 2026-10-29).
+   * Phạm vi quyền giống GET /candidate/:id.
+   */
+  @Post(':id/view')
+  @HttpCode(HttpStatus.OK)
+  recordView(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.activityService.recordView(id, user);
+  }
+
+  @Get(':id/activity')
+  listActivity(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.activityService.list(id, user);
   }
 
   @Put(':id')
