@@ -235,6 +235,9 @@ export function CandidatesClient({
   const isReadOnly = permissionLevel === "view";
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
+  // Có quyền xoá data (Admin; MKT với data mình up) → cũng được tick chọn để "Xoá data đã chọn".
+  const canDeleteAny = currentUserRole === "admin" || currentUserRole === "mkt";
+  const canSelect = canAssign || canDeleteAny;
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
   const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
   const canClaim = currentUserRole === "sale";
@@ -606,6 +609,34 @@ export function CandidatesClient({
   const selectedUnassignedIds = selectedOnPage.filter((c) => !c.assigned_to).map((c) => c.id);
   const selectedAssignedCount = selectedOnPage.length - selectedUnassignedIds.length;
   const allOnPageSelected = candidates.length > 0 && candidates.every((c) => selectedIds.has(c.id));
+  // "Xoá data đã chọn" chỉ gồm data mình có quyền xoá (backend kiểm lại từng data).
+  const selectedDeletableIds = selectedOnPage.filter((c) => canDelete(c)).map((c) => c.id);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  /** Xoá (mềm) các data đã tick chọn — hỏi xác nhận trước (yêu cầu người dùng 2026-10-30). */
+  async function handleBulkDelete() {
+    const ids = selectedDeletableIds;
+    if (ids.length === 0) return;
+    const skippedNote =
+      selectedIds.size > ids.length ? `
+(${selectedIds.size - ids.length} data bạn không có quyền xoá sẽ được giữ nguyên.)` : "";
+    if (!window.confirm(`Xoá ${ids.length} data đã chọn?${skippedNote}`)) return;
+    setIsBulkDeleting(true);
+    try {
+      const result = await clientApi<{ deleted_count: number; skipped_count: number }>("/candidate/delete-bulk", {
+        method: "POST",
+        body: JSON.stringify({ candidate_ids: ids }),
+      });
+      await refresh();
+      const text = `Đã xoá ${result.deleted_count} data${result.skipped_count ? `, bỏ qua ${result.skipped_count} data` : ""}`;
+      if (result.skipped_count) toast.warning(text);
+      else toast.success(text);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
 
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
@@ -898,11 +929,11 @@ export function CandidatesClient({
       </Card>
       )}
 
-      {viewMode !== "care_pool" && canAssign && selectedIds.size > 0 && (
+      {viewMode !== "care_pool" && canSelect && selectedIds.size > 0 && (
         <Card className="mb-2 flex flex-wrap items-center justify-between gap-3 p-2.5">
           <span className="text-sm text-slate-600">
             Đã chọn {selectedIds.size} lao động
-            {selectedAssignedCount > 0 && (
+            {canAssign && selectedAssignedCount > 0 && (
               <span className="text-slate-400"> — {selectedAssignedCount} data đã có Sale phụ trách sẽ được bỏ qua khi phân chia</span>
             )}
           </span>
@@ -910,16 +941,31 @@ export function CandidatesClient({
             <Button type="button" size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={isReadOnly || selectedUnassignedIds.length === 0}
-              title={selectedUnassignedIds.length === 0 ? "Các data đã chọn đều đã có Sale phụ trách" : undefined}
-              onClick={() => setModal({ mode: "assign", candidateIds: selectedUnassignedIds })}
-            >
-              <UserPlus className="h-4 w-4" strokeWidth={2} />
-              Phân chia đã chọn ({selectedUnassignedIds.length})
-            </Button>
+            {canDeleteAny && (
+              <Button
+                type="button"
+                size="sm"
+                variant="danger"
+                disabled={isReadOnly || isBulkDeleting || selectedDeletableIds.length === 0}
+                title={selectedDeletableIds.length === 0 ? "Bạn không có quyền xoá các data đã chọn" : undefined}
+                onClick={() => void handleBulkDelete()}
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={2} />
+                {isBulkDeleting ? "Đang xoá..." : `Xoá data đã chọn (${selectedDeletableIds.length})`}
+              </Button>
+            )}
+            {canAssign && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={isReadOnly || selectedUnassignedIds.length === 0}
+                title={selectedUnassignedIds.length === 0 ? "Các data đã chọn đều đã có Sale phụ trách" : undefined}
+                onClick={() => setModal({ mode: "assign", candidateIds: selectedUnassignedIds })}
+              >
+                <UserPlus className="h-4 w-4" strokeWidth={2} />
+                Phân chia đã chọn ({selectedUnassignedIds.length})
+              </Button>
+            )}
           </div>
         </Card>
       )}
@@ -956,7 +1002,7 @@ export function CandidatesClient({
                   Các cột còn lại giữ đúng tỉ lệ cũ bằng %; cột "Tình trạng cuộc gọi" để
                   tự động nên nhận toàn bộ phần còn lại (trước đây mọi cột đều px nên
                   bảng phóng to đều tất cả, kể cả ô tick/STT). */}
-              {canAssign && <col className="w-6" />}
+              {canSelect && <col className="w-6" />}
               <col className="w-7" />
               <col className="w-[6%]" />
               <col className="w-[17%]" />
@@ -971,7 +1017,7 @@ export function CandidatesClient({
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
-                {canAssign && (
+                {canSelect && (
                   <th className="border-r border-slate-100 px-0 py-2 text-center">
                     <Checkbox
                       aria-label="Chọn tất cả trên trang"
@@ -1012,7 +1058,7 @@ export function CandidatesClient({
 
                 return (
                   <Fragment key={candidate.id}>
-                  {isNewDay && <DaySeparatorRow colSpan={canAssign ? 10 : 9} />}
+                  {isNewDay && <DaySeparatorRow colSpan={canSelect ? 10 : 9} />}
                   <tr
                     // UI Polish — h-28 (thay vì h-24): với tên/địa chỉ đã cố định 1 dòng ở
                     // trên, 96px hơi thiếu 1 chút khiến vài hàng vẫn bị đẩy cao hơn — 112px
@@ -1026,7 +1072,7 @@ export function CandidatesClient({
                       router.push(`/candidates/${candidate.id}`);
                     }}
                   >
-                    {canAssign && (
+                    {canSelect && (
                       // Bấm vào ô (kể cả khoảng trống quanh ô tick) không mở trang Chi tiết.
                       <td className="border-r border-slate-100 px-0 py-2 text-center" onClick={(event) => event.stopPropagation()}>
                         <Checkbox

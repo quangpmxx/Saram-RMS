@@ -21,6 +21,7 @@ import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
 import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
+import { DeleteBulkDto } from './dto/delete-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
 import { RemindCallbackDto } from './dto/remind-callback.dto';
 import { UpdateCallStatusDto } from './dto/update-call-status.dto';
@@ -110,6 +111,15 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.candidatesService.assignBulk(dto, user);
+  }
+
+  @Post('delete-bulk')
+  @HttpCode(HttpStatus.OK)
+  deleteBulk(
+    @Body() dto: DeleteBulkDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.removeBulk(dto.candidate_ids, user);
   }
 
   @Get(':id')

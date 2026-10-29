@@ -635,6 +635,37 @@ export class CandidatesService {
     return finalResponse;
   }
 
+  /**
+   * POST /candidate/delete-bulk — "Xoá data đã chọn" (yêu cầu người dùng
+   * 2026-10-30). Xoá mềm TỪNG data qua remove() — cùng kiểm quyền (Admin;
+   * MKT chỉ data mình up), audit log, cập nhật cờ trùng SĐT và realtime như
+   * xoá lẻ. Data không có quyền xoá/không còn tồn tại thì bỏ qua (đếm vào
+   * skipped_count), không làm hỏng cả lượt.
+   */
+  async removeBulk(
+    ids: string[],
+    currentUser: AuthenticatedUser,
+  ): Promise<{ deleted_count: number; skipped_count: number }> {
+    let deleted = 0;
+    let skipped = 0;
+    for (const id of new Set(ids)) {
+      try {
+        await this.remove(id, currentUser);
+        deleted++;
+      } catch (error) {
+        if (
+          error instanceof ForbiddenException ||
+          error instanceof NotFoundException
+        ) {
+          skipped++;
+          continue;
+        }
+        throw error;
+      }
+    }
+    return { deleted_count: deleted, skipped_count: skipped };
+  }
+
   async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {
     const existing = await this.prisma.lead.findUnique({ where: { id } });
     if (!existing || existing.deletedAt) {

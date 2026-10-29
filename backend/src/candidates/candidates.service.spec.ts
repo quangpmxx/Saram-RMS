@@ -547,6 +547,45 @@ describe('CandidatesService', () => {
     });
   });
 
+  describe('removeBulk (Xoá data đã chọn)', () => {
+    it('xoá mềm từng data có quyền, bỏ qua data không có quyền/không còn tồn tại', async () => {
+      const others = {
+        ...baseLead,
+        id: 'lead-2',
+        uploadedById: 'someone-else',
+      };
+      prisma.lead.findUnique.mockImplementation(
+        ({ where }: { where: { id: string } }) =>
+          Promise.resolve(
+            where.id === 'lead-1'
+              ? baseLead
+              : where.id === 'lead-2'
+                ? others
+                : null,
+          ),
+      );
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.removeBulk(['lead-1', 'lead-2', 'lead-x', 'lead-1'], mktUser),
+      ).resolves.toEqual({ deleted_count: 1, skipped_count: 2 });
+      expect(prisma.lead.update).toHaveBeenCalledTimes(1);
+      expect(prisma.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: { deletedAt: expect.any(Date), deletedById: mktUser.id },
+      });
+    });
+
+    it('Leader không có quyền xoá → không xoá data nào', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      await expect(service.removeBulk(['lead-1'], leaderUser)).resolves.toEqual(
+        { deleted_count: 0, skipped_count: 1 },
+      );
+      expect(prisma.lead.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('Admin xóa được mọi ứng viên', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
