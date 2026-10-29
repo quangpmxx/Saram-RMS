@@ -126,7 +126,6 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       title="Gửi thông báo"
-      description="Người nhận sẽ thấy ngay ở chuông thông báo + toast nổi."
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
