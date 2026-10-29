@@ -9,7 +9,6 @@ import {
   CalendarClock,
   Check,
   Lock,
-  MessageSquarePlus,
   PauseCircle,
   Pencil,
   PlayCircle,
@@ -978,13 +977,6 @@ export function CandidateDetailClient({
                     />
                   ))}
                 </div>
-              </div>
-              <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                <span className="flex items-center gap-1.5 text-slate-500">
-                  <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={2} />
-                  Số lần ghi nhận
-                </span>
-                <span className="font-medium text-slate-800">{visibleNotes.length}</span>
               </div>
             </div>
           </Card>
