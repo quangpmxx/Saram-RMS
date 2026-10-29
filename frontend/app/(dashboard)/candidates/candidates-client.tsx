@@ -27,8 +27,6 @@ import {
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { callStatusVariant } from "@/lib/call-status-variant";
-import { noteColorBgHex } from "@/lib/note-colors";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type {
   AccountRole,
@@ -65,7 +63,7 @@ import { DuplicateDetailBadge } from "./duplicate-detail-badge";
 import { ActionLink } from "./action-link";
 import { shouldOpenRowDetail } from "./row-click";
 import { SourceBadge } from "./source-badge";
-import { CareNoteCell } from "./care-note-cell";
+import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
 import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
@@ -129,11 +127,6 @@ interface SavedListState {
   search?: string;
 }
 
-function callResultVariant(name: string): "success" | "warning" | "neutral" {
-  if (name.includes("Không tiềm năng")) return "neutral";
-  if (name.includes("Tiềm năng")) return "success";
-  return "warning";
-}
 
 function formatUploadedAt(value: string): { date: string; time: string } {
   const parsed = new Date(value);
@@ -1107,27 +1100,8 @@ export function CandidatesClient({
                       )}
                     </td>
 
-                    <td
-                      className="border-r border-slate-100 px-4 py-2"
-                      style={{ backgroundColor: noteColorBgHex(candidate.note_color) }}
-                    >
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {candidate.call_status ? (
-                          <Badge variant={callStatusVariant(candidate.call_status.name)} className="text-[10px] px-2 py-0">
-                            {candidate.call_status.name}
-                          </Badge>
-                        ) : (
-                          <Badge variant="neutral" className="text-[10px] px-2 py-0">
-                            Chưa gọi
-                          </Badge>
-                        )}
-                        {candidate.call_result && (
-                          <Badge variant={callResultVariant(candidate.call_result.name)} className="text-[10px] px-2 py-0">
-                            {candidate.call_result.name}
-                          </Badge>
-                        )}
-                      </div>
-                      <CareNoteCell notes={candidateNotes} />
+                    <td className="border-r border-slate-100 px-4 py-2" style={callStatusCellStyle(candidate)}>
+                      <CallStatusCellContent candidate={candidate} notes={candidateNotes} />
                     </td>
 
                     {/* Cột "Zalo" (yêu cầu người dùng 2026-10-29) — trạng thái kết bạn

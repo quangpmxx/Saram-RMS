@@ -16,7 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { AccountRole, LeadRealtimeEvent, PaginatedResult } from "@/lib/types";
+import type { AccountRole, LeadRealtimeEvent, Note, PaginatedResult } from "@/lib/types";
 import {
   CARE_END_REASON_LABEL,
   CARE_METHOD_LABEL,
@@ -45,6 +45,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { SourceBadge } from "./source-badge";
 import { shouldOpenRowDetail } from "./row-click";
+import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
 
 /** Sale có thể nhận việc — Leader: Sale nhóm mình; Quản lý/Admin: mọi Sale. */
 export interface CareSaleOption {
@@ -411,6 +412,30 @@ export function CareWarehousePanel({
   }
 
   const items = data?.items ?? [];
+
+  /**
+   * Cột "Nội dung ghi chú" (yêu cầu người dùng 2026-10-29) — toàn bộ lịch sử
+   * ghi chú của data, đồng bộ với cột "Tình trạng cuộc gọi" ở tab Tất cả
+   * (cùng nguồn GET /candidate/notes, cùng component hiển thị). Mỗi lần danh
+   * sách tải lại (kể cả do realtime) thì tải lại ghi chú của trang.
+   */
+  const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
+  useEffect(() => {
+    const ids = (data?.items ?? []).map((item) => item.id);
+    if (ids.length === 0) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    clientApi<Record<string, Note[]>>(`/candidate/notes?ids=${ids.join(",")}`, { signal: controller.signal })
+      .catch(() => ({}) as Record<string, Note[]>)
+      .then((byLead) => {
+        if (cancelled) return;
+        setNotesByLeadId(new Map(ids.map((id) => [id, (byLead[id] ?? []).filter((note) => !note.is_deleted)])));
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [data]);
   const stats = data?.stats;
   const total = data?.total ?? 0;
   const allOnPageSelected = items.length > 0 && items.every((i) => selected.has(i.id));
@@ -612,7 +637,7 @@ export function CareWarehousePanel({
                 <th className="border-r border-slate-100 px-2 py-2">Lao động</th>
                 <th className="border-r border-slate-100 px-2 py-2">Trạng thái tháng</th>
                 <th className="border-r border-slate-100 px-2 py-2">Sale được giao</th>
-                <th className="border-r border-slate-100 px-2 py-2">Kết quả gần nhất</th>
+                <th className="min-w-[300px] border-r border-slate-100 px-2 py-2">Nội dung ghi chú</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lần CS tháng / tổng</th>
                 {hasActions && <th className="px-2 py-2 text-center">Hành động</th>}
               </tr>
@@ -711,28 +736,8 @@ export function CareWarehousePanel({
                         <span className="text-slate-400">Chưa giao</span>
                       )}
                     </td>
-                    <td className="max-w-[220px] border-r border-slate-100 px-2 py-2">
-                      {care.last_care_result ? (
-                        <>
-                          <div className="flex flex-wrap gap-1">
-                            {care.last_care_result.call_status && (
-                              <Badge variant="info" className="px-1.5 py-0 text-[10px]">
-                                {care.last_care_result.call_status.name}
-                              </Badge>
-                            )}
-                            {care.last_care_result.call_result && (
-                              <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
-                                {care.last_care_result.call_result.name}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="mt-0.5 line-clamp-2 text-slate-600" title={care.last_care_result.content}>
-                            {care.last_care_result.content}
-                          </p>
-                        </>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                    <td className="min-w-[300px] border-r border-slate-100 px-2 py-2" style={callStatusCellStyle(item)}>
+                      <CallStatusCellContent candidate={item} notes={notesByLeadId.get(item.id)} />
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2 text-center font-medium text-slate-700">
                       {care.month_care_count} / {care.total_care_count}
