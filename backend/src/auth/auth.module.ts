@@ -20,7 +20,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         signOptions: {
           expiresIn: configService.get<string>(
             'JWT_EXPIRES_IN',
-            '8h',
+            '7d',
           ) as SignOptions['expiresIn'],
         },
       }),

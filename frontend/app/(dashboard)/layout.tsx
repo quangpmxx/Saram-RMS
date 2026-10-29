@@ -17,6 +17,7 @@ import { PageTitleProvider, PageTitleSlot } from "@/lib/page-title-context";
 import { ToastProvider, ToastSlot } from "@/lib/toast-context";
 import { APP_SCROLL_CONTAINER_ID } from "@/lib/app-scroll-container";
 import { NavigationTracker } from "@/lib/navigation-history";
+import { BrowserSessionGuard } from "@/lib/browser-session";
 import { BirthdayThemeProvider } from "@/lib/birthday-theme-context";
 import { BirthdayLayoutBackground } from "@/components/birthday/birthday-layout-background";
 import { BirthdayHeaderStrip } from "@/components/birthday/birthday-header-strip";
@@ -75,6 +76,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Suspense fallback={null}>
             <NavigationTracker />
           </Suspense>
+          {/* Tắt trình duyệt rồi mở lại → đăng xuất, bắt đăng nhập lại. */}
+          <BrowserSessionGuard />
           {/*
             Sidebar cố định (yêu cầu tinh chỉnh trang đăng nhập/giao diện):
             từ breakpoint md trở lên, khóa toàn bộ khung ứng dụng đúng bằng chiều

@@ -5,7 +5,22 @@ import type { ApiErrorBody } from "./types";
 // Component (login-form.tsx...), và next/headers chỉ chạy được ở server.
 const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-async function parseResponse<T>(res: Response): Promise<T> {
+/**
+ * Phiên hết hạn/bị thu hồi (401) khi đang dùng app → chuyển thẳng về trang
+ * đăng nhập thay vì để màn hình báo lỗi (yêu cầu người dùng 2026-10-29).
+ * Trừ chính lệnh đăng nhập (sai mật khẩu cũng là 401) và khi đang ở /login.
+ */
+function redirectToLoginIfSessionEnded(res: Response, path: string): boolean {
+  if (res.status !== 401 || path === "/login" || typeof window === "undefined") return false;
+  if (window.location.pathname.startsWith("/login")) return false;
+  window.location.replace("/login");
+  return true;
+}
+
+async function parseResponse<T>(res: Response, path: string): Promise<T> {
+  // Không trả kết quả cũng không ném lỗi — trang sắp được thay bằng /login,
+  // tránh nơi gọi kịp hiện thông báo lỗi trong lúc chuyển trang.
+  if (redirectToLoginIfSessionEnded(res, path)) return new Promise<T>(() => {});
   const contentType = res.headers.get("content-type") ?? "";
   const body: unknown = contentType.includes("application/json") ? await res.json() : undefined;
 
@@ -27,7 +42,7 @@ export async function clientApi<T>(path: string, init?: RequestInit): Promise<T>
     credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
-  return parseResponse<T>(res);
+  return parseResponse<T>(res, path);
 }
 
 /**
@@ -40,7 +55,7 @@ export async function clientApiUpload<T>(path: string, formData: FormData): Prom
     credentials: "include",
     body: formData,
   });
-  return parseResponse<T>(res);
+  return parseResponse<T>(res, path);
 }
 
 export { ApiError };

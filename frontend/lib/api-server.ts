@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { ApiError } from "./api-error";
 import type { ApiErrorBody } from "./types";
 
@@ -32,6 +33,10 @@ export async function serverApi<T>(path: string, init?: RequestInit): Promise<T>
       ...init?.headers,
     },
   });
+  // Phiên hết hạn/bị thu hồi → về trang đăng nhập, không hiện trang lỗi.
+  // Trừ "/me": lib/session.ts cần nhận 401 để tự quyết (trang /login dùng
+  // nó để biết đã đăng nhập chưa — redirect ở đây sẽ thành vòng lặp).
+  if (res.status === 401 && path !== "/me") redirect("/login");
   return parseResponse<T>(res);
 }
 
