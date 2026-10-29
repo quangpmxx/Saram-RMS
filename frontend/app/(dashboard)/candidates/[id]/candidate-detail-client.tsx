@@ -1009,7 +1009,15 @@ export function CandidateDetailClient({
             </div>
           </div>
 
-          {canUpdate && <InlineNoteComposer onSubmit={handleAddNote} />}
+          {canUpdate &&
+            (candidate.assigned_to ? (
+              <InlineNoteComposer onSubmit={handleAddNote} />
+            ) : (
+              // Nguyên tắc: chưa có Sale phụ trách thì không ghi chú được (backend cũng chặn).
+              <p className="border-b border-slate-100 px-4 py-3 text-sm text-amber-700">
+                Data chưa có Sale phụ trách — cần được chia hoặc tự nhận phụ trách trước khi ghi chú.
+              </p>
+            ))}
 
           {visibleNotes.length === 0 ? (
             <EmptyState title="Chưa có ghi chú nào" icon={<Phone className="h-5 w-5" strokeWidth={1.75} />} />

@@ -46,6 +46,9 @@ import { isLockActive, isVisibleInCarePool } from './care-pool.util';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LeadEventTargets } from '../realtime/realtime-event.interface';
 
+const NO_ASSIGNEE_NOTE_MESSAGE =
+  'Data chưa có Sale phụ trách — cần được chia hoặc tự nhận phụ trách trước khi ghi chú';
+
 /** Chuyển 1 bản ghi Lead (raw Prisma) thành đối tượng nhận realtime — dùng chung cho mọi hook trong file này. */
 function leadTargets(lead: {
   assignedTeamId: string | null;
@@ -289,6 +292,11 @@ export class LeadPipelineService {
     currentUser: AuthenticatedUser,
   ): Promise<NoteResponseDto> {
     const lead = await this.loadLeadForUpdate(id, currentUser);
+    // Nguyên tắc (yêu cầu người dùng 2026-10-29): data chưa có Sale phụ trách
+    // (chưa được chia, chưa ai tự nhận) thì không ai ghi chú được.
+    if (!lead.assignedToId) {
+      throw new UnprocessableEntityException(NO_ASSIGNEE_NOTE_MESSAGE);
+    }
     if (dto.call_status_id) {
       await this.assertStatusInCategory(dto.call_status_id, 'call_status');
     }

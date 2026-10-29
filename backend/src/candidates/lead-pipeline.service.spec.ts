@@ -747,6 +747,20 @@ describe('LeadPipelineService', () => {
       );
     });
 
+    it('data chưa có Sale phụ trách → không ghi chú được (kể cả Admin)', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedToId: null,
+      });
+
+      for (const user of [adminUser]) {
+        await expect(
+          service.createNote('lead-1', { content: 'X' }, user),
+        ).rejects.toThrow('Data chưa có Sale phụ trách');
+      }
+      expect(prisma.leadNote.create).not.toHaveBeenCalled();
+    });
+
     it('MKT không có quyền thêm ghi chú', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
       await expect(
