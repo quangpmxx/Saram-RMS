@@ -588,10 +588,8 @@ export function CareWarehousePanel({
                 <th className="border-r border-slate-100 px-2 py-2">Lao động</th>
                 <th className="border-r border-slate-100 px-2 py-2">Trạng thái tháng</th>
                 <th className="border-r border-slate-100 px-2 py-2">Sale được giao</th>
-                <th className="border-r border-slate-100 px-2 py-2">Chăm sóc gần nhất</th>
                 <th className="border-r border-slate-100 px-2 py-2">Kết quả gần nhất</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lần CS tháng / tổng</th>
-                <th className="border-r border-slate-100 px-2 py-2">Phân công gần nhất</th>
                 {hasActions && <th className="px-2 py-2 text-center">Hành động</th>}
               </tr>
             </thead>
@@ -679,14 +677,6 @@ export function CareWarehousePanel({
                         <span className="text-slate-400">Chưa giao</span>
                       )}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-2 text-slate-600">
-                      <p>{formatCareDateTime(care.last_care_at)}</p>
-                      {care.last_care_by && (
-                        <p className="text-[10px] text-slate-400">
-                          <NameWithRoleHint account={care.last_care_by} />
-                        </p>
-                      )}
-                    </td>
                     <td className="max-w-[220px] border-r border-slate-100 px-2 py-2">
                       {care.last_care_result ? (
                         <>
@@ -712,9 +702,6 @@ export function CareWarehousePanel({
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2 text-center font-medium text-slate-700">
                       {care.month_care_count} / {care.total_care_count}
-                    </td>
-                    <td className="border-r border-slate-100 px-2 py-2 text-slate-600">
-                      {formatCareDateTime(care.last_assigned_at)}
                     </td>
                     {hasActions && (
                       <td className="px-2 py-2">
