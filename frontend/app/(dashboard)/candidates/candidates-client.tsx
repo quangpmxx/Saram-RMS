@@ -601,6 +601,12 @@ export function CandidatesClient({
     }, 350);
   }
 
+  // Phân chia hàng loạt chỉ áp dụng data chưa có Sale phụ trách (backend assign-bulk cũng bỏ qua data đã chia).
+  const selectedOnPage = candidates.filter((c) => selectedIds.has(c.id));
+  const selectedUnassignedIds = selectedOnPage.filter((c) => !c.assigned_to).map((c) => c.id);
+  const selectedAssignedCount = selectedOnPage.length - selectedUnassignedIds.length;
+  const allOnPageSelected = candidates.length > 0 && candidates.every((c) => selectedIds.has(c.id));
+
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -892,18 +898,29 @@ export function CandidatesClient({
       </Card>
       )}
 
-      {viewMode === "pending" && canAssign && selectedIds.size > 0 && (
-        <Card className="mb-2 flex items-center justify-between gap-3 p-2.5">
-          <span className="text-sm text-slate-600">Đã chọn {selectedIds.size} lao động</span>
-          <Button
-            type="button"
-            size="sm"
-            disabled={isReadOnly}
-            onClick={() => setModal({ mode: "assign", candidateIds: [...selectedIds] })}
-          >
-            <UserPlus className="h-4 w-4" strokeWidth={2} />
-            Phân chia đã chọn
-          </Button>
+      {viewMode !== "care_pool" && canAssign && selectedIds.size > 0 && (
+        <Card className="mb-2 flex flex-wrap items-center justify-between gap-3 p-2.5">
+          <span className="text-sm text-slate-600">
+            Đã chọn {selectedIds.size} lao động
+            {selectedAssignedCount > 0 && (
+              <span className="text-slate-400"> — {selectedAssignedCount} data đã có Sale phụ trách sẽ được bỏ qua khi phân chia</span>
+            )}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
+              Bỏ chọn
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isReadOnly || selectedUnassignedIds.length === 0}
+              title={selectedUnassignedIds.length === 0 ? "Các data đã chọn đều đã có Sale phụ trách" : undefined}
+              onClick={() => setModal({ mode: "assign", candidateIds: selectedUnassignedIds })}
+            >
+              <UserPlus className="h-4 w-4" strokeWidth={2} />
+              Phân chia đã chọn ({selectedUnassignedIds.length})
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -935,9 +952,10 @@ export function CandidatesClient({
               thuộc nội dung/data dài ngắn). */}
           <table className="w-full table-fixed border-collapse text-left text-xs">
             <colgroup>
+              {/* Ô tick chọn data trước STT, mọi tab (yêu cầu người dùng 2026-10-29, giống tab Chăm sóc). */}
+              {canAssign && <col className="w-[26px] min-w-[26px] max-w-[26px]" />}
               {/* STT (yêu cầu người dùng 2026-10-28) — vừa 4 chữ số, lấy bớt từ cột "Tình trạng cuộc gọi". */}
               <col className="w-[26px] min-w-[26px] max-w-[26px]" />
-              {viewMode === "pending" && canAssign && <col className="w-10 min-w-10 max-w-10" />}
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[108px] min-w-[108px] max-w-[108px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
@@ -950,8 +968,18 @@ export function CandidatesClient({
             </colgroup>
             <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
               <tr>
+                {canAssign && (
+                  <th className="border-r border-slate-100 px-0 py-2 text-center">
+                    <Checkbox
+                      aria-label="Chọn tất cả trên trang"
+                      checked={allOnPageSelected}
+                      onChange={(event) =>
+                        setSelectedIds(event.target.checked ? new Set(candidates.map((c) => c.id)) : new Set())
+                      }
+                    />
+                  </th>
+                )}
                 <th className="border-r border-slate-100 px-0 py-2 text-center">STT</th>
-                {viewMode === "pending" && canAssign && <th className="border-r border-slate-100 px-4 py-2" />}
                 <th className="border-r border-slate-100 px-0.5 py-2 text-center">Ngày</th>
                 <th className="border-r border-slate-100 px-1.5 py-2 text-center">Thông tin lao động</th>
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nguồn</th>
@@ -981,7 +1009,7 @@ export function CandidatesClient({
 
                 return (
                   <Fragment key={candidate.id}>
-                  {isNewDay && <DaySeparatorRow colSpan={viewMode === "pending" && canAssign ? 10 : 9} />}
+                  {isNewDay && <DaySeparatorRow colSpan={canAssign ? 10 : 9} />}
                   <tr
                     // UI Polish — h-28 (thay vì h-24): với tên/địa chỉ đã cố định 1 dòng ở
                     // trên, 96px hơi thiếu 1 chút khiến vài hàng vẫn bị đẩy cao hơn — 112px
@@ -995,14 +1023,19 @@ export function CandidatesClient({
                       router.push(`/candidates/${candidate.id}`);
                     }}
                   >
+                    {canAssign && (
+                      // Bấm vào ô (kể cả khoảng trống quanh ô tick) không mở trang Chi tiết.
+                      <td className="border-r border-slate-100 px-0 py-2 text-center" onClick={(event) => event.stopPropagation()}>
+                        <Checkbox
+                          aria-label={`Chọn ${candidate.full_name}`}
+                          checked={selectedIds.has(candidate.id)}
+                          onChange={() => toggleSelected(candidate.id)}
+                        />
+                      </td>
+                    )}
                     <td className="border-r border-slate-100 px-0 py-2 text-center text-[10px] text-slate-500 tabular-nums">
                       {(page - 1) * pageSize + index + 1}
                     </td>
-                    {viewMode === "pending" && canAssign && (
-                      <td className="border-r border-slate-100 px-4 py-2">
-                        <Checkbox checked={selectedIds.has(candidate.id)} onChange={() => toggleSelected(candidate.id)} />
-                      </td>
-                    )}
 
                     <td className="border-r border-slate-100 px-0.5 py-2 text-center whitespace-nowrap">
                       <p className="font-medium text-slate-800">{uploadedAt.date}</p>
