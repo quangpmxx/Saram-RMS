@@ -532,16 +532,6 @@ export function DashboardClient({
         })}
       </div>
 
-      {/* Kho chăm sóc (2026-10-28): Tiến độ chăm sóc — dùng chung bộ lọc Nhóm/Nhân viên ở trên;
-          ngày/tháng chọn riêng trong khối vì chỉ số chăm sóc tính theo ngày/tháng, không theo khoảng. */}
-      {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
-        <CareProgressBlock
-          currentUserRole={currentUserRole}
-          teamId={canFilterByTeam ? teamId : ""}
-          accountId={accountId}
-        />
-      )}
-
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">
         <h2 className="text-sm font-semibold text-slate-900">Hiệu suất toàn công ty</h2>
@@ -617,6 +607,17 @@ export function DashboardClient({
             </div>
           </Card>
         </div>
+      )}
+
+      {/* Kho chăm sóc (2026-10-28): Tiến độ chăm sóc — dùng chung bộ lọc Nhóm/Nhân viên ở trên;
+          ngày/tháng chọn riêng trong khối vì chỉ số chăm sóc tính theo ngày/tháng, không theo khoảng.
+          Đặt dưới bảng Top 3 nhân viên (yêu cầu người dùng 2026-10-29). */}
+      {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
+        <CareProgressBlock
+          currentUserRole={currentUserRole}
+          teamId={canFilterByTeam ? teamId : ""}
+          accountId={accountId}
+        />
       )}
 
       {/* 3. Hiệu suất theo nhóm */}
