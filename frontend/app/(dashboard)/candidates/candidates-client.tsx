@@ -62,7 +62,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
-import { DuplicateDetailBadge } from "./duplicate-detail-badge";
+import { DuplicatePhone } from "./duplicate-phone";
 import { ActionLink } from "./action-link";
 import { shouldOpenRowDetail } from "./row-click";
 import { SourceBadge } from "./source-badge";
@@ -1029,13 +1029,10 @@ export function CandidatesClient({
                           (line-clamp-2) thay vì cố định 1 dòng, theo yêu cầu tinh chỉnh độ
                           rộng cột — cột đã hẹp lại nên 1 dòng dễ cắt cụt tên quá sớm. Các
                           trường còn lại vẫn 1 dòng + ellipsis để không giãn cột. */}
-                      {/* UI Polish — nhãn "Trùng SĐT" đổi từ badge viên thuốc cạnh tên sang
-                          nhãn nhỏ chéo ở góc phải trên cùng của cụm tên + SĐT (thay vì chiếm
-                          chỗ ngang bên cạnh tên) — cần bọc relative đúng vùng này. */}
-                      <div className="relative">
-                        {/* Tên căn giữa ô (yêu cầu người dùng 2026-10-29, giữ cỡ chữ 12px); có nhãn
-                            "Trùng" ở góc phải thì chừa đều 2 bên để tên vẫn nằm giữa. */}
-                        <div className={cn(candidate.is_duplicate_flagged && "px-4")}>
+                      {/* Trùng SĐT: bôi nền cam ngay trên số điện thoại (yêu cầu người dùng 2026-10-29, thay nhãn chéo "Trùng"). */}
+                      <div>
+                        {/* Tên căn giữa ô (yêu cầu người dùng 2026-10-29, giữ cỡ chữ 12px). */}
+                        <div>
                           <Link
                             href={`/candidates/${candidate.id}`}
                             title={candidate.full_name}
@@ -1048,16 +1045,14 @@ export function CandidatesClient({
                             {candidate.full_name}
                           </Link>
                         </div>
-                        <div
-                          className={cn(
-                            "mt-0.5 flex items-center gap-1 text-slate-500",
-                            candidate.is_duplicate_flagged && "pr-4",
-                          )}
-                        >
+                        <div className="mt-0.5 flex items-center gap-1 text-slate-500">
                           <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
-                          <span className="truncate">{candidate.phone_number}</span>
+                          {candidate.is_duplicate_flagged ? (
+                            <DuplicatePhone candidateId={candidate.id} phoneNumber={candidate.phone_number} />
+                          ) : (
+                            <span className="truncate">{candidate.phone_number}</span>
+                          )}
                         </div>
-                        {candidate.is_duplicate_flagged && <DuplicateDetailBadge candidateId={candidate.id} />}
                       </div>
                       <div className="mt-0.5 flex items-center gap-1 text-slate-500">
                         <Cake className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
