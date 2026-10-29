@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { AuditLogService } from './audit-log.service';
+import { AUDIT_LOG_VISIBLE_MS, AuditLogService } from './audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('AuditLogService', () => {
@@ -89,17 +89,34 @@ describe('AuditLogService', () => {
       );
     });
 
-    it('lọc theo khoảng thời gian khi có date_from/date_to', async () => {
+    it('lọc theo khoảng thời gian khi có date_from/date_to (trong 3 ngày gần nhất)', async () => {
+      const from = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const to = new Date();
       await service.list({
         page: 1,
         page_size: 20,
-        date_from: '2026-07-01',
-        date_to: '2026-07-10',
+        date_from: from.toISOString(),
+        date_to: to.toISOString(),
       });
 
       const call = prisma.auditLog.findMany.mock.calls[0][0];
-      expect(call.where.createdAt.gte).toEqual(new Date('2026-07-01'));
-      expect(call.where.createdAt.lte).toEqual(new Date('2026-07-10'));
+      expect(call.where.createdAt.gte).toEqual(from);
+      expect(call.where.createdAt.lte).toEqual(to);
+    });
+
+    it.each([
+      ['không chọn ngày', undefined],
+      ['chọn từ ngày cũ hơn 3 ngày', '2026-07-01'],
+    ])('chỉ trả nhật ký 3 ngày gần nhất — %s', async (_label, dateFrom) => {
+      const before = Date.now();
+      await service.list({ page: 1, page_size: 20, date_from: dateFrom });
+
+      const gte: Date =
+        prisma.auditLog.findMany.mock.calls[0][0].where.createdAt.gte;
+      const expected = before - AUDIT_LOG_VISIBLE_MS;
+      expect(gte.getTime()).toBeGreaterThanOrEqual(expected);
+      expect(gte.getTime()).toBeLessThan(expected + 5000);
+      expect(AUDIT_LOG_VISIBLE_MS).toBe(3 * 24 * 60 * 60 * 1000);
     });
 
     it('phân trang đúng theo page/page_size, sắp xếp mới nhất trước', async () => {

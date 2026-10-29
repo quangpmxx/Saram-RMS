@@ -29,6 +29,9 @@ export interface AuditLogEntry {
  * chính (vd không được chặn đăng nhập chỉ vì audit log insert thất bại),
  * nên lỗi được nuốt và log cảnh báo thay vì ném ra ngoài.
  */
+/** Trang Nhật ký chỉ hiện nhật ký trong 3 ngày gần nhất. */
+export const AUDIT_LOG_VISIBLE_MS = 3 * 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class AuditLogService {
   private readonly logger = new Logger(AuditLogService.name);
@@ -70,12 +73,18 @@ export class AuditLogService {
       entityType: query.entity_type,
       entityId: query.entity_id,
     };
-    if (query.date_from || query.date_to) {
-      where.createdAt = {
-        gte: query.date_from ? new Date(query.date_from) : undefined,
-        lte: query.date_to ? new Date(query.date_to) : undefined,
-      };
-    }
+    // Trang Nhật ký chỉ hiện 3 ngày gần nhất (yêu cầu người dùng 2026-10-30).
+    // KHÔNG xoá bản ghi cũ: lịch sử thao tác của từng data và thống kê Kho
+    // chăm sóc vẫn đọc bảng này. Lọc "từ ngày" cũ hơn mốc này thì tính từ mốc.
+    const visibleFrom = new Date(Date.now() - AUDIT_LOG_VISIBLE_MS);
+    const requestedFrom = query.date_from ? new Date(query.date_from) : null;
+    where.createdAt = {
+      gte:
+        requestedFrom && requestedFrom > visibleFrom
+          ? requestedFrom
+          : visibleFrom,
+      lte: query.date_to ? new Date(query.date_to) : undefined,
+    };
 
     const [total, logs] = await this.prisma.$transaction([
       this.prisma.auditLog.count({ where }),

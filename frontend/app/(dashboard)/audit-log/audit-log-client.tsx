@@ -196,6 +196,8 @@ export function AuditLogClient({
       <div className="mb-3 flex items-center gap-1.5 text-sm text-slate-500">
         <History className="h-4 w-4" strokeWidth={2} />
         Tổng số hành động trong bộ lọc hiện tại: <span className="font-semibold text-slate-800">{result.total}</span>
+        {/* Backend chỉ trả nhật ký 3 ngày gần nhất (yêu cầu người dùng 2026-10-30). */}
+        <span className="text-slate-400">· Chỉ hiện nhật ký trong 3 ngày gần nhất</span>
       </div>
 
       <Card className="overflow-hidden">
