@@ -63,6 +63,7 @@ import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { DuplicateDetailBadge } from "./duplicate-detail-badge";
 import { ActionLink } from "./action-link";
+import { shouldOpenRowDetail } from "./row-click";
 import { SourceBadge } from "./source-badge";
 import { CareNoteCell } from "./care-note-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
@@ -933,7 +934,13 @@ export function CandidatesClient({
                     // trên, 96px hơi thiếu 1 chút khiến vài hàng vẫn bị đẩy cao hơn — 112px
                     // đủ chỗ cho đúng 4 dòng cố định (tên + SĐT + năm sinh + địa chỉ), mọi
                     // hàng cao bằng nhau tuyệt đối.
-                    className={`h-28 align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
+                    className={`h-28 cursor-pointer align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
+                    onClick={(event) => {
+                      // Bấm chỗ nào trên hàng cũng mở Chi tiết (yêu cầu người dùng 2026-10-29).
+                      if (!shouldOpenRowDetail(event)) return;
+                      saveListStateForReturn();
+                      router.push(`/candidates/${candidate.id}`);
+                    }}
                   >
                     <td className="border-r border-slate-100 px-0 py-2 text-center text-[10px] text-slate-500 tabular-nums">
                       {(page - 1) * pageSize + index + 1}
@@ -950,20 +957,7 @@ export function CandidatesClient({
                     </td>
 
                     <td
-                      className={cn(
-                        "cursor-pointer border-r border-slate-100 px-1.5 py-2",
-                        candidate.care_stopped_at && "relative",
-                      )}
-                      onClick={(event) => {
-                        // UI Polish — cả ô mở được chi tiết ứng viên, không chỉ riêng tên
-                        // nữa. Bỏ qua nếu click trúng chính link tên hoặc nhãn "Trùng SĐT"
-                        // (role="button") — 2 phần tử đó tự xử lý click riêng, tránh điều
-                        // hướng 2 lần chồng lên nhau.
-                        const target = event.target as HTMLElement;
-                        if (target.closest("a, [role='button']")) return;
-                        saveListStateForReturn();
-                        router.push(`/candidates/${candidate.id}`);
-                      }}
+                      className={cn("border-r border-slate-100 px-1.5 py-2", candidate.care_stopped_at && "relative")}
                     >
                       {/* Data đã đóng (dừng chăm sóc) → dấu X đỏ gạch chéo cả ô, nền giữ
                           trắng (yêu cầu người dùng 2026-10-29). Không chặn click vào ô. */}

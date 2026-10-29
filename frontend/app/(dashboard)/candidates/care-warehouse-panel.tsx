@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -44,6 +44,7 @@ import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { SourceBadge } from "./source-badge";
+import { shouldOpenRowDetail } from "./row-click";
 
 /** Sale có thể nhận việc — Leader: Sale nhóm mình; Quản lý/Admin: mọi Sale. */
 export interface CareSaleOption {
@@ -213,6 +214,7 @@ export function CareWarehousePanel({
   onOpenLead?: () => void;
 }) {
   const toast = useToast();
+  const router = useRouter();
   const canAssign = ASSIGNER_ROLES.includes(currentUserRole) && !isReadOnly;
   const canClaim = currentUserRole === "sale" && !isReadOnly;
   const canPickTeam = ["admin", "manager", "mkt"].includes(currentUserRole);
@@ -625,7 +627,16 @@ export function CareWarehousePanel({
                 return (
                   <tr
                     key={item.id}
-                    className={cn("align-top hover:bg-brand-50/50", index % 2 === 1 ? "bg-slate-50/60" : "bg-white")}
+                    className={cn(
+                      "cursor-pointer align-top hover:bg-brand-50/50",
+                      index % 2 === 1 ? "bg-slate-50/60" : "bg-white",
+                    )}
+                    onClick={(event) => {
+                      // Bấm chỗ nào trên hàng cũng mở Chi tiết (yêu cầu người dùng 2026-10-29).
+                      if (!shouldOpenRowDetail(event)) return;
+                      saveStateForReturn();
+                      router.push(`/candidates/${item.id}`);
+                    }}
                   >
                     <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">
                       {((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
