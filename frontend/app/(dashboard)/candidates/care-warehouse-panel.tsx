@@ -908,9 +908,6 @@ function CareStatsBar({
           <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
           Kho chăm sóc — tháng {mm}/{year}
         </span>
-        <span className="text-slate-500">
-          Số ô bên trái là <b>số data</b> (mỗi data đếm 1 lần). Lượt chăm sóc là <b>số ghi chú</b>.
-        </span>
       </div>
       <div className="flex flex-wrap gap-2">
         {tiles.map((t) => (
