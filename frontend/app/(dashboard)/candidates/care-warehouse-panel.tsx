@@ -917,7 +917,7 @@ function CareStatsBar({
       </div>
       <div className="flex flex-wrap gap-2">
         {tiles.map((t) => (
-          <div key={t.key} className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5">
+          <div key={t.key} className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-center">
             <p className="text-[11px] text-slate-500">{t.label}</p>
             <p className={cn("text-lg font-bold tabular-nums", t.tone)}>{t.value}</p>
           </div>
