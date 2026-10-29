@@ -589,7 +589,14 @@ export function CandidatesClient({
    * router.refresh) vì chạy theo từng lần gõ.
    */
   function handleKeywordChange(keyword: string) {
-    const nextFilters = { ...filters, keyword };
+    applyFiltersNow({ ...filters, keyword }, 350);
+  }
+
+  /**
+   * Đổi bộ lọc là lọc luôn, không cần bấm Tìm kiếm (yêu cầu người dùng
+   * 2026-10-30). Ô gõ chữ chờ ngừng gõ (delayMs); ô chọn thì lọc ngay.
+   */
+  function applyFiltersNow(nextFilters: Filters, delayMs = 0) {
     setFilters(nextFilters);
     if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     keywordTimerRef.current = setTimeout(async () => {
@@ -606,7 +613,7 @@ export function CandidatesClient({
           toast.error(error instanceof ApiError ? error.message : "Không tải được kết quả tìm kiếm");
         }
       }
-    }, 350);
+    }, delayMs);
   }
 
   // Phân chia hàng loạt chỉ áp dụng data chưa có Sale phụ trách (backend assign-bulk cũng bỏ qua data đã chia).
@@ -895,7 +902,7 @@ export function CandidatesClient({
           <Select
             uiSize="xs"
             value={filters.source_id}
-            onChange={(event) => setFilters((prev) => ({ ...prev, source_id: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, source_id: event.target.value })}
           >
             <option value="">Tất cả</option>
             {sources.map((source) => (
@@ -912,7 +919,7 @@ export function CandidatesClient({
                 uiSize="xs"
                 value={filters.lead_state ?? ""}
                 onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, lead_state: event.target.value as LeadStateFilter }))
+                  applyFiltersNow({ ...filters, lead_state: event.target.value as LeadStateFilter })
                 }
               >
                 <option value="">Tất cả</option>
@@ -926,7 +933,7 @@ export function CandidatesClient({
             <Field uiSize="xs" label="Ngày lên số" className="w-40">
               <DateRangePicker
                 value={filters.date}
-                onChange={(next) => setFilters((prev) => ({ ...prev, date: next }))}
+                onChange={(next) => applyFiltersNow({ ...filters, date: next })}
                 placeholder="Tất cả"
                 allowClear
               />
@@ -937,7 +944,7 @@ export function CandidatesClient({
                   teams={teams}
                   saleMembers={allSaleMembers}
                   value={filters.team_sale}
-                  onChange={(value) => setFilters((prev) => ({ ...prev, team_sale: value }))}
+                  onChange={(value) => applyFiltersNow({ ...filters, team_sale: value })}
                 />
               </Field>
             )}

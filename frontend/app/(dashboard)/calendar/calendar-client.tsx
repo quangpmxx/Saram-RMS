@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, CalendarDays, Search, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -92,13 +92,28 @@ export function CalendarClient({
 
   const groups = groupByDate(events);
 
+  const refreshSeqRef = useRef(0);
   async function refresh() {
+    // Bỏ kết quả của lượt tải cũ về muộn (đổi bộ lọc liên tục).
+    const seq = ++refreshSeqRef.current;
     const query = new URLSearchParams({ date_from: dateRange.from, date_to: dateRange.to });
     if (createdById) query.set("created_by_id", createdById);
     if (eventType) query.set("type", eventType);
     const result = await clientApi<CalendarEvent[]>(`/calendar?${query.toString()}`);
-    setEvents(result);
+    if (seq === refreshSeqRef.current) setEvents(result);
   }
+
+  // Đổi bộ lọc là lọc luôn, không cần bấm "Lọc" (yêu cầu người dùng
+  // 2026-10-30). Lần đầu bỏ qua — dữ liệu ban đầu đã có từ máy chủ.
+  const filtersMountedRef = useRef(false);
+  useEffect(() => {
+    if (!filtersMountedRef.current) {
+      filtersMountedRef.current = true;
+      return;
+    }
+    refresh().catch((error) => toast.error(error instanceof ApiError ? error.message : "Không tải được lịch hẹn"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi bộ lọc đổi
+  }, [dateRange, createdById, eventType]);
 
   const isReadOnly = permissionLevel === "view";
   const [deletingKey, setDeletingKey] = useState<string | null>(null);

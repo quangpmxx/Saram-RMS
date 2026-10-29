@@ -371,10 +371,19 @@ export function CareWarehousePanel({
    */
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function handleSearchChange(search: string) {
-    setFilters((p) => ({ ...p, search }));
+    applyTypedFilter({ search });
+  }
+
+  /**
+   * Ô gõ chữ/số (Tìm kiếm, Số lần chăm sóc): chờ ngừng gõ 350ms rồi lọc luôn.
+   * Các ô chọn thì gọi thẳng applyFilters() — đổi là lọc ngay, không cần bấm
+   * "Lọc" (yêu cầu người dùng 2026-10-30).
+   */
+  function applyTypedFilter(patch: Partial<CareFilters>) {
+    setFilters((p) => ({ ...p, ...patch }));
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      setApplied((p) => ({ ...p, search }));
+      setApplied((p) => ({ ...p, ...patch }));
       setPage(1);
     }, 350);
   }
@@ -500,12 +509,7 @@ export function CareWarehousePanel({
           <Select
             uiSize="xs"
             value={filters.status}
-            onChange={(e) =>
-              setFilters((p) => ({
-                ...p,
-                status: e.target.value as StatusFilter,
-              }))
-            }
+            onChange={(e) => applyFilters({ ...filters, status: e.target.value as StatusFilter })}
           >
             <option value="">Tất cả</option>
             <option value="not_cared">Chưa chăm sóc</option>
@@ -518,7 +522,7 @@ export function CareWarehousePanel({
             <Select
               uiSize="xs"
               value={filters.team_id}
-              onChange={(e) => setFilters((p) => ({ ...p, team_id: e.target.value }))}
+              onChange={(e) => applyFilters({ ...filters, team_id: e.target.value })}
             >
               <option value="">Tất cả</option>
               {teams.map((t) => (
@@ -535,7 +539,7 @@ export function CareWarehousePanel({
               uiSize="xs"
               className="max-w-44"
               value={filters.assignee_id}
-              onChange={(e) => setFilters((p) => ({ ...p, assignee_id: e.target.value }))}
+              onChange={(e) => applyFilters({ ...filters, assignee_id: e.target.value })}
             >
               <option value="">Tất cả</option>
               {saleOptions
@@ -557,7 +561,7 @@ export function CareWarehousePanel({
               className="w-14"
               placeholder="Từ"
               value={filters.care_min}
-              onChange={(e) => setFilters((p) => ({ ...p, care_min: e.target.value }))}
+              onChange={(e) => applyTypedFilter({ care_min: e.target.value })}
             />
             <span className="text-slate-400">–</span>
             <Input
@@ -567,14 +571,14 @@ export function CareWarehousePanel({
               className="w-14"
               placeholder="Đến"
               value={filters.care_max}
-              onChange={(e) => setFilters((p) => ({ ...p, care_max: e.target.value }))}
+              onChange={(e) => applyTypedFilter({ care_max: e.target.value })}
             />
           </div>
         </Field>
         <Field uiSize="xs" label="Chăm sóc gần nhất" className="w-36">
           <DateRangePicker
             value={filters.last_care}
-            onChange={(next) => setFilters((p) => ({ ...p, last_care: next }))}
+            onChange={(next) => applyFilters({ ...filters, last_care: next })}
             placeholder="Tất cả"
             allowClear
           />
@@ -582,7 +586,7 @@ export function CareWarehousePanel({
         <Field uiSize="xs" label="Ngày phân công" className="w-36">
           <DateRangePicker
             value={filters.assigned}
-            onChange={(next) => setFilters((p) => ({ ...p, assigned: next }))}
+            onChange={(next) => applyFilters({ ...filters, assigned: next })}
             placeholder="Tất cả"
             allowClear
           />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, History, RefreshCw } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import type { Account, AuditLogEntry, PaginatedResult } from "@/lib/types";
@@ -80,7 +80,10 @@ export function AuditLogClient({
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<AuditLogEntry | null>(null);
 
+  const refreshSeqRef = useRef(0);
   async function refresh(page = 1) {
+    // Bỏ kết quả của lượt tải cũ về muộn (đổi bộ lọc liên tục).
+    const seq = ++refreshSeqRef.current;
     setLoading(true);
     try {
       const query = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
@@ -91,11 +94,25 @@ export function AuditLogClient({
       if (filters.date.from) query.set("date_from", new Date(filters.date.from).toISOString());
       if (filters.date.to) query.set("date_to", new Date(`${filters.date.to}T23:59:59.999`).toISOString());
       const next = await clientApi<PaginatedResult<AuditLogEntry>>(`/audit-log?${query.toString()}`);
-      setResult(next);
+      if (seq === refreshSeqRef.current) setResult(next);
     } finally {
-      setLoading(false);
+      if (seq === refreshSeqRef.current) setLoading(false);
     }
   }
+
+  // Đổi bộ lọc là lọc luôn, không cần bấm "Lọc" (yêu cầu người dùng
+  // 2026-10-30); chờ 350ms để ô "ID đối tượng" không tải theo từng ký tự.
+  // Lần đầu bỏ qua — dữ liệu ban đầu đã có từ máy chủ.
+  const filtersMountedRef = useRef(false);
+  useEffect(() => {
+    if (!filtersMountedRef.current) {
+      filtersMountedRef.current = true;
+      return;
+    }
+    const timer = setTimeout(() => void refresh(1).catch(() => undefined), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi bộ lọc đổi
+  }, [filters]);
 
   const totalPages = Math.max(1, Math.ceil(result.total / result.page_size));
 

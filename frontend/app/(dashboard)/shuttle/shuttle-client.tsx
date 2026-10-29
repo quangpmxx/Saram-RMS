@@ -1193,14 +1193,18 @@ export function ShuttleClient({
   const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshSeqRef = useRef(0);
   function handleKeywordChange(keyword: string) {
-    const nextFilters = { ...filters, keyword };
+    applyFiltersNow({ ...filters, keyword }, 350);
+  }
+
+  /** Đổi bộ lọc là lọc luôn, không cần bấm Tìm kiếm (yêu cầu người dùng 2026-10-30); ô gõ chữ chờ ngừng gõ. */
+  function applyFiltersNow(nextFilters: Filters, delayMs = 0) {
     setFilters(nextFilters);
     if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     keywordTimerRef.current = setTimeout(() => {
       refresh(1, pageSize, nextFilters).catch((error) => {
         toast.error(error instanceof ApiError ? error.message : "Không tải được kết quả tìm kiếm");
       });
-    }, 350);
+    }, delayMs);
   }
 
   async function handleClearFilters() {
@@ -1381,7 +1385,7 @@ export function ShuttleClient({
         <Field uiSize="xs" label="Ngày" className="w-36">
           <DateRangePicker
             value={filters.date}
-            onChange={(next) => setFilters((prev) => ({ ...prev, date: next }))}
+            onChange={(next) => applyFiltersNow({ ...filters, date: next })}
             placeholder="Tất cả"
             allowClear
           />
@@ -1390,7 +1394,7 @@ export function ShuttleClient({
           <Select
             uiSize="xs"
             value={filters.company_id}
-            onChange={(event) => setFilters((prev) => ({ ...prev, company_id: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, company_id: event.target.value })}
           >
             <option value="">Tất cả</option>
             {companies.map((item) => (
@@ -1404,7 +1408,7 @@ export function ShuttleClient({
           <Select
             uiSize="xs"
             value={filters.type}
-            onChange={(event) => setFilters((prev) => ({ ...prev, type: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, type: event.target.value })}
           >
             <option value="">Tất cả</option>
             {options.types.map((item) => (
@@ -1418,7 +1422,7 @@ export function ShuttleClient({
           <Select
             uiSize="xs"
             value={filters.sale_user_id}
-            onChange={(event) => setFilters((prev) => ({ ...prev, sale_user_id: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, sale_user_id: event.target.value })}
           >
             <option value="">Tất cả</option>
             {initialSaleAccounts.map((account) => (
@@ -1432,7 +1436,7 @@ export function ShuttleClient({
           <Select
             uiSize="xs"
             value={filters.driver_user_id}
-            onChange={(event) => setFilters((prev) => ({ ...prev, driver_user_id: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, driver_user_id: event.target.value })}
           >
             <option value="">Tất cả</option>
             {initialDriverAccounts.map((account) => (
@@ -1446,7 +1450,7 @@ export function ShuttleClient({
           <Select
             uiSize="xs"
             value={filters.status}
-            onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, status: event.target.value })}
           >
             <option value="">Tất cả</option>
             {options.statuses.map((item) => (
@@ -1460,7 +1464,7 @@ export function ShuttleClient({
           <Select
             uiSize="xs"
             value={filters.interview_result}
-            onChange={(event) => setFilters((prev) => ({ ...prev, interview_result: event.target.value }))}
+            onChange={(event) => applyFiltersNow({ ...filters, interview_result: event.target.value })}
           >
             <option value="">Tất cả</option>
             {options.interviewResults.map((item) => (

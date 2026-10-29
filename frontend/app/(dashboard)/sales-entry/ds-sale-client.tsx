@@ -442,7 +442,11 @@ export function DsSaleClient({
     }, 350);
   }
 
-  function applyFilters() {
+  /**
+   * Áp dụng bộ lọc. Đổi 1 ô chọn là gọi luôn với giá trị mới (overrides) —
+   * lọc ngay, không cần bấm Tìm kiếm (yêu cầu người dùng 2026-10-30).
+   */
+  function applyFilters(overrides: Partial<typeof appliedFilters> = {}) {
     if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     const next = {
       keyword,
@@ -451,6 +455,7 @@ export function DsSaleClient({
       company_id: companyFilter?.id ?? "",
       sale_user_id: saleFilter?.id ?? "",
       pickup_user_id: pickupFilter?.id ?? "",
+      ...overrides,
     };
     setAppliedFilters(next);
     void loadPage(1, next, pageSize);
@@ -657,16 +662,25 @@ export function DsSaleClient({
           </Select>
         </Field>
         <Field label="Ngày vào từ" uiSize="xs" className="w-32">
-          <Input uiSize="xs" type="date" value={joinFrom} onChange={(e) => setJoinFrom(e.target.value)} />
+          <Input uiSize="xs" type="date" value={joinFrom} onChange={(e) => {
+              setJoinFrom(e.target.value);
+              applyFilters({ join_date_from: e.target.value });
+            }} />
         </Field>
         <Field label="Đến ngày" uiSize="xs" className="w-32">
-          <Input uiSize="xs" type="date" value={joinTo} onChange={(e) => setJoinTo(e.target.value)} />
+          <Input uiSize="xs" type="date" value={joinTo} onChange={(e) => {
+              setJoinTo(e.target.value);
+              applyFilters({ join_date_to: e.target.value });
+            }} />
         </Field>
         <Field label="Công ty làm" uiSize="xs" className="w-36">
           <DsSaleSearchSelect
             options={companies}
             value={companyFilter}
-            onChange={setCompanyFilter}
+            onChange={(option) => {
+              setCompanyFilter(option);
+              applyFilters({ company_id: option?.id ?? "" });
+            }}
             placeholder="Tất cả"
             emptyLabel="Chưa có dữ liệu công ty hợp tác"
           />
@@ -677,7 +691,10 @@ export function DsSaleClient({
             <DsSaleSearchSelect
               options={saleAccounts}
               value={saleFilter}
-              onChange={setSaleFilter}
+              onChange={(option) => {
+                setSaleFilter(option);
+                applyFilters({ sale_user_id: option?.id ?? "" });
+              }}
               placeholder="Tất cả"
               emptyLabel="Chưa có tài khoản Sale"
             />
@@ -687,14 +704,17 @@ export function DsSaleClient({
           <DsSaleSearchSelect
             options={pickupAccounts}
             value={pickupFilter}
-            onChange={setPickupFilter}
+            onChange={(option) => {
+              setPickupFilter(option);
+              applyFilters({ pickup_user_id: option?.id ?? "" });
+            }}
             placeholder="Tất cả"
             emptyLabel="Chưa có tài khoản Đưa đón"
           />
         </Field>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <Button type="button" size="xs" variant="primary" onClick={applyFilters}>
+          <Button type="button" size="xs" variant="primary" onClick={() => applyFilters()}>
             Tìm kiếm
           </Button>
           <Button type="button" size="xs" variant="outline" onClick={clearFilters}>
