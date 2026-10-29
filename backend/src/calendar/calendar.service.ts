@@ -49,14 +49,24 @@ export class CalendarService {
     // khi có lọc type, không đáng kể với quy mô dữ liệu bảng này.
     const [interviews, callbacks] = await Promise.all([
       this.prisma.interviewAppointment.findMany({
-        where: { scheduledAt, lead: leadWhere, ...createdByWhere },
+        where: {
+          scheduledAt,
+          deletedAt: null,
+          lead: leadWhere,
+          ...createdByWhere,
+        },
         include: {
           lead: { select: { id: true, fullName: true, phoneNumber: true } },
           createdBy: { select: { id: true, fullName: true, role: true } },
         },
       }),
       this.prisma.callbackSchedule.findMany({
-        where: { scheduledAt, lead: leadWhere, ...createdByWhere },
+        where: {
+          scheduledAt,
+          deletedAt: null,
+          lead: leadWhere,
+          ...createdByWhere,
+        },
         include: {
           lead: { select: { id: true, fullName: true, phoneNumber: true } },
           createdBy: { select: { id: true, fullName: true, role: true } },

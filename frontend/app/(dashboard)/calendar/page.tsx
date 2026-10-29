@@ -70,6 +70,8 @@ export default async function CalendarPage() {
       initialDateTo={dateTo}
       canFilterBySale={canFilterBySale}
       saleMembers={saleMembers}
+      currentUserId={user.id}
+      currentUserRole={user.role}
     />
   );
 }

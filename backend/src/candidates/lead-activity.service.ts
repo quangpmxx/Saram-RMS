@@ -369,6 +369,10 @@ export function describeLog(
       const company = /partner_company_name=(.*)$/.exec(newValue ?? '')?.[1];
       return `đã đặt lịch phỏng vấn${attempt ? ` lần ${attempt}` : ''}${company ? ` tại ${company}` : ''}`;
     }
+    if (actionType === 'delete') {
+      const attempt = /attempt_no=(\d+)/.exec(oldValue ?? '')?.[1];
+      return `đã xoá lịch phỏng vấn${attempt ? ` lần ${attempt}` : ''}`;
+    }
     if (fieldChanged === 'status_id') {
       return `đã cập nhật trạng thái phỏng vấn: ${name(oldValue) || '(trống)'} → ${name(newValue) || '(trống)'}`;
     }
@@ -379,6 +383,10 @@ export function describeLog(
     if (actionType === 'create') {
       const at = /scheduled_at=(\S+)/.exec(newValue ?? '')?.[1];
       return `đã đặt lịch gọi lại${at ? ` lúc ${formatVnDateTime(at)}` : ''}`;
+    }
+    if (actionType === 'delete') {
+      const at = /scheduled_at=(\S+)/.exec(oldValue ?? '')?.[1];
+      return `đã xoá lịch gọi lại${at ? ` lúc ${formatVnDateTime(at)}` : ''}`;
     }
     return 'đã cập nhật lịch gọi lại';
   }

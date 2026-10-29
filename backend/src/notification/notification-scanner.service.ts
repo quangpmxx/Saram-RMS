@@ -55,6 +55,7 @@ export class NotificationScannerService {
     const dueCallbacks = await this.prisma.callbackSchedule.findMany({
       where: {
         isCompleted: false,
+        deletedAt: null,
         scheduledAt: { lte: now, gte: graceWindowStart },
         lead: { deletedAt: null, assignedToId: { not: null } },
       },

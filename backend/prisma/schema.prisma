@@ -496,8 +496,8 @@ model Lead {
   /// trạng thái hiện tại; mỗi lần dừng/tiếp tục đều ghi audit_logs
   /// (field_changed = 'care_stopped_at') để dựng lại trạng thái tại mốc
   /// cuối tháng bất kỳ khi tính báo cáo tháng cũ (xem care-metrics.ts).
-  careStoppedAt   DateTime? @map("care_stopped_at")
-  careStoppedById String?   @map("care_stopped_by") @db.Uuid
+  careStoppedAt         DateTime? @map("care_stopped_at")
+  careStoppedById       String?   @map("care_stopped_by") @db.Uuid
   /// Sale đề nghị dừng chăm sóc, đang CHỜ Leader/Quản lý/Admin duyệt
   /// (yêu cầu người dùng 2026-10-28). Duyệt → điền careStoppedAt/By và xóa
   /// 2 cột này; từ chối → chỉ xóa 2 cột này. Lịch sử nằm trong audit_logs.
@@ -592,17 +592,20 @@ model LeadNote {
 /// bùng PV (no-show) và hẹn lại tạo 1 dòng mới với attempt_no tăng dần, giữ
 /// nguyên toàn bộ lịch sử các lần hẹn trước đó.
 model InterviewAppointment {
-  id                 String   @id @default(uuid()) @db.Uuid
-  leadId             String   @map("lead_id") @db.Uuid
-  attemptNo          Int      @default(1) @map("attempt_no") @db.SmallInt
-  partnerCompanyName String   @map("partner_company_name") @db.VarChar(150)
-  scheduledAt        DateTime @map("scheduled_at")
-  statusId           String   @map("status_id") @db.Uuid
-  employmentStatusId String?  @map("employment_status_id") @db.Uuid
-  employmentReason   String?  @map("employment_reason")
-  createdById        String   @map("created_by") @db.Uuid
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid()) @db.Uuid
+  leadId             String    @map("lead_id") @db.Uuid
+  attemptNo          Int       @default(1) @map("attempt_no") @db.SmallInt
+  partnerCompanyName String    @map("partner_company_name") @db.VarChar(150)
+  scheduledAt        DateTime  @map("scheduled_at")
+  statusId           String    @map("status_id") @db.Uuid
+  employmentStatusId String?   @map("employment_status_id") @db.Uuid
+  employmentReason   String?   @map("employment_reason")
+  createdById        String    @map("created_by") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  /// Xoá mềm từ module Lịch hẹn (2026-10-29) — mọi truy vấn phải lọc deletedAt: null.
+  deletedAt          DateTime? @map("deleted_at")
+  deletedById        String?   @map("deleted_by") @db.Uuid
 
   lead             Lead           @relation(fields: [leadId], references: [id])
   status           StatusCatalog  @relation("InterviewAppointmentStatus", fields: [statusId], references: [id])
@@ -616,12 +619,15 @@ model InterviewAppointment {
 
 /// Mục 2.11, tài liệu 11 — Lịch hẹn gọi lại của 1 lead.
 model CallbackSchedule {
-  id          String   @id @default(uuid()) @db.Uuid
-  leadId      String   @map("lead_id") @db.Uuid
-  scheduledAt DateTime @map("scheduled_at")
-  isCompleted Boolean  @default(false) @map("is_completed")
-  createdById String   @map("created_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
+  id          String    @id @default(uuid()) @db.Uuid
+  leadId      String    @map("lead_id") @db.Uuid
+  scheduledAt DateTime  @map("scheduled_at")
+  isCompleted Boolean   @default(false) @map("is_completed")
+  createdById String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  /// Xoá mềm từ module Lịch hẹn (2026-10-29) — mọi truy vấn phải lọc deletedAt: null.
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by") @db.Uuid
 
   lead      Lead    @relation(fields: [leadId], references: [id])
   createdBy Account @relation("CallbackScheduleCreatedBy", fields: [createdById], references: [id])
@@ -982,11 +988,11 @@ model ShuttleRecord {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  createdBy Account      @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
-  updatedBy Account      @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
-  company   OrderRecord? @relation(fields: [companyId], references: [id])
-  saleUser  Account?     @relation("ShuttleRecordSaleUser", fields: [saleUserId], references: [id])
-  driverUser Account?    @relation("ShuttleRecordDriverUser", fields: [driverUserId], references: [id])
+  createdBy  Account      @relation("ShuttleRecordCreatedBy", fields: [createdById], references: [id])
+  updatedBy  Account      @relation("ShuttleRecordUpdatedBy", fields: [updatedById], references: [id])
+  company    OrderRecord? @relation(fields: [companyId], references: [id])
+  saleUser   Account?     @relation("ShuttleRecordSaleUser", fields: [saleUserId], references: [id])
+  driverUser Account?     @relation("ShuttleRecordDriverUser", fields: [driverUserId], references: [id])
 
   @@index([date])
   @@index([status])

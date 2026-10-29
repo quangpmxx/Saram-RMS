@@ -206,13 +206,20 @@ export class DashboardService {
               where: { ...leadWhere, callResult: { code: 'POTENTIAL' } },
             }),
             this.prisma.interviewAppointment.count({
-              where: { createdById: sale.id, ...interviewDateWhere },
+              where: {
+                createdById: sale.id,
+                deletedAt: null,
+                ...interviewDateWhere,
+              },
             }),
             this.prisma.lead.count({
               where: {
                 ...leadWhere,
                 interviews: {
-                  some: { employmentStatus: { code: 'EMPLOYED' } },
+                  some: {
+                    deletedAt: null,
+                    employmentStatus: { code: 'EMPLOYED' },
+                  },
                 },
               },
             }),
@@ -376,7 +383,12 @@ export class DashboardService {
           this.prisma.lead.count({
             where: {
               ...where,
-              interviews: { some: { employmentStatus: { code: 'EMPLOYED' } } },
+              interviews: {
+                some: {
+                  deletedAt: null,
+                  employmentStatus: { code: 'EMPLOYED' },
+                },
+              },
             },
           }),
         ]);
@@ -412,25 +424,32 @@ export class DashboardService {
       employedCount,
     ] = await Promise.all([
       this.prisma.lead.count({ where }),
-      this.prisma.lead.count({ where: { ...where, interviews: { some: {} } } }),
+      this.prisma.lead.count({
+        where: { ...where, interviews: { some: { deletedAt: null } } },
+      }),
       this.prisma.lead.count({
         where: {
           ...where,
           interviews: {
-            some: { status: { code: { in: ATTENDED_INTERVIEW_STATUS_CODES } } },
+            some: {
+              deletedAt: null,
+              status: { code: { in: ATTENDED_INTERVIEW_STATUS_CODES } },
+            },
           },
         },
       }),
       this.prisma.lead.count({
         where: {
           ...where,
-          interviews: { some: { status: { code: 'PASSED' } } },
+          interviews: { some: { deletedAt: null, status: { code: 'PASSED' } } },
         },
       }),
       this.prisma.lead.count({
         where: {
           ...where,
-          interviews: { some: { employmentStatus: { code: 'EMPLOYED' } } },
+          interviews: {
+            some: { deletedAt: null, employmentStatus: { code: 'EMPLOYED' } },
+          },
         },
       }),
     ]);

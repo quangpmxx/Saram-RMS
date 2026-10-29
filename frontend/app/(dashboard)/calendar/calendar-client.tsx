@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CalendarPlus, CalendarDays, Search } from "lucide-react";
+import { CalendarPlus, CalendarDays, Search, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { CalendarEvent, Candidate, ModulePermissionLevel, PaginatedResult, TeamMember } from "@/lib/types";
+import type {
+  AccountRole,
+  CalendarEvent,
+  Candidate,
+  ModulePermissionLevel,
+  PaginatedResult,
+  TeamMember,
+} from "@/lib/types";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +57,8 @@ export function CalendarClient({
   initialDateTo,
   canFilterBySale,
   saleMembers,
+  currentUserId,
+  currentUserRole,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialEvents: CalendarEvent[];
@@ -58,6 +67,8 @@ export function CalendarClient({
   /** Dự án phụ — nâng cấp toàn diện: chỉ Admin/Quản lý/Leader mới cần chọn Sale (Sale role đã bị khóa chỉ thấy lịch của mình). */
   canFilterBySale: boolean;
   saleMembers: TeamMember[];
+  currentUserId: string;
+  currentUserRole: AccountRole;
 }) {
   useSetPageTitle("Lịch hẹn");
   const [events, setEvents] = useState(initialEvents);
@@ -90,6 +101,41 @@ export function CalendarClient({
   }
 
   const isReadOnly = permissionLevel === "view";
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  /**
+   * Nút xoá trên từng dòng (yêu cầu người dùng 2026-10-29) — khớp quyền
+   * backend: MKT chỉ xem; Sale chỉ xoá lịch gọi lại do chính mình đặt (lịch
+   * PV theo phạm vi lead, backend kiểm tra lại). Xoá mềm — vẫn còn trong
+   * lịch sử thao tác của data.
+   */
+  function canDelete(event: CalendarEvent): boolean {
+    if (isReadOnly || currentUserRole === "mkt") return false;
+    if (currentUserRole === "sale" && event.type === "callback") return event.created_by.id === currentUserId;
+    return true;
+  }
+
+  async function handleDelete(event: CalendarEvent) {
+    const label = event.type === "interview" ? "lịch hẹn phỏng vấn" : "lịch gọi lại";
+    if (
+      !window.confirm(
+        `Xoá ${label} của ${event.candidate.full_name} lúc ${formatDateTime(event.scheduled_at)}?`,
+      )
+    ) {
+      return;
+    }
+    const key = `${event.type}-${event.id}`;
+    setDeletingKey(key);
+    try {
+      await clientApi(`/calendar/${event.type}/${event.id}`, { method: "DELETE" });
+      setEvents((prev) => prev.filter((e) => !(e.type === event.type && e.id === event.id)));
+      toast.success(`Đã xoá ${label}`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setDeletingKey(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -150,10 +196,10 @@ export function CalendarClient({
               </div>
               <ul className="divide-y divide-slate-100">
                 {group.events.map((event) => (
-                  <li key={`${event.type}-${event.id}`}>
+                  <li key={`${event.type}-${event.id}`} className="flex items-center transition-colors hover:bg-slate-50">
                     <Link
                       href={`/candidates/${event.candidate.id}`}
-                      className="flex flex-wrap items-center justify-between gap-2 p-4 transition-colors hover:bg-slate-50"
+                      className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 p-4"
                     >
                       <div className="flex items-center gap-3">
                         <Badge variant={event.type === "interview" ? "info" : "accent"}>
@@ -171,6 +217,18 @@ export function CalendarClient({
                         </p>
                       </div>
                     </Link>
+                    {canDelete(event) && (
+                      <button
+                        type="button"
+                        title="Xoá lịch hẹn"
+                        aria-label={`Xoá lịch hẹn của ${event.candidate.full_name}`}
+                        disabled={deletingKey === `${event.type}-${event.id}`}
+                        onClick={() => void handleDelete(event)}
+                        className="mr-3 shrink-0 rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={2} />
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

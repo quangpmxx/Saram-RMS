@@ -140,6 +140,7 @@ export class CareWarehouseService {
       notes: { some: { isDeleted: false } },
       callbacks: {
         none: {
+          deletedAt: null,
           isCompleted: false,
           scheduledAt: { gte: today.start, lt: today.end },
         },

@@ -27,6 +27,12 @@ describe('LeadPipelineService', () => {
     };
     statusCatalog: { findUnique: jest.Mock };
     account: { findUnique: jest.Mock };
+    interviewAppointment: {
+      findUnique: jest.Mock;
+      findFirst: jest.Mock;
+      update: jest.Mock;
+    };
+    callbackSchedule: { findUnique: jest.Mock; update: jest.Mock };
   };
   let auditLog: { log: jest.Mock };
   let candidatesService: { findOne: jest.Mock };
@@ -138,6 +144,12 @@ describe('LeadPipelineService', () => {
       },
       statusCatalog: { findUnique: jest.fn() },
       account: { findUnique: jest.fn() },
+      interviewAppointment: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      callbackSchedule: { findUnique: jest.fn(), update: jest.fn() },
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     candidatesService = { findOne: jest.fn().mockResolvedValue({}) };
@@ -905,6 +917,109 @@ describe('LeadPipelineService', () => {
         managerUser,
       );
       expect(prisma.leadNote.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteInterview / deleteCallback (xoá mềm từ module Lịch hẹn)', () => {
+    const interview = {
+      id: 'iv-1',
+      leadId: 'lead-1',
+      attemptNo: 2,
+      scheduledAt: new Date('2026-10-30T02:00:00.000Z'),
+      deletedAt: null,
+    };
+    const callback = {
+      id: 'cb-1',
+      leadId: 'lead-1',
+      createdById: 'sale-1',
+      scheduledAt: new Date('2026-10-30T03:00:00.000Z'),
+      deletedAt: null,
+    };
+
+    it('Admin xoá lịch PV: chỉ đánh dấu deletedAt, ghi nhật ký, tính lại trạng thái PV từ lịch còn lại', async () => {
+      prisma.interviewAppointment.findUnique.mockResolvedValue(interview);
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.interviewAppointment.findFirst.mockResolvedValue({
+        statusId: 'st-old',
+        employmentStatusId: null,
+        partnerCompanyName: 'Samsung',
+      });
+
+      await service.deleteInterview('iv-1', adminUser);
+
+      expect(prisma.interviewAppointment.update).toHaveBeenCalledWith({
+        where: { id: 'iv-1' },
+        data: { deletedAt: expect.any(Date), deletedById: 'admin-1' },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'delete',
+          entityType: 'interview_appointment',
+          entityId: 'iv-1',
+        }),
+      );
+      expect(prisma.interviewAppointment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { leadId: 'lead-1', deletedAt: null },
+        }),
+      );
+      expect(prisma.lead.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            currentInterviewStatusId: 'st-old',
+            currentPartnerCompanyName: 'Samsung',
+          }),
+        }),
+      );
+    });
+
+    it('MKT không được xoá lịch PV', async () => {
+      prisma.interviewAppointment.findUnique.mockResolvedValue(interview);
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+
+      await expect(service.deleteInterview('iv-1', mktUser)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.interviewAppointment.update).not.toHaveBeenCalled();
+    });
+
+    it('lịch đã xoá rồi → 404', async () => {
+      prisma.interviewAppointment.findUnique.mockResolvedValue({
+        ...interview,
+        deletedAt: new Date(),
+      });
+      await expect(service.deleteInterview('iv-1', adminUser)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('Sale xoá được lịch gọi lại do chính mình đặt', async () => {
+      prisma.callbackSchedule.findUnique.mockResolvedValue(callback);
+
+      await service.deleteCallback('cb-1', saleUser);
+
+      expect(prisma.callbackSchedule.update).toHaveBeenCalledWith({
+        where: { id: 'cb-1' },
+        data: { deletedAt: expect.any(Date), deletedById: 'sale-1' },
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'delete',
+          entityType: 'callback_schedule',
+        }),
+      );
+    });
+
+    it('Sale không xoá được lịch gọi lại của người khác', async () => {
+      prisma.callbackSchedule.findUnique.mockResolvedValue({
+        ...callback,
+        createdById: 'sale-2',
+      });
+
+      await expect(service.deleteCallback('cb-1', saleUser)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.callbackSchedule.update).not.toHaveBeenCalled();
     });
   });
 });

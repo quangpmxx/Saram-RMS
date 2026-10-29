@@ -485,7 +485,7 @@ export class LeadPipelineService {
       'SCHEDULED',
     );
     const lastAttempt = await this.prisma.interviewAppointment.findFirst({
-      where: { leadId: id },
+      where: { leadId: id, deletedAt: null },
       orderBy: { attemptNo: 'desc' },
     });
 
@@ -522,7 +522,7 @@ export class LeadPipelineService {
     await this.candidatesService.findOne(id, currentUser);
 
     const interviews = await this.prisma.interviewAppointment.findMany({
-      where: { leadId: id },
+      where: { leadId: id, deletedAt: null },
       include: INTERVIEW_INCLUDE,
       orderBy: { attemptNo: 'asc' },
     });
@@ -544,7 +544,7 @@ export class LeadPipelineService {
     const interview = await this.prisma.interviewAppointment.findUnique({
       where: { id: interviewId },
     });
-    if (!interview) {
+    if (!interview || interview.deletedAt) {
       throw new NotFoundException('Không tìm thấy lịch hẹn phỏng vấn');
     }
     await this.loadLeadForUpdate(interview.leadId, currentUser);
@@ -652,7 +652,7 @@ export class LeadPipelineService {
     const callback = await this.prisma.callbackSchedule.findUnique({
       where: { id: callbackId },
     });
-    if (!callback) {
+    if (!callback || callback.deletedAt) {
       throw new NotFoundException('Không tìm thấy lịch gọi lại');
     }
 
@@ -683,6 +683,78 @@ export class LeadPipelineService {
     });
 
     return toCallbackResponse(updated);
+  }
+
+  /**
+   * Xoá 1 lịch hẹn PV từ module Lịch hẹn (yêu cầu người dùng 2026-10-29) —
+   * XOÁ MỀM (deletedAt/deletedById), không mất lịch sử. Cùng quyền như cập
+   * nhật lịch hẹn PV. Trạng thái PV hiện tại của lead tính lại từ các lần
+   * hẹn còn lại.
+   */
+  async deleteInterview(
+    interviewId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    const interview = await this.prisma.interviewAppointment.findUnique({
+      where: { id: interviewId },
+    });
+    if (!interview || interview.deletedAt) {
+      throw new NotFoundException('Không tìm thấy lịch hẹn phỏng vấn');
+    }
+    await this.loadLeadForUpdate(interview.leadId, currentUser);
+
+    await this.prisma.interviewAppointment.update({
+      where: { id: interviewId },
+      data: { deletedAt: new Date(), deletedById: currentUser.id },
+    });
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'delete',
+      entityType: 'interview_appointment',
+      entityId: interviewId,
+      oldValue: `attempt_no=${interview.attemptNo};scheduled_at=${interview.scheduledAt.toISOString()}`,
+    });
+    await this.syncCurrentInterviewSnapshot(interview.leadId, currentUser);
+  }
+
+  /**
+   * Xoá 1 lịch gọi lại (xoá mềm) — cùng quyền như cập nhật lịch gọi lại:
+   * Sale chỉ xoá lịch do chính mình đặt; Leader/Quản lý/Admin theo phạm vi lead.
+   */
+  async deleteCallback(
+    callbackId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    const callback = await this.prisma.callbackSchedule.findUnique({
+      where: { id: callbackId },
+    });
+    if (!callback || callback.deletedAt) {
+      throw new NotFoundException('Không tìm thấy lịch gọi lại');
+    }
+    if (currentUser.role === 'sale') {
+      if (callback.createdById !== currentUser.id) {
+        throw new ForbiddenException('Bạn chỉ được xoá lịch gọi lại của mình');
+      }
+    } else {
+      await this.loadLeadForUpdate(callback.leadId, currentUser);
+    }
+
+    await this.prisma.callbackSchedule.update({
+      where: { id: callbackId },
+      data: { deletedAt: new Date(), deletedById: currentUser.id },
+    });
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'delete',
+      entityType: 'callback_schedule',
+      entityId: callbackId,
+      oldValue: `scheduled_at=${callback.scheduledAt.toISOString()}`,
+    });
+    this.realtime.emitCandidateChange(
+      'updated',
+      await this.reloadCandidateSilently(callback.leadId),
+      currentUser,
+    );
   }
 
   /**
@@ -806,7 +878,7 @@ export class LeadPipelineService {
     currentUser: AuthenticatedUser,
   ): Promise<void> {
     const latest = await this.prisma.interviewAppointment.findFirst({
-      where: { leadId },
+      where: { leadId, deletedAt: null },
       orderBy: { attemptNo: 'desc' },
     });
 
