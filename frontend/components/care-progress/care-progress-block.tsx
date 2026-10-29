@@ -85,23 +85,24 @@ function Group({ title, subtitle, children }: { title: string; subtitle: string;
   );
 }
 
-/** 4 nhóm số tổng: Trong ngày, Tồn cũ, Tháng, Mục tiêu tháng. */
-function SummaryGroups({
-  daily,
-  monthly,
-  target,
-  date,
-  month,
-  isSale,
-}: {
-  daily: CareDailyMetrics;
-  monthly: CareMonthlyMetrics;
-  target: CareProgressResult["target"];
-  date: string;
-  month: string;
-  isSale: boolean;
-}) {
-  const targetPercent = target.rate ?? 0;
+type ViewMode = "day" | "month";
+
+function ProgressBar({ percent }: { percent: number }) {
+  return (
+    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div
+        className="h-full rounded-full bg-emerald-500 transition-all duration-200"
+        style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Yêu cầu người dùng (2026-10-29): mặc định chỉ hiện số liệu + thanh tiến
+ * trình theo NGÀY; muốn xem tháng thì chọn "Theo tháng".
+ */
+function DaySummary({ daily, date }: { daily: CareDailyMetrics; date: string }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <Group title={`Trong ngày ${dateLabel(date)}`} subtitle="Data được giao trong ngày — mỗi data đếm 1 lần">
@@ -114,6 +115,14 @@ function SummaryGroups({
           tone="text-brand-700"
           hint="Đã xử lý ÷ Được giao trong ngày"
         />
+        <div className="col-span-2 sm:col-span-4">
+          <ProgressBar percent={daily.completion_rate ?? 0} />
+          <p className="mt-1 text-[11px] text-slate-500">
+            {daily.today.assigned === 0
+              ? "Chưa có data nào được giao trong ngày"
+              : `Còn ${daily.today.pending.toLocaleString("vi-VN")} data giao trong ngày chưa xử lý`}
+          </p>
+        </div>
       </Group>
       <Group
         title="Tồn cũ"
@@ -128,6 +137,23 @@ function SummaryGroups({
           hint="Số ghi chú trong ngày, cả 2 nhóm Trong ngày và Tồn cũ (1 data có thể nhiều lượt)"
         />
       </Group>
+    </div>
+  );
+}
+
+function MonthSummary({
+  monthly,
+  target,
+  month,
+  isSale,
+}: {
+  monthly: CareMonthlyMetrics;
+  target: CareProgressResult["target"];
+  month: string;
+  isSale: boolean;
+}) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
       <Group title={`Tháng ${monthLabel(month)}`} subtitle="Data được giao trong tháng">
         <Metric label="Được giao" value={monthly.assigned} />
         <Metric label="Đã chăm sóc" value={monthly.processed} tone="text-emerald-700" />
@@ -154,12 +180,7 @@ function SummaryGroups({
           </p>
           <p className="text-xl font-bold text-brand-700 tabular-nums">{formatRate(target.rate)}</p>
         </div>
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-emerald-500 transition-all duration-200"
-            style={{ width: `${Math.max(0, Math.min(100, targetPercent))}%` }}
-          />
-        </div>
+        <ProgressBar percent={target.rate ?? 0} />
         <p className="mt-1 text-[11px] text-slate-500">
           Còn {target.not_cared.toLocaleString("vi-VN")} data chưa được chăm sóc
         </p>
@@ -168,7 +189,15 @@ function SummaryGroups({
   );
 }
 
-function SaleTable({ rows, totals }: { rows: CareProgressRow[]; totals: CareProgressResult["totals"] }) {
+function SaleTable({
+  rows,
+  totals,
+  mode,
+}: {
+  rows: CareProgressRow[];
+  totals: CareProgressResult["totals"];
+  mode: ViewMode;
+}) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center gap-1 py-6 text-sm text-slate-400">
@@ -179,23 +208,34 @@ function SaleTable({ rows, totals }: { rows: CareProgressRow[]; totals: CareProg
   }
   const th = "border-b border-slate-200 px-2 py-2 font-semibold whitespace-nowrap";
   const td = "px-2 py-2 tabular-nums";
+  const isDay = mode === "day";
   return (
     <div className="max-h-[420px] overflow-auto rounded-xl border border-slate-200">
-      <table className="w-full min-w-[960px] border-collapse text-left text-xs">
+      <table className="w-full min-w-[720px] border-collapse text-left text-xs">
         <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] tracking-wider text-brand-900 uppercase backdrop-blur">
           <tr>
             <th className={th}>Sale</th>
             <th className={th}>Nhóm</th>
-            <th className={cn(th, "text-right")}>Giao trong ngày</th>
-            <th className={cn(th, "text-right")}>Đã chăm sóc</th>
-            <th className={cn(th, "text-right")}>Chưa chăm sóc</th>
-            <th className={cn(th, "text-right")}>Tỷ lệ ngày</th>
-            <th className={cn(th, "text-right")} title="Còn tồn / tồn đầu ngày">
-              Tồn cũ
-            </th>
-            <th className={cn(th, "text-right")}>Giao trong tháng</th>
-            <th className={cn(th, "text-right")}>Chưa CS trong tháng</th>
-            <th className={th}>Chăm sóc gần nhất</th>
+            {isDay ? (
+              <>
+                <th className={cn(th, "text-right")}>Giao trong ngày</th>
+                <th className={cn(th, "text-right")}>Đã chăm sóc</th>
+                <th className={cn(th, "text-right")}>Chưa chăm sóc</th>
+                <th className={cn(th, "text-right")}>Tỷ lệ ngày</th>
+                <th className={cn(th, "text-right")} title="Còn tồn / tồn đầu ngày">
+                  Tồn cũ
+                </th>
+                <th className={cn(th, "text-right")}>Lượt CS ngày</th>
+              </>
+            ) : (
+              <>
+                <th className={cn(th, "text-right")}>Giao trong tháng</th>
+                <th className={cn(th, "text-right")}>Đã chăm sóc</th>
+                <th className={cn(th, "text-right")}>Chưa CS trong tháng</th>
+                <th className={cn(th, "text-right")}>Lượt CS tháng</th>
+                <th className={th}>Chăm sóc gần nhất</th>
+              </>
+            )}
             <th className={th} />
           </tr>
         </thead>
@@ -213,20 +253,32 @@ function SaleTable({ rows, totals }: { rows: CareProgressRow[]; totals: CareProg
                 </div>
               </td>
               <td className="px-2 py-2 text-slate-500">{row.team?.name ?? "—"}</td>
-              <td className={cn(td, "text-right")}>{row.daily.today.assigned}</td>
-              <td className={cn(td, "text-right text-emerald-700")}>{row.daily.today.processed}</td>
-              <td className={cn(td, "text-right", row.daily.today.pending > 0 && "font-semibold text-red-700")}>
-                {row.daily.today.pending}
-              </td>
-              <td className={cn(td, "text-right font-medium text-brand-700")}>
-                {formatRate(row.daily.completion_rate)}
-              </td>
-              <td className={cn(td, "text-right", row.daily.backlog.remaining > 0 && "text-amber-700")}>
-                {row.daily.backlog.remaining} / {row.daily.backlog.start}
-              </td>
-              <td className={cn(td, "text-right")}>{row.monthly.assigned}</td>
-              <td className={cn(td, "text-right", row.monthly.pending > 0 && "text-red-700")}>{row.monthly.pending}</td>
-              <td className="px-2 py-2 text-slate-500">{formatCareDateTime(row.monthly.last_care_at)}</td>
+              {isDay ? (
+                <>
+                  <td className={cn(td, "text-right")}>{row.daily.today.assigned}</td>
+                  <td className={cn(td, "text-right text-emerald-700")}>{row.daily.today.processed}</td>
+                  <td className={cn(td, "text-right", row.daily.today.pending > 0 && "font-semibold text-red-700")}>
+                    {row.daily.today.pending}
+                  </td>
+                  <td className={cn(td, "text-right font-medium text-brand-700")}>
+                    {formatRate(row.daily.completion_rate)}
+                  </td>
+                  <td className={cn(td, "text-right", row.daily.backlog.remaining > 0 && "text-amber-700")}>
+                    {row.daily.backlog.remaining} / {row.daily.backlog.start}
+                  </td>
+                  <td className={cn(td, "text-right")}>{row.daily.care_turns}</td>
+                </>
+              ) : (
+                <>
+                  <td className={cn(td, "text-right")}>{row.monthly.assigned}</td>
+                  <td className={cn(td, "text-right text-emerald-700")}>{row.monthly.processed}</td>
+                  <td className={cn(td, "text-right", row.monthly.pending > 0 && "text-red-700")}>
+                    {row.monthly.pending}
+                  </td>
+                  <td className={cn(td, "text-right")}>{row.monthly.care_turns}</td>
+                  <td className="px-2 py-2 text-slate-500">{formatCareDateTime(row.monthly.last_care_at)}</td>
+                </>
+              )}
               <td className="px-2 py-2">
                 <Link
                   href={`/candidates?view=care&care_assignee=${row.account.id}`}
@@ -245,16 +297,26 @@ function SaleTable({ rows, totals }: { rows: CareProgressRow[]; totals: CareProg
             <td className="px-2 py-2" colSpan={2}>
               Tổng (data khác nhau)
             </td>
-            <td className={cn(td, "text-right")}>{totals.daily.today.assigned}</td>
-            <td className={cn(td, "text-right")}>{totals.daily.today.processed}</td>
-            <td className={cn(td, "text-right")}>{totals.daily.today.pending}</td>
-            <td className={cn(td, "text-right")}>{formatRate(totals.daily.completion_rate)}</td>
-            <td className={cn(td, "text-right")}>
-              {totals.daily.backlog.remaining} / {totals.daily.backlog.start}
-            </td>
-            <td className={cn(td, "text-right")}>{totals.monthly.assigned}</td>
-            <td className={cn(td, "text-right")}>{totals.monthly.pending}</td>
-            <td className="px-2 py-2">{formatCareDateTime(totals.monthly.last_care_at)}</td>
+            {isDay ? (
+              <>
+                <td className={cn(td, "text-right")}>{totals.daily.today.assigned}</td>
+                <td className={cn(td, "text-right")}>{totals.daily.today.processed}</td>
+                <td className={cn(td, "text-right")}>{totals.daily.today.pending}</td>
+                <td className={cn(td, "text-right")}>{formatRate(totals.daily.completion_rate)}</td>
+                <td className={cn(td, "text-right")}>
+                  {totals.daily.backlog.remaining} / {totals.daily.backlog.start}
+                </td>
+                <td className={cn(td, "text-right")}>{totals.daily.care_turns}</td>
+              </>
+            ) : (
+              <>
+                <td className={cn(td, "text-right")}>{totals.monthly.assigned}</td>
+                <td className={cn(td, "text-right")}>{totals.monthly.processed}</td>
+                <td className={cn(td, "text-right")}>{totals.monthly.pending}</td>
+                <td className={cn(td, "text-right")}>{totals.monthly.care_turns}</td>
+                <td className="px-2 py-2">{formatCareDateTime(totals.monthly.last_care_at)}</td>
+              </>
+            )}
             <td />
           </tr>
         </tfoot>
@@ -283,6 +345,7 @@ export function CareProgressBlock({
   status?: "" | "pending" | "done";
 }) {
   const isSale = currentUserRole === "sale";
+  const [mode, setMode] = useState<ViewMode>("day");
   const [date, setDate] = useState(vnToday);
   const [month, setMonth] = useState(() => vnToday().slice(0, 7));
   const [data, setData] = useState<CareProgressResult | null>(null);
@@ -346,28 +409,53 @@ export function CareProgressBlock({
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Ngày" uiSize="sm">
-            <Input
-              uiSize="sm"
-              type="date"
-              value={date}
-              max={vnToday()}
-              onChange={(e) => {
-                if (!e.target.value) return;
-                setDate(e.target.value);
-                setMonth(e.target.value.slice(0, 7));
-              }}
-            />
-          </Field>
-          <Field label="Tháng" uiSize="sm">
-            <Input
-              uiSize="sm"
-              type="month"
-              value={month}
-              max={vnToday().slice(0, 7)}
-              onChange={(e) => e.target.value && setMonth(e.target.value)}
-            />
-          </Field>
+          <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium" role="tablist" aria-label="Xem theo">
+            {(
+              [
+                ["day", "Theo ngày"],
+                ["month", "Theo tháng"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={mode === key}
+                onClick={() => setMode(key)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 transition-colors",
+                  mode === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {mode === "day" ? (
+            <Field label="Ngày" uiSize="sm">
+              <Input
+                uiSize="sm"
+                type="date"
+                value={date}
+                max={vnToday()}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  setDate(e.target.value);
+                  setMonth(e.target.value.slice(0, 7));
+                }}
+              />
+            </Field>
+          ) : (
+            <Field label="Tháng" uiSize="sm">
+              <Input
+                uiSize="sm"
+                type="month"
+                value={month}
+                max={vnToday().slice(0, 7)}
+                onChange={(e) => e.target.value && setMonth(e.target.value)}
+              />
+            </Field>
+          )}
           <Link
             href={accountId ? `/candidates?view=care&care_assignee=${accountId}` : "/candidates?view=care"}
             className="flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
@@ -383,28 +471,22 @@ export function CareProgressBlock({
         !error && <p className="py-6 text-center text-sm text-slate-400">Đang tải…</p>
       ) : isSale ? (
         ownRow ? (
-          <SummaryGroups
-            daily={ownRow.daily}
-            monthly={ownRow.monthly}
-            target={data.target}
-            date={data.date}
-            month={data.month}
-            isSale
-          />
+          mode === "day" ? (
+            <DaySummary daily={ownRow.daily} date={data.date} />
+          ) : (
+            <MonthSummary monthly={ownRow.monthly} target={data.target} month={data.month} isSale />
+          )
         ) : (
           <p className="py-6 text-center text-sm text-slate-400">Chưa có dữ liệu.</p>
         )
       ) : (
         <div className="space-y-3">
-          <SummaryGroups
-            daily={data.totals.daily}
-            monthly={data.totals.monthly}
-            target={data.target}
-            date={data.date}
-            month={data.month}
-            isSale={false}
-          />
-          <SaleTable rows={data.rows} totals={data.totals} />
+          {mode === "day" ? (
+            <DaySummary daily={data.totals.daily} date={data.date} />
+          ) : (
+            <MonthSummary monthly={data.totals.monthly} target={data.target} month={data.month} isSale={false} />
+          )}
+          <SaleTable rows={data.rows} totals={data.totals} mode={mode} />
         </div>
       )}
     </Card>
