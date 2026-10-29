@@ -167,6 +167,7 @@ export function CandidatesClient({
   teams,
   allSaleMembers,
   zaloStatuses,
+  zaloFriendStatuses,
   initialViewMode,
   initialFilters,
   initialCareAssigneeId,
@@ -182,6 +183,8 @@ export function CandidatesClient({
   teams: Team[];
   allSaleMembers: TeamMember[];
   zaloStatuses: StatusCatalogItem[];
+  /** Cột "Zalo" (2026-10-29): trạng thái kết bạn Zalo — Chưa kết bạn / Đã kết bạn / Không có Zalo. */
+  zaloFriendStatuses: StatusCatalogItem[];
   /**
    * Phase 7 — mở sẵn đúng danh sách đã lọc khi bấm vào 1 con số breakdown
    * từ Dashboard/Reports (Mục 1/8, docs/12). Không truyền (trang Ứng viên
@@ -626,6 +629,19 @@ export function CandidatesClient({
     }
   }
 
+  /** Cột "Zalo" (yêu cầu người dùng 2026-10-29) — chọn xong lưu ngay, cập nhật đúng dòng đó. */
+  async function handleZaloFriendStatusChange(candidate: Candidate, zaloFriendStatusId: string | null) {
+    try {
+      const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-friend-status`, {
+        method: "PUT",
+        body: JSON.stringify({ zalo_friend_status_id: zaloFriendStatusId }),
+      });
+      setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    }
+  }
+
   return (
     <div className="w-full">
       {isReadOnly && (
@@ -895,7 +911,9 @@ export function CandidatesClient({
               <col className="w-[108px] min-w-[108px] max-w-[108px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[64px] min-w-[64px] max-w-[64px]" />
-              <col className="w-[327px] min-w-[327px] max-w-[327px]" />
+              {/* Cột "Zalo" (2026-10-29) lấy 46px từ cột "Tình trạng cuộc gọi" (327 → 281). */}
+              <col className="w-[281px] min-w-[281px] max-w-[281px]" />
+              <col className="w-[46px] min-w-[46px] max-w-[46px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[21px] min-w-[21px] max-w-[21px]" />
             </colgroup>
@@ -908,6 +926,7 @@ export function CandidatesClient({
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nguồn</th>
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nhân viên</th>
                 <th className="border-r border-slate-100 px-4 py-2 text-center">Tình trạng cuộc gọi</th>
+                <th className="border-r border-slate-100 px-1 py-2 text-center">Zalo</th>
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Kết quả</th>
                 <th className="px-1 py-2 text-center">HĐ</th>
               </tr>
@@ -1101,16 +1120,51 @@ export function CandidatesClient({
                             {candidate.call_result.name}
                           </Badge>
                         )}
-                        {candidate.zalo_friend_status && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0 text-[10px] font-medium whitespace-nowrap ring-1 ring-inset ring-black/10"
-                            style={zaloFriendStatusStyle(candidate.zalo_friend_status.name)}
-                          >
-                            {candidate.zalo_friend_status.name}
-                          </span>
-                        )}
                       </div>
                       <CareNoteCell notes={candidateNotes} />
+                    </td>
+
+                    {/* Cột "Zalo" (yêu cầu người dùng 2026-10-29) — trạng thái kết bạn
+                        Zalo, cùng kiểu khối như cột "Kết quả". Nhiều lựa chọn nên đặt
+                        <select> trong suốt phủ lên khối chữ: vẫn mở danh sách chọn thật
+                        mà chữ dài vẫn xuống dòng được. */}
+                    <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">
+                      {(() => {
+                        const status = candidate.zalo_friend_status;
+                        const pillStyle = status ? zaloFriendStatusStyle(status.name) : undefined;
+                        const pillClass = cn(
+                          "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
+                          status ? "ring-1 ring-inset ring-black/10" : "border border-slate-200 text-slate-600",
+                        );
+                        if (!canUpdateZaloStatus(candidate)) {
+                          return (
+                            <span style={pillStyle} className={pillClass}>
+                              {status?.name ?? "--"}
+                            </span>
+                          );
+                        }
+                        return (
+                          <div className="relative">
+                            <div style={pillStyle} className={pillClass}>
+                              <span>{status?.name ?? "--"}</span>
+                              <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
+                            </div>
+                            <select
+                              aria-label={`Trạng thái Zalo của ${candidate.full_name}`}
+                              value={status?.id ?? ""}
+                              onChange={(event) => void handleZaloFriendStatusChange(candidate, event.target.value || null)}
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            >
+                              <option value="">Chưa cập nhật</option>
+                              {zaloFriendStatuses.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">

@@ -111,7 +111,7 @@ export default async function CandidatesPage({
       ? `/candidate/pending?${candidateQuery.toString()}`
       : `/candidate?${candidateQuery.toString()}`;
 
-  const [candidatesResult, sources, teamMembers, teamsResult, zaloStatuses] = await Promise.all([
+  const [candidatesResult, sources, teamMembers, teamsResult, zaloStatuses, zaloFriendStatuses] = await Promise.all([
     serverApi<PaginatedResult<Candidate>>(candidateEndpoint),
     serverApi<LeadSource[]>("/lead-source"),
     user.role === "leader" && user.team_id
@@ -121,6 +121,7 @@ export default async function CandidatesPage({
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
     serverApi<StatusCatalogItem[]>("/status?category=zalo_status"),
+    serverApi<StatusCatalogItem[]>("/status?category=zalo_friend_status"),
   ]);
 
   const allSaleMembers = canBrowseAllSales
@@ -144,6 +145,7 @@ export default async function CandidatesPage({
       teams={teamsResult.items}
       allSaleMembers={allSaleMembers}
       zaloStatuses={zaloStatuses}
+      zaloFriendStatuses={zaloFriendStatuses}
       initialViewMode={initialViewMode}
       initialFilters={initialFilters}
       initialCareAssigneeId={initialViewMode === "care" ? careAssignee : undefined}
