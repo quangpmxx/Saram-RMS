@@ -27,6 +27,8 @@ export interface NotificationResponseDto {
   scheduled_at: string;
   sent_at: string | null;
   status: string;
+  /** Dữ liệu phụ theo loại — shuttle_update: xem ShuttleNoticeDto (shuttle.service.ts). */
+  meta: unknown;
 }
 
 type NotificationWithSender = Notification & {
@@ -55,5 +57,6 @@ export function toNotificationResponse(
     scheduled_at: notification.scheduledAt.toISOString(),
     sent_at: notification.sentAt?.toISOString() ?? null,
     status: notification.status,
+    meta: notification.meta ?? null,
   };
 }

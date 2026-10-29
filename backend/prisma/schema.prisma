@@ -810,6 +810,9 @@ enum NotificationType {
   /// Kho chăm sóc: báo Sale được Leader/Quản lý/Admin giao data chăm sóc
   /// (1 thông báo/Sale/đợt giao — giao 1 data thì gắn lead_id).
   care_assigned
+  /// Đưa đón (2026-10-29): nhập dòng mới / đổi Tình trạng / đổi Kết quả —
+  /// báo mọi tài khoản có quyền xem Danh sách đưa đón. Dữ liệu dựng nhãn màu ở `meta`.
+  shuttle_update
 
   @@map("notification_type")
 }
@@ -855,6 +858,8 @@ model Notification {
   scheduledAt    DateTime            @map("scheduled_at")
   sentAt         DateTime?           @map("sent_at")
   status         NotificationStatus  @default(pending)
+  /// Dữ liệu phụ theo loại (vd shuttle_update: tên lao động, công ty, giá trị, màu nhãn).
+  meta           Json?
   createdAt      DateTime            @default(now()) @map("created_at")
 
   account      Account       @relation(fields: [accountId], references: [id])

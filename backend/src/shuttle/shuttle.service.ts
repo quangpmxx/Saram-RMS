@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,6 +11,8 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { ModulePermissionService } from '../module-permission/module-permission.service';
+import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
@@ -29,7 +33,19 @@ import {
   toShuttleResponse,
 } from './dto/shuttle-response.dto';
 
-/** Nội dung thông báo nổi Đưa đón — frontend tự dựng câu + tô màu theo color_key. */
+/** Khớp ACCOUNT_ROLE_LABEL ở frontend — dùng cho nội dung chữ của thông báo. */
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Admin',
+  manager: 'Manager',
+  leader: 'Leader',
+  mkt: 'NV MKT',
+  sale: 'NV Sale',
+  accounting: 'Kế toán',
+  order_staff: 'NV QL Đơn hàng',
+  shuttle_staff: 'NV Đưa đón',
+};
+
+/** notifications.meta của loại shuttle_update — frontend dựng câu + tô màu nhãn theo color_key. */
 export interface ShuttleNoticeDto {
   record_id: string;
   kind: 'created' | 'status' | 'interview_result';
@@ -70,6 +86,10 @@ export class ShuttleService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly realtime: RealtimeService,
+    // forwardRef: module-registry → ShuttleController → ShuttleService →
+    // ModulePermissionService → module-registry là vòng import.
+    @Inject(forwardRef(() => ModulePermissionService))
+    private readonly modulePermission: ModulePermissionService,
   ) {}
 
   async list(query: ListShuttleQueryDto): Promise<
@@ -242,8 +262,9 @@ export class ShuttleService {
   }
 
   /**
-   * Thông báo nổi Đưa đón (yêu cầu người dùng 2026-10-29). Lỗi ở đây KHÔNG
-   * được làm hỏng thao tác lưu — chỉ ghi log.
+   * Thông báo Đưa đón (yêu cầu người dùng 2026-10-29) — lưu vào chuông của
+   * từng người nhận + bật nổi kèm âm thanh. Lỗi ở đây KHÔNG được làm hỏng
+   * thao tác lưu — chỉ ghi log.
    */
   private async emitNotice(
     kind: ShuttleNoticeDto['kind'],
@@ -275,21 +296,62 @@ export class ShuttleService {
         kind === 'created'
           ? record.createdBy.fullName
           : record.updatedBy.fullName;
-      this.realtime.emitShuttleNotice<ShuttleNoticeDto>(
-        record.id,
-        {
-          record_id: record.id,
-          kind,
-          worker_name: record.fullName,
-          company_name: company?.name ?? null,
-          actor_name: actorName,
-          actor_role: currentUser.role,
-          value,
-          color_key: option?.colorKey ?? null,
-          text_color_key: option?.textColorKey ?? null,
-        },
-        currentUser,
-      );
+      const meta: ShuttleNoticeDto = {
+        record_id: record.id,
+        kind,
+        worker_name: record.fullName,
+        company_name: company?.name ?? null,
+        actor_name: actorName,
+        actor_role: currentUser.role,
+        value,
+        color_key: option?.colorKey ?? null,
+        text_color_key: option?.textColorKey ?? null,
+      };
+      const worker = meta.company_name
+        ? `${meta.worker_name} (${meta.company_name})`
+        : meta.worker_name;
+      const content =
+        kind === 'created'
+          ? `${actorName} (${ROLE_LABEL[currentUser.role] ?? currentUser.role}) đã nhập đưa đón ${worker}`
+          : `Lao động ${worker} - ${value}`;
+
+      // Người nhận: mọi tài khoản đang hoạt động có quyền xem Danh sách đưa
+      // đón (kể cả người vừa thao tác).
+      const accounts = await this.prisma.account.findMany({
+        where: { status: 'active' },
+        select: { id: true, role: true },
+      });
+      const now = new Date();
+      for (const account of accounts) {
+        const level = await this.modulePermission.getEffective(
+          account.id,
+          account.role,
+          'shuttle',
+        );
+        if (level === 'none') continue;
+        const notification = await this.prisma.notification.create({
+          data: {
+            accountId: account.id,
+            type: 'shuttle_update',
+            channel: 'in_app',
+            content: content.slice(0, 500),
+            senderId: currentUser.id,
+            scheduledAt: now,
+            sentAt: now,
+            status: 'sent',
+            meta: meta as unknown as Prisma.InputJsonValue,
+          },
+          include: {
+            sender: {
+              select: { id: true, fullName: true, role: true, avatarUrl: true },
+            },
+          },
+        });
+        this.realtime.emitNotificationCreated(
+          toNotificationResponse(notification),
+          currentUser,
+        );
+      }
     } catch (error) {
       this.logger.warn(`Không gửi được thông báo đưa đón: ${String(error)}`);
     }

@@ -126,10 +126,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                     {user.role === "admin" && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
-                    <NotificationBell
-                      userId={user.id}
-                      showShuttleNotices={(permissions.shuttle ?? "none") !== "none"}
-                    />
+                    <NotificationBell userId={user.id} />
                     <UserMenu user={user} />
                   </div>
                 </div>

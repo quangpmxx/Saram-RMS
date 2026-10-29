@@ -357,12 +357,10 @@ export type AppRealtimeModule =
   | "penalty"
   | "notification"
   | "dashboard"
-  | "sales-entry"
-  /** Thông báo nổi Đưa đón (2026-10-29) — payload: ShuttleNotice. */
-  | "shuttle-notice";
+  | "sales-entry";
 /**
- * Thông báo nổi Đưa đón — nhập dòng mới / đổi Tình trạng / đổi Kết quả
- * (yêu cầu người dùng 2026-10-29). Chỉ phát realtime, không lưu vào chuông.
+ * Thông báo Đưa đón (type=shuttle_update, nằm ở AppNotification.meta) — nhập
+ * dòng mới / đổi Tình trạng / đổi Kết quả (yêu cầu người dùng 2026-10-29).
  */
 export interface ShuttleNotice {
   record_id: string;
@@ -823,7 +821,9 @@ export interface AppNotification {
     | "care_stop_requested"
     | "care_stop_decided"
     /** Kho chăm sóc: Sale được giao data chăm sóc (giao 1 data thì có lead_id). */
-    | "care_assigned";
+    | "care_assigned"
+    /** Đưa đón: nhập dòng mới / đổi Tình trạng / đổi Kết quả — chi tiết ở `meta`. */
+    | "shuttle_update";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;
@@ -832,6 +832,8 @@ export interface AppNotification {
   scheduled_at: string;
   sent_at: string | null;
   status: "pending" | "sent" | "failed";
+  /** Dữ liệu phụ theo loại — shuttle_update: ShuttleNotice. */
+  meta?: ShuttleNotice | null;
 }
 
 /**

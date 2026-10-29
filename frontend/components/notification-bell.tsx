@@ -23,7 +23,6 @@ import {
   type AppNotification,
   type AppRealtimeEvent,
   type PaginatedResult,
-  type ShuttleNotice,
 } from "@/lib/types";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
@@ -44,6 +43,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   care_stop_requested: "Đề nghị dừng chăm sóc cần duyệt",
   care_stop_decided: "Kết quả đề nghị dừng chăm sóc",
   care_assigned: "Được giao data chăm sóc",
+  shuttle_update: "Danh sách đưa đón",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -75,6 +75,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   care_stop_requested: 60_000,
   care_stop_decided: 60_000,
   care_assigned: 60_000,
+  shuttle_update: 15_000,
 };
 
 function formatDateTime(value: string): string {
@@ -84,6 +85,38 @@ function formatDateTime(value: string): string {
 /** Admin_message hiện đúng nội dung đã soạn; 2 loại nhắc lịch cũ vẫn hiện nhãn cố định như trước. */
 function notificationTitle(n: AppNotification): string {
   return n.content ?? TYPE_LABEL[n.type];
+}
+
+/**
+ * Tiêu đề hiển thị — Đưa đón (shuttle_update) dựng lại từ meta để tô nhãn
+ * Tình trạng/Kết quả đúng màu đã cài ở trang Danh sách đưa đón.
+ */
+function NotificationTitle({ n }: { n: AppNotification }) {
+  const notice = n.type === "shuttle_update" ? n.meta : null;
+  if (!notice) return <>{notificationTitle(n)}</>;
+  const worker = notice.company_name ? `${notice.worker_name} (${notice.company_name})` : notice.worker_name;
+  if (notice.kind === "created") {
+    return (
+      <>
+        <span className="font-semibold">
+          {notice.actor_name} ({ACCOUNT_ROLE_LABEL[notice.actor_role] ?? notice.actor_role})
+        </span>{" "}
+        đã nhập đưa đón <span className="font-semibold">{worker}</span>
+      </>
+    );
+  }
+  const chipStyle = shuttleColorStyle(notice.color_key, notice.text_color_key);
+  return (
+    <>
+      Lao động <span className="font-semibold">{worker}</span> -{" "}
+      <span
+        className={cn("inline-block rounded px-1.5 py-0.5 text-xs font-medium", !chipStyle && "bg-slate-100 text-slate-700")}
+        style={chipStyle}
+      >
+        {notice.value}
+      </span>
+    </>
+  );
 }
 
 /**
@@ -99,6 +132,7 @@ function notificationTarget(n: AppNotification): string | null {
   if (n.type === "anonymous_feedback_created") return "/attendance?tab=requests&view=feedback";
   // Được giao nhiều data chăm sóc 1 lần — mở Kho, lọc sẵn "Được giao".
   if (n.type === "care_assigned") return "/candidates?view=care&care_scope=assigned";
+  if (n.type === "shuttle_update") return "/shuttle";
   return null;
 }
 
@@ -111,6 +145,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type === "anonymous_feedback_created") return <MessageSquareWarning className={className} strokeWidth={2} />;
   if (type.startsWith("care_stop_")) return <PauseCircle className={className} strokeWidth={2} />;
   if (type === "care_assigned") return <UserCheck className={className} strokeWidth={2} />;
+  if (type === "shuttle_update") return <Bus className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 
@@ -231,22 +266,13 @@ function playNotificationSound() {
  * số). Bấm X đóng toast → đánh dấu đã xem ngay (chuông không sáng cho thông
  * báo đó), vẫn còn trong danh sách chuông.
  */
-export function NotificationBell({
-  userId,
-  showShuttleNotices = false,
-}: {
-  userId: string;
-  /** Chỉ tài khoản có quyền xem Danh sách đưa đón mới nhận thông báo nổi Đưa đón. */
-  showShuttleNotices?: boolean;
-}) {
+export function NotificationBell({ userId }: { userId: string }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(() => loadIdSet(seenStorageKey(userId)));
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadIdSet(dismissedStorageKey(userId)));
   const [toasts, setToasts] = useState<AppNotification[]>([]);
-  /** Thông báo nổi Đưa đón — chỉ hiện tạm, không vào danh sách chuông. */
-  const [shuttleToasts, setShuttleToasts] = useState<Array<ShuttleNotice & { key: string; at: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
@@ -350,17 +376,6 @@ export function NotificationBell({
    * Socket.IO gửi lại...).
    */
   function handleAppRealtimeEvent(event: AppRealtimeEvent) {
-    if (event.module === "shuttle-notice") {
-      if (!showShuttleNotices) return;
-      // Báo cho mọi tài khoản có quyền xem Đưa đón, kể cả người vừa thao tác.
-      const notice = event.payload as ShuttleNotice | undefined;
-      if (!notice) return;
-      const key = `${notice.record_id}-${notice.kind}-${event.updated_at}`;
-      playNotificationSound();
-      setShuttleToasts((prev) => (prev.some((t) => t.key === key) ? prev : [...prev, { ...notice, key, at: event.updated_at }]));
-      setTimeout(() => setShuttleToasts((prev) => prev.filter((t) => t.key !== key)), SHUTTLE_TOAST_DURATION_MS);
-      return;
-    }
     if (event.module !== "notification" || event.action !== "created") return;
     const n = event.payload as AppNotification | undefined;
     if (!n || n.account_id !== userId || knownIdsRef.current.has(n.id)) return;
@@ -543,7 +558,7 @@ export function NotificationBell({
                     <div className="flex items-start gap-2.5">
                       <NotificationIcon type={n.type} className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-slate-800">{notificationTitle(n)}</p>
+                        <p className="text-sm text-slate-800"><NotificationTitle n={n} /></p>
                         <p className="text-xs text-slate-500">{formatDateTime(n.scheduled_at)}</p>
                       </div>
                       <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", STATUS_CLASS[n.status])}>
@@ -566,21 +581,9 @@ export function NotificationBell({
         con position:fixed, nếu không portal thì toast sẽ bị nhốt gọn trong
         khung header thay vì nổi đúng vị trí trên toàn trang.
       */}
-      {(toasts.length > 0 || shuttleToasts.length > 0) &&
+      {toasts.length > 0 &&
         createPortal(
           <div className="fixed top-14 right-3 z-40 flex w-[calc(100%-1.5rem)] max-w-80 flex-col gap-2 sm:right-6">
-            {shuttleToasts.map((t) => (
-              <ShuttleNoticeToast
-                key={t.key}
-                notice={t}
-                at={t.at}
-                onOpen={() => {
-                  setShuttleToasts((prev) => prev.filter((x) => x.key !== t.key));
-                  router.push("/shuttle");
-                }}
-                onClose={() => setShuttleToasts((prev) => prev.filter((x) => x.key !== t.key))}
-              />
-            ))}
             {toasts.map((n) => (
               <div
                 key={n.id}
@@ -599,7 +602,7 @@ export function NotificationBell({
                 <div className="flex items-start gap-2.5">
                   <NotificationIcon type={n.type} className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-800">{notificationTitle(n)}</p>
+                    <p className="text-sm font-medium text-slate-800"><NotificationTitle n={n} /></p>
                     <p className="text-xs text-slate-500">{formatDateTime(n.scheduled_at)}</p>
                   </div>
                   <button
@@ -620,75 +623,5 @@ export function NotificationBell({
           document.body,
         )}
     </>
-  );
-}
-
-const SHUTTLE_TOAST_DURATION_MS = 15_000;
-
-/**
- * Thông báo nổi Đưa đón (yêu cầu người dùng 2026-10-29):
- * - Nhập mới: "Đỗ Thị Thảo (Leader) đã nhập đưa đón Nguyễn Hoà Bình (Foxconn)"
- * - Đổi Tình trạng/Kết quả: "Lao động Nguyễn Hoà Bình (Foxconn) - [Đã đón]" —
- *   nhãn tô đúng màu đã cài ở trang Danh sách đưa đón.
- */
-function ShuttleNoticeToast({
-  notice,
-  at,
-  onOpen,
-  onClose,
-}: {
-  notice: ShuttleNotice;
-  at: string;
-  onOpen: () => void;
-  onClose: () => void;
-}) {
-  const worker = notice.company_name ? `${notice.worker_name} (${notice.company_name})` : notice.worker_name;
-  const chipStyle = shuttleColorStyle(notice.color_key, notice.text_color_key);
-  return (
-    <div
-      onClick={onOpen}
-      className="cursor-pointer rounded-xl border border-brand-200 border-l-4 border-l-brand-500 bg-gradient-to-br from-brand-50 to-white p-3 shadow-lg shadow-brand-900/20 ring-1 ring-brand-500/10"
-    >
-      <div className="flex items-start gap-2.5">
-        <Bus className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} />
-        <div className="min-w-0 flex-1">
-          {notice.kind === "created" ? (
-            <p className="text-sm text-slate-800">
-              <span className="font-semibold">
-                {notice.actor_name} ({ACCOUNT_ROLE_LABEL[notice.actor_role] ?? notice.actor_role})
-              </span>{" "}
-              đã nhập đưa đón <span className="font-semibold">{worker}</span>
-            </p>
-          ) : (
-            <p className="text-sm text-slate-800">
-              Lao động <span className="font-semibold">{worker}</span> -{" "}
-              <span
-                className={cn(
-                  "inline-block rounded px-1.5 py-0.5 text-xs font-medium",
-                  !chipStyle && "bg-slate-100 text-slate-700",
-                )}
-                style={chipStyle}
-              >
-                {notice.value}
-              </span>
-            </p>
-          )}
-          <p className="text-xs text-slate-500">
-            {new Date(at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · Danh sách đưa đón
-          </p>
-        </div>
-        <button
-          type="button"
-          title="Đóng"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-          className="shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500"
-        >
-          <X className="h-3.5 w-3.5" strokeWidth={2} />
-        </button>
-      </div>
-    </div>
   );
 }

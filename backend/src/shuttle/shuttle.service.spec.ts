@@ -4,6 +4,7 @@ import { ShuttleService } from './shuttle.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { ModulePermissionService } from '../module-permission/module-permission.service';
 import { Prisma } from '../../generated/prisma/client';
 
 describe('ShuttleService', () => {
@@ -28,14 +29,17 @@ describe('ShuttleService', () => {
       findMany: jest.Mock;
       findUnique: jest.Mock;
     };
+    account: { findMany: jest.Mock };
+    notification: { create: jest.Mock };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
   let realtimeService: {
     emitTransportationChange: jest.Mock;
     emitTransportationDeleted: jest.Mock;
-    emitShuttleNotice: jest.Mock;
+    emitNotificationCreated: jest.Mock;
   };
+  let modulePermission: { getEffective: jest.Mock };
 
   const currentUser = { id: 'user-1', role: 'sale' as const, sessionId: 's' };
 
@@ -84,13 +88,41 @@ describe('ShuttleService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue({ name: 'Foxconn' }),
       },
+      account: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'admin-1', role: 'admin' },
+          { id: 'sale-9', role: 'sale' },
+          { id: 'acc-9', role: 'accounting' },
+        ]),
+      },
+      notification: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({
+            id: `n-${data.accountId}`,
+            leadId: null,
+            leaveRequestId: null,
+            sender: null,
+            sentAt: data.sentAt,
+            createdAt: data.scheduledAt,
+            ...data,
+          }),
+        ),
+      },
       $transaction: jest.fn(),
+    };
+    // Kế toán bị tắt quyền xem Đưa đón trong ví dụ này.
+    modulePermission = {
+      getEffective: jest
+        .fn()
+        .mockImplementation((id: string) =>
+          Promise.resolve(id === 'acc-9' ? 'none' : 'view'),
+        ),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     realtimeService = {
       emitTransportationChange: jest.fn(),
       emitTransportationDeleted: jest.fn(),
-      emitShuttleNotice: jest.fn(),
+      emitNotificationCreated: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -99,6 +131,7 @@ describe('ShuttleService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
         { provide: RealtimeService, useValue: realtimeService },
+        { provide: ModulePermissionService, useValue: modulePermission },
       ],
     }).compile();
 
@@ -489,10 +522,14 @@ describe('ShuttleService', () => {
     });
   });
 
-  describe('thông báo nổi Đưa đón (emitShuttleNotice)', () => {
+  describe('thông báo Đưa đón (lưu vào chuông + bật nổi)', () => {
     const leader = { id: 'leader-1', role: 'leader' as const, sessionId: 's' };
+    const created = () =>
+      prisma.notification.create.mock.calls.map(
+        ([arg]: [{ data: Record<string, unknown> }]) => arg.data,
+      );
 
-    it('nhập dòng mới → thông báo "đã nhập" kèm tên lao động, công ty, người nhập', async () => {
+    it('nhập dòng mới → lưu thông báo cho mọi tài khoản có quyền xem Đưa đón', async () => {
       prisma.shuttleRecord.create.mockResolvedValue({
         ...record,
         createdBy: { id: 'leader-1', fullName: 'Đỗ Thị Thảo' },
@@ -507,20 +544,26 @@ describe('ShuttleService', () => {
         leader,
       );
 
-      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledWith(
-        'record-1',
+      const rows = created();
+      expect(rows.map((r) => r.accountId)).toEqual(['admin-1', 'sale-9']);
+      expect(rows[0]).toEqual(
         expect.objectContaining({
-          kind: 'created',
-          worker_name: 'Nguyễn Văn A',
-          company_name: 'Foxconn',
-          actor_name: 'Đỗ Thị Thảo',
-          actor_role: 'leader',
+          type: 'shuttle_update',
+          channel: 'in_app',
+          senderId: 'leader-1',
+          content:
+            'Đỗ Thị Thảo (Leader) đã nhập đưa đón Nguyễn Văn A (Foxconn)',
+          meta: expect.objectContaining({
+            kind: 'created',
+            worker_name: 'Nguyễn Văn A',
+            company_name: 'Foxconn',
+          }),
         }),
-        leader,
       );
+      expect(realtimeService.emitNotificationCreated).toHaveBeenCalledTimes(2);
     });
 
-    it('đổi Tình trạng → thông báo kèm màu đã cài cho giá trị đó', async () => {
+    it('đổi Tình trạng → nội dung "Lao động … - giá trị" kèm màu đã cài', async () => {
       prisma.shuttleRecord.findUnique.mockResolvedValue({
         ...record,
         status: 'Hẹn lại',
@@ -530,7 +573,7 @@ describe('ShuttleService', () => {
         status: 'Đã đón',
       });
       prisma.shuttleOption.findUnique.mockResolvedValue({
-        colorKey: 'green',
+        colorKey: 'green-base',
         textColorKey: null,
       });
 
@@ -541,19 +584,19 @@ describe('ShuttleService', () => {
           where: { field_value: { field: 'status', value: 'Đã đón' } },
         }),
       );
-      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledTimes(1);
-      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledWith(
-        'record-1',
+      expect(created()[0]).toEqual(
         expect.objectContaining({
-          kind: 'status',
-          value: 'Đã đón',
-          color_key: 'green',
+          content: 'Lao động Nguyễn Văn A (Foxconn) - Đã đón',
+          meta: expect.objectContaining({
+            kind: 'status',
+            value: 'Đã đón',
+            color_key: 'green-base',
+          }),
         }),
-        leader,
       );
     });
 
-    it('đổi Kết quả → thông báo kind=interview_result', async () => {
+    it('đổi Kết quả → kind=interview_result', async () => {
       prisma.shuttleRecord.findUnique.mockResolvedValue({
         ...record,
         interviewResult: null,
@@ -570,14 +613,14 @@ describe('ShuttleService', () => {
         leader,
       );
 
-      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledWith(
-        'record-1',
+      expect(created()[0]).toEqual(
         expect.objectContaining({
-          kind: 'interview_result',
-          value: 'Trượt phỏng vấn',
-          color_key: null,
+          content: 'Lao động Nguyễn Văn A (Foxconn) - Trượt phỏng vấn',
+          meta: expect.objectContaining({
+            kind: 'interview_result',
+            color_key: null,
+          }),
         }),
-        leader,
       );
     });
 
@@ -591,10 +634,10 @@ describe('ShuttleService', () => {
         leader,
       );
 
-      expect(realtimeService.emitShuttleNotice).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('lỗi khi dựng thông báo không làm hỏng việc lưu', async () => {
+    it('lỗi khi tạo thông báo không làm hỏng việc lưu', async () => {
       prisma.shuttleRecord.findUnique.mockResolvedValue({
         ...record,
         status: 'Hẹn lại',
@@ -605,7 +648,7 @@ describe('ShuttleService', () => {
       await expect(
         service.update('record-1', { status: 'Đã đón' }, leader),
       ).resolves.toEqual(expect.objectContaining({ status: 'Đã đón' }));
-      expect(realtimeService.emitShuttleNotice).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
   });
 });
