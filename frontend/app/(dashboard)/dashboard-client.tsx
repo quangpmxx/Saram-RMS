@@ -609,17 +609,6 @@ export function DashboardClient({
         </div>
       )}
 
-      {/* Kho chăm sóc (2026-10-28): Tiến độ chăm sóc — dùng chung bộ lọc Nhóm/Nhân viên ở trên;
-          ngày/tháng chọn riêng trong khối vì chỉ số chăm sóc tính theo ngày/tháng, không theo khoảng.
-          Đặt dưới bảng Top 3 nhân viên (yêu cầu người dùng 2026-10-29). */}
-      {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
-        <CareProgressBlock
-          currentUserRole={currentUserRole}
-          teamId={canFilterByTeam ? teamId : ""}
-          accountId={accountId}
-        />
-      )}
-
       {/* 3. Hiệu suất theo nhóm */}
       {canViewByTeam && (
         <Card className="p-5">
@@ -738,6 +727,17 @@ export function DashboardClient({
             </table>
           </div>
         </Card>
+      )}
+
+      {/* Kho chăm sóc (2026-10-28): Tiến độ chăm sóc — dùng chung bộ lọc Nhóm/Nhân viên ở trên;
+          ngày/tháng chọn riêng trong khối vì chỉ số chăm sóc tính theo ngày/tháng, không theo khoảng.
+          Đặt cuối trang, dưới Hiệu suất từng nhân viên (yêu cầu người dùng 2026-10-29). */}
+      {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
+        <CareProgressBlock
+          currentUserRole={currentUserRole}
+          teamId={canFilterByTeam ? teamId : ""}
+          accountId={accountId}
+        />
       )}
 
       {quickView && (
