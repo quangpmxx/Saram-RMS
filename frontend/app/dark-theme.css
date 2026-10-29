@@ -7,7 +7,7 @@
 html.dark {
   color-scheme: dark;
   --background: #0b1120;
-  --foreground: #e2e8f0;
+  --foreground: #d7dfe9;
   --color-slate-50: #0b1120;
   --color-gray-50: #0b1120;
   --color-slate-100: #1a2436;
@@ -81,6 +81,7 @@ html.dark .border-brand-200 { border-color: color-mix(in srgb, #3b82f6 36%, #111
 html.dark .border-brand-300 { border-color: color-mix(in srgb, #3b82f6 48%, #111a2b); }
 html.dark .border-pink-200 { border-color: color-mix(in srgb, #ec4899 36%, #111a2b); }
 html.dark .border-pink-200\/70 { border-color: color-mix(in srgb, color-mix(in srgb, #ec4899 36%, #111a2b) 70%, transparent); }
+html.dark .disabled\:text-slate-400:disabled { color: #8a98ad; }
 html.dark .focus\:bg-white:focus { background-color: #111a2b; }
 html.dark .focus\:border-brand-300:focus { border-color: color-mix(in srgb, #3b82f6 48%, #111a2b); }
 html.dark .hover\:bg-amber-100:hover { background-color: color-mix(in srgb, #f59e0b 20%, #111a2b); }
@@ -97,6 +98,11 @@ html.dark .hover\:text-brand-600:hover { color: #60a5fa; }
 html.dark .hover\:text-brand-700:hover { color: #93c5fd; }
 html.dark .hover\:text-red-600:hover { color: #f87171; }
 html.dark .hover\:text-red-700:hover { color: #fca5a5; }
+html.dark .hover\:text-slate-500:hover { color: #9eabbe; }
+html.dark .hover\:text-slate-600:hover { color: #b3bfcf; }
+html.dark .hover\:text-slate-700:hover { color: #c6d0dd; }
+html.dark .placeholder\:text-slate-300::placeholder { color: #76849b; }
+html.dark .placeholder\:text-slate-400::placeholder { color: #8a98ad; }
 html.dark .ring-amber-200 { --tw-ring-color: color-mix(in srgb, #f59e0b 36%, #111a2b); }
 html.dark .ring-amber-300 { --tw-ring-color: color-mix(in srgb, #f59e0b 48%, #111a2b); }
 html.dark .ring-pink-200 { --tw-ring-color: color-mix(in srgb, #ec4899 36%, #111a2b); }
@@ -127,6 +133,13 @@ html.dark .text-red-700 { color: #fca5a5; }
 html.dark .text-rose-700 { color: #fda4af; }
 html.dark .text-rose-900 { color: #fecdd3; }
 html.dark .text-sky-700 { color: #7dd3fc; }
+html.dark .text-slate-300 { color: #76849b; }
+html.dark .text-slate-400 { color: #8a98ad; }
+html.dark .text-slate-500 { color: #9eabbe; }
+html.dark .text-slate-600 { color: #b3bfcf; }
+html.dark .text-slate-700 { color: #c6d0dd; }
+html.dark .text-slate-800 { color: #d7dfe9; }
+html.dark .text-slate-900 { color: #e5eaf1; }
 html.dark .text-teal-700 { color: #5eead4; }
 html.dark .text-violet-700 { color: #c4b5fd; }
 

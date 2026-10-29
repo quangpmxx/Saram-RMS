@@ -62,6 +62,23 @@ const SLATE_DARK = {
   950: "#f8fafc",
 };
 
+/**
+ * Màu CHỮ xám riêng (tách khỏi nền/viền ở trên) — cân độ tương phản trên nền
+ * thẻ SURFACE (yêu cầu người dùng 2026-10-29): tiêu đề không trắng chói
+ * (~14:1), chữ thường ~11:1, chữ phụ 400/500 ≥ 5.3:1 kể cả trên hàng nền
+ * xám, chữ mờ 300 vẫn đọc được (~4.4:1).
+ */
+const SLATE_TEXT = {
+  300: "#76849b",
+  400: "#8a98ad",
+  500: "#9eabbe",
+  600: "#b3bfcf",
+  700: "#c6d0dd",
+  800: "#d7dfe9",
+  900: "#e5eaf1",
+  950: "#eef2f7",
+};
+
 const RESPONSIVE = { sm: "40rem", md: "48rem", lg: "64rem", xl: "80rem", "2xl": "96rem" };
 const PSEUDO = {
   hover: ":hover",
@@ -80,6 +97,11 @@ const withAlpha = (value, alpha) => (alpha === null ? value : `color-mix(in srgb
 
 /** Giá trị màu tối cho 1 utility, hoặc null nếu không cần đổi. */
 function darkValue(prop, color, shade, alpha) {
+  if (color === "slate" || color === "gray") {
+    // Nền/viền xám đã đổi qua biến CSS; chỉ chữ cần thang riêng.
+    const value = prop === "text" ? SLATE_TEXT[shade] : undefined;
+    return value ? { css: "color", value: withAlpha(value, alpha) } : null;
+  }
   if (color === "white") {
     // bg-white/5…/20 là lớp phủ mờ trên sidebar tối — giữ nguyên.
     if (prop !== "bg" || (alpha !== null && alpha <= 20)) return null;
@@ -105,7 +127,7 @@ function darkValue(prop, color, shade, alpha) {
 }
 
 const TOKEN = new RegExp(
-  String.raw`(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|divide)-(white|${FAMILIES.join("|")})(?:-(\d{2,3}))?(?:\/(\d{1,3}))?(?![\w/-])`,
+  String.raw`(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|divide)-(white|slate|gray|${FAMILIES.join("|")})(?:-(\d{2,3}))?(?:\/(\d{1,3}))?(?![\w/-])`,
   "g",
 );
 
@@ -181,7 +203,7 @@ const css = `/*
 html.dark {
   color-scheme: dark;
   --background: ${PAGE};
-  --foreground: #e2e8f0;
+  --foreground: ${SLATE_TEXT[800]};
 ${slateVars}
 }
 html.dark * {
