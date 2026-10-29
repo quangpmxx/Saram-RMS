@@ -268,8 +268,11 @@ export function DsSaleClient({
   const cellRefs = useRef<Map<string, HTMLInputElement | HTMLTextAreaElement | null>>(new Map());
   const focusFieldOnMount = useRef<string | null>(null);
 
+  const loadSeqRef = useRef(0);
   const loadPage = useCallback(
     async (targetPage: number, filters = appliedFilters, size = pageSize) => {
+      // Bỏ kết quả của lượt tải cũ về muộn (tìm kiếm khi gõ gọi liên tục).
+      const seq = ++loadSeqRef.current;
       setLoading(true);
       try {
         const result = await listDsSaleRows({
@@ -282,14 +285,16 @@ export function DsSaleClient({
           sale_user_id: filters.sale_user_id || undefined,
           pickup_user_id: filters.pickup_user_id || undefined,
         });
+        if (seq !== loadSeqRef.current) return;
         setSheetRows(result.items.map(toSheetRow));
         setTotal(result.total);
         setPage(result.page);
         setSelected(new Set());
       } catch (err) {
+        if (seq !== loadSeqRef.current) return;
         toast.error(err instanceof ApiError ? err.message : "Không tải được danh sách DS Sale");
       } finally {
-        setLoading(false);
+        if (seq === loadSeqRef.current) setLoading(false);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- appliedFilters/pageSize truyền tường minh qua tham số ở nơi gọi, không cần liệt kê lại
@@ -422,7 +427,23 @@ export function DsSaleClient({
     }, [loadPage, page, appliedFilters, pageSize]),
   );
 
+  /**
+   * Gõ đến đâu lọc đến đó (yêu cầu người dùng 2026-10-29): chờ ngừng gõ
+   * 350ms rồi lọc; xoá hết chữ = về toàn bộ data.
+   */
+  const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleKeywordChange(value: string) {
+    setKeyword(value);
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    keywordTimerRef.current = setTimeout(() => {
+      const next = { ...appliedFilters, keyword: value };
+      setAppliedFilters(next);
+      void loadPage(1, next, pageSize);
+    }, 350);
+  }
+
   function applyFilters() {
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     const next = {
       keyword,
       join_date_from: joinFrom,
@@ -436,6 +457,7 @@ export function DsSaleClient({
   }
 
   function clearFilters() {
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     setKeyword("");
     setJoinFrom("");
     setJoinTo("");
@@ -616,7 +638,7 @@ export function DsSaleClient({
           <Input
             uiSize="xs"
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(e) => handleKeywordChange(e.target.value)}
             placeholder="Mã NV, họ tên, CCCD, quê quán..."
           />
         </Field>

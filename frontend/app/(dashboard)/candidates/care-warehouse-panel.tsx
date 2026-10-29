@@ -358,9 +358,24 @@ export function CareWarehousePanel({
   useRealtimeReconnect(scheduleReload);
 
   function applyFilters(next: CareFilters = filters) {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setFilters(next);
     setApplied(next);
     setPage(1);
+  }
+
+  /**
+   * Gõ đến đâu lọc đến đó (yêu cầu người dùng 2026-10-29): chờ ngừng gõ
+   * 350ms rồi áp dụng riêng ô Tìm kiếm; xoá hết chữ = về toàn bộ data.
+   */
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleSearchChange(search: string) {
+    setFilters((p) => ({ ...p, search }));
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setApplied((p) => ({ ...p, search }));
+      setPage(1);
+    }, 350);
   }
 
   // ?care_scope=assigned (bấm thông báo "được giao data chăm sóc") → bật bộ
@@ -477,7 +492,7 @@ export function CareWarehousePanel({
           <Input
             uiSize="xs"
             value={filters.search}
-            onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+            onChange={(e) => handleSearchChange(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && applyFilters()}
             placeholder="Tên, SĐT, ghi chú, năm sinh, địa chỉ"
           />

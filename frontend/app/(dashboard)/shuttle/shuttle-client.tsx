@@ -1053,8 +1053,12 @@ export function ShuttleClient({
   }
 
   async function refresh(targetPage: number, targetPageSize: number, activeFilters: Filters) {
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    // Bỏ kết quả của lượt tải cũ về muộn (tìm kiếm khi gõ gọi liên tục).
+    const seq = ++refreshSeqRef.current;
     const query = buildShuttleQuery(targetPage, targetPageSize, activeFilters);
     const result = await clientApi<ShuttleListResult>(`/shuttle?${query.toString()}`);
+    if (seq !== refreshSeqRef.current) return;
     setRecords(result.items);
     setFirstDayOffset(result.first_day_offset ?? 0);
     setRowDrafts(buildRowDrafts(result.items));
@@ -1179,6 +1183,23 @@ export function ShuttleClient({
 
   async function handleSearch() {
     await refresh(1, pageSize, filters);
+  }
+
+  /**
+   * Gõ đến đâu lọc đến đó (yêu cầu người dùng 2026-10-29): chờ ngừng gõ
+   * 350ms rồi lọc; xoá hết chữ = về toàn bộ data.
+   */
+  const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshSeqRef = useRef(0);
+  function handleKeywordChange(keyword: string) {
+    const nextFilters = { ...filters, keyword };
+    setFilters(nextFilters);
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    keywordTimerRef.current = setTimeout(() => {
+      refresh(1, pageSize, nextFilters).catch((error) => {
+        toast.error(error instanceof ApiError ? error.message : "Không tải được kết quả tìm kiếm");
+      });
+    }, 350);
   }
 
   async function handleClearFilters() {
@@ -1337,7 +1358,7 @@ export function ShuttleClient({
           <Input
             uiSize="xs"
             value={filters.keyword}
-            onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
+            onChange={(event) => handleKeywordChange(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
             placeholder="Tên hoặc số điện thoại"
           />

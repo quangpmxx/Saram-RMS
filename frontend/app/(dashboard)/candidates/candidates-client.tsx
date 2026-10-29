@@ -221,6 +221,9 @@ export function CandidatesClient({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   /** Người dùng đã tự bấm chọn tab — khôi phục trạng thái cũ (sessionStorage) không được đè lên. */
   const userPickedViewRef = useRef(false);
+  /** Tìm kiếm khi gõ: hẹn giờ chờ ngừng gõ + số thứ tự lượt tải (bỏ kết quả của lượt cũ về muộn). */
+  const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRequestSeqRef = useRef(0);
 
   useSetPageTitle("Data lao động");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
@@ -437,7 +440,10 @@ export function CandidatesClient({
   }, []);
 
   async function refresh(targetPage = page, mode: ViewMode = viewMode, targetPageSize = pageSize) {
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    const seq = ++listRequestSeqRef.current;
     const result = await fetchPage(targetPage, mode, targetPageSize);
+    if (seq !== listRequestSeqRef.current) return;
     setCandidates(result.items);
     setTotal(result.total);
     setPage(targetPage);
@@ -567,6 +573,32 @@ export function CandidatesClient({
 
   async function handleSearch() {
     await refresh(1);
+  }
+
+  /**
+   * Gõ đến đâu lọc đến đó (yêu cầu người dùng 2026-10-29): chờ ngừng gõ
+   * 350ms rồi tải lại trang 1; xoá hết chữ = về toàn bộ data. Tải nhẹ (không
+   * router.refresh) vì chạy theo từng lần gõ.
+   */
+  function handleKeywordChange(keyword: string) {
+    const nextFilters = { ...filters, keyword };
+    setFilters(nextFilters);
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    keywordTimerRef.current = setTimeout(async () => {
+      const seq = ++listRequestSeqRef.current;
+      try {
+        const result = await fetchPage(1, viewMode, pageSize, nextFilters);
+        if (seq !== listRequestSeqRef.current) return;
+        setCandidates(result.items);
+        setTotal(result.total);
+        setPage(1);
+        setSelectedIds(new Set());
+      } catch (error) {
+        if (seq === listRequestSeqRef.current) {
+          toast.error(error instanceof ApiError ? error.message : "Không tải được kết quả tìm kiếm");
+        }
+      }
+    }, 350);
   }
 
   function toggleSelected(id: string) {
@@ -797,7 +829,7 @@ export function CandidatesClient({
             <Input
               uiSize="xs"
               value={filters.keyword}
-              onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
+              onChange={(event) => handleKeywordChange(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
               placeholder="Tên, SĐT, ghi chú, năm sinh, địa chỉ"
             />

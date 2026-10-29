@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, RotateCcw, Search, Settings2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type {
@@ -240,8 +240,23 @@ export function CheckPenaltyPanel({
   }
 
   function updateFilter(apply: () => void) {
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     apply();
     setPage(1);
+  }
+
+  /**
+   * Gõ đến đâu lọc đến đó (yêu cầu người dùng 2026-10-29): chờ ngừng gõ
+   * 350ms rồi lọc; xoá hết chữ = về toàn bộ data.
+   */
+  const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleKeywordInputChange(value: string) {
+    setKeywordInput(value);
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    keywordTimerRef.current = setTimeout(() => {
+      setKeyword(value.trim());
+      setPage(1);
+    }, 350);
   }
 
   function handleClearFilters() {
@@ -375,7 +390,7 @@ export function CheckPenaltyPanel({
               <Input
                 uiSize="xs"
                 value={keywordInput}
-                onChange={(e) => setKeywordInput(e.target.value)}
+                onChange={(e) => handleKeywordInputChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") updateFilter(() => setKeyword(keywordInput));
                 }}
