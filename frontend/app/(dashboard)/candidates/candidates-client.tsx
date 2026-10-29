@@ -2,6 +2,7 @@
 
 import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMY } from "@/lib/date-format";
+import { LEAD_STATE_OPTIONS, type LeadStateFilter } from "@/lib/lead-state";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -115,6 +116,8 @@ const CARE_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "m
 interface Filters {
   keyword: string;
   source_id: string;
+  /** Trạng thái data: "" = tất cả. Có thể thiếu ở trạng thái danh sách đã lưu từ bản cũ. */
+  lead_state?: LeadStateFilter;
   team_sale: TeamSaleValue | null;
   /** Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng chung (xem components/ui/date-range-picker.tsx). */
   date: DateRangeValue;
@@ -343,6 +346,7 @@ export function CandidatesClient({
     }
 
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
+    if (activeFilters.lead_state) query.set("lead_state", activeFilters.lead_state);
     if (activeFilters.team_sale?.type === "team") query.set("team_id", activeFilters.team_sale.id);
     if (activeFilters.team_sale?.type === "sale") query.set("assigned_to", activeFilters.team_sale.id);
     // DateRangePicker đã tự quy đổi preset ("7 ngày qua"...) thành from/to cụ
@@ -394,6 +398,7 @@ export function CandidatesClient({
       "team_id",
       "assigned_to",
       "keyword",
+      "lead_state",
     ].some((key) => searchParams.has(key));
     let raw: string | null = null;
     try {
@@ -902,6 +907,22 @@ export function CandidatesClient({
         </Field>
         {(viewMode === "all" || viewMode === "mine") && (
           <>
+            <Field uiSize="xs" label="Trạng thái" className="w-28">
+              <Select
+                uiSize="xs"
+                value={filters.lead_state ?? ""}
+                onChange={(event) =>
+                  setFilters((prev) => ({ ...prev, lead_state: event.target.value as LeadStateFilter }))
+                }
+              >
+                <option value="">Tất cả</option>
+                {LEAD_STATE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field uiSize="xs" label="Ngày lên số" className="w-40">
               <DateRangePicker
                 value={filters.date}

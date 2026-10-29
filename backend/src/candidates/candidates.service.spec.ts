@@ -763,6 +763,29 @@ describe('CandidatesService', () => {
   });
 
   describe('list', () => {
+    it.each([
+      ['held', { isHeld: true }],
+      [
+        'pending_close',
+        { careStopRequestedAt: { not: null }, careStoppedAt: null },
+      ],
+      ['closed', { careStoppedAt: { not: null } }],
+    ] as const)(
+      'lọc trạng thái lead_state=%s (Đã giữ / Chờ đóng / Đã đóng)',
+      async (state, expected) => {
+        prisma.$transaction.mockResolvedValue([0, []]);
+
+        await service.list(
+          { page: 1, page_size: 20, lead_state: state },
+          adminUser,
+        );
+
+        expect(prisma.lead.count).toHaveBeenCalledWith({
+          where: expect.objectContaining(expected),
+        });
+      },
+    );
+
     it('Admin/Quản lý/MKT thấy toàn bộ (không lọc theo assigned)', async () => {
       prisma.$transaction.mockResolvedValue([0, []]);
 

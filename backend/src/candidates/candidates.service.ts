@@ -129,6 +129,14 @@ export class CandidatesService {
         mode: 'insensitive',
       };
     }
+    if (query.lead_state === 'held') {
+      where.isHeld = true;
+    } else if (query.lead_state === 'pending_close') {
+      where.careStopRequestedAt = { not: null };
+      where.careStoppedAt = null;
+    } else if (query.lead_state === 'closed') {
+      where.careStoppedAt = { not: null };
+    }
 
     const [total, leads] = await this.prisma.$transaction([
       this.prisma.lead.count({ where }),

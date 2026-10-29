@@ -5,6 +5,7 @@ import { requirePageAccess } from "@/lib/module-permission";
 import type { Candidate, LeadSource, PaginatedResult, StatusCatalogItem, Team, TeamMember } from "@/lib/types";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { CandidatesClient } from "./candidates-client";
+import { parseLeadState, type LeadStateFilter } from "@/lib/lead-state";
 import type { TeamSaleValue } from "./team-sale-filter";
 
 /**
@@ -78,15 +79,18 @@ export default async function CandidatesPage({
   const teamIdParam = getParam("team_id");
   const assignedTo = getParam("assigned_to");
   const keyword = getParam("keyword");
+  const leadState = parseLeadState(getParam("lead_state"));
 
   const initialFilters: {
     keyword: string;
     source_id: string;
+    lead_state: LeadStateFilter;
     team_sale: TeamSaleValue | null;
     date: DateRangeValue;
   } = {
     keyword: keyword ?? "",
     source_id: sourceId ?? "",
+    lead_state: leadState,
     team_sale: teamIdParam ? { type: "team", id: teamIdParam } : assignedTo ? { type: "sale", id: assignedTo } : null,
     date: dateFrom || dateTo ? { preset: "custom", from: dateFrom ?? "", to: dateTo ?? "" } : EMPTY_DATE_RANGE,
   };
@@ -94,6 +98,7 @@ export default async function CandidatesPage({
   const candidateQuery = new URLSearchParams({ page: "1", page_size: "50" });
   if (initialViewMode === "all" || initialViewMode === "mine") {
     if (keyword) candidateQuery.set("keyword", keyword);
+    if (leadState) candidateQuery.set("lead_state", leadState);
     if (sourceId) candidateQuery.set("source_id", sourceId);
     if (teamIdParam) candidateQuery.set("team_id", teamIdParam);
     if (assignedTo) candidateQuery.set("assigned_to", assignedTo);

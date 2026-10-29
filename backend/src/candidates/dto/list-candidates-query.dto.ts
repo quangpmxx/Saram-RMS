@@ -2,12 +2,16 @@ import { Type } from 'class-transformer';
 import {
   IsBooleanString,
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Min,
 } from 'class-validator';
+
+export const LEAD_STATE_FILTERS = ['held', 'pending_close', 'closed'] as const;
+export type LeadStateFilter = (typeof LEAD_STATE_FILTERS)[number];
 
 /**
  * Mục 4, docs/13-api-design.md — GET /candidate (query).
@@ -87,4 +91,13 @@ export class ListCandidatesQueryDto {
   @IsOptional()
   @IsString()
   partner_company_name?: string;
+
+  /**
+   * Lọc trạng thái data ở tab Tất cả (yêu cầu người dùng 2026-10-30):
+   * held = Đã giữ, pending_close = Chờ đóng (Sale đề nghị dừng chăm sóc, chờ
+   * duyệt), closed = Đã đóng (đã dừng chăm sóc).
+   */
+  @IsOptional()
+  @IsIn(LEAD_STATE_FILTERS)
+  lead_state?: LeadStateFilter;
 }
