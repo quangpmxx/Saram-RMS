@@ -231,7 +231,14 @@ function playNotificationSound() {
  * số). Bấm X đóng toast → đánh dấu đã xem ngay (chuông không sáng cho thông
  * báo đó), vẫn còn trong danh sách chuông.
  */
-export function NotificationBell({ userId }: { userId: string }) {
+export function NotificationBell({
+  userId,
+  showShuttleNotices = false,
+}: {
+  userId: string;
+  /** Chỉ tài khoản có quyền xem Danh sách đưa đón mới nhận thông báo nổi Đưa đón. */
+  showShuttleNotices?: boolean;
+}) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -344,7 +351,8 @@ export function NotificationBell({ userId }: { userId: string }) {
    */
   function handleAppRealtimeEvent(event: AppRealtimeEvent) {
     if (event.module === "shuttle-notice") {
-      // Báo cho TẤT CẢ tài khoản, kể cả người vừa thao tác (yêu cầu người dùng).
+      if (!showShuttleNotices) return;
+      // Báo cho mọi tài khoản có quyền xem Đưa đón, kể cả người vừa thao tác.
       const notice = event.payload as ShuttleNotice | undefined;
       if (!notice) return;
       const key = `${notice.record_id}-${notice.kind}-${event.updated_at}`;
