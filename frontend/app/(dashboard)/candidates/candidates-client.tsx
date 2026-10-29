@@ -138,7 +138,8 @@ function callResultVariant(name: string): "success" | "warning" | "neutral" {
 function formatUploadedAt(value: string): { date: string; time: string } {
   const parsed = new Date(value);
   return {
-    date: parsed.toLocaleDateString("vi-VN"),
+    // dd/mm/yy (yêu cầu người dùng 2026-10-29).
+    date: parsed.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "2-digit" }),
     time: parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
   };
 }
