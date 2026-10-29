@@ -26,10 +26,16 @@ describe('ShuttleService', () => {
     };
     orderRecord: {
       findMany: jest.Mock;
+      findUnique: jest.Mock;
     };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
+  let realtimeService: {
+    emitTransportationChange: jest.Mock;
+    emitTransportationDeleted: jest.Mock;
+    emitShuttleNotice: jest.Mock;
+  };
 
   const currentUser = { id: 'user-1', role: 'sale' as const, sessionId: 's' };
 
@@ -76,13 +82,15 @@ describe('ShuttleService', () => {
       },
       orderRecord: {
         findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue({ name: 'Foxconn' }),
       },
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
-    const realtimeService = {
+    realtimeService = {
       emitTransportationChange: jest.fn(),
       emitTransportationDeleted: jest.fn(),
+      emitShuttleNotice: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -478,6 +486,126 @@ describe('ShuttleService', () => {
           entityType: 'shuttle_option',
         }),
       );
+    });
+  });
+
+  describe('thông báo nổi Đưa đón (emitShuttleNotice)', () => {
+    const leader = { id: 'leader-1', role: 'leader' as const, sessionId: 's' };
+
+    it('nhập dòng mới → thông báo "đã nhập" kèm tên lao động, công ty, người nhập', async () => {
+      prisma.shuttleRecord.create.mockResolvedValue({
+        ...record,
+        createdBy: { id: 'leader-1', fullName: 'Đỗ Thị Thảo' },
+      });
+
+      await service.create(
+        {
+          date: '2026-07-13',
+          full_name: 'Nguyễn Văn A',
+          phone_number: '0901000001',
+        },
+        leader,
+      );
+
+      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledWith(
+        'record-1',
+        expect.objectContaining({
+          kind: 'created',
+          worker_name: 'Nguyễn Văn A',
+          company_name: 'Foxconn',
+          actor_name: 'Đỗ Thị Thảo',
+          actor_role: 'leader',
+        }),
+        leader,
+      );
+    });
+
+    it('đổi Tình trạng → thông báo kèm màu đã cài cho giá trị đó', async () => {
+      prisma.shuttleRecord.findUnique.mockResolvedValue({
+        ...record,
+        status: 'Hẹn lại',
+      });
+      prisma.shuttleRecord.update.mockResolvedValue({
+        ...record,
+        status: 'Đã đón',
+      });
+      prisma.shuttleOption.findUnique.mockResolvedValue({
+        colorKey: 'green',
+        textColorKey: null,
+      });
+
+      await service.update('record-1', { status: 'Đã đón' }, leader);
+
+      expect(prisma.shuttleOption.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { field_value: { field: 'status', value: 'Đã đón' } },
+        }),
+      );
+      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledTimes(1);
+      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledWith(
+        'record-1',
+        expect.objectContaining({
+          kind: 'status',
+          value: 'Đã đón',
+          color_key: 'green',
+        }),
+        leader,
+      );
+    });
+
+    it('đổi Kết quả → thông báo kind=interview_result', async () => {
+      prisma.shuttleRecord.findUnique.mockResolvedValue({
+        ...record,
+        interviewResult: null,
+      });
+      prisma.shuttleRecord.update.mockResolvedValue({
+        ...record,
+        interviewResult: 'Trượt phỏng vấn',
+      });
+      prisma.shuttleOption.findUnique.mockResolvedValue(null);
+
+      await service.update(
+        'record-1',
+        { interview_result: 'Trượt phỏng vấn' },
+        leader,
+      );
+
+      expect(realtimeService.emitShuttleNotice).toHaveBeenCalledWith(
+        'record-1',
+        expect.objectContaining({
+          kind: 'interview_result',
+          value: 'Trượt phỏng vấn',
+          color_key: null,
+        }),
+        leader,
+      );
+    });
+
+    it('sửa ô khác (Ghi chú) hoặc giữ nguyên Tình trạng → không thông báo', async () => {
+      prisma.shuttleRecord.findUnique.mockResolvedValue(record);
+      prisma.shuttleRecord.update.mockResolvedValue({ ...record, note: 'Mới' });
+
+      await service.update(
+        'record-1',
+        { note: 'Mới', status: 'Đã đón' },
+        leader,
+      );
+
+      expect(realtimeService.emitShuttleNotice).not.toHaveBeenCalled();
+    });
+
+    it('lỗi khi dựng thông báo không làm hỏng việc lưu', async () => {
+      prisma.shuttleRecord.findUnique.mockResolvedValue({
+        ...record,
+        status: 'Hẹn lại',
+      });
+      prisma.shuttleRecord.update.mockResolvedValue(record);
+      prisma.orderRecord.findUnique.mockRejectedValue(new Error('DB down'));
+
+      await expect(
+        service.update('record-1', { status: 'Đã đón' }, leader),
+      ).resolves.toEqual(expect.objectContaining({ status: 'Đã đón' }));
+      expect(realtimeService.emitShuttleNotice).not.toHaveBeenCalled();
     });
   });
 });

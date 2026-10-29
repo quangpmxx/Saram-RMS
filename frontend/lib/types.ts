@@ -357,7 +357,25 @@ export type AppRealtimeModule =
   | "penalty"
   | "notification"
   | "dashboard"
-  | "sales-entry";
+  | "sales-entry"
+  /** Thông báo nổi Đưa đón (2026-10-29) — payload: ShuttleNotice. */
+  | "shuttle-notice";
+/**
+ * Thông báo nổi Đưa đón — nhập dòng mới / đổi Tình trạng / đổi Kết quả
+ * (yêu cầu người dùng 2026-10-29). Chỉ phát realtime, không lưu vào chuông.
+ */
+export interface ShuttleNotice {
+  record_id: string;
+  kind: "created" | "status" | "interview_result";
+  worker_name: string;
+  company_name: string | null;
+  actor_name: string;
+  actor_role: AccountRole;
+  value: string | null;
+  color_key: string | null;
+  text_color_key: string | null;
+}
+
 export type AppRealtimeAction = "created" | "updated" | "deleted" | "invalidate";
 
 export interface AppRealtimeEvent<TPayload = unknown> {

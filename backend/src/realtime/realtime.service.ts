@@ -144,6 +144,30 @@ export class RealtimeService {
     this.emitDashboardInvalidate(actor);
   }
 
+  /**
+   * Thông báo nổi + âm thanh cho MỌI tài khoản khi Đưa đón có dòng mới hoặc
+   * đổi Tình trạng/Kết quả (yêu cầu người dùng 2026-10-29). Chỉ phát
+   * realtime, không lưu bảng notifications (tránh mỗi lần sửa sinh ra hàng
+   * chục dòng thông báo cho từng tài khoản).
+   */
+  emitShuttleNotice<T>(
+    recordId: string,
+    notice: T,
+    actor: AuthenticatedUser,
+  ): void {
+    this.gateway.broadcastAppEvent(
+      { broadcastAll: true },
+      this.buildAppEvent(
+        'shuttle-notice',
+        'shuttle_notice',
+        'created',
+        recordId,
+        actor,
+        notice,
+      ),
+    );
+  }
+
   emitTransportationDeleted(id: string, actor: AuthenticatedUser | null): void {
     this.emitDashboardInvalidate(actor);
     this.gateway.broadcastAppEvent(

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   Bell,
+  Bus,
   CalendarClock,
   FileStack,
   FileText,
@@ -17,7 +18,14 @@ import {
   X,
 } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
-import { ACCOUNT_ROLE_LABEL, type AppNotification, type AppRealtimeEvent, type PaginatedResult } from "@/lib/types";
+import {
+  ACCOUNT_ROLE_LABEL,
+  type AppNotification,
+  type AppRealtimeEvent,
+  type PaginatedResult,
+  type ShuttleNotice,
+} from "@/lib/types";
+import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { roleAccentTextStyle } from "@/lib/role-accent";
 import { cn } from "@/lib/cn";
@@ -230,6 +238,8 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [seenIds, setSeenIds] = useState<Set<string>>(() => loadIdSet(seenStorageKey(userId)));
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadIdSet(dismissedStorageKey(userId)));
   const [toasts, setToasts] = useState<AppNotification[]>([]);
+  /** Thông báo nổi Đưa đón — chỉ hiện tạm, không vào danh sách chuông. */
+  const [shuttleToasts, setShuttleToasts] = useState<Array<ShuttleNotice & { key: string; at: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
@@ -333,6 +343,16 @@ export function NotificationBell({ userId }: { userId: string }) {
    * Socket.IO gửi lại...).
    */
   function handleAppRealtimeEvent(event: AppRealtimeEvent) {
+    if (event.module === "shuttle-notice") {
+      // Báo cho TẤT CẢ tài khoản, kể cả người vừa thao tác (yêu cầu người dùng).
+      const notice = event.payload as ShuttleNotice | undefined;
+      if (!notice) return;
+      const key = `${notice.record_id}-${notice.kind}-${event.updated_at}`;
+      playNotificationSound();
+      setShuttleToasts((prev) => (prev.some((t) => t.key === key) ? prev : [...prev, { ...notice, key, at: event.updated_at }]));
+      setTimeout(() => setShuttleToasts((prev) => prev.filter((t) => t.key !== key)), SHUTTLE_TOAST_DURATION_MS);
+      return;
+    }
     if (event.module !== "notification" || event.action !== "created") return;
     const n = event.payload as AppNotification | undefined;
     if (!n || n.account_id !== userId || knownIdsRef.current.has(n.id)) return;
@@ -538,9 +558,21 @@ export function NotificationBell({ userId }: { userId: string }) {
         con position:fixed, nếu không portal thì toast sẽ bị nhốt gọn trong
         khung header thay vì nổi đúng vị trí trên toàn trang.
       */}
-      {toasts.length > 0 &&
+      {(toasts.length > 0 || shuttleToasts.length > 0) &&
         createPortal(
           <div className="fixed top-14 right-3 z-40 flex w-[calc(100%-1.5rem)] max-w-80 flex-col gap-2 sm:right-6">
+            {shuttleToasts.map((t) => (
+              <ShuttleNoticeToast
+                key={t.key}
+                notice={t}
+                at={t.at}
+                onOpen={() => {
+                  setShuttleToasts((prev) => prev.filter((x) => x.key !== t.key));
+                  router.push("/shuttle");
+                }}
+                onClose={() => setShuttleToasts((prev) => prev.filter((x) => x.key !== t.key))}
+              />
+            ))}
             {toasts.map((n) => (
               <div
                 key={n.id}
@@ -580,5 +612,75 @@ export function NotificationBell({ userId }: { userId: string }) {
           document.body,
         )}
     </>
+  );
+}
+
+const SHUTTLE_TOAST_DURATION_MS = 15_000;
+
+/**
+ * Thông báo nổi Đưa đón (yêu cầu người dùng 2026-10-29):
+ * - Nhập mới: "Đỗ Thị Thảo (Leader) đã nhập đưa đón Nguyễn Hoà Bình (Foxconn)"
+ * - Đổi Tình trạng/Kết quả: "Lao động Nguyễn Hoà Bình (Foxconn) - [Đã đón]" —
+ *   nhãn tô đúng màu đã cài ở trang Danh sách đưa đón.
+ */
+function ShuttleNoticeToast({
+  notice,
+  at,
+  onOpen,
+  onClose,
+}: {
+  notice: ShuttleNotice;
+  at: string;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const worker = notice.company_name ? `${notice.worker_name} (${notice.company_name})` : notice.worker_name;
+  const chipStyle = shuttleColorStyle(notice.color_key, notice.text_color_key);
+  return (
+    <div
+      onClick={onOpen}
+      className="cursor-pointer rounded-xl border border-brand-200 border-l-4 border-l-brand-500 bg-gradient-to-br from-brand-50 to-white p-3 shadow-lg shadow-brand-900/20 ring-1 ring-brand-500/10"
+    >
+      <div className="flex items-start gap-2.5">
+        <Bus className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} />
+        <div className="min-w-0 flex-1">
+          {notice.kind === "created" ? (
+            <p className="text-sm text-slate-800">
+              <span className="font-semibold">
+                {notice.actor_name} ({ACCOUNT_ROLE_LABEL[notice.actor_role] ?? notice.actor_role})
+              </span>{" "}
+              đã nhập đưa đón <span className="font-semibold">{worker}</span>
+            </p>
+          ) : (
+            <p className="text-sm text-slate-800">
+              Lao động <span className="font-semibold">{worker}</span> -{" "}
+              <span
+                className={cn(
+                  "inline-block rounded px-1.5 py-0.5 text-xs font-medium",
+                  !chipStyle && "bg-slate-100 text-slate-700",
+                )}
+                style={chipStyle}
+              >
+                {notice.value}
+              </span>
+            </p>
+          )}
+          <p className="text-xs text-slate-500">
+            {new Date(at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · Danh sách đưa đón
+          </p>
+        </div>
+        <button
+          type="button"
+          title="Đóng"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          className="shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
+      </div>
+    </div>
   );
 }

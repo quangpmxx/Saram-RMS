@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
@@ -28,6 +29,20 @@ import {
   toShuttleResponse,
 } from './dto/shuttle-response.dto';
 
+/** Nội dung thông báo nổi Đưa đón — frontend tự dựng câu + tô màu theo color_key. */
+export interface ShuttleNoticeDto {
+  record_id: string;
+  kind: 'created' | 'status' | 'interview_result';
+  worker_name: string;
+  company_name: string | null;
+  actor_name: string;
+  actor_role: string;
+  /** Giá trị Tình trạng/Kết quả mới (kind khác 'created'). */
+  value: string | null;
+  color_key: string | null;
+  text_color_key: string | null;
+}
+
 const OPTION_FIELDS = [
   'area',
   'type',
@@ -49,6 +64,8 @@ type OptionField = (typeof OPTION_FIELDS)[number];
  */
 @Injectable()
 export class ShuttleService {
+  private readonly logger = new Logger(ShuttleService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
@@ -158,6 +175,7 @@ export class ShuttleService {
 
     const response = toShuttleResponse(record);
     this.realtime.emitTransportationChange('created', response, currentUser);
+    await this.emitNotice('created', record, currentUser);
     return response;
   }
 
@@ -211,7 +229,70 @@ export class ShuttleService {
 
     const response = toShuttleResponse(record);
     this.realtime.emitTransportationChange('updated', response, currentUser);
+    if (record.status && record.status !== existing.status) {
+      await this.emitNotice('status', record, currentUser);
+    }
+    if (
+      record.interviewResult &&
+      record.interviewResult !== existing.interviewResult
+    ) {
+      await this.emitNotice('interview_result', record, currentUser);
+    }
     return response;
+  }
+
+  /**
+   * Thông báo nổi Đưa đón (yêu cầu người dùng 2026-10-29). Lỗi ở đây KHÔNG
+   * được làm hỏng thao tác lưu — chỉ ghi log.
+   */
+  private async emitNotice(
+    kind: ShuttleNoticeDto['kind'],
+    record: ShuttleWithRelations,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    try {
+      const value =
+        kind === 'status'
+          ? record.status
+          : kind === 'interview_result'
+            ? record.interviewResult
+            : null;
+      const [company, option] = await Promise.all([
+        record.companyId
+          ? this.prisma.orderRecord.findUnique({
+              where: { id: record.companyId },
+              select: { name: true },
+            })
+          : null,
+        value
+          ? this.prisma.shuttleOption.findUnique({
+              where: { field_value: { field: kind, value } },
+              select: { colorKey: true, textColorKey: true },
+            })
+          : null,
+      ]);
+      const actorName =
+        kind === 'created'
+          ? record.createdBy.fullName
+          : record.updatedBy.fullName;
+      this.realtime.emitShuttleNotice<ShuttleNoticeDto>(
+        record.id,
+        {
+          record_id: record.id,
+          kind,
+          worker_name: record.fullName,
+          company_name: company?.name ?? null,
+          actor_name: actorName,
+          actor_role: currentUser.role,
+          value,
+          color_key: option?.colorKey ?? null,
+          text_color_key: option?.textColorKey ?? null,
+        },
+        currentUser,
+      );
+    } catch (error) {
+      this.logger.warn(`Không gửi được thông báo đưa đón: ${String(error)}`);
+    }
   }
 
   async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {

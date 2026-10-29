@@ -25,7 +25,9 @@ export type AppRealtimeModule =
    * nên không có listener nào lắng nghe sự kiện, giống lý luận đã áp dụng
    * cho 'transportation').
    */
-  | 'sales-entry';
+  | 'sales-entry'
+  /** Thông báo nổi Đưa đón (nhập mới / đổi Tình trạng / đổi Kết quả) — 2026-10-29. */
+  | 'shuttle-notice';
 
 export type AppRealtimeAction =
   'created' | 'updated' | 'deleted' | 'invalidate';
