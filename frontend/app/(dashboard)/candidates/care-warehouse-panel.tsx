@@ -424,13 +424,13 @@ export function CareWarehousePanel({
             ))}
           </div>
         )}
-        <Field uiSize="xs" label="Tìm theo tên hoặc SĐT" className="min-w-[180px] flex-1">
+        <Field uiSize="xs" label="Tìm kiếm" className="min-w-[180px] flex-1">
           <Input
             uiSize="xs"
             value={filters.search}
             onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
             onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            placeholder="Tên hoặc SĐT"
+            placeholder="Tên, SĐT, ghi chú, năm sinh, địa chỉ"
           />
         </Field>
         <Field uiSize="xs" label="Trạng thái chăm sóc (tháng)">

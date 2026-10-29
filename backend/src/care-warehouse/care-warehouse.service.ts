@@ -14,6 +14,7 @@ import {
   CandidateResponseDto,
   toCandidateResponse,
 } from '../candidates/dto/candidate-response.dto';
+import { buildLeadKeywordWhere } from '../candidates/lead-keyword-search';
 import { RealtimeService } from '../realtime/realtime.service';
 import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { LeadChangeType } from '../realtime/realtime-event.interface';
@@ -191,15 +192,10 @@ export class CareWarehouseService {
       ...this.eligibleWhere(now),
       ...(teamId ? { assignedTeamId: teamId } : {}),
     };
-    const search = query.search?.trim();
-    const leadWhere: Prisma.LeadWhereInput = search
-      ? {
-          ...scopeWhere,
-          OR: [
-            { fullName: { contains: search, mode: 'insensitive' } },
-            { phoneNumber: { contains: search } },
-          ],
-        }
+    // Cùng điều kiện tìm kiếm với tab Tất cả (tên/SĐT/ghi chú/địa chỉ/năm sinh).
+    const searchWhere = buildLeadKeywordWhere(query.search);
+    const leadWhere: Prisma.LeadWhereInput = searchWhere
+      ? { ...scopeWhere, ...searchWhere }
       : scopeWhere;
 
     const leads = await this.prisma.lead.findMany({

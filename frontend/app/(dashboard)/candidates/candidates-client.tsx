@@ -776,13 +776,13 @@ export function CandidatesClient({
       // UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng.
       <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
         {(viewMode === "all" || viewMode === "mine") && (
-          <Field uiSize="xs" label="Tìm theo tên, SĐT hoặc ghi chú" className="min-w-[200px] flex-1">
+          <Field uiSize="xs" label="Tìm kiếm" className="min-w-[200px] flex-1">
             <Input
               uiSize="xs"
               value={filters.keyword}
               onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
               onKeyDown={(event) => event.key === "Enter" && void handleSearch()}
-              placeholder="Tên, SĐT hoặc nội dung ghi chú chăm sóc"
+              placeholder="Tên, SĐT, ghi chú, năm sinh, địa chỉ"
             />
           </Field>
         )}

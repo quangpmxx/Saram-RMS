@@ -9,6 +9,7 @@ import {
 import { Account, Lead, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { buildLeadKeywordWhere } from './lead-keyword-search';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import {
@@ -82,35 +83,17 @@ export class CandidatesService {
       team_id: query.team_id,
     });
 
-    if (query.keyword) {
-      // UI Polish — mở rộng tìm kiếm sang cả nội dung ghi chú chăm sóc của
-      // Sale (lead_notes.content), ngoài tên/SĐT như tài liệu 13 mô tả gốc —
-      // theo yêu cầu trực tiếp của người dùng trong phiên làm việc. Chỉ khớp
-      // ghi chú CHƯA xóa (is_deleted=false), tương ứng đúng nội dung đang
-      // hiển thị thật cho người dùng, không tính ghi chú đã xóa mềm.
+    const keywordWhere = buildLeadKeywordWhere(query.keyword);
+    if (keywordWhere) {
+      // UI Polish — tìm theo tên/SĐT + ghi chú (chăm sóc chưa xóa, MKT), địa
+      // chỉ, năm sinh — xem lead-keyword-search.ts (dùng chung với Kho chăm sóc).
       // Dùng where.AND (không ghi đè where.OR) — buildScopeWhere() ở trên có
       // thể đã đặt sẵn where.AND cho phạm vi xem của Sale/Leader (gộp "Chờ
       // phân chia"); ghi đè trực tiếp where.OR sẽ xóa mất phạm vi đó.
       const scopeAnd = Array.isArray(where.AND)
         ? (where.AND as Record<string, unknown>[])
         : [];
-      where.AND = [
-        ...scopeAnd,
-        {
-          OR: [
-            { fullName: { contains: query.keyword, mode: 'insensitive' } },
-            { phoneNumber: { contains: query.keyword } },
-            {
-              notes: {
-                some: {
-                  content: { contains: query.keyword, mode: 'insensitive' },
-                  isDeleted: false,
-                },
-              },
-            },
-          ],
-        },
-      ];
+      where.AND = [...scopeAnd, keywordWhere];
     }
     if (query.source_id) {
       where.sourceId = query.source_id;
