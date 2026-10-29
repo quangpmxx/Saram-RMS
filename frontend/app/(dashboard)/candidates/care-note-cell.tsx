@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDMY } from "@/lib/date-format";
+import { callResultVariant, callStatusVariant } from "@/lib/call-status-variant";
 import { useState } from "react";
 import type { Note } from "@/lib/types";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
@@ -22,9 +23,19 @@ function formatNoteTimestamp(value: string): string {
 }
 
 /** Badge cỡ nhỏ riêng cho ô này (nhỏ hơn ~10-15% so với Badge dùng chung) — tránh xung đột class vì `cn()` trong dự án chỉ nối chuỗi, không dedupe Tailwind. */
-function MiniStatusBadge({ label }: { label: string }) {
+const MINI_BADGE_TONE: Record<"info" | "neutral" | "warning" | "danger" | "success", string> = {
+  info: "bg-brand-50 text-brand-700 ring-brand-600/20",
+  neutral: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  warning: "bg-amber-50 text-amber-700 ring-amber-600/20",
+  danger: "bg-red-50 text-red-700 ring-red-600/20",
+  success: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+};
+
+function MiniStatusBadge({ label, tone }: { label: string; tone: keyof typeof MINI_BADGE_TONE }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-brand-50 px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-brand-700 ring-1 ring-inset ring-brand-600/20">
+    <span
+      className={`inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-medium whitespace-nowrap ring-1 ring-inset ${MINI_BADGE_TONE[tone]}`}
+    >
       {label}
     </span>
   );
@@ -93,7 +104,14 @@ export function CareNoteCell({ notes }: { notes: Note[] | undefined }) {
               <NameWithRoleHint account={note.created_by} className="font-semibold text-slate-700" />
               <span className="text-slate-300">·</span>
               <span className="text-slate-400">{formatNoteTimestamp(note.created_at)}</span>
-              {note.call_status && <MiniStatusBadge label={note.call_status.name} />}
+              {/* Nhãn của chính lần xử lý này (tình trạng + kết quả) — thay cho dòng
+                  nhãn chung đầu ô đã bỏ (yêu cầu người dùng 2026-10-29). */}
+              {note.call_status && (
+                <MiniStatusBadge label={note.call_status.name} tone={callStatusVariant(note.call_status.name)} />
+              )}
+              {note.call_result && (
+                <MiniStatusBadge label={note.call_result.name} tone={callResultVariant(note.call_result.name)} />
+              )}
             </div>
             <NoteContent content={note.content} />
           </div>

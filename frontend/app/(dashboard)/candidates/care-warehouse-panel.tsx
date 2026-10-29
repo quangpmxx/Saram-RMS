@@ -737,7 +737,7 @@ export function CareWarehousePanel({
                       )}
                     </td>
                     <td className="min-w-[300px] border-r border-slate-100 px-2 py-2" style={callStatusCellStyle(item)}>
-                      <CallStatusCellContent candidate={item} notes={notesByLeadId.get(item.id)} />
+                      <CallStatusCellContent notes={notesByLeadId.get(item.id)} />
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2 text-center font-medium text-slate-700">
                       {care.month_care_count} / {care.total_care_count}

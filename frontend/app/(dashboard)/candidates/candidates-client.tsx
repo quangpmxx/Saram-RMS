@@ -1101,7 +1101,7 @@ export function CandidatesClient({
                     </td>
 
                     <td className="border-r border-slate-100 px-4 py-2" style={callStatusCellStyle(candidate)}>
-                      <CallStatusCellContent candidate={candidate} notes={candidateNotes} />
+                      <CallStatusCellContent notes={candidateNotes} />
                     </td>
 
                     {/* Cột "Zalo" (yêu cầu người dùng 2026-10-29) — trạng thái kết bạn

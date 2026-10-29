@@ -9,3 +9,10 @@ export function callStatusVariant(name: string): "info" | "neutral" | "warning" 
   if (name === "Sai số") return "danger";
   return "warning"; // Không nghe máy / Thuê bao / Máy bận
 }
+
+/** Màu nhãn "Kết quả cuộc gọi" (Tiềm năng / Không tiềm năng / còn lại). */
+export function callResultVariant(name: string): "success" | "warning" | "neutral" {
+  if (name.includes("Không tiềm năng")) return "neutral";
+  if (name.includes("Tiềm năng")) return "success";
+  return "warning";
+}
