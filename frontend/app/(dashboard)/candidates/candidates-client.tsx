@@ -1100,7 +1100,7 @@ export function CandidatesClient({
                       )}
                     </td>
 
-                    <td className="border-r border-slate-100 px-4 py-2" style={callStatusCellStyle(candidate)}>
+                    <td className="border-r border-slate-100 px-3 py-1" style={callStatusCellStyle(candidate)}>
                       <CallStatusCellContent notes={candidateNotes} />
                     </td>
 

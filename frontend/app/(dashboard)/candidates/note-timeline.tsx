@@ -64,7 +64,7 @@ export function NoteTimeline({
   const itemPaddingClass = compact ? "pl-6" : "pl-8";
   const lineOffsetClass = compact ? "left-3" : "left-[15px]";
   const dotClass = compact
-    ? "top-1.5 left-[9px] h-1.5 w-1.5"
+    ? "top-1 left-[9px] h-1.5 w-1.5"
     : "top-2 left-[11px] h-2 w-2";
 
   return (
@@ -90,7 +90,7 @@ export function NoteTimeline({
           type="button"
           onClick={toggle}
           className={`flex items-center gap-1 font-medium text-brand-600 hover:text-brand-700 ${
-            compact ? "mt-1 text-[10px]" : "mt-2 text-xs"
+            compact ? "mt-0.5 text-[10px]" : "mt-2 text-xs"
           }`}
         >
           {isExpanded ? (

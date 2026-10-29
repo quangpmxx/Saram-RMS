@@ -736,7 +736,7 @@ export function CareWarehousePanel({
                         <span className="text-slate-400">Chưa giao</span>
                       )}
                     </td>
-                    <td className="min-w-[300px] border-r border-slate-100 px-2 py-2" style={callStatusCellStyle(item)}>
+                    <td className="min-w-[300px] border-r border-slate-100 px-2 py-1" style={callStatusCellStyle(item)}>
                       <CallStatusCellContent notes={notesByLeadId.get(item.id)} />
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2 text-center font-medium text-slate-700">
