@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMYHM } from "@/lib/date-format";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -89,7 +90,7 @@ const EMPTY_FILTERS: CareFilters = {
   stats_assignee_id: "",
 };
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 const ASSIGNER_ROLES: AccountRole[] = ["admin", "manager", "leader"];
 /** Gộp nhiều sự kiện realtime liên tiếp (vd giao 50 data 1 lần) thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 600;
@@ -440,9 +441,7 @@ export function CareWarehousePanel({
     if (ids.length === 0) return;
     let cancelled = false;
     const controller = new AbortController();
-    clientApi<Record<string, Note[]>>(`/candidate/notes?ids=${ids.join(",")}`, { signal: controller.signal })
-      .catch(() => ({}) as Record<string, Note[]>)
-      .then((byLead) => {
+    fetchNotesByLeadIds(ids, controller.signal).then((byLead) => {
         if (cancelled) return;
         setNotesByLeadId(new Map(ids.map((id) => [id, (byLead[id] ?? []).filter((note) => !note.is_deleted)])));
       });

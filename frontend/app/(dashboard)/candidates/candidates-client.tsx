@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMY } from "@/lib/date-format";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { Fragment, useEffect, useRef, useState } from "react";
@@ -73,7 +74,7 @@ import { CareWarehousePanel, clearSavedCareState, type CareSaleOption } from "./
 
 const PAGE_SIZE = 50;
 /** Dự án phụ — nâng cấp toàn diện: cho chọn số dòng/trang, y hệt trang Đưa đón (yêu cầu trực tiếp người dùng). */
-const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 /**
  * Yêu cầu trực tiếp người dùng: "xử lý xong 1 data, ấn Lưu hoặc Quay lại thì
  * quay lại ĐÚNG trang/vị trí cuộn lúc trước" — lưu tạm trạng thái danh sách
@@ -260,9 +261,7 @@ export function CandidatesClient({
     const controller = new AbortController();
     const ids = candidates.map((candidate) => candidate.id);
 
-    clientApi<Record<string, Note[]>>(`/candidate/notes?ids=${ids.join(",")}`, { signal: controller.signal })
-      .catch(() => ({}) as Record<string, Note[]>)
-      .then((byLead) => {
+    fetchNotesByLeadIds(ids, controller.signal).then((byLead) => {
         if (cancelled) return;
         setNotesByLeadId(new Map(ids.map((id) => [id, (byLead[id] ?? []).filter((note) => !note.is_deleted)])));
       });

@@ -25,7 +25,7 @@ export class ListCareWarehouseQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(200)
+  @Max(300)
   page_size: number = 20;
 
   /** "assigned" = chỉ data đang được giao cho chính người xem (bộ lọc "Được giao" của Sale). */

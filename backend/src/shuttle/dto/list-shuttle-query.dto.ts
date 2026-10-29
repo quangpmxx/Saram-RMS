@@ -22,7 +22,7 @@ export class ListShuttleQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(300)
   page_size: number = 20;
 
   /** Tìm theo tên hoặc SĐT. */

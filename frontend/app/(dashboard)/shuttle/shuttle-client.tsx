@@ -60,7 +60,7 @@ const OPTION_FIELD_KEYS: Record<string, keyof ShuttleOptions> = {
   interview_time: "interviewTimes",
 };
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 
 /** Dự án phụ — nâng cấp toàn diện: mức thu phóng bảng, y hệt danh sách % của Google Sheet (yêu cầu trực tiếp người dùng). */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;

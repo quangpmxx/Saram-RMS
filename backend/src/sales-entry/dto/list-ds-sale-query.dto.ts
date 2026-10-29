@@ -22,7 +22,7 @@ export class ListDsSaleQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(200)
+  @Max(300)
   page_size: number = 100;
 
   /** Tìm theo Mã NV, Họ tên, CMT/CCCD, Quê quán (Mục 10). */

@@ -49,7 +49,7 @@ interface SheetRow {
   status: SaveStatus;
 }
 
-const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 300] as const;
 
 /** Yêu cầu trực tiếp người dùng (2026-07-18): "thêm chức năng thu phóng như trang Danh sách đưa đón" — khớp đúng ZOOM_LEVELS ở shuttle-client.tsx. */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
