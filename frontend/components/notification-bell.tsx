@@ -209,8 +209,31 @@ const CHIME_NOTES_HZ = [659.25, 987.77, 1318.51];
 const CHIME_NOTE_GAP_S = 0.14;
 const CHIME_NOTE_DURATION_S = 0.22;
 
-/** Phát chuỗi 3 tiếng "chime" bằng Web Audio API — không cần thêm file âm thanh. */
+/**
+ * Âm thanh thông báo do người dùng chọn (2026-10-29) — public/sounds/
+ * notification.mp3. Dùng lại 1 thẻ Audio (tải sẵn 1 lần); không phát được
+ * (file lỗi, trình duyệt chặn) thì phát tiếng "chime" cũ làm dự phòng.
+ */
+const NOTIFICATION_SOUND_URL = "/sounds/notification.mp3";
+const NOTIFICATION_SOUND_VOLUME = 0.8;
+let notificationAudio: HTMLAudioElement | null = null;
+
 function playNotificationSound() {
+  try {
+    if (!notificationAudio) {
+      notificationAudio = new Audio(NOTIFICATION_SOUND_URL);
+      notificationAudio.preload = "auto";
+      notificationAudio.volume = NOTIFICATION_SOUND_VOLUME;
+    }
+    notificationAudio.currentTime = 0;
+    void notificationAudio.play().catch(() => playChimeSound());
+  } catch {
+    playChimeSound();
+  }
+}
+
+/** Dự phòng: chuỗi 3 tiếng "chime" bằng Web Audio API (không cần file). */
+function playChimeSound() {
   try {
     const AudioContextClass =
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
