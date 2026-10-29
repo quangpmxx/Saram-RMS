@@ -666,6 +666,7 @@ describe('LeadPipelineService', () => {
           content: 'Gọi lần 2',
           call_status_id: 'status-sai-so',
           call_result_id: null,
+          zalo_friend_status_id: null,
         },
         saleUser,
       );
@@ -675,6 +676,7 @@ describe('LeadPipelineService', () => {
           data: expect.objectContaining({
             callStatusId: 'status-sai-so',
             callResultId: null,
+            zaloFriendStatusId: null,
           }),
         }),
       );

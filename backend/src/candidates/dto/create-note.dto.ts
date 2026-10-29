@@ -27,4 +27,10 @@ export class CreateNoteDto {
   @ValidateIf((_, value) => value !== null)
   @IsUUID()
   call_result_id?: string | null;
+
+  /** Tình trạng Zalo của lần chăm sóc này — cùng quy tắc như 2 trường trên. */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  zalo_friend_status_id?: string | null;
 }

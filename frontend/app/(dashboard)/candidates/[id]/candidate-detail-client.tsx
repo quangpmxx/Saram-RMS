@@ -143,9 +143,9 @@ export function CandidateDetailClient({
   const [callStatusId, setCallStatusId] = useState("");
   const [callResultId, setCallResultId] = useState("");
   const [zaloStatusId, setZaloStatusId] = useState(initialCandidate.zalo_status?.id ?? "");
-  const [zaloFriendStatusId, setZaloFriendStatusId] = useState(
-    initialCandidate.zalo_friend_status?.id ?? "",
-  );
+  // Như 2 ô trên: mở trang thì để trống, gửi ghi chú xong cũng trống lại
+  // (yêu cầu người dùng 2026-10-29); trạng thái Zalo đã lưu của data vẫn giữ.
+  const [zaloFriendStatusId, setZaloFriendStatusId] = useState("");
   /**
    * Dự án phụ — nâng cấp toàn diện: tự động lưu "Tình trạng cuộc gọi/Kết quả
    * cuộc gọi/Kết quả" khi rời trang mà QUÊN bấm "Lưu thông tin" (yêu cầu
@@ -418,6 +418,8 @@ export function CandidateDetailClient({
    */
   async function handleSetZaloFriendStatus(value: string) {
     setZaloFriendStatusId(value);
+    // Ô để trống = lần này chưa chọn, KHÔNG xoá trạng thái Zalo đã lưu của data.
+    if (!value) return;
     setIsSavingZaloFriendStatus(true);
     try {
       const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/zalo-friend-status`, {
@@ -426,7 +428,7 @@ export function CandidateDetailClient({
       });
       setCandidate(updated);
     } catch (error) {
-      setZaloFriendStatusId(candidate.zalo_friend_status?.id ?? "");
+      setZaloFriendStatusId("");
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setIsSavingZaloFriendStatus(false);
@@ -597,11 +599,17 @@ export function CandidateDetailClient({
       method: "POST",
       // Nhãn của ghi chú = đúng tình trạng/kết quả đang chọn ở lần chăm sóc
       // này (để trống = không gắn), không lấy giá trị cũ của data.
-      body: JSON.stringify({ content, call_status_id: callStatusId || null, call_result_id: callResultId || null }),
+      body: JSON.stringify({
+        content,
+        call_status_id: callStatusId || null,
+        call_result_id: callResultId || null,
+        zalo_friend_status_id: zaloFriendStatusId || null,
+      }),
     });
-    // Gửi xong thì để trống lại 2 ô cho lần ghi chú tiếp theo (yêu cầu người dùng 2026-10-29).
+    // Gửi xong thì để trống lại 3 ô cho lần ghi chú tiếp theo (yêu cầu người dùng 2026-10-29).
     setCallStatusId("");
     setCallResultId("");
+    setZaloFriendStatusId("");
     savedCallInfoRef.current = { ...savedCallInfoRef.current, callStatusId: "", callResultId: "" };
     await refreshNotes();
   }

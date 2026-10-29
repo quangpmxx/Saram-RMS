@@ -295,6 +295,12 @@ export class LeadPipelineService {
     if (dto.call_result_id) {
       await this.assertStatusInCategory(dto.call_result_id, 'call_result');
     }
+    if (dto.zalo_friend_status_id) {
+      await this.assertStatusInCategory(
+        dto.zalo_friend_status_id,
+        'zalo_friend_status',
+      );
+    }
 
     const created = await this.prisma.leadNote.create({
       data: {
@@ -313,7 +319,10 @@ export class LeadPipelineService {
             ? dto.call_result_id
             : lead.callResultId,
         // Dự án phụ — nâng cấp toàn diện: snapshot Tình trạng Zalo cùng cơ chế.
-        zaloFriendStatusId: lead.zaloFriendStatusId,
+        zaloFriendStatusId:
+          dto.zalo_friend_status_id !== undefined
+            ? dto.zalo_friend_status_id
+            : lead.zaloFriendStatusId,
       },
       include: NOTE_INCLUDE,
     });
