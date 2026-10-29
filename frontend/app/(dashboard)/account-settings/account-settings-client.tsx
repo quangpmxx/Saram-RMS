@@ -34,7 +34,7 @@ function formatDateOnly(value: string | null): string {
  * Trước đây là modal, đổi sang trang riêng để tránh giới hạn chiều cao popup.
  */
 export function AccountSettingsClient({ user, accounts }: { user: Account; accounts: Account[] }) {
-  useSetPageTitle("Cài đặt tài khoản", "Ảnh đại diện, tên người dùng và mật khẩu đăng nhập.");
+  useSetPageTitle("Cài đặt tài khoản");
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
