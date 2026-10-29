@@ -949,10 +949,9 @@ export function CandidatesClient({
                     </td>
 
                     <td
-                      // Data đã đóng (dừng chăm sóc) → tô đỏ nhạt cả ô thông tin (yêu cầu người dùng 2026-10-29).
                       className={cn(
                         "cursor-pointer border-r border-slate-100 px-1.5 py-2",
-                        candidate.care_stopped_at && "bg-red-100",
+                        candidate.care_stopped_at && "relative",
                       )}
                       onClick={(event) => {
                         // UI Polish — cả ô mở được chi tiết ứng viên, không chỉ riêng tên
@@ -965,6 +964,19 @@ export function CandidatesClient({
                         router.push(`/candidates/${candidate.id}`);
                       }}
                     >
+                      {/* Data đã đóng (dừng chăm sóc) → dấu X đỏ gạch chéo cả ô, nền giữ
+                          trắng (yêu cầu người dùng 2026-10-29). Không chặn click vào ô. */}
+                      {candidate.care_stopped_at && (
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 100 100"
+                          preserveAspectRatio="none"
+                          className="pointer-events-none absolute inset-0 z-[1] h-full w-full text-red-500/70"
+                        >
+                          <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                          <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                        </svg>
+                      )}
                       {/* UI Polish — tên cho phép xuống dòng tối đa 2 dòng rồi ellipsis
                           (line-clamp-2) thay vì cố định 1 dòng, theo yêu cầu tinh chỉnh độ
                           rộng cột — cột đã hẹp lại nên 1 dòng dễ cắt cụt tên quá sớm. Các
