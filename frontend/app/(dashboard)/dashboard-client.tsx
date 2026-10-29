@@ -737,6 +737,7 @@ export function DashboardClient({
           currentUserRole={currentUserRole}
           teamId={canFilterByTeam ? teamId : ""}
           accountId={accountId}
+          showNotes={false}
         />
       )}
 

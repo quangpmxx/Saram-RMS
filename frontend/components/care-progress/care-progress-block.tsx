@@ -75,11 +75,11 @@ function Metric({
   );
 }
 
-function Group({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function Group({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-slate-200 p-3">
-      <p className="text-xs font-semibold text-slate-800">{title}</p>
-      <p className="mb-2 text-[10px] text-slate-400">{subtitle}</p>
+      <p className={cn("text-xs font-semibold text-slate-800", !subtitle && "mb-2")}>{title}</p>
+      {subtitle && <p className="mb-2 text-[10px] text-slate-400">{subtitle}</p>}
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">{children}</div>
     </div>
   );
@@ -102,10 +102,13 @@ function ProgressBar({ percent }: { percent: number }) {
  * Yêu cầu người dùng (2026-10-29): mặc định chỉ hiện số liệu + thanh tiến
  * trình theo NGÀY; muốn xem tháng thì chọn "Theo tháng".
  */
-function DaySummary({ daily, date }: { daily: CareDailyMetrics; date: string }) {
+function DaySummary({ daily, date, showNotes }: { daily: CareDailyMetrics; date: string; showNotes: boolean }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <Group title={`Trong ngày ${dateLabel(date)}`} subtitle="Data được giao trong ngày — mỗi data đếm 1 lần">
+      <Group
+        title={`Trong ngày ${dateLabel(date)}`}
+        subtitle={showNotes ? "Data được giao trong ngày — mỗi data đếm 1 lần" : undefined}
+      >
         <Metric label="Được giao" value={daily.today.assigned} />
         <Metric label="Đã xử lý" value={daily.today.processed} tone="text-emerald-700" />
         <Metric label="Chưa xử lý" value={daily.today.pending} tone="text-red-700" />
@@ -126,7 +129,9 @@ function DaySummary({ daily, date }: { daily: CareDailyMetrics; date: string }) 
       </Group>
       <Group
         title="Tồn cũ"
-        subtitle="Giao từ các ngày trước trong tháng, chưa xử lý — tính riêng, không vào tỷ lệ ngày"
+        subtitle={
+          showNotes ? "Giao từ các ngày trước trong tháng, chưa xử lý — tính riêng, không vào tỷ lệ ngày" : undefined
+        }
       >
         <Metric label="Tồn đầu ngày" value={daily.backlog.start} />
         <Metric label="Đã xử lý hôm nay" value={daily.backlog.processed} tone="text-emerald-700" />
@@ -337,12 +342,15 @@ export function CareProgressBlock({
   teamId = "",
   accountId = "",
   status = "",
+  showNotes = true,
 }: {
   currentUserRole: AccountRole;
   /** Bộ lọc nhóm/nhân viên lấy từ trang chứa (Dashboard/Báo cáo). */
   teamId?: string;
   accountId?: string;
   status?: "" | "pending" | "done";
+  /** false = ẩn các dòng chú thích giải thích (Dashboard — yêu cầu người dùng 2026-10-29). */
+  showNotes?: boolean;
 }) {
   const isSale = currentUserRole === "sale";
   const [mode, setMode] = useState<ViewMode>("day");
@@ -400,13 +408,15 @@ export function CareProgressBlock({
             <HeartHandshake className="h-4 w-4 text-brand-600" strokeWidth={2} />
             Tiến độ chăm sóc
           </h2>
-          <p className="text-xs text-slate-500">
-            {isSale
-              ? "Data Kho chăm sóc được giao cho bạn. Chỉ ghi chú của chính bạn mới tính là đã xử lý."
-              : `Theo từng Sale. Đã xử lý = Sale được giao đã ghi chú.${
-                  data && data.rows.length > 0 ? ` ${pendingCount}/${data.rows.length} Sale còn data chưa xử lý.` : ""
-                }`}
-          </p>
+          {showNotes && (
+            <p className="text-xs text-slate-500">
+              {isSale
+                ? "Data Kho chăm sóc được giao cho bạn. Chỉ ghi chú của chính bạn mới tính là đã xử lý."
+                : `Theo từng Sale. Đã xử lý = Sale được giao đã ghi chú.${
+                    data && data.rows.length > 0 ? ` ${pendingCount}/${data.rows.length} Sale còn data chưa xử lý.` : ""
+                  }`}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium" role="tablist" aria-label="Xem theo">
@@ -472,7 +482,7 @@ export function CareProgressBlock({
       ) : isSale ? (
         ownRow ? (
           mode === "day" ? (
-            <DaySummary daily={ownRow.daily} date={data.date} />
+            <DaySummary daily={ownRow.daily} date={data.date} showNotes={showNotes} />
           ) : (
             <MonthSummary monthly={ownRow.monthly} target={data.target} month={data.month} isSale />
           )
@@ -482,7 +492,7 @@ export function CareProgressBlock({
       ) : (
         <div className="space-y-3">
           {mode === "day" ? (
-            <DaySummary daily={data.totals.daily} date={data.date} />
+            <DaySummary daily={data.totals.daily} date={data.date} showNotes={showNotes} />
           ) : (
             <MonthSummary monthly={data.totals.monthly} target={data.target} month={data.month} isSale={false} />
           )}
