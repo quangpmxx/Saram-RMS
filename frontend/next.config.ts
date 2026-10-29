@@ -4,6 +4,25 @@ const BACKEND_URL = process.env.API_URL ?? "http://localhost:3001";
 
 const nextConfig: NextConfig = {
   /**
+   * Next 16 chặn trang mở từ tên miền khác "localhost" (link VS Code Ports/
+   * ngrok/Cloudflare/IP LAN) dùng tài nguyên dev (/_next, HMR) — mở qua link
+   * sẽ lỗi. Cho phép các tên miền tunnel phổ biến + IP mạng nội bộ. Chỉ có
+   * tác dụng ở `next dev`.
+   */
+  allowedDevOrigins: [
+    "**.devtunnels.ms",
+    "**.app.github.dev",
+    "**.ngrok-free.app",
+    "**.ngrok-free.dev",
+    "**.ngrok.io",
+    "**.ngrok.app",
+    "**.trycloudflare.com",
+    "**.loca.lt",
+    "192.168.*.*",
+    "10.*.*.*",
+    "172.*.*.*",
+  ],
+  /**
    * Proxy /api/* trên chính origin của Next.js sang backend NestJS
    * (server-to-server, cùng máy). Nhờ vậy trình duyệt chỉ cần biết 1 origin
    * duy nhất — khắc phục 2 vấn đề khi share link qua tunnel (ngrok/VS Code
