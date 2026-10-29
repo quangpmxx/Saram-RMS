@@ -1,5 +1,5 @@
 /**
- * Sinh favicon.ico từ logo công ty (assets/2.jpg) — cắt vùng biểu tượng
+ * Sinh favicon.ico từ logo công ty (assets/5.jpg — logo Saram cũ, trước là assets/2.jpg) — cắt vùng biểu tượng
  * tròn "SR" (bỏ chữ "SARAM GROUP" bên dưới vì quá nhỏ để đọc được ở kích
  * thước tab trình duyệt), rồi đóng gói nhiều kích thước PNG (16/32/48px)
  * vào 1 file .ico hợp lệ theo chuẩn "PNG-in-ICO" (được mọi trình duyệt
@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SOURCE = path.join(__dirname, "..", "..", "assets", "2.jpg");
+const SOURCE = path.join(__dirname, "..", "..", "assets", "5.jpg");
 const OUTPUT = path.join(__dirname, "..", "app", "favicon.ico");
 const SIZES = [16, 32, 48];
 

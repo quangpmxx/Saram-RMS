@@ -142,16 +142,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
                     giữa theo toàn bộ chiều cao nội dung — với trang dài sẽ bị đẩy
                     xuống dưới màn hình đầu, lỗi thực tế đã gặp). z-0 để luôn nằm
                     dưới nội dung mọi trang (z-10) — mọi trang PHẢI đặt nội dung
-                    trong khối z-10 để logo không đè lên (đã bọc sẵn bên dưới). */}
+                    trong khối z-10 để logo không đè lên (đã bọc sẵn bên dưới).
+                    2026-10-29: đổi sang logo Đại Việt (assets/2.jpg, đã tách nền →
+                    public/dai-viet-logo-transparent.png) theo yêu cầu người dùng. */}
                 <div
                   aria-hidden="true"
                   className="pointer-events-none sticky top-0 z-0 -mb-[100vh] flex h-screen items-center justify-center overflow-hidden"
                 >
                   <Image
-                    src="/saram-logo-transparent.png"
+                    src="/dai-viet-logo-transparent.png"
                     alt=""
-                    width={584}
-                    height={733}
+                    width={800}
+                    height={835}
                     priority
                     className="w-[380px] opacity-[0.07] select-none sm:w-[460px]"
                   />
