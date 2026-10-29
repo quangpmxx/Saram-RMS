@@ -614,7 +614,7 @@ export function DashboardClient({
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-900">Hiệu suất theo nhóm</h2>
-            <Select uiSize="xs" className="w-44" value={teamSort} onChange={(event) => setTeamSort(event.target.value as TeamSort)}>
+            <Select uiSize="xs" className="w-1/2!" value={teamSort} onChange={(event) => setTeamSort(event.target.value as TeamSort)}>
               <option value="new_leads">Nhiều Data nhất</option>
               <option value="performance">Hiệu suất cao nhất</option>
             </Select>
@@ -655,7 +655,7 @@ export function DashboardClient({
             <h2 className="text-sm font-semibold text-slate-900">Hiệu suất từng nhân viên</h2>
             <Select
               uiSize="xs"
-              className="w-40"
+              className="w-1/2!"
               value={employeeSort}
               onChange={(event) => setEmployeeSort(event.target.value as EmployeeSort)}
             >
