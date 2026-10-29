@@ -150,6 +150,11 @@ function formatUploadedAt(value: string): { date: string; time: string } {
  * inline luôn thắng chắc chắn (cùng lý do đã áp dụng cho màu nền ô ghi chú
  * — xem lib/note-colors.ts).
  */
+/** Cột "Zalo": viết tắt "kết bạn" → "KB" cho gọn bằng cột "Kết quả" (yêu cầu người dùng 2026-10-29). */
+function shortZaloFriendName(name: string): string {
+  return name.replace(/kết bạn/i, "KB");
+}
+
 function zaloStatusStyle(name: string | undefined): { backgroundColor: string; color: string } | undefined {
   if (name === "Đã gửi CCCD") return { backgroundColor: "#15803d", color: "#ffffff" };
   return undefined;
@@ -911,9 +916,9 @@ export function CandidatesClient({
               <col className="w-[108px] min-w-[108px] max-w-[108px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[64px] min-w-[64px] max-w-[64px]" />
-              {/* Cột "Zalo" (2026-10-29) lấy 46px từ cột "Tình trạng cuộc gọi" (327 → 281). */}
-              <col className="w-[281px] min-w-[281px] max-w-[281px]" />
-              <col className="w-[46px] min-w-[46px] max-w-[46px]" />
+              {/* Cột "Zalo" (2026-10-29) rộng bằng cột "Kết quả", lấy 38px từ cột "Tình trạng cuộc gọi" (327 → 289). */}
+              <col className="w-[289px] min-w-[289px] max-w-[289px]" />
+              <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[38px] min-w-[38px] max-w-[38px]" />
               <col className="w-[21px] min-w-[21px] max-w-[21px]" />
             </colgroup>
@@ -1139,14 +1144,14 @@ export function CandidatesClient({
                         if (!canUpdateZaloStatus(candidate)) {
                           return (
                             <span style={pillStyle} className={pillClass}>
-                              {status?.name ?? "--"}
+                              {status ? shortZaloFriendName(status.name) : "--"}
                             </span>
                           );
                         }
                         return (
                           <div className="relative">
                             <div style={pillStyle} className={pillClass}>
-                              <span>{status?.name ?? "--"}</span>
+                              <span>{status ? shortZaloFriendName(status.name) : "--"}</span>
                               <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
                             </div>
                             <select
@@ -1158,7 +1163,7 @@ export function CandidatesClient({
                               <option value="">Chưa cập nhật</option>
                               {zaloFriendStatuses.map((s) => (
                                 <option key={s.id} value={s.id}>
-                                  {s.name}
+                                  {shortZaloFriendName(s.name)}
                                 </option>
                               ))}
                             </select>
