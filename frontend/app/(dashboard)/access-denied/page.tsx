@@ -15,7 +15,7 @@ export default function AccessDeniedPage() {
         <ShieldX className="h-7 w-7" strokeWidth={1.75} />
       </div>
       <div>
-        <p className="text-base font-semibold text-slate-800">Bạn không có quyền truy cập trang này</p>
+        <p className="text-base font-semibold text-slate-800">Bạn không có quyền thao tác với trang này</p>
         <p className="mt-1 text-sm text-slate-500">Liên hệ Admin nếu bạn cho rằng đây là nhầm lẫn.</p>
       </div>
       <Link href="/">

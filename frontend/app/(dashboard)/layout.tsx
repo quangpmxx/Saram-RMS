@@ -5,7 +5,6 @@ import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
 import { type BirthdayToday } from "@/lib/types";
 import { MODULE_REGISTRY } from "@/lib/module-registry";
-import { getMyModulePermissions } from "@/lib/module-permission";
 import { Logo } from "@/components/logo";
 import { CollapsibleSidebar } from "@/components/collapsible-sidebar";
 import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
@@ -41,32 +40,18 @@ async function getBirthdayToday(): Promise<BirthdayToday | null> {
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [user, birthdayToday, permissions] = await Promise.all([
-    getCurrentUser(),
-    getBirthdayToday(),
-    getMyModulePermissions(),
-  ]);
+  const [user, birthdayToday] = await Promise.all([getCurrentUser(), getBirthdayToday()]);
 
   if (!user) {
     redirect("/login");
   }
 
-  // Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
-  // dùng): "Phân quyền" phiên bản đơn giản — menu giờ lọc theo QUYỀN HIỆU
-  // LỰC thật (permissions[code] !== "none"), không còn lọc thẳng theo mảng
-  // vai trò cố định nữa. Khi Admin CHƯA cấu hình gì cho 1 tài khoản, BE tự
-  // trả về đúng quyền suy ra từ vai trò (xem module-permission.service.ts),
-  // nên hành vi menu KHÔNG đổi cho tới khi Admin chủ động phân quyền riêng.
-  const navItems: NavItem[] = MODULE_REGISTRY.filter((item) => (permissions[item.code] ?? "none") !== "none").map(
-    (item) => ({ href: item.href, label: item.label, icon: item.icon }),
-  );
-  // "Phân quyền" — CHỈ Admin, không đi qua hệ thống module-permission (tự
-  // quản lý chính nó sẽ tạo vòng lặp vô nghĩa: Admin luôn 'edit' mọi module
-  // nên thực chất luôn hiện, nhưng để rõ ràng/an toàn vẫn gate cứng theo
-  // role admin ở đây, khớp cách trang này tự chặn ở page.tsx).
-  if (user.role === "admin") {
-    navItems.push({ href: "/permissions", label: "Phân quyền", icon: "permissions" });
-  }
+  // Rà soát phân quyền 2026-10-30: menu hiện ĐỦ mọi mục (kể cả "Phân quyền")
+  // với mọi tài khoản; bấm vào trang không có quyền → trang tự chuyển sang
+  // /access-denied (requirePageAccess / kiểm tra vai trò ở page.tsx) báo
+  // "Bạn không có quyền thao tác với trang này".
+  const navItems: NavItem[] = MODULE_REGISTRY.map((item) => ({ href: item.href, label: item.label, icon: item.icon }));
+  navItems.push({ href: "/permissions", label: "Phân quyền", icon: "permissions" });
 
   return (
     <PageTitleProvider>
