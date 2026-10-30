@@ -438,8 +438,12 @@ export class AttendanceService {
     if (cells.length === 0) return [];
 
     const accountIds = [...new Set(cells.map((c) => c.account_id))];
+    // Rà soát 2026-10-30 (L1): chỉ tải các ngày đang sửa, không tải cả lịch sử.
+    const dates = [
+      ...new Set(cells.map((c) => dateOnlyToUtcMidnight(c.date).getTime())),
+    ].map((ms) => new Date(ms));
     const existing = await this.prisma.attendanceRecord.findMany({
-      where: { accountId: { in: accountIds } },
+      where: { accountId: { in: accountIds }, date: { in: dates } },
       select: { accountId: true, date: true, status: true },
     });
     const existingStatusByKey = new Map<string, AttendanceStatusValue>();

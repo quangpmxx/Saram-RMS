@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -204,16 +205,12 @@ export class LeaveRequestsService {
 
     const nextStatus =
       dto.decision === 'approved' ? 'pending_admin' : 'rejected';
-    const updated = await this.prisma.leaveRequest.update({
-      where: { id },
-      data: {
-        status: nextStatus,
-        leaderDecision: dto.decision,
-        leaderDecisionById: currentUser.id,
-        leaderDecisionAt: new Date(),
-        leaderNote: dto.note?.trim() || undefined,
-      },
-      include: LEAVE_REQUEST_INCLUDE,
+    const updated = await this.updateIfStillPending(id, ['pending_leader'], {
+      status: nextStatus,
+      leaderDecision: dto.decision,
+      leaderDecisionById: currentUser.id,
+      leaderDecisionAt: new Date(),
+      leaderNote: dto.note?.trim() || undefined,
     });
 
     await this.auditLog.log({
@@ -275,17 +272,17 @@ export class LeaveRequestsService {
     }
 
     const nextStatus = dto.decision === 'approved' ? 'approved' : 'rejected';
-    const updated = await this.prisma.leaveRequest.update({
-      where: { id },
-      data: {
+    const updated = await this.updateIfStillPending(
+      id,
+      ['pending_admin', 'pending_leader'],
+      {
         status: nextStatus,
         adminDecision: dto.decision,
         adminDecisionById: currentUser.id,
         adminDecisionAt: new Date(),
         adminNote: dto.note?.trim() || undefined,
       },
-      include: LEAVE_REQUEST_INCLUDE,
-    });
+    );
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -307,6 +304,35 @@ export class LeaveRequestsService {
     );
 
     return toLeaveRequestResponse(updated);
+  }
+
+  /**
+   * Rà soát 2026-10-30 (M1): kiểm trạng thái rồi mới ghi là hai bước rời nhau —
+   * hai người duyệt cùng lúc sẽ ghi đè quyết định của nhau. Đưa điều kiện trạng
+   * thái vào chính câu UPDATE; người đến sau (không khớp, Prisma P2025) nhận 409.
+   */
+  private async updateIfStillPending(
+    id: string,
+    allowedStatuses: Array<'pending_leader' | 'pending_admin'>,
+    data: Prisma.LeaveRequestUncheckedUpdateInput,
+  ) {
+    try {
+      return await this.prisma.leaveRequest.update({
+        where: { id, status: { in: allowedStatuses } },
+        data,
+        include: LEAVE_REQUEST_INCLUDE,
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new ConflictException(
+          'Đơn này vừa được người khác xử lý — vui lòng tải lại',
+        );
+      }
+      throw error;
+    }
   }
 
   private async findOwnedOrScoped(id: string, currentUser: AuthenticatedUser) {

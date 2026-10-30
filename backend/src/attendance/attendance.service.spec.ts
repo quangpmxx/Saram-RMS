@@ -365,6 +365,36 @@ describe('AttendanceService', () => {
       expect(result).toEqual({ saved: 0, deleted: 1 });
     });
 
+    it('27b) Chỉ tải bản ghi đúng nhân viên + đúng ngày đang sửa (không tải cả lịch sử)', async () => {
+      prisma.attendanceRecord.findMany.mockResolvedValueOnce([]);
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'Sale One', remainingLeaveDays: 1 },
+      ]);
+      await service.bulkSave(
+        {
+          upserts: [],
+          deletes: [
+            { account_id: 'sale-1', date: '2026-07-14' },
+            { account_id: 'sale-1', date: '2026-07-15' },
+          ],
+        },
+        adminUser,
+      );
+      expect(prisma.attendanceRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            accountId: { in: ['sale-1'] },
+            date: {
+              in: [
+                new Date('2026-07-14T00:00:00.000Z'),
+                new Date('2026-07-15T00:00:00.000Z'),
+              ],
+            },
+          },
+        }),
+      );
+    });
+
     it('28) Đổi 1 ô từ NP sang trạng thái khác (present) → hoàn lại 1 ngày phép', async () => {
       prisma.attendanceRecord.findMany.mockResolvedValueOnce([
         {

@@ -104,7 +104,7 @@ export class SalesEntryService {
     query: ListDsSaleQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<Prisma.SalesEntryRecordWhereInput> {
-    const where: Prisma.SalesEntryRecordWhereInput = {};
+    const where: Prisma.SalesEntryRecordWhereInput = { deletedAt: null };
 
     if (query.keyword) {
       where.OR = [
@@ -238,15 +238,17 @@ export class SalesEntryService {
     const existing = await this.prisma.salesEntryRecord.findUnique({
       where: { id },
     });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy dòng DS Sale');
     }
     await this.assertCanModifyRow(existing.saleUserId, currentUser);
 
-    const saleUserId = await this.resolveSaleUserId(
-      dto.sale_user_id ?? null,
-      currentUser,
-    );
+    // Không gửi sale_user_id = giữ nguyên Sale cũ (gửi null = bỏ gán có chủ ý).
+    // Sale luôn bị ép về chính mình nên vẫn đi qua resolveSaleUserId.
+    const saleUserId =
+      dto.sale_user_id === undefined && currentUser.role !== 'sale'
+        ? existing.saleUserId
+        : await this.resolveSaleUserId(dto.sale_user_id ?? null, currentUser);
 
     let record: DsSaleRowWithRelations;
     try {
@@ -292,17 +294,33 @@ export class SalesEntryService {
       }
     }
 
-    const result = await this.prisma.salesEntryRecord.deleteMany({ where });
+    // Xoá mềm (rà soát 2026-10-30): chỉ đụng các dòng trong phạm vi quyền và
+    // chưa xoá; audit ghi nội dung từng dòng; realtime chỉ phát cho id thật sự xoá.
+    where.deletedAt = null;
+    const targets = await this.prisma.salesEntryRecord.findMany({
+      where,
+      select: { id: true, employeeCode: true, fullName: true },
+    });
+    if (targets.length === 0) return { deleted: 0 };
 
-    await this.auditLog.log({
-      accountId: currentUser.id,
-      actionType: 'delete',
-      entityType: 'sales_entry_record',
-      newValue: `Đã xóa ${result.count} dòng`,
+    const result = await this.prisma.salesEntryRecord.updateMany({
+      where: { id: { in: targets.map((t) => t.id) }, deletedAt: null },
+      data: { deletedAt: new Date(), deletedById: currentUser.id },
     });
 
-    for (const id of ids) {
-      this.realtime.emitSalesEntryChange('deleted', { id }, currentUser);
+    for (const target of targets) {
+      await this.auditLog.log({
+        accountId: currentUser.id,
+        actionType: 'delete',
+        entityType: 'sales_entry_record',
+        entityId: target.id,
+        oldValue: target.fullName ?? target.employeeCode ?? target.id,
+      });
+      this.realtime.emitSalesEntryChange(
+        'deleted',
+        { id: target.id },
+        currentUser,
+      );
     }
 
     return { deleted: result.count };
