@@ -15,6 +15,12 @@ export function callStatusCellStyle(candidate: Pick<Candidate, "note_color">): C
  * còn dòng nhãn chung đầu ô — nhãn tình trạng/kết quả hiện cạnh tên người xử
  * lý của TỪNG ghi chú (xem care-note-cell.tsx).
  */
-export function CallStatusCellContent({ notes }: { notes: Note[] | undefined }) {
-  return <CareNoteCell notes={notes} />;
+export function CallStatusCellContent({
+  notes,
+  collapsedMaxHeight,
+}: {
+  notes: Note[] | undefined;
+  collapsedMaxHeight?: number;
+}) {
+  return <CareNoteCell notes={notes} collapsedMaxHeight={collapsedMaxHeight} />;
 }

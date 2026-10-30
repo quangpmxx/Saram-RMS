@@ -93,6 +93,8 @@ const EMPTY_FILTERS: CareFilters = {
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 const ASSIGNER_ROLES: AccountRole[] = ["admin", "manager", "leader"];
+/** Khung ghi chú thu gọn ở tab Chăm sóc — vừa dòng cao 84px, ~1,5 ghi chú. */
+const CARE_NOTE_COLLAPSED_HEIGHT = 44;
 /** Gộp nhiều sự kiện realtime liên tiếp (vd giao 50 data 1 lần) thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 600;
 
@@ -691,7 +693,9 @@ export function CareWarehousePanel({
                   <tr
                     key={item.id}
                     className={cn(
-                      "cursor-pointer align-top hover:bg-brand-50/50",
+                      // Chiều cao dòng cố định (yêu cầu người dùng 2026-10-30); ghi chú dài
+                      // bị cắt ở CARE_NOTE_COLLAPSED_HEIGHT, bấm "Xem thêm" mới mở ra.
+                      "h-[84px] cursor-pointer align-top hover:bg-brand-50/50",
                       index % 2 === 1 ? "bg-slate-50/60" : "bg-white",
                     )}
                     onClick={(event) => {
@@ -782,7 +786,10 @@ export function CareWarehousePanel({
                       )}
                     </td>
                     <td className="min-w-[300px] border-r border-slate-100 px-2 py-1" style={callStatusCellStyle(item)}>
-                      <CallStatusCellContent notes={notesByLeadId.get(item.id)} />
+                      <CallStatusCellContent
+                        notes={notesByLeadId.get(item.id)}
+                        collapsedMaxHeight={CARE_NOTE_COLLAPSED_HEIGHT}
+                      />
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2 text-center font-medium text-slate-700">
                       {care.month_care_count} / {care.total_care_count}

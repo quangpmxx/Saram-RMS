@@ -55,7 +55,14 @@ function NoteContent({ content }: { content: string }) {
  * chú, chiều cao ô/hàng vẫn cố định — chỉ mở rộng đúng ô khi bấm "Xem thêm".
  * `notes === undefined`: đang tải.
  */
-export function CareNoteCell({ notes }: { notes: Note[] | undefined }) {
+export function CareNoteCell({
+  notes,
+  collapsedMaxHeight = COLLAPSED_MAX_HEIGHT,
+}: {
+  notes: Note[] | undefined;
+  /** Chiều cao khung ghi chú khi thu gọn (tab Chăm sóc dùng khung thấp hơn). */
+  collapsedMaxHeight?: number;
+}) {
   const [isRowExpanded, setIsRowExpanded] = useState(false);
 
   if (notes === undefined) {
@@ -72,7 +79,7 @@ export function CareNoteCell({ notes }: { notes: Note[] | undefined }) {
         notes={notes}
         collapseByHeight
         compact
-        collapsedMaxHeight={COLLAPSED_MAX_HEIGHT}
+        collapsedMaxHeight={collapsedMaxHeight}
         expanded={isRowExpanded}
         onToggleExpanded={setIsRowExpanded}
         renderNote={(note) => (
