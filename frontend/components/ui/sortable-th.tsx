@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 /**
  * Tiêu đề cột bấm để sắp xếp (yêu cầu người dùng 2026-10-30): mọi cột Ngày
  * và STT trên thanh tiêu đề bấm trực tiếp để đổi chiều tăng dần (thấp → cao)
- * / giảm dần (cao → thấp). Cột ngày bấm lần đầu = giảm dần (mới nhất trước);
+ * / giảm dần (cao → thấp). Cột ngày/giờ bấm lần đầu = giảm dần (mới nhất trước);
  * STT tăng dần = thứ tự mặc định của danh sách.
  */
 export type SortOrder = "asc" | "desc";
@@ -18,8 +18,9 @@ export interface SortState<K extends string = string> {
 }
 
 /**
- * Bấm cột đang sắp → đổi chiều; bấm cột khác → `firstOrder`. Cột ngày mặc
- * định giảm dần — mới nhất trước (yêu cầu người dùng 2026-10-30).
+ * Bấm cột đang sắp → đổi chiều; bấm cột khác → `firstOrder`. Cột ngày và
+ * cột giờ bấm lần đầu đều giảm dần — mới nhất/muộn nhất trước (yêu cầu
+ * người dùng 2026-10-30); riêng STT tăng dần.
  */
 export function nextSort<K extends string>(
   current: SortState<K> | null,
@@ -59,7 +60,6 @@ export function SortableTh<K extends string>({
   sortKey,
   sort,
   onSort,
-  firstOrder,
   children,
   className,
   ...rest
@@ -67,8 +67,6 @@ export function SortableTh<K extends string>({
   sortKey: K;
   sort: SortState<K> | null;
   onSort: (next: SortState<K>) => void;
-  /** Chiều khi bấm lần đầu. Mặc định giảm dần (cột ngày); cột STT tự lấy tăng dần. */
-  firstOrder?: SortOrder;
   children: ReactNode;
 } & Omit<ThHTMLAttributes<HTMLTableCellElement>, "onClick">) {
   const active = sort?.key === sortKey ? sort.order : null;
@@ -85,7 +83,7 @@ export function SortableTh<K extends string>({
             ? "Đang xếp giảm dần — bấm để xếp tăng dần"
             : "Bấm để xếp tăng dần / giảm dần"
       }
-      onClick={() => onSort(nextSort(sort, sortKey, firstOrder ?? (sortKey === "stt" ? "asc" : "desc")))}
+      onClick={() => onSort(nextSort(sort, sortKey, sortKey === "stt" ? "asc" : "desc"))}
     >
       <span className="inline-flex items-center justify-center gap-0.5 hover:opacity-80">
         {children}

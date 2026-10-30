@@ -1555,7 +1555,6 @@ export function ShuttleClient({
                   sortKey="interview_time"
                   sort={sort}
                   onSort={handleSort}
-                  firstOrder="asc"
                   className="border-r border-slate-100 px-3 py-2.5"
                 >
                   Giờ PV

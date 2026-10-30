@@ -308,7 +308,7 @@ export function CheckinManagementPanel({
                   <th className="px-4 py-3">Nhóm</th>
                   <th className="px-4 py-3">Chức vụ</th>
                   <th className="px-4 py-3">Trạng thái</th>
-                  <SortableTh sortKey="time" sort={timeSort} onSort={setTimeSort} firstOrder="asc" className="px-4 py-3">
+                  <SortableTh sortKey="time" sort={timeSort} onSort={setTimeSort} className="px-4 py-3">
                     Giờ Check in
                   </SortableTh>
                   <th className="px-4 py-3">Địa chỉ</th>
