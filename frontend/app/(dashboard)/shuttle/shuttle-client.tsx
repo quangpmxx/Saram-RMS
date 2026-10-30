@@ -937,7 +937,7 @@ export function ShuttleClient({
   const [firstDayOffset, setFirstDayOffset] = useState(initialResult.first_day_offset ?? 0);
   // Bấm tiêu đề Ngày/STT/Giờ PV (yêu cầu người dùng 2026-10-30). Ref để
   // buildShuttleQuery đọc được ngay giá trị mới.
-  const [sort, setSort] = useState<SortState<ShuttleSortKey>>({ key: "stt", order: "asc" });
+  const [sort, setSort] = useState<SortState<ShuttleSortKey>>({ key: "date", order: "desc" });
   const sortRef = useRef(sort);
   /** Chỉ có khi STT giảm dần: tổng số dòng từng ngày để đếm ngược STT. */
   const [dayCounts, setDayCounts] = useState<Record<string, number> | null>(null);

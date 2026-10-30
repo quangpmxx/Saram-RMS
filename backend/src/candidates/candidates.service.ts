@@ -20,9 +20,12 @@ import {
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { QuickEditCandidateDto } from './dto/quick-edit-candidate.dto';
-import { ListCandidatesQueryDto } from './dto/list-candidates-query.dto';
+import {
+  ListCandidatesQueryDto,
+  type CandidateSort,
+} from './dto/list-candidates-query.dto';
 import { PendingCandidatesQueryDto } from './dto/pending-candidates-query.dto';
-import { flipOrder } from '../common/utils/sort-order.util';
+import { flipOrder, type SortOrder } from '../common/utils/sort-order.util';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { AssignBulkDto } from './dto/assign-bulk.dto';
 import { TransferCandidateDto } from './dto/transfer-candidate.dto';
@@ -62,6 +65,19 @@ export interface CreateCandidateResult {
 
 /** Vai trò luôn xem/sửa được toàn bộ ứng viên — Mục 2.6 & Mục 8, docs/09. */
 const FULL_ACCESS_ROLES = new Set(['admin', 'manager', 'mkt']);
+
+/**
+ * Thứ tự tab Tất cả / Chờ phân chia: mặc định ngày giờ lên số giảm dần — mới
+ * nhất trước (yêu cầu người dùng 2026-10-30, thay cho 'chưa phân chia lên
+ * đầu' 2026-07-16). Bấm 'Ngày' đổi chiều; 'STT' giảm dần đảo ngược mặc định.
+ */
+function leadListOrderBy(
+  sort: CandidateSort | undefined,
+  order: SortOrder | undefined,
+): Prisma.LeadOrderByWithRelationInput[] {
+  const dir = sort === 'date' ? (order ?? 'desc') : flipOrder(order ?? 'asc');
+  return [{ uploadedAt: dir }, { id: dir }];
+}
 
 @Injectable()
 export class CandidatesService {
@@ -144,28 +160,7 @@ export class CandidatesService {
       this.prisma.lead.findMany({
         where,
         include: CANDIDATE_INCLUDE,
-        // Yêu cầu trực tiếp người dùng (2026-07-16): ưu tiên hiện lead CHƯA
-        // được phân chia lên đầu, còn lại xếp theo ngày giờ lên số — đúng 2
-        // tiêu chí, không thêm tiêu chí nào khác.
-        // Bấm tiêu đề "Ngày" → chỉ xếp theo ngày lên số; "STT" giảm dần →
-        // đảo ngược đúng thứ tự mặc định (yêu cầu người dùng 2026-10-30).
-        orderBy:
-          query.sort === 'date'
-            ? [
-                { uploadedAt: query.order ?? 'asc' },
-                { id: query.order ?? 'asc' },
-              ]
-            : query.order === 'desc'
-              ? [
-                  { assignedToId: { sort: 'desc', nulls: 'last' } },
-                  { uploadedAt: 'asc' },
-                  { id: 'desc' },
-                ]
-              : [
-                  { assignedToId: { sort: 'asc', nulls: 'first' } },
-                  { uploadedAt: 'desc' },
-                  { id: 'asc' },
-                ],
+        orderBy: leadListOrderBy(query.sort, query.order),
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),
@@ -773,18 +768,8 @@ export class CandidatesService {
       this.prisma.lead.findMany({
         where,
         include: CANDIDATE_INCLUDE,
-        // Yêu cầu trực tiếp người dùng (2026-07-16): toàn bộ danh sách này
-        // đã là "chưa chia" (assignedToId=null) nên chỉ còn xếp theo ngày
-        // giờ lên số — không thêm tiêu chí nào khác.
-        // Bấm tiêu đề "Ngày"/"STT" (yêu cầu người dùng 2026-10-30): STT tăng
-        // dần = mặc định (mới nhất trước); Ngày tăng dần = cũ nhất trước.
-        orderBy: (() => {
-          const order =
-            query.sort === 'date'
-              ? (query.order ?? 'asc')
-              : flipOrder(query.order ?? 'asc');
-          return [{ uploadedAt: order }, { id: order }];
-        })(),
+        // Xếp theo ngày giờ lên số, giống tab Tất cả.
+        orderBy: leadListOrderBy(query.sort, query.order),
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),

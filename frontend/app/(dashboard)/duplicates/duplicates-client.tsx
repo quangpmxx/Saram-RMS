@@ -39,8 +39,8 @@ export function DuplicatesClient({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   // Bấm tiêu đề "Ngày up" (yêu cầu người dùng 2026-10-30) — áp cho mọi nhóm
-  // đang mở; mặc định máy chủ trả bản up sớm nhất trước.
-  const [dateSort, setDateSort] = useState<SortState<"uploaded_at">>({ key: "uploaded_at", order: "asc" });
+  // đang mở; mặc định bản up mới nhất trước.
+  const [dateSort, setDateSort] = useState<SortState<"uploaded_at">>({ key: "uploaded_at", order: "desc" });
 
   async function refresh(page = 1) {
     setLoading(true);

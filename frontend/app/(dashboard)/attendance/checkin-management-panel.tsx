@@ -71,7 +71,7 @@ export function CheckinManagementPanel({
   const [teamId, setTeamId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [statusFilter, setStatusFilter] = useState<CheckinStatusFilter>("all");
-  const [timeSort, setTimeSort] = useState<SortState<"time"> | null>(null);
+  const [timeSort, setTimeSort] = useState<SortState<"time">>({ key: "time", order: "desc" });
   const [data, setData] = useState<CheckinListResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -220,9 +220,7 @@ export function CheckinManagementPanel({
   }
 
   // Bấm tiêu đề "Giờ Check in" (yêu cầu người dùng 2026-10-30); chưa check in luôn ở cuối.
-  const employees = timeSort
-    ? sortRows(data?.employees ?? [], timeSort.order, (e) => e.checkin?.checked_in_at)
-    : (data?.employees ?? []);
+  const employees = sortRows(data?.employees ?? [], timeSort.order, (e) => e.checkin?.checked_in_at);
 
   // Nghi vấn gian lận (yêu cầu trực tiếp người dùng, 2026-07-15): "2 tài
   // khoản chấm công đều hiển thị chung 1 IP máy" (nhờ người đến trước Check

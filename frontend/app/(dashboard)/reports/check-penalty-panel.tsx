@@ -114,7 +114,7 @@ export function CheckPenaltyPanel({
   const [keywordInput, setKeywordInput] = useState("");
   const [page, setPage] = useState(1);
   // Bấm tiêu đề STT/Ngày báo cáo/Hạn nộp/Thời gian nộp (yêu cầu người dùng 2026-10-30).
-  const [sort, setSort] = useState<SortState<PenaltySortKey>>({ key: "stt", order: "asc" });
+  const [sort, setSort] = useState<SortState<PenaltySortKey>>({ key: "report_date", order: "desc" });
   function handleSort(next: SortState<PenaltySortKey>) {
     setSort(next);
     setPage(1);

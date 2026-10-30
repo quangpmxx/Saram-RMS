@@ -271,9 +271,9 @@ export function ReportsClient({
   const [accountId, setAccountId] = useState("");
   const [summary, setSummary] = useState(initialSummary);
   const [rows, setRows] = useState(initialRows);
-  // Bấm tiêu đề "Ngày" (yêu cầu người dùng 2026-10-30); chưa bấm = thứ tự máy chủ trả.
-  const [dateSort, setDateSort] = useState<SortState<"date"> | null>(null);
-  const sortedRows = dateSort ? sortRows(rows, dateSort.order, (row) => row.date) : rows;
+  // Bấm tiêu đề "Ngày" (yêu cầu người dùng 2026-10-30); mặc định giảm dần.
+  const [dateSort, setDateSort] = useState<SortState<"date">>({ key: "date", order: "desc" });
+  const sortedRows = sortRows(rows, dateSort.order, (row) => row.date);
   const [loading, setLoading] = useState(false);
   /** Dòng "hôm nay của chính mình" — độc lập với bộ lọc đang xem, quyết định nút Nhập/Sửa (Mục 2, 4). */
   const [myTodayRow, setMyTodayRow] = useState<DailyReportRow | null>(

@@ -114,7 +114,8 @@ type ModalState =
   | { mode: "remind"; candidate: Candidate };
 
 type CandidateSortKey = "stt" | "date";
-const DEFAULT_CANDIDATE_SORT: SortState<CandidateSortKey> = { key: "stt", order: "asc" };
+/** Mặc định khi vào: ngày giờ lên số giảm dần (yêu cầu người dùng 2026-10-30). */
+const DEFAULT_CANDIDATE_SORT: SortState<CandidateSortKey> = { key: "date", order: "desc" };
 
 /** "care" = Kho chăm sóc (2026-10-28) — khác "care_pool" (Cột chăm sóc cũ, đã ẩn khỏi UI). */
 type ViewMode = "all" | "pending" | "care_pool" | "mine" | "care";
