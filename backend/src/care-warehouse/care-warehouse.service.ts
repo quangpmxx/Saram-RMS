@@ -1614,7 +1614,8 @@ export class CareWarehouseService {
     if (user.role === 'sale') {
       teamId = await this.resolveTeamScope(user);
       accountId = user.id;
-    } else if (ASSIGNER_ROLES.has(user.role)) {
+    } else if (ASSIGNER_ROLES.has(user.role) || user.role === 'mkt') {
+      // MKT xem toàn bộ như Admin (rà soát phân quyền 2026-10-30).
       teamId = await this.resolveTeamScope(user, query.team_id);
     } else {
       throw new ForbiddenException('Bạn không có quyền xem tiến độ chăm sóc');

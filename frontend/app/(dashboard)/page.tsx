@@ -19,9 +19,14 @@ export default async function HomePage() {
   // khi "none", không cần phân biệt view/edit ở giao diện.
   await requirePageAccess("dashboard");
 
-  const canViewPerformance = ["admin", "manager", "leader"].includes(user.role);
-  const canViewByTeam = ["admin", "manager"].includes(user.role);
-  const canFilterByTeam = ["admin", "manager"].includes(user.role);
+  // Rà soát phân quyền 2026-10-30: mọi vai trò xem số liệu chung, Top 3 và
+  // hiệu suất theo nhóm toàn công ty; bảng "Hiệu suất từng nhân viên" backend
+  // tự thu hẹp (Sale: mình, Leader: nhóm mình). Lọc nhóm: Admin/Quản lý/MKT;
+  // lọc nhân viên: thêm Leader (nhân viên nhóm mình).
+  const canViewPerformance = true;
+  const canViewByTeam = true;
+  const canFilterByTeam = ["admin", "manager", "mkt"].includes(user.role);
+  const canFilterBySale = ["admin", "manager", "mkt", "leader"].includes(user.role);
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -32,11 +37,12 @@ export default async function HomePage() {
     date_to: endOfToday.toISOString(),
   });
 
-  const [summary, performance, byTeam, teamsResult, sources] = await Promise.all([
+  const [summary, performance, ranking, byTeam, teamsResult, sources] = await Promise.all([
     serverApi<DashboardSummary>(`/dashboard/summary?${dateQuery.toString()}`),
     canViewPerformance
       ? serverApi<SalePerformance[]>(`/dashboard/performance?${dateQuery.toString()}`)
       : Promise.resolve<SalePerformance[]>([]),
+    serverApi<SalePerformance[]>(`/dashboard/ranking?${dateQuery.toString()}`),
     canViewByTeam
       ? serverApi<TeamSummary[]>(`/dashboard/by-team?${dateQuery.toString()}`)
       : Promise.resolve<TeamSummary[]>([]),
@@ -53,10 +59,12 @@ export default async function HomePage() {
       canViewPerformance={canViewPerformance}
       canViewByTeam={canViewByTeam}
       canFilterByTeam={canFilterByTeam}
+      canFilterBySale={canFilterBySale}
       teams={teamsResult.items}
       sources={sources}
       initialSummary={summary}
       initialPerformance={performance}
+      initialRanking={ranking}
       initialByTeam={byTeam}
     />
   );

@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 
 /** Vai trò xem được Tiến độ chăm sóc — khớp CareWarehouseService.progress() ở backend. */
-export const CARE_PROGRESS_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale"];
+export const CARE_PROGRESS_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "mkt"];
 
 /** Gộp nhiều tín hiệu "dashboard invalidate" liên tiếp thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 800;

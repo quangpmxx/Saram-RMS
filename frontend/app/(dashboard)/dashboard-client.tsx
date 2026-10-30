@@ -211,10 +211,12 @@ export function DashboardClient({
   canViewPerformance,
   canViewByTeam,
   canFilterByTeam,
+  canFilterBySale,
   teams,
   sources,
   initialSummary,
   initialPerformance,
+  initialRanking,
   initialByTeam,
 }: {
   currentUserFullName: string;
@@ -222,16 +224,20 @@ export function DashboardClient({
   canViewPerformance: boolean;
   canViewByTeam: boolean;
   canFilterByTeam: boolean;
+  canFilterBySale: boolean;
   teams: Team[];
   sources: LeadSource[];
   initialSummary: DashboardSummary;
   initialPerformance: SalePerformance[];
+  /** Những người lọt Top 3 toàn công ty (GET /dashboard/ranking) — mọi vai trò xem được. */
+  initialRanking: SalePerformance[];
   initialByTeam: TeamSummary[];
 }) {
   useSetPageTitle("Dashboard", `Xin chào, ${currentUserFullName} — tổng quan số liệu hệ thống.`);
 
   const [summary, setSummary] = useState(initialSummary);
   const [performance, setPerformance] = useState(initialPerformance);
+  const [ranking, setRanking] = useState(initialRanking);
   const [byTeam, setByTeam] = useState(initialByTeam);
   /** Danh sách CỐ ĐỊNH cho dropdown "Nhân viên" — lấy 1 lần từ initialPerformance (chưa lọc), không đổi theo kết quả performance đã lọc sau đó (nếu không sẽ chỉ còn 1 lựa chọn sau khi lọc theo 1 nhân viên). */
   const [employeeOptions] = useState(initialPerformance);
@@ -286,15 +292,17 @@ export function DashboardClient({
     const query = buildQuery(overrides);
     setLoading(true);
     try {
-      const [nextSummary, nextPerformance, nextByTeam] = await Promise.all([
+      const [nextSummary, nextPerformance, nextByTeam, nextRanking] = await Promise.all([
         clientApi<DashboardSummary>(`/dashboard/summary?${query.toString()}`),
         canViewPerformance
           ? clientApi<SalePerformance[]>(`/dashboard/performance?${query.toString()}`)
           : Promise.resolve<SalePerformance[]>([]),
         canViewByTeam ? clientApi<TeamSummary[]>(`/dashboard/by-team?${query.toString()}`) : Promise.resolve<TeamSummary[]>([]),
+        clientApi<SalePerformance[]>(`/dashboard/ranking?${query.toString()}`),
       ]);
       setSummary(nextSummary);
       setPerformance(nextPerformance);
+      setRanking(nextRanking);
       setByTeam(nextByTeam);
     } catch {
       toast.error("Không tải được số liệu, vui lòng thử lại.");
@@ -313,15 +321,17 @@ export function DashboardClient({
   async function silentRefresh() {
     try {
       const query = buildQuery();
-      const [nextSummary, nextPerformance, nextByTeam] = await Promise.all([
+      const [nextSummary, nextPerformance, nextByTeam, nextRanking] = await Promise.all([
         clientApi<DashboardSummary>(`/dashboard/summary?${query.toString()}`),
         canViewPerformance
           ? clientApi<SalePerformance[]>(`/dashboard/performance?${query.toString()}`)
           : Promise.resolve<SalePerformance[]>([]),
         canViewByTeam ? clientApi<TeamSummary[]>(`/dashboard/by-team?${query.toString()}`) : Promise.resolve<TeamSummary[]>([]),
+        clientApi<SalePerformance[]>(`/dashboard/ranking?${query.toString()}`),
       ]);
       setSummary(nextSummary);
       setPerformance(nextPerformance);
+      setRanking(nextRanking);
       setByTeam(nextByTeam);
     } catch {
       // Bỏ qua lỗi tải nền — dữ liệu cũ vẫn hiển thị, sự kiện invalidate kế tiếp sẽ tự sửa.
@@ -389,7 +399,7 @@ export function DashboardClient({
    * xếp hạng "0 Hẹn PV"/"0 Đỗ PV" không có ý nghĩa.
    */
   const topScheduled = useMemo(() => {
-    return performance
+    return ranking
       .filter((row) => row.kpi.interview_scheduled > 0)
       .map((row) => ({
         row,
@@ -397,10 +407,10 @@ export function DashboardClient({
       }))
       .sort((a, b) => b.row.kpi.interview_scheduled - a.row.kpi.interview_scheduled || b.ratio - a.ratio)
       .slice(0, 3);
-  }, [performance]);
+  }, [ranking]);
 
   const topPassed = useMemo(() => {
-    return performance
+    return ranking
       .filter((row) => row.kpi.passed > 0)
       .map((row) => ({
         row,
@@ -408,7 +418,7 @@ export function DashboardClient({
       }))
       .sort((a, b) => b.row.kpi.passed - a.row.kpi.passed || b.ratio - a.ratio)
       .slice(0, 3);
-  }, [performance]);
+  }, [ranking]);
 
   return (
     <div className="-mt-3 mx-auto max-w-7xl space-y-5">
@@ -444,7 +454,7 @@ export function DashboardClient({
               </Select>
             </Field>
           )}
-          {canViewPerformance && (
+          {canFilterBySale && (
             <Field label="Nhân viên" uiSize="sm" className="w-36">
               <Select
                 uiSize="sm"

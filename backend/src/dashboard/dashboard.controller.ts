@@ -35,6 +35,14 @@ export class DashboardController {
     return this.dashboardService.getPerformance(query, user);
   }
 
+  @Get('ranking')
+  getRanking(
+    @Query() query: DashboardQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.dashboardService.getRanking(query, user);
+  }
+
   @Get('by-team')
   getByTeam(
     @Query() query: DashboardQueryDto,

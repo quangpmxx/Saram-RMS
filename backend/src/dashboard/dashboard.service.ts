@@ -13,9 +13,16 @@ import {
   TeamSummaryDto,
 } from './dto/dashboard-response.dto';
 
-/** Mục 4, docs/13: "Chờ phân chia" là hàng đợi chung toàn hệ thống — không giới hạn theo nhóm (đúng hành vi GET /candidate/pending đã có từ Phase 2). */
-const PENDING_VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'mkt']);
-const PERFORMANCE_VIEW_ROLES = new Set(['admin', 'manager', 'leader']);
+/**
+ * Rà soát phân quyền 2026-10-30 — Dashboard:
+ * - Số liệu chung, Top 3 xếp hạng, Hiệu suất theo nhóm: TOÀN CÔNG TY cho mọi
+ *   vai trò (Sale/Leader không lọc được theo nhóm khác).
+ * - Hiệu suất từng nhân viên: Sale chỉ dòng của mình, Leader nhóm mình,
+ *   Quản lý/Admin/MKT toàn bộ.
+ * - Ô "Chờ phân chia": Leader/Sale chỉ data nhóm mình + data chưa có nhóm
+ *   (khớp tab Chờ phân chia); Quản lý/Admin/MKT toàn bộ.
+ */
+const FULL_VIEW_ROLES = new Set(['admin', 'manager', 'mkt']);
 const REPORT_VIEW_ROLES = new Set(['admin', 'manager', 'leader']);
 
 /** Bám sát đúng 3 trạng thái phỏng vấn tính là "đã đến PV" — SCHEDULED chưa đến, NO_SHOW là bùng (không đến). */
@@ -61,7 +68,10 @@ export class DashboardService {
     query: DashboardQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<DashboardSummaryDto> {
-    const scope = await this.buildScope(currentUser, query.team_id);
+    query = await this.sanitizeQuery(query, currentUser);
+    const scope: Prisma.LeadWhereInput = query.team_id
+      ? { assignedTeamId: query.team_id }
+      : {};
     const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
     const extraWhere = this.buildExtraWhere(currentUser, query);
     const baseWhere: Prisma.LeadWhereInput = {
@@ -84,10 +94,7 @@ export class DashboardService {
         }
       : null;
 
-    const saleAccountIds = await this.resolveSaleAccountIdsInScope(
-      currentUser,
-      query,
-    );
+    const saleAccountIds = await this.resolveSaleAccountIdsInScope(query);
     const sourceFiltered = Boolean(query.source_id);
 
     const [
@@ -151,23 +158,66 @@ export class DashboardService {
     query: DashboardQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<SalePerformanceDto[]> {
-    if (!PERFORMANCE_VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException('Bạn không có quyền xem hiệu suất Sale');
-    }
+    // Chi tiết từng cá nhân: Sale chỉ mình, Leader nhóm mình, còn lại toàn bộ.
+    query = await this.sanitizeQuery(query, currentUser);
+    const teamId =
+      currentUser.role === 'leader'
+        ? ((await this.getOwnTeamId(currentUser.id)) ?? '__none__')
+        : query.team_id;
+    const accountId =
+      currentUser.role === 'sale' ? currentUser.id : query.account_id;
+    return this.computePerformance(query, teamId, accountId);
+  }
 
-    const teamId = await this.resolveTeamIdForRestrictedRole(
-      currentUser,
+  /**
+   * GET /dashboard/ranking — Top 3 hẹn PV / đỗ PV trên TOÀN CÔNG TY cho mọi
+   * vai trò. Chỉ trả về những người lọt Top 3 (không lộ chi tiết người khác).
+   */
+  async getRanking(
+    query: DashboardQueryDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<SalePerformanceDto[]> {
+    query = await this.sanitizeQuery(query, currentUser);
+    const rows = await this.computePerformance(
+      query,
       query.team_id,
+      query.account_id,
     );
-    // Sale role không thể tới được đây (đã bị chặn ở ForbiddenException phía
-    // trên — PERFORMANCE_VIEW_ROLES không có 'sale') nên account_id dùng
-    // thẳng, không cần khóa riêng như buildExtraWhere() (nơi 'sale' CÓ thể
-    // gọi tới, vd getSummary()).
+    const top = (
+      metric: (r: SalePerformanceDto) => number,
+      base: (r: SalePerformanceDto) => number,
+    ) =>
+      rows
+        .filter((r) => metric(r) > 0)
+        .sort(
+          (a, b) =>
+            metric(b) - metric(a) ||
+            metric(b) / Math.max(base(b), 1) - metric(a) / Math.max(base(a), 1),
+        )
+        .slice(0, 3);
+    const picked = new Set([
+      ...top(
+        (r) => r.kpi.interview_scheduled,
+        (r) => r.kpi.new_leads,
+      ),
+      ...top(
+        (r) => r.kpi.passed,
+        (r) => r.kpi.attended,
+      ),
+    ]);
+    return [...picked];
+  }
+
+  private async computePerformance(
+    query: DashboardQueryDto,
+    teamId: string | undefined,
+    accountId: string | undefined,
+  ): Promise<SalePerformanceDto[]> {
     const sales = await this.prisma.account.findMany({
       where: {
         role: 'sale',
         ...(teamId ? { teamId } : {}),
-        ...(query.account_id ? { id: query.account_id } : {}),
+        ...(accountId ? { id: accountId } : {}),
       },
       select: { id: true, fullName: true, avatarUrl: true, teamId: true },
       orderBy: { fullName: 'asc' },
@@ -252,11 +302,7 @@ export class DashboardService {
     query: DashboardQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<TeamSummaryDto[]> {
-    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
-      throw new ForbiddenException(
-        'Bạn không có quyền xem số liệu tổng hợp theo nhóm',
-      );
-    }
+    query = await this.sanitizeQuery(query, currentUser);
 
     const teams = await this.prisma.team.findMany({
       select: { id: true, name: true },
@@ -578,26 +624,15 @@ export class DashboardService {
   }
 
   /**
-   * Danh sách account_id của Sale đang trong phạm vi xem của currentUser +
-   * bộ lọc hiện tại — dùng cho computeShuttleKpi() ở mức công ty (getSummary).
-   * Sale: chỉ chính mình. MKT: rỗng (MKT không phải Sale, không đứng tên
-   * dòng Đưa đón nào). Leader: Sale trong đúng nhóm mình (ép cứng, giống
-   * buildScope()). Admin/Quản lý: theo team_id/account_id nếu có lọc, không
-   * thì toàn bộ Sale.
+   * Danh sách account_id của Sale theo bộ lọc hiện tại — dùng cho
+   * computeShuttleKpi() ở mức công ty (getSummary): mặc định toàn bộ Sale.
    */
   private async resolveSaleAccountIdsInScope(
-    currentUser: AuthenticatedUser,
     query: DashboardQueryDto,
   ): Promise<string[]> {
-    if (currentUser.role === 'mkt') return [];
-    if (currentUser.role === 'sale') {
-      return [currentUser.id];
-    }
-
-    const teamId = await this.resolveTeamIdForRestrictedRole(
-      currentUser,
-      query.team_id,
-    );
+    // query đã qua sanitizeQuery(): số liệu chung tính trên toàn bộ Sale của
+    // công ty, chỉ thu hẹp theo bộ lọc hợp lệ.
+    const teamId = query.team_id;
     const sales = await this.prisma.account.findMany({
       where: {
         role: 'sale',
@@ -655,12 +690,27 @@ export class DashboardService {
     dateFrom?: string,
     dateTo?: string,
   ): Promise<number> {
-    if (!PENDING_VIEW_ROLES.has(currentUser.role)) {
-      return 0;
-    }
     const dateWhere = this.buildDateWhere(dateFrom, dateTo);
+    const teamWhere: Prisma.LeadWhereInput = FULL_VIEW_ROLES.has(
+      currentUser.role,
+    )
+      ? {}
+      : {
+          OR: [
+            {
+              assignedTeamId:
+                (await this.getOwnTeamId(currentUser.id)) ?? '__none__',
+            },
+            { assignedTeamId: null },
+          ],
+        };
     return this.prisma.lead.count({
-      where: { deletedAt: null, assignedToId: null, ...dateWhere },
+      where: {
+        deletedAt: null,
+        assignedToId: null,
+        ...dateWhere,
+        ...teamWhere,
+      },
     });
   }
 
@@ -689,26 +739,25 @@ export class DashboardService {
   }
 
   /**
-   * Phạm vi chung cho Dashboard summary (Mục 8, docs/09) — Sale: lead của
-   * mình; Leader: cả nhóm; MKT: data mình upload; Quản lý/Admin: toàn bộ
-   * (team_id thu hẹp thêm nếu có truyền).
+   * Bộ lọc hợp lệ theo vai trò (rà soát phân quyền 2026-10-30): Quản lý/
+   * Admin/MKT lọc tự do theo nhóm/nhân viên. Leader chỉ lọc được nhân viên
+   * trong nhóm mình (không lọc nhóm). Sale không lọc nhóm/nhân viên — số liệu
+   * chung luôn là toàn công ty.
    */
-  private async buildScope(
+  private async sanitizeQuery(
+    query: DashboardQueryDto,
     currentUser: AuthenticatedUser,
-    teamId?: string,
-  ): Promise<Prisma.LeadWhereInput> {
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-      return teamId ? { assignedTeamId: teamId } : {};
-    }
-    if (currentUser.role === 'leader') {
+  ): Promise<DashboardQueryDto> {
+    if (FULL_VIEW_ROLES.has(currentUser.role)) return query;
+    if (currentUser.role === 'leader' && query.account_id) {
       const ownTeamId = await this.getOwnTeamId(currentUser.id);
-      return { assignedTeamId: ownTeamId ?? '__none__' };
+      const member = await this.prisma.account.findFirst({
+        where: { id: query.account_id, teamId: ownTeamId ?? '__none__' },
+        select: { id: true },
+      });
+      return { ...query, team_id: undefined, account_id: member?.id };
     }
-    if (currentUser.role === 'sale') {
-      return { assignedToId: currentUser.id };
-    }
-    // mkt
-    return { uploadedById: currentUser.id };
+    return { ...query, team_id: undefined, account_id: undefined };
   }
 
   /** Leader luôn bị ép về đúng nhóm mình bất kể có truyền team_id hay không; Quản lý/Admin dùng nguyên team_id đã truyền (có thể rỗng = toàn bộ). */

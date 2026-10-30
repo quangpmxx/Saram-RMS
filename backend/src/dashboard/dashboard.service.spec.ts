@@ -56,33 +56,24 @@ describe('DashboardService', () => {
     service = moduleRef.get(DashboardService);
   });
 
-  describe('getSummary — phạm vi theo vai trò (Mục 8, docs/09)', () => {
-    it('Sale: lọc theo assignedToId = chính mình', async () => {
-      await service.getSummary({}, saleUser);
-      expect(prisma.lead.groupBy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ assignedToId: 'sale-1' }),
-        }),
-      );
+  describe('getSummary — số liệu chung toàn công ty (rà soát phân quyền 2026-10-30)', () => {
+    it('Sale/MKT/Leader: số liệu chung toàn công ty, không bị thu hẹp về mình/nhóm mình', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      for (const user of [saleUser, mktUser, leaderUser]) {
+        prisma.lead.groupBy.mockClear();
+        await service.getSummary({}, user);
+        const call = prisma.lead.groupBy.mock.calls[0][0];
+        expect(call.where.assignedTeamId).toBeUndefined();
+        expect(call.where.assignedToId).toBeUndefined();
+        expect(call.where.uploadedById).toBeUndefined();
+      }
     });
 
-    it('MKT: lọc theo uploadedById = chính mình', async () => {
-      await service.getSummary({}, mktUser);
-      expect(prisma.lead.groupBy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ uploadedById: 'mkt-1' }),
-        }),
-      );
-    });
-
-    it('Leader: lọc theo assignedTeamId = nhóm mình, bỏ qua team_id truyền vào', async () => {
+    it('Sale/Leader truyền team_id nhóm khác: bị bỏ qua (vẫn toàn công ty)', async () => {
       prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
       await service.getSummary({ team_id: 'team-OTHER' }, leaderUser);
-      expect(prisma.lead.groupBy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ assignedTeamId: 'team-1' }),
-        }),
-      );
+      const call = prisma.lead.groupBy.mock.calls[0][0];
+      expect(call.where.assignedTeamId).toBeUndefined();
     });
 
     it('Admin không truyền team_id: không giới hạn nhóm', async () => {
@@ -102,12 +93,15 @@ describe('DashboardService', () => {
       );
     });
 
-    it('pending_count = 0 với Sale (không thuộc PENDING_VIEW_ROLES)', async () => {
-      const result = await service.getSummary({}, saleUser);
-      expect(result.pending_count).toBe(0);
-      expect(prisma.lead.count).not.toHaveBeenCalledWith(
+    it('Chờ phân chia của Sale/Leader: chỉ nhóm mình + data chưa có nhóm', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      await service.getSummary({}, saleUser);
+      expect(prisma.lead.count).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ assignedToId: null }),
+          where: expect.objectContaining({
+            assignedToId: null,
+            OR: [{ assignedTeamId: 'team-1' }, { assignedTeamId: null }],
+          }),
         }),
       );
     });
@@ -135,14 +129,19 @@ describe('DashboardService', () => {
     });
   });
 
-  describe('getPerformance — Mục 8, docs/13: chỉ Leader/Quản lý/Admin', () => {
-    it('Sale/MKT bị từ chối', async () => {
-      await expect(service.getPerformance({}, saleUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
+  describe('getPerformance — chi tiết từng cá nhân', () => {
+    it('Sale chỉ thấy dòng của mình (account_id truyền vào bị bỏ qua); MKT thấy toàn bộ', async () => {
+      await service.getPerformance({ account_id: 'sale-2' }, saleUser);
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ role: 'sale', id: 'sale-1' }),
+        }),
       );
-      await expect(service.getPerformance({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      prisma.account.findMany.mockClear();
+      await service.getPerformance({}, mktUser);
+      const call = prisma.account.findMany.mock.calls[0][0];
+      expect(call.where.teamId).toBeUndefined();
+      expect(call.where.id).toBeUndefined();
     });
 
     it('Leader luôn bị ép về đúng nhóm mình', async () => {
@@ -163,17 +162,13 @@ describe('DashboardService', () => {
     });
   });
 
-  describe('getByTeam — Mục 8, docs/13: chỉ Quản lý/Admin', () => {
-    it('Leader/Sale/MKT bị từ chối', async () => {
-      await expect(service.getByTeam({}, leaderUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getByTeam({}, saleUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getByTeam({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+  describe('getByTeam — hiệu suất theo nhóm (mọi vai trò)', () => {
+    it('Sale/Leader xem được số liệu các nhóm', async () => {
+      prisma.team.findMany.mockResolvedValue([
+        { id: 'team-1', name: 'Nhóm 1' },
+        { id: 'team-2', name: 'Nhóm 2' },
+      ]);
+      await expect(service.getByTeam({}, saleUser)).resolves.toHaveLength(2);
     });
 
     it('Admin xem được danh sách theo từng nhóm', async () => {
@@ -356,10 +351,10 @@ describe('DashboardService', () => {
   });
 
   describe('Bảo mật: account_id/source_id (bộ lọc Nhân viên/Nguồn mới của Dashboard)', () => {
-    it('Sale truyền account_id của người khác vẫn chỉ thấy đúng data của chính mình (không bị ghi đè assignedToId)', async () => {
+    it('Sale không lọc được theo nhân viên khác (số liệu chung toàn công ty)', async () => {
       await service.getSummary({ account_id: 'sale-OTHER' }, saleUser);
       const call = prisma.lead.groupBy.mock.calls[0][0];
-      expect(call.where.assignedToId).toBe('sale-1');
+      expect(call.where.assignedToId).toBeUndefined();
     });
 
     it('Admin dùng account_id để thu hẹp đúng 1 Sale', async () => {
