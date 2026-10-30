@@ -50,3 +50,20 @@ export function vnMonthStart(date: Date): Date {
 export function vnNextMonthStart(date: Date): Date {
   return vnMonthRange(vnMonthKey(date)).end;
 }
+
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Số thứ tự ngày theo giờ VN — 2 mốc cùng số = cùng 1 ngày lịch VN. */
+export function vnDayIndex(date: Date): number {
+  return Math.floor((date.getTime() + VN_OFFSET_MS) / DAY_MS);
+}
+
+/**
+ * Số lần chăm sóc của 1 data = số NGÀY khác nhau (giờ VN) có ghi chú (yêu
+ * cầu người dùng 2026-10-30): cùng 1 ngày dù nhiều người/nhiều ghi chú chỉ
+ * tính 1 lần.
+ */
+export function countCareDays(dates: Date[]): number {
+  return new Set(dates.map(vnDayIndex)).size;
+}

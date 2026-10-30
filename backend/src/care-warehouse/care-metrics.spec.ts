@@ -62,7 +62,7 @@ describe('computeSaleDaily', () => {
   const day = vnDayRange('2026-10-15');
   const endOfDay = vn('2026-10-15 23:59');
 
-  it('đếm data khác nhau: 3 ghi chú trên 1 data = 1 đã xử lý, 3 lượt chăm sóc', () => {
+  it('đếm data khác nhau: 3 ghi chú cùng ngày trên 1 data = 1 đã xử lý, 1 lượt chăm sóc', () => {
     const assignments = [
       asg('L1', SALE_A, '2026-10-15 08:00'),
       asg('L2', SALE_A, '2026-10-15 08:00'),
@@ -81,7 +81,7 @@ describe('computeSaleDaily', () => {
     );
     expect(m.today).toEqual({ assigned: 2, processed: 1, pending: 1 });
     expect(m.completion_rate).toBe(50);
-    expect(m.care_turns).toBe(3);
+    expect(m.care_turns).toBe(1);
   });
 
   it('ghi chú của người khác KHÔNG tính là Sale được giao đã xử lý', () => {
@@ -302,6 +302,62 @@ describe('computeSaleMonthly', () => {
         now,
       ),
     ).toMatchObject({ assigned: 1, pending: 1 });
+  });
+});
+
+describe('số lần chăm sóc = số ngày khác nhau có ghi chú', () => {
+  const oct = vnMonthRange('2026-10');
+  const now = vn('2026-10-31 12:00');
+
+  it('cùng ngày 3 người ghi chú → 1 lần; 10 ghi chú trong 3 ngày → 3 lần', () => {
+    const sameDay = new NoteIndex([
+      note('L1', SALE_A, '2026-10-30 08:00'),
+      note('L1', SALE_B, '2026-10-30 10:00'),
+      note('L1', 'leader', '2026-10-30 23:59'),
+    ]);
+    expect(
+      summarizeLeadMonth('L1', [], sameDay, oct.start, now).month_care_count,
+    ).toBe(1);
+
+    const days = ['01', '01', '01', '01', '05', '05', '05', '20', '20', '20'];
+    const tenNotes = new NoteIndex(
+      days.map((d, i) =>
+        note('L1', i % 2 ? SALE_A : SALE_B, `2026-10-${d} 0${i}:00`),
+      ),
+    );
+    expect(
+      summarizeLeadMonth('L1', [], tenNotes, oct.start, now).month_care_count,
+    ).toBe(3);
+  });
+
+  it('ranh giới ngày theo giờ Việt Nam (23:59 và 00:01 là 2 ngày)', () => {
+    const notes = new NoteIndex([
+      note('L1', SALE_A, '2026-10-10 23:59'),
+      note('L1', SALE_A, '2026-10-11 00:01'),
+    ]);
+    expect(
+      summarizeLeadMonth('L1', [], notes, oct.start, now).month_care_count,
+    ).toBe(2);
+  });
+
+  it('Lượt CS tháng của Sale: mỗi data tính số ngày Sale đó có ghi chú', () => {
+    const notes = new NoteIndex([
+      note('L1', SALE_A, '2026-10-02 09:00'),
+      note('L1', SALE_A, '2026-10-02 15:00'),
+      note('L1', SALE_A, '2026-10-03 09:00'),
+      note('L2', SALE_A, '2026-10-03 09:00'),
+    ]);
+    const m = computeSaleMonthly(
+      [
+        asg('L1', SALE_A, '2026-10-02 08:00'),
+        asg('L2', SALE_A, '2026-10-02 08:00'),
+      ],
+      notes,
+      oct.start,
+      oct.end,
+      now,
+    );
+    expect(m.care_turns).toBe(3);
   });
 });
 

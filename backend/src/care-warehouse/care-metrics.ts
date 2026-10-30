@@ -1,4 +1,4 @@
-import { vnNextMonthStart } from './care-time.util';
+import { countCareDays, vnNextMonthStart } from './care-time.util';
 
 /**
  * Kho chăm sóc — toàn bộ công thức chỉ số dưới dạng hàm THUẦN (không đọc
@@ -6,7 +6,8 @@ import { vnNextMonthStart } from './care-time.util';
  * nơi luôn ra cùng một con số. Nguồn dữ liệu duy nhất: lead_notes (lần
  * chăm sóc thực tế, chỉ ghi chú chưa xóa) + care_assignments (lịch sử phân
  * công). Mọi chỉ số "data" đếm theo lead khác nhau (Set), lượt chăm sóc
- * đếm riêng theo số ghi chú.
+ * = số NGÀY khác nhau có ghi chú (cùng ngày nhiều ghi chú chỉ tính 1 lần,
+ * yêu cầu người dùng 2026-10-30).
  */
 
 export interface AssignmentRow {
@@ -106,7 +107,7 @@ export interface SaleDailyMetrics {
   completion_rate: number | null;
   /** Nhóm "Tồn cũ": giao từ các ngày trước trong tháng, chưa xử lý tính tới đầu ngày. */
   backlog: { start: number; processed: number; remaining: number };
-  /** Tổng ghi chú của Sale trong ngày trên các data thuộc 2 nhóm trên. */
+  /** Số data thuộc 2 nhóm trên được Sale ghi chú trong ngày (mỗi data tối đa 1 lần/ngày). */
   care_turns: number;
 }
 
@@ -161,12 +162,9 @@ export function computeSaleDaily(
   let careTurns = 0;
   if (cutoff > dayStart) {
     for (const leadId of [...todayLeads, ...backlogLeads]) {
-      careTurns += notes.byAuthor(
-        leadId,
-        assigneeOf.get(leadId)!,
-        dayStart,
-        cutoff,
-      ).length;
+      careTurns += countCareDays(
+        notes.byAuthor(leadId, assigneeOf.get(leadId)!, dayStart, cutoff),
+      );
     }
   }
 
@@ -193,7 +191,7 @@ export interface SaleMonthlyMetrics {
   processed: number;
   /** Số data đang giao cho Sale mà Sale chưa chăm sóc lần nào trong tháng. */
   pending: number;
-  /** Tổng ghi chú của Sale trong tháng trên các data được giao. */
+  /** Số lần Sale chăm sóc các data được giao trong tháng: mỗi data tính số ngày khác nhau có ghi chú. */
   care_turns: number;
   /** Lần ghi chú gần nhất của Sale trong tháng trên các data được giao. */
   last_care_at: Date | null;
@@ -235,7 +233,7 @@ export function computeSaleMonthly(
       monthStart,
       cutoff,
     );
-    careTurns += list.length;
+    careTurns += countCareDays(list);
     const last = list[list.length - 1];
     if (last && (!lastCareAt || last > lastCareAt)) lastCareAt = last;
   }
@@ -353,7 +351,7 @@ export function summarizeLeadMonth(
 
   return {
     month_status: cared ? 'cared' : 'not_cared',
-    month_care_count: monthNotes.length,
+    month_care_count: countCareDays(monthNotes),
     open_assignment: open
       ? {
           id: open.id,

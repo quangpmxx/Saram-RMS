@@ -32,6 +32,7 @@ import {
   wasCareStoppedAt,
 } from './care-metrics';
 import {
+  countCareDays,
   vnDateOnly,
   vnDayRange,
   vnMonthKey,
@@ -511,11 +512,11 @@ export class CareWarehouseService {
         endedAt: true,
       },
     });
-    const noteTotals = await this.prisma.leadNote.groupBy({
-      by: ['leadId'],
+    // Tổng số lần chăm sóc = số ngày khác nhau có ghi chú → cần mốc từng
+    // ghi chú (groupBy không gom được theo ngày giờ VN).
+    const allNotes = await this.prisma.leadNote.findMany({
       where: { isDeleted: false, lead: leadWhere },
-      _count: { _all: true },
-      _max: { createdAt: true },
+      select: { leadId: true, createdAt: true },
     });
     const assignmentMax = await this.prisma.careAssignment.groupBy({
       by: ['leadId'],
@@ -544,10 +545,19 @@ export class CareWarehouseService {
         ),
       );
     }
+    const notesByLead = new Map<string, Date[]>();
+    for (const n of allNotes) {
+      const list = notesByLead.get(n.leadId);
+      if (list) list.push(n.createdAt);
+      else notesByLead.set(n.leadId, [n.createdAt]);
+    }
     const totals = new Map(
-      noteTotals.map((t) => [
-        t.leadId,
-        { count: t._count._all, lastAt: t._max.createdAt },
+      [...notesByLead].map(([leadId, dates]) => [
+        leadId,
+        {
+          count: countCareDays(dates),
+          lastAt: new Date(Math.max(...dates.map((d) => d.getTime()))),
+        },
       ]),
     );
     const lastAssigned = new Map(
