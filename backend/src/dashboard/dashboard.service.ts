@@ -12,6 +12,7 @@ import {
   SalePerformanceDto,
   TeamSummaryDto,
 } from './dto/dashboard-response.dto';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 /**
  * Rà soát phân quyền 2026-10-30 — Dashboard:
@@ -162,7 +163,7 @@ export class DashboardService {
     query = await this.sanitizeQuery(query, currentUser);
     const teamId =
       currentUser.role === 'leader'
-        ? ((await this.getOwnTeamId(currentUser.id)) ?? '__none__')
+        ? ((await findOwnTeamId(this.prisma, currentUser.id)) ?? '__none__')
         : query.team_id;
     const accountId =
       currentUser.role === 'sale' ? currentUser.id : query.account_id;
@@ -699,7 +700,8 @@ export class DashboardService {
           OR: [
             {
               assignedTeamId:
-                (await this.getOwnTeamId(currentUser.id)) ?? '__none__',
+                (await findOwnTeamId(this.prisma, currentUser.id)) ??
+                '__none__',
             },
             { assignedTeamId: null },
           ],
@@ -730,7 +732,7 @@ export class DashboardService {
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       if (teamId) where.assignedTeamId = teamId;
     } else if (currentUser.role === 'leader' || currentUser.role === 'sale') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.assignedTeamId = ownTeamId ?? '__none__';
     } else {
       return 0;
@@ -750,7 +752,7 @@ export class DashboardService {
   ): Promise<DashboardQueryDto> {
     if (FULL_VIEW_ROLES.has(currentUser.role)) return query;
     if (currentUser.role === 'leader' && query.account_id) {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       const member = await this.prisma.account.findFirst({
         where: { id: query.account_id, teamId: ownTeamId ?? '__none__' },
         select: { id: true },
@@ -766,16 +768,9 @@ export class DashboardService {
     teamId?: string,
   ): Promise<string | undefined> {
     if (currentUser.role === 'leader') {
-      return (await this.getOwnTeamId(currentUser.id)) ?? '__none__';
+      return (await findOwnTeamId(this.prisma, currentUser.id)) ?? '__none__';
     }
     return teamId;
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-    });
-    return account?.teamId ?? null;
   }
 
   private buildDateWhere(

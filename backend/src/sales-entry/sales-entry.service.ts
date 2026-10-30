@@ -24,6 +24,7 @@ import {
   DsSaleRowWithRelations,
   toDsSaleRowResponse,
 } from './dto/ds-sale-response.dto';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 /** "" hoặc chỉ khoảng trắng đều coi như chưa nhập — dùng để chặn lưu dòng hoàn toàn rỗng (Mục 9/14, yêu cầu người dùng). */
 function isBlank(value: string | null | undefined): boolean {
@@ -128,7 +129,7 @@ export class SalesEntryService {
       // vi duy nhất (chính mình), bất kể query.sale_user_id gửi lên là gì.
       where.saleUserId = currentUser.id;
     } else if (currentUser.role === 'leader') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       // Chưa có nhóm — không thấy dòng nào, an toàn hơn là lộ hết dữ liệu.
       // "saleUserId: { in: [] }" (không phải 1 UUID giả) để tránh lỗi kiểu
       // dữ liệu UUID ở Postgres khi so sánh với chuỗi không hợp lệ.
@@ -283,7 +284,7 @@ export class SalesEntryService {
     if (currentUser.role === 'sale') {
       where.saleUserId = currentUser.id;
     } else if (currentUser.role === 'leader') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (teamId) {
         where.saleUser = { teamId };
       } else {
@@ -341,7 +342,7 @@ export class SalesEntryService {
       return currentUser.id;
     }
     if (currentUser.role === 'leader' && requested) {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       const target = await this.prisma.account.findUnique({
         where: { id: requested },
         select: { teamId: true },
@@ -367,7 +368,7 @@ export class SalesEntryService {
       return;
     }
     if (currentUser.role === 'leader') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (!existingSaleUserId) return; // Chưa gán Sale — Leader vẫn nhận (gán) được, khớp resolveSaleUserId.
       const target = await this.prisma.account.findUnique({
         where: { id: existingSaleUserId },
@@ -379,14 +380,6 @@ export class SalesEntryService {
         );
       }
     }
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-      select: { teamId: true },
-    });
-    return account?.teamId ?? null;
   }
 
   private toWriteData(dto: UpsertDsSaleRowDto) {
@@ -416,7 +409,7 @@ export class SalesEntryService {
   ): Promise<DsSaleAccountOptionDto[]> {
     const teamId =
       currentUser.role === 'leader'
-        ? await this.getOwnTeamId(currentUser.id)
+        ? await findOwnTeamId(this.prisma, currentUser.id)
         : undefined;
     return this.listAccountOptions('sale', teamId);
   }

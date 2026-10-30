@@ -16,9 +16,10 @@ import {
 import { isLockActive } from '../candidates/care-pool.util';
 import { ListCarePoolQueryDto } from './dto/list-care-pool-query.dto';
 import { RealtimeService } from '../realtime/realtime.service';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 /** Mục 8, docs/09: Quản lý/Admin xem toàn bộ cột chăm sóc, không giới hạn nhóm. */
-const FULL_ACCESS_ROLES = new Set(['admin', 'manager']);
+const ALL_TEAMS_ROLES = new Set(['admin', 'manager']);
 
 /**
  * Mục 5, docs/13-api-design.md — GET/POST/DELETE /care-pool. Phase 5 —
@@ -43,7 +44,7 @@ export class CarePoolService {
       removedFromCarePoolAt: null,
     };
 
-    if (FULL_ACCESS_ROLES.has(currentUser.role)) {
+    if (ALL_TEAMS_ROLES.has(currentUser.role)) {
       if (query.team_id) {
         where.assignedTeamId = query.team_id;
       }
@@ -52,7 +53,7 @@ export class CarePoolService {
       if (currentUser.role !== 'sale' && currentUser.role !== 'leader') {
         throw new ForbiddenException('Bạn không có quyền xem cột chăm sóc');
       }
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.assignedTeamId = ownTeamId ?? '__none__';
     }
 
@@ -85,7 +86,7 @@ export class CarePoolService {
     }
 
     const lead = await this.loadCarePoolLead(id);
-    const ownTeamId = await this.getOwnTeamId(currentUser.id);
+    const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
     if (!ownTeamId || lead.assignedTeamId !== ownTeamId) {
       throw new ForbiddenException(
         'Bạn chỉ được xử lý lead trong cột chăm sóc của nhóm mình',
@@ -236,12 +237,5 @@ export class CarePoolService {
       throw new NotFoundException('Không tìm thấy ứng viên trong cột chăm sóc');
     }
     return lead;
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-    });
-    return account?.teamId ?? null;
   }
 }

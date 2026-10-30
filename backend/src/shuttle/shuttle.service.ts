@@ -36,18 +36,7 @@ import {
   ShuttleWithRelations,
   toShuttleResponse,
 } from './dto/shuttle-response.dto';
-
-/** Khớp ACCOUNT_ROLE_LABEL ở frontend — dùng cho nội dung chữ của thông báo. */
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Admin',
-  manager: 'Manager',
-  leader: 'Leader',
-  mkt: 'NV MKT',
-  sale: 'NV Sale',
-  accounting: 'Kế toán',
-  order_staff: 'NV QL Đơn hàng',
-  shuttle_staff: 'NV Đưa đón',
-};
+import { ROLE_LABEL } from '../common/constants/role-label';
 
 /** notifications.meta của loại shuttle_update — frontend dựng câu + tô màu nhãn theo color_key. */
 export interface ShuttleNoticeDto {

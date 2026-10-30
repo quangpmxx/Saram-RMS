@@ -15,6 +15,7 @@ import {
   DistributionRuleResponseDto,
   toDistributionRuleResponse,
 } from './dto/distribution-rule-response.dto';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 /**
  * Mục 3, docs/09-business-specification.md + Mục 5, docs/13-api-design.md —
@@ -298,7 +299,7 @@ export class DistributionRuleService {
       return;
     }
     if (currentUser.role === 'leader') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (ownTeamId === teamId) {
         return;
       }
@@ -320,17 +321,10 @@ export class DistributionRuleService {
         'Chỉ Leader hoặc Admin mới được cấu hình tự động phân chia',
       );
     }
-    const ownTeamId = await this.getOwnTeamId(currentUser.id);
+    const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
     if (ownTeamId !== teamId) {
       throw new ForbiddenException('Bạn chỉ được cấu hình cho nhóm mình');
     }
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-    });
-    return account?.teamId ?? null;
   }
 
   private async assertTeamExists(teamId: string): Promise<void> {

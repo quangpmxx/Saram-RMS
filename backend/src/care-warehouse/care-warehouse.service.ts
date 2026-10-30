@@ -46,7 +46,7 @@ import { CareProgressQueryDto } from './dto/care-progress-query.dto';
 import { ListBatchesQueryDto } from './dto/list-batches-query.dto';
 
 /** Quản lý/Admin thao tác trên mọi nhóm (Câu 4 đã chốt — giống mọi module hiện nay). */
-const FULL_ACCESS_ROLES = new Set(['admin', 'manager']);
+const ALL_TEAMS_ROLES = new Set(['admin', 'manager']);
 const ASSIGNER_ROLES = new Set(['admin', 'manager', 'leader']);
 
 /** field_changed của audit_logs dùng để dựng lại trạng thái Dừng chăm sóc theo thời gian. */
@@ -180,7 +180,7 @@ export class CareWarehouseService {
   ): Promise<string | null> {
     // MKT xem Kho toàn công ty (yêu cầu người dùng 2026-10-28) — CHỈ xem:
     // mọi thao tác giao/nhận/dừng đều chặn MKT ở các hàm tương ứng.
-    if (FULL_ACCESS_ROLES.has(user.role) || user.role === 'mkt') {
+    if (ALL_TEAMS_ROLES.has(user.role) || user.role === 'mkt') {
       return requestedTeamId ?? null;
     }
     if (user.role !== 'leader' && user.role !== 'sale') {
@@ -382,7 +382,7 @@ export class CareWarehouseService {
     listCounts: { cared: number; total: number } | null,
   ) {
     const teamId =
-      FULL_ACCESS_ROLES.has(user.role) || user.role === 'mkt'
+      ALL_TEAMS_ROLES.has(user.role) || user.role === 'mkt'
         ? (query.stats_team_id ?? null)
         : await this.resolveTeamScope(user);
     const assigneeId =
@@ -1477,7 +1477,7 @@ export class CareWarehouseService {
     lead: { assignedTeamId: string | null; assignedToId: string | null },
     openAssigneeId: string | null,
   ): void {
-    if (FULL_ACCESS_ROLES.has(user.role)) return;
+    if (ALL_TEAMS_ROLES.has(user.role)) return;
     if (user.role === 'leader') {
       this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
       return;
@@ -1849,7 +1849,7 @@ export class CareWarehouseService {
    * mọi truy vấn qua this.prisma bên trong transaction sẽ chờ mãi.
    */
   private async actorTeamId(user: AuthenticatedUser): Promise<string | null> {
-    if (FULL_ACCESS_ROLES.has(user.role)) return null;
+    if (ALL_TEAMS_ROLES.has(user.role)) return null;
     const teamId = await this.getOwnTeamId(user.id);
     if (!teamId) {
       throw new ForbiddenException('Tài khoản của bạn chưa thuộc nhóm nào');
