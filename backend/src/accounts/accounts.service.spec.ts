@@ -321,6 +321,37 @@ describe('AccountsService', () => {
     });
   });
 
+  describe('không tự khóa/xóa chính mình', () => {
+    it('deactivate chính mình → 422, không cập nhật', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      await expect(service.deactivate('acc-1', 'acc-1')).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
+      expect(prisma.account.update).not.toHaveBeenCalled();
+    });
+
+    it('update chính mình sang inactive → 422; sửa trường khác vẫn được', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      await expect(
+        service.update('acc-1', { status: 'inactive' }, 'acc-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(prisma.account.update).not.toHaveBeenCalled();
+
+      prisma.account.update.mockResolvedValue(baseAccount);
+      await expect(
+        service.update('acc-1', { full_name: 'Tên mới' }, 'acc-1'),
+      ).resolves.toBeDefined();
+    });
+
+    it('xóa vĩnh viễn chính mình → 422, không xóa', async () => {
+      prisma.account.findUnique.mockResolvedValue(baseAccount);
+      await expect(
+        service.deletePermanently('acc-1', 'acc-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(prisma.account.delete).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deletePermanently', () => {
     it('xóa hẳn tài khoản chưa có dữ liệu liên quan, ghi audit log', async () => {
       prisma.account.findUnique.mockResolvedValue(baseAccount);

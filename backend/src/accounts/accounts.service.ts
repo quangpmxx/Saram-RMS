@@ -23,6 +23,12 @@ const TEAM_SELECT = { id: true, name: true } as const;
 /** Vai trò bắt buộc phải thuộc 1 nhóm — Mục 2.2, docs/11-database-design.md. */
 const ROLES_REQUIRING_TEAM = new Set(['leader', 'sale']);
 
+/** Không ai được tự khóa/xóa tài khoản đang đăng nhập (yêu cầu người dùng 2026-10-30). */
+const SELF_DEACTIVATE_MESSAGE =
+  'Không thể vô hiệu hóa tài khoản đang đăng nhập của chính bạn';
+const SELF_DELETE_MESSAGE =
+  'Không thể xóa tài khoản đang đăng nhập của chính bạn';
+
 @Injectable()
 export class AccountsService {
   constructor(
@@ -132,6 +138,9 @@ export class AccountsService {
     if (!existing) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
+    if (id === actorId && dto.status === 'inactive') {
+      throw new UnprocessableEntityException(SELF_DEACTIVATE_MESSAGE);
+    }
 
     if (dto.team_id) {
       await this.assertTeamExists(dto.team_id);
@@ -188,6 +197,9 @@ export class AccountsService {
     if (!existing) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
+    if (id === actorId) {
+      throw new UnprocessableEntityException(SELF_DEACTIVATE_MESSAGE);
+    }
 
     await this.prisma.account.update({
       where: { id },
@@ -219,6 +231,9 @@ export class AccountsService {
     const existing = await this.prisma.account.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+    if (id === actorId) {
+      throw new UnprocessableEntityException(SELF_DELETE_MESSAGE);
     }
 
     try {

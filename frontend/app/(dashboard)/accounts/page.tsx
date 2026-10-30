@@ -21,6 +21,11 @@ export default async function AccountsPage() {
   ]);
 
   return (
-    <AccountsClient permissionLevel={permissionLevel} initialAccounts={accountsResult.items} teams={teamsResult.items} />
+    <AccountsClient
+      currentUserId={user.id}
+      permissionLevel={permissionLevel}
+      initialAccounts={accountsResult.items}
+      teams={teamsResult.items}
+    />
   );
 }

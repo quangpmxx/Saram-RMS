@@ -23,10 +23,13 @@ const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
 type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; account: Account };
 
 export function AccountsClient({
+  currentUserId,
   permissionLevel,
   initialAccounts,
   teams,
 }: {
+  /** Tài khoản đang đăng nhập — không cho tự vô hiệu hóa/xóa chính mình (backend cũng chặn). */
+  currentUserId: string;
   permissionLevel: ModulePermissionLevel;
   initialAccounts: Account[];
   teams: Team[];
@@ -216,6 +219,7 @@ export function AccountsClient({
                         <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
                         Sửa
                       </Button>
+                      {account.id !== currentUserId && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -232,6 +236,7 @@ export function AccountsClient({
                         )}
                         {account.status === "active" ? "Vô hiệu hóa" : "Kích hoạt lại"}
                       </Button>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -242,6 +247,7 @@ export function AccountsClient({
                         <KeyRound className="h-3.5 w-3.5" strokeWidth={2} />
                         Reset mật khẩu
                       </Button>
+                      {account.id !== currentUserId && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -253,6 +259,7 @@ export function AccountsClient({
                         <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                         Xóa
                       </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
