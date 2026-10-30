@@ -377,36 +377,44 @@ export class ShuttleService {
         select: { id: true, role: true },
       });
       const now = new Date();
-      for (const account of accounts) {
-        const level = await this.modulePermission.getEffective(
-          account.id,
-          account.role,
-          'shuttle',
-        );
-        if (level === 'none') continue;
-        const notification = await this.prisma.notification.create({
-          data: {
-            accountId: account.id,
-            type: 'shuttle_update',
-            channel: 'in_app',
-            content: content.slice(0, 500),
-            senderId: currentUser.id,
-            scheduledAt: now,
-            sentAt: now,
-            status: 'sent',
-            meta: meta as unknown as Prisma.InputJsonValue,
-          },
-          include: {
-            sender: {
-              select: { id: true, fullName: true, role: true, avatarUrl: true },
+      // Chạy song song thay vì từng người một (hệ thống có hàng chục tài khoản).
+      await Promise.all(
+        accounts.map(async (account) => {
+          const level = await this.modulePermission.getEffective(
+            account.id,
+            account.role,
+            'shuttle',
+          );
+          if (level === 'none') return;
+          const notification = await this.prisma.notification.create({
+            data: {
+              accountId: account.id,
+              type: 'shuttle_update',
+              channel: 'in_app',
+              content: content.slice(0, 500),
+              senderId: currentUser.id,
+              scheduledAt: now,
+              sentAt: now,
+              status: 'sent',
+              meta: meta as unknown as Prisma.InputJsonValue,
             },
-          },
-        });
-        this.realtime.emitNotificationCreated(
-          toNotificationResponse(notification),
-          currentUser,
-        );
-      }
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  role: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          });
+          this.realtime.emitNotificationCreated(
+            toNotificationResponse(notification),
+            currentUser,
+          );
+        }),
+      );
     } catch (error) {
       this.logger.warn(`Không gửi được thông báo đưa đón: ${String(error)}`);
     }

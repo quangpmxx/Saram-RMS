@@ -9,8 +9,8 @@ describe('DashboardService', () => {
     team: { findMany: jest.Mock };
     lead: { count: jest.Mock; groupBy: jest.Mock };
     leadSource: { findMany: jest.Mock };
-    leadNote: { count: jest.Mock };
-    interviewAppointment: { count: jest.Mock };
+    leadNote: { count: jest.Mock; groupBy: jest.Mock };
+    interviewAppointment: { count: jest.Mock; groupBy: jest.Mock };
     shuttleRecord: { findMany: jest.Mock };
   };
 
@@ -40,8 +40,14 @@ describe('DashboardService', () => {
         groupBy: jest.fn().mockResolvedValue([]),
       },
       leadSource: { findMany: jest.fn().mockResolvedValue([]) },
-      leadNote: { count: jest.fn().mockResolvedValue(0) },
-      interviewAppointment: { count: jest.fn().mockResolvedValue(0) },
+      leadNote: {
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      interviewAppointment: {
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       shuttleRecord: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
