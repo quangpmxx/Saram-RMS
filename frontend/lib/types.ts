@@ -504,20 +504,10 @@ export interface TeamSummary {
   kpi: KpiBreakdown;
 }
 
-/** GET /report/by-source — Mục 8, docs/13-api-design.md. */
-export interface BySourceReport {
-  source_id: string;
-  source_name: string;
-  lead_count: number;
-  potential_rate: number;
-  employed_rate: number;
-}
-
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
  * docs/09-13 — module mới): Báo cáo hằng ngày — thay thế nội dung trang
- * "Báo cáo" cũ (FunnelStep/BySourceReport ở trên GIỮ NGUYÊN, vẫn dùng cho
- * Dashboard).
+ * "Báo cáo" cũ (FunnelStep ở trên GIỮ NGUYÊN, vẫn dùng cho Dashboard).
  */
 export interface DailyReportRow {
   date: string;
@@ -728,13 +718,6 @@ export interface CheckinStatus {
   device: string;
   operating_system: string;
   browser: string;
-}
-
-export interface CheckinPreview {
-  company_location_configured: boolean;
-  distance_from_company_meters: number | null;
-  status: CheckinRecordStatus | null;
-  location_label: string | null;
 }
 
 /** Mục 11: 1 dòng trong "trang quản lý Check in" — 1 nhân viên + bản ghi Check in của họ (null nếu chưa Check in ngày đang xem). */

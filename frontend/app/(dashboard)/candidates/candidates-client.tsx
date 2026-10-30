@@ -81,7 +81,6 @@ import { shouldOpenRowDetail } from "./row-click";
 import { SourceBadge } from "./source-badge";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
-import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
 import { CareWarehousePanel, clearSavedCareState, type CareSaleOption } from "./care-warehouse-panel";
 
@@ -125,8 +124,8 @@ type CandidateSortKey = "stt" | "date";
 /** Mặc định khi vào: ngày giờ lên số giảm dần (yêu cầu người dùng 2026-10-30). */
 const DEFAULT_CANDIDATE_SORT: SortState<CandidateSortKey> = { key: "date", order: "desc" };
 
-/** "care" = Kho chăm sóc (2026-10-28) — khác "care_pool" (Cột chăm sóc cũ, đã ẩn khỏi UI). */
-type ViewMode = "all" | "pending" | "care_pool" | "mine" | "care";
+/** "care" = Kho chăm sóc (2026-10-28). Cột chăm sóc cũ ("care_pool") đã gỡ hẳn (rà soát 2026-10-30). */
+type ViewMode = "all" | "pending" | "mine" | "care";
 /** Vai trò xem được tab Kho chăm sóc — MKT chỉ xem (toàn công ty), khớp backend. */
 const CARE_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "mkt"];
 
@@ -326,16 +325,10 @@ export function CandidatesClient({
   ): Promise<PaginatedResult<Candidate>> {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
     if (activeFilters.source_id) query.set("source_id", activeFilters.source_id);
-    if (mode !== "care_pool") applySortParams(query, sortRef.current);
+    applySortParams(query, sortRef.current);
 
     if (mode === "pending") {
       return clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
-    }
-    if (mode === "care_pool") {
-      // Mục 5, docs/13: GET /care-pool không nhận cùng bộ filter với /candidate
-      // (chỉ page/page_size/team_id) — dùng query riêng, không lẫn filters hiện tại.
-      const carePoolQuery = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
-      return clientApi<PaginatedResult<Candidate>>(`/care-pool?${carePoolQuery.toString()}`);
     }
 
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
@@ -537,9 +530,7 @@ export function CandidatesClient({
         ? updated.assigned_to === null
         : viewMode === "mine"
           ? updated.assigned_to?.id === currentUserId
-          : viewMode === "care_pool"
-            ? event.change_type !== "care_pool_removed"
-            : true;
+          : true;
 
     if (wasShown) {
       if (stillEligible) {
@@ -551,7 +542,7 @@ export function CandidatesClient({
       return;
     }
 
-    if (event.change_type === "created" || event.change_type === "care_pool_entered") {
+    if (event.change_type === "created") {
       void silentRefetchCurrentPage();
     }
   }
@@ -918,8 +909,7 @@ export function CandidatesClient({
 
       {viewMode !== "care" && (
       <>
-      {viewMode !== "care_pool" && (
-      // UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng.
+      {/* UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng. */}
       <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
         {(viewMode === "all" || viewMode === "mine") && (
           <Field uiSize="xs" label="Tìm kiếm" className="min-w-[200px] flex-1">
@@ -1003,9 +993,8 @@ export function CandidatesClient({
           Tìm kiếm
         </Button>
       </Card>
-      )}
 
-      {viewMode !== "care_pool" && canSelect && selectedIds.size > 0 && (
+      {canSelect && selectedIds.size > 0 && (
         <Card className="mb-2 flex flex-wrap items-center justify-between gap-3 p-2.5">
           <span className="text-sm text-slate-600">
             Đã chọn {selectedIds.size} lao động
@@ -1047,16 +1036,6 @@ export function CandidatesClient({
       )}
 
       <Card className="overflow-hidden p-0">
-        {viewMode === "care_pool" ? (
-          <CarePoolTable
-            candidates={candidates}
-            currentUserId={currentUserId}
-            currentUserRole={currentUserRole}
-            teamNameById={teamNameById}
-            onChanged={() => refresh(page, "care_pool")}
-            onBanner={(b) => (b.type === "success" ? toast.success(b.text) : toast.error(b.text))}
-          />
-        ) : (
         <div ref={scrollContainerRef} className="max-h-[calc(100vh-180px)] overflow-auto">
           {/* Dự án phụ — nâng cấp toàn diện: bọc riêng <table> trong 1 div có
               "zoom" (không phải transform: scale) — zoom tính lại layout thật
@@ -1448,8 +1427,7 @@ export function CandidatesClient({
           </table>
           </div>
         </div>
-        )}
-        {viewMode !== "care_pool" && candidates.length === 0 && (
+        {candidates.length === 0 && (
           <EmptyState
             title={viewMode === "pending" ? "Không có lao động nào đang chờ phân chia" : "Chưa có lao động nào khớp bộ lọc"}
             icon={<Search className="h-5 w-5" strokeWidth={1.75} />}

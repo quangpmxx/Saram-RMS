@@ -406,17 +406,6 @@ describe('CheckinService (Phase 1+2+3+4)', () => {
     });
   });
 
-  describe('preview()', () => {
-    it('17) Thiếu User-Agent -> preview cũng trả "needs_verification" (nhất quán với checkin())', async () => {
-      const result = await service.preview(
-        createDto({ latitude: 10.0001, longitude: 106.0001 }),
-        sale,
-        undefined,
-      );
-      expect(result.status).toBe('needs_verification');
-    });
-  });
-
   describe('updateCompanyLocation() — ghi audit log (Mục 9)', () => {
     it('18) Đổi cấu hình vị trí công ty được ghi audit log "update"', async () => {
       prisma.companyLocationConfig.update.mockResolvedValue({

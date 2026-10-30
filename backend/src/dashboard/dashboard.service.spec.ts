@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DashboardService } from './dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -181,32 +180,6 @@ describe('DashboardService', () => {
     });
   });
 
-  describe('getFunnel/getBySource — Mục 8, docs/13: Leader/Quản lý/Admin', () => {
-    it('Sale/MKT bị từ chối cả 2 API', async () => {
-      await expect(service.getFunnel({}, saleUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getFunnel({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getBySource({}, saleUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getBySource({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-    });
-
-    it('getFunnel: account_id thu hẹp theo đúng 1 Sale', async () => {
-      await service.getFunnel({ account_id: 'sale-9' }, adminUser);
-      expect(prisma.lead.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ assignedToId: 'sale-9' }),
-        }),
-      );
-    });
-  });
-
   describe('computeFunnel — tỷ lệ % so với bước Lead đầu tiên', () => {
     it('tính đúng % làm tròn 1 chữ số thập phân, bước Lead luôn 100%', async () => {
       prisma.lead.count
@@ -216,7 +189,7 @@ describe('DashboardService', () => {
         .mockResolvedValueOnce(3) // PASSED
         .mockResolvedValueOnce(1); // EMPLOYED
 
-      const funnel = await service.getFunnel({}, adminUser);
+      const funnel = await service['computeFunnel']({});
 
       expect(funnel).toEqual([
         { code: 'LEAD', label: 'Lead', count: 10, percentage: 100 },
@@ -234,7 +207,7 @@ describe('DashboardService', () => {
 
     it('bước Lead = 0 → tất cả % là 0, không chia cho 0', async () => {
       prisma.lead.count.mockResolvedValue(0);
-      const funnel = await service.getFunnel({}, adminUser);
+      const funnel = await service['computeFunnel']({});
       expect(
         funnel.every((step) => step.percentage === 0 || step.code === 'LEAD'),
       ).toBe(true);

@@ -13,12 +13,10 @@ import { CandidatesModule } from './candidates/candidates.module';
 import { ImportsModule } from './imports/imports.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CalendarModule } from './calendar/calendar.module';
-import { CarePoolModule } from './care-pool/care-pool.module';
 import { CareWarehouseModule } from './care-warehouse/care-warehouse.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
-import { ColumnWidthModule } from './column-width/column-width.module';
 import { ShuttleModule } from './shuttle/shuttle.module';
 import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
 import { DailyReportsModule } from './daily-reports/daily-reports.module';
@@ -54,12 +52,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     ImportsModule,
     CatalogModule,
     CalendarModule,
-    CarePoolModule,
     CareWarehouseModule,
     DistributionModule,
     DashboardModule,
     NotificationModule,
-    ColumnWidthModule,
     ShuttleModule,
     SaleReminderModule,
     DailyReportsModule,

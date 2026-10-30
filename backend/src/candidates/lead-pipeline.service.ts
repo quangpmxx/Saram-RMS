@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -42,7 +41,6 @@ import {
   CallbackResponseDto,
   toCallbackResponse,
 } from './dto/callback-response.dto';
-import { isLockActive, isVisibleInCarePool } from './care-pool.util';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LeadEventTargets } from '../realtime/realtime-event.interface';
 
@@ -829,35 +827,11 @@ export class LeadPipelineService {
       const sameTeam = Boolean(
         account?.teamId && lead.assignedTeamId === account.teamId,
       );
-      // Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm được xử
-      // lý tiếp 1 lead KHÔNG phải của mình (thêm ghi chú, cập nhật trạng
-      // thái cuộc gọi/PV/lịch gọi lại...), NHƯNG chỉ khi lead đã được xử lý
-      // ít nhất 1 lần (lastActivityAt khác null) — tôn trọng quyền xử lý số
-      // hoàn toàn mới của người phụ trách gốc, tránh giành số.
       // Rà soát phân quyền 2026-10-30: Sale xử lý hộ (ghi chú, trạng thái,
       // lịch...) MỌI data trong nhóm mình, miễn data đã có người phụ trách.
+      // (Nhánh "khoá xử lý Cột chăm sóc" cũ đã gỡ cùng tính năng đó.)
       if (sameTeam && lead.assignedToId !== null) {
         return lead;
-      }
-      // Phase 5 — Mục 8, docs/09: Sale cũng xử lý được lead trong cột chăm
-      // sóc của nhóm mình, nhưng BẮT BUỘC đã chiếm khóa trước (POST
-      // /care-pool/:id/lock) — đúng quy tắc "chỉ 1 người xử lý 1 lead tại 1
-      // thời điểm" (Mục 10.1, docs/09).
-      if (isVisibleInCarePool(lead) && sameTeam) {
-        if (lead.carePoolLockedById === currentUser.id && isLockActive(lead)) {
-          return lead;
-        }
-        if (lead.carePoolLockedById && isLockActive(lead)) {
-          const locker = await this.prisma.account.findUnique({
-            where: { id: lead.carePoolLockedById },
-          });
-          throw new ConflictException(
-            `Sale ${locker?.fullName ?? 'khác'} đang xử lý ứng viên này, vui lòng thử lại sau`,
-          );
-        }
-        throw new ForbiddenException(
-          'Bạn cần chiếm khóa xử lý (mở lead trong Cột chăm sóc) trước khi thao tác',
-        );
       }
       throw new ForbiddenException(
         'Bạn chỉ được cập nhật ứng viên đang phụ trách',

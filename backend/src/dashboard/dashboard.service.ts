@@ -1,11 +1,9 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
-import { ReportFunnelQueryDto } from './dto/report-funnel-query.dto';
 import {
-  BySourceReportDto,
   DashboardSummaryDto,
   FunnelStep,
   KpiBreakdown,
@@ -24,7 +22,6 @@ import { findOwnTeamId } from '../common/utils/account-team.util';
  *   (khớp tab Chờ phân chia); Quản lý/Admin/MKT toàn bộ.
  */
 const FULL_VIEW_ROLES = new Set(['admin', 'manager', 'mkt']);
-const REPORT_VIEW_ROLES = new Set(['admin', 'manager', 'leader']);
 
 /** Bám sát đúng 3 trạng thái phỏng vấn tính là "đã đến PV" — SCHEDULED chưa đến, NO_SHOW là bùng (không đến). */
 const ATTENDED_INTERVIEW_STATUS_CODES = ['ATTENDED', 'PASSED', 'FAILED'];
@@ -361,93 +358,6 @@ export class DashboardService {
           conversion_rate: employedStep?.percentage ?? 0,
           care_pool_count: carePoolCount,
           kpi,
-        };
-      }),
-    );
-  }
-
-  /** Mục 8, docs/13: GET /report/funnel — "Leader, Quản lý, Admin". */
-  async getFunnel(
-    query: ReportFunnelQueryDto,
-    currentUser: AuthenticatedUser,
-  ): Promise<FunnelStep[]> {
-    if (!REPORT_VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xem báo cáo phễu chuyển đổi',
-      );
-    }
-
-    const teamId = await this.resolveTeamIdForRestrictedRole(
-      currentUser,
-      query.team_id,
-    );
-    const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
-    const where: Prisma.LeadWhereInput = {
-      deletedAt: null,
-      ...(teamId ? { assignedTeamId: teamId } : {}),
-      ...(query.account_id ? { assignedToId: query.account_id } : {}),
-      ...dateWhere,
-    };
-
-    return this.computeFunnel(where);
-  }
-
-  /** Mục 8, docs/13: GET /report/by-source — "Leader, Quản lý, Admin". */
-  async getBySource(
-    query: DashboardQueryDto,
-    currentUser: AuthenticatedUser,
-  ): Promise<BySourceReportDto[]> {
-    if (!REPORT_VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xem báo cáo theo nguồn kênh',
-      );
-    }
-
-    const teamId = await this.resolveTeamIdForRestrictedRole(
-      currentUser,
-      query.team_id,
-    );
-    const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
-    const baseWhere: Prisma.LeadWhereInput = {
-      deletedAt: null,
-      ...(teamId ? { assignedTeamId: teamId } : {}),
-      ...dateWhere,
-    };
-
-    const sources = await this.prisma.leadSource.findMany();
-
-    return Promise.all(
-      sources.map(async (source) => {
-        const where: Prisma.LeadWhereInput = {
-          ...baseWhere,
-          sourceId: source.id,
-        };
-        const [leadCount, potentialCount, employedCount] = await Promise.all([
-          this.prisma.lead.count({ where }),
-          this.prisma.lead.count({
-            where: { ...where, callResult: { code: 'POTENTIAL' } },
-          }),
-          this.prisma.lead.count({
-            where: {
-              ...where,
-              interviews: {
-                some: {
-                  deletedAt: null,
-                  employmentStatus: { code: 'EMPLOYED' },
-                },
-              },
-            },
-          }),
-        ]);
-
-        return {
-          source_id: source.id,
-          source_name: source.name,
-          lead_count: leadCount,
-          potential_rate:
-            leadCount > 0 ? round1((potentialCount / leadCount) * 100) : 0,
-          employed_rate:
-            leadCount > 0 ? round1((employedCount / leadCount) * 100) : 0,
         };
       }),
     );

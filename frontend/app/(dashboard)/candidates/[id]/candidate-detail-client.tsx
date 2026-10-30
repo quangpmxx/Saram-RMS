@@ -255,31 +255,6 @@ export function CandidateDetailClient({
       });
   });
 
-  /**
-   * Mục 5, docs/13 + Mục 3, docs/12: Sale mở 1 lead đang ở Cột chăm sóc (không
-   * phải lead của mình) → tự động chiếm khóa xử lý, tránh 2 Sale cùng sửa 1
-   * lúc. Lead của chính Sale đó thì không cần khóa (đã có đường quyền riêng
-   * qua sở hữu lead — Mục "extend assertInScope/loadLeadForUpdate" ở backend).
-   */
-  useEffect(() => {
-    if (currentUserRole !== "sale") return;
-    if (!candidate.entered_care_pool_at) return;
-    if (candidate.assigned_to?.id === currentUserId) return;
-    let cancelled = false;
-    clientApi<Candidate>(`/care-pool/${candidate.id}/lock`, { method: "POST" })
-      .then((updated) => {
-        if (!cancelled) setCandidate(updated);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        toast.error(error instanceof ApiError ? error.message : "Không thể mở khóa xử lý lao động này");
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidate.id]);
-
   // Sale không phụ trách gốc: kiểm tra xem có đang được giao chăm sóc data
   // này không (lượt giao chưa đóng, trong tháng hiện tại).
   useEffect(() => {
@@ -833,21 +808,6 @@ export function CandidateDetailClient({
                   {candidate.assigned_to ? <NameWithRoleHint account={candidate.assigned_to} /> : "Chờ phân chia"}
                 </dd>
               </div>
-              {candidate.entered_care_pool_at && candidate.care_pool_locked_by && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Cột chăm sóc</dt>
-                  <dd>
-                    <Badge variant="info">
-                      Đang xử lý —{" "}
-                      {candidate.care_pool_locked_by.id === currentUserId ? (
-                        "Bạn"
-                      ) : (
-                        <NameWithRoleHint account={candidate.care_pool_locked_by} />
-                      )}
-                    </Badge>
-                  </dd>
-                </div>
-              )}
               {candidate.mkt_note && (
                 <div className="border-t border-slate-100 pt-2">
                   <dt className="text-slate-500">Ghi chú MKT</dt>

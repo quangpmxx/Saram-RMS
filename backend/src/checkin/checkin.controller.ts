@@ -15,7 +15,6 @@ import {
 import type { Request } from 'express';
 import { CheckinService } from './checkin.service';
 import { CreateCheckinDto } from './dto/create-checkin.dto';
-import { CheckinPreviewQueryDto } from './dto/checkin-preview-query.dto';
 import { UpdateCompanyLocationDto } from './dto/update-company-location.dto';
 import { ListCheckinQueryDto } from './dto/list-checkin-query.dto';
 import { ResetCheckinDto } from './dto/reset-checkin.dto';
@@ -42,16 +41,6 @@ export class CheckinController {
       req.ip,
       req.headers['user-agent'],
     );
-  }
-
-  /** Mục 2/3, yêu cầu người dùng: xem trước khoảng cách/trạng thái trước khi xác nhận — không ghi DB. */
-  @Get('preview')
-  preview(
-    @Query() query: CheckinPreviewQueryDto,
-    @Req() req: Request,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.checkinService.preview(query, user, req.headers['user-agent']);
   }
 
   @Post()

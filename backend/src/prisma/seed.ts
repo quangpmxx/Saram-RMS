@@ -43,7 +43,7 @@ async function seedAdmin(prisma: PrismaClient): Promise<void> {
   });
 
   console.log(
-    `Đã tạo tài khoản Admin đầu tiên: username="${admin.username}", mật khẩu mặc định="${defaultPassword}"`,
+    `Đã tạo tài khoản Admin đầu tiên: username="${admin.username}" (mật khẩu: DEFAULT_PASSWORD trong .env)`,
   );
   console.log(
     'Vui lòng đăng nhập và đổi mật khẩu ngay sau lần dùng đầu tiên (Phase 0 chưa hỗ trợ tự đổi mật khẩu — chỉ Admin reset).',
@@ -253,7 +253,7 @@ async function seedSampleCandidates(prisma: PrismaClient): Promise<void> {
       },
     });
     console.log(
-      `Đã tạo tài khoản MKT mẫu: username="${username}", mật khẩu mặc định="${defaultPassword}"`,
+      `Đã tạo tài khoản MKT mẫu: username="${username}" (mật khẩu: DEFAULT_PASSWORD trong .env)`,
     );
   }
 
@@ -398,7 +398,7 @@ async function seedPhase2Sample(prisma: PrismaClient): Promise<void> {
   });
 
   console.log(
-    `Đã tạo nhóm "Nhóm Sale Demo" với Leader (leader_demo/${defaultPassword}) và 2 Sale (sale_demo_a, sale_demo_b/${defaultPassword}).`,
+    `Đã tạo nhóm "Nhóm Sale Demo" với Leader (leader_demo) và 2 Sale (sale_demo_a, sale_demo_b).`,
   );
 
   const [leadForA, leadForB] = await prisma.lead.findMany({
@@ -505,7 +505,7 @@ async function seedCrossTeamDuplicateSample(
   });
 
   console.log(
-    `Đã tạo nhóm "Nhóm Sale Demo 2" với Leader (leader_demo_2/${defaultPassword}) và Sale (sale_demo_c/${defaultPassword}).`,
+    `Đã tạo nhóm "Nhóm Sale Demo 2" với Leader (leader_demo_2) và Sale (sale_demo_c).`,
   );
 
   const source = await prisma.leadSource.findFirst({

@@ -54,20 +54,6 @@ export interface CheckinStatusResponseDto {
   browser: string;
 }
 
-/**
- * Mục 2/3, yêu cầu người dùng: hiển thị khoảng cách/trạng thái TRƯỚC khi
- * xác nhận Check in — tính bằng đúng công thức/service dùng khi lưu thật,
- * nhưng KHÔNG ghi gì xuống DB và KHÔNG lộ tọa độ công ty ra response (Mục 7:
- * "Chỉ Admin được xem... cấu hình này").
- */
-export interface CheckinPreviewResponseDto {
-  company_location_configured: boolean;
-  distance_from_company_meters: number | null;
-  status: CheckinStatusValue | null;
-  /** "Công ty" khi status=valid, ngược lại null (frontend tự hiển thị resolved_address thay thế). */
-  location_label: string | null;
-}
-
 export interface CompanyLocationResponseDto {
   address: string;
   latitude: number;
