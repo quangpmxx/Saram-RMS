@@ -670,7 +670,7 @@ export function CareWarehousePanel({
                 )}
                 <th className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap">STT</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lao động</th>
-                <th className="border-r border-slate-100 px-2 py-2 text-center">Trạng thái</th>
+                <th className="w-px border-r border-slate-100 px-2 py-2 text-center whitespace-nowrap">Trạng thái</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Sale được giao</th>
                 <th className="min-w-[300px] border-r border-slate-100 px-2 py-2 text-center">Nội dung ghi chú</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lần CS tháng / tổng</th>
@@ -738,7 +738,7 @@ export function CareWarehousePanel({
                         </p>
                       )}
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-2">
+                    <td className="w-px border-r border-slate-100 px-2 py-2 whitespace-nowrap">
                       <div className="flex flex-col items-start gap-1">
                         {care.month_status === "cared" ? (
                           <Badge variant="success">Đã chăm sóc</Badge>
