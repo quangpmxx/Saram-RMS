@@ -65,7 +65,10 @@ import { OrderManagementController } from '../order-management/order-management.
 export interface ModuleRegistryEntry {
   code: string;
   label: string;
+  /** Vai trò mặc định được SỬA module này. */
   defaultRoles: AccountRole[];
+  /** Vai trò mặc định CHỈ XEM (không thêm/sửa/xoá) — Admin vẫn chỉnh riêng được từng người. */
+  viewRoles?: AccountRole[];
   controllers: Type<unknown>[];
 }
 
@@ -94,7 +97,10 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   {
     code: 'shuttle',
     label: 'Danh sách đưa đón',
-    defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale'],
+    // Rà soát phân quyền 2026-10-30: chỉ Admin/Quản lý thêm/sửa/xoá (cả danh
+    // mục tuỳ chọn); Leader/MKT/Sale chỉ xem mọi dòng.
+    defaultRoles: ['admin', 'manager'],
+    viewRoles: ['leader', 'mkt', 'sale'],
     controllers: [ShuttleController],
   },
   {

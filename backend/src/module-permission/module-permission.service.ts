@@ -31,7 +31,8 @@ export class ModulePermissionService {
   ): ModulePermissionLevel {
     const entry = MODULE_REGISTRY.find((m) => m.code === moduleCode);
     if (!entry) return 'none';
-    return entry.defaultRoles.includes(role) ? 'edit' : 'none';
+    if (entry.defaultRoles.includes(role)) return 'edit';
+    return entry.viewRoles?.includes(role) ? 'view' : 'none';
   }
 
   async getEffective(
