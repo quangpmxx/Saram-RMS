@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 import { Test } from '@nestjs/testing';
 import { LeaveRequestsService } from './leave-requests.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -595,6 +597,69 @@ describe('LeaveRequestsService', () => {
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'reject' }),
       );
+    });
+  });
+
+  describe('duyệt đồng thời (rà soát 2026-10-30, M1)', () => {
+    const p2025 = () =>
+      new Prisma.PrismaClientKnownRequestError('not found', {
+        code: 'P2025',
+        clientVersion: 'test',
+      });
+
+    it('adminDecide: UPDATE kèm điều kiện trạng thái; người đến sau nhận 409, không ghi audit/thông báo', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'pending_admin',
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockRejectedValue(p2025());
+
+      await expect(
+        service.adminDecide('req-1', { decision: 'rejected' }, admin),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(prisma.leaveRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'req-1',
+            status: { in: ['pending_admin', 'pending_leader'] },
+          },
+        }),
+      );
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('leaderDecide: người đến sau nhận 409, không ghi audit', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockRejectedValue(p2025());
+
+      await expect(
+        service.leaderDecide('req-1', { decision: 'approved' }, leader),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(prisma.leaveRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'req-1', status: { in: ['pending_leader'] } },
+        }),
+      );
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('lỗi khác P2025 được ném lại nguyên vẹn', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'pending_admin',
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.adminDecide('req-1', { decision: 'approved' }, admin),
+      ).rejects.toThrow('db down');
     });
   });
 });

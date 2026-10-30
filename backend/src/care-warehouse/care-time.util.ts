@@ -7,14 +7,21 @@ export const TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 const VN_OFFSET = '+07:00';
 
+/**
+ * Tạo 1 lần dùng mãi: Intl.DateTimeFormat rất tốn CPU khi khởi tạo, mà hàm
+ * này được gọi hàng chục nghìn lần mỗi request Kho/Báo cáo tiến độ (đo
+ * 2026-10-30: ~75% CPU của 2 API đó).
+ */
+const VN_DATE_FORMAT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 /** "YYYY-MM-DD" theo giờ Việt Nam. */
 export function vnDateOnly(date: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+  return VN_DATE_FORMAT.format(date);
 }
 
 /** "YYYY-MM" theo giờ Việt Nam. */

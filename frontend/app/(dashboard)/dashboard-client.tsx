@@ -344,10 +344,18 @@ export function DashboardClient({
    * (vd bulk assign nhiều lead cùng lúc) chỉ gộp thành ĐÚNG 1 lượt refetch.
    */
   const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tab trình duyệt đang ẩn thì KHÔNG tải lại 4 API Dashboard theo từng sự kiện
+  // (mỗi thay đổi lead của bất kỳ ai đều phát tín hiệu tới mọi máy đang mở
+  // Dashboard) — chỉ đánh dấu "cũ" và tải đúng 1 lần khi người dùng quay lại tab.
+  const staleWhileHiddenRef = useRef(false);
   function scheduleInvalidateRefresh() {
     if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
     invalidateTimerRef.current = setTimeout(() => {
       invalidateTimerRef.current = null;
+      if (document.visibilityState === "hidden") {
+        staleWhileHiddenRef.current = true;
+        return;
+      }
       void silentRefresh();
     }, 800);
   }
@@ -356,6 +364,17 @@ export function DashboardClient({
       if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
     };
   }, []);
+  // Không có mảng phụ thuộc: đăng ký lại sau mỗi lần render để silentRefresh()
+  // luôn đọc bộ lọc mới nhất (listener rẻ, chỉ 1 sự kiện visibilitychange).
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== "visible" || !staleWhileHiddenRef.current) return;
+      staleWhileHiddenRef.current = false;
+      void silentRefresh();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  });
 
   function handleAppRealtimeEvent(event: AppRealtimeEvent) {
     if (event.module !== "dashboard" || event.action !== "invalidate") return;

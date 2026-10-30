@@ -14,6 +14,8 @@ describe('AttendanceService', () => {
       upsert: jest.Mock;
       deleteMany: jest.Mock;
     };
+    $transaction: jest.Mock;
+    $queryRaw: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
 
@@ -43,6 +45,11 @@ describe('AttendanceService', () => {
         upsert: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      // Transaction tương tác (H1): chạy callback với chính mock này làm `tx`.
+      $transaction: jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
+        cb(prisma),
+      ),
+      $queryRaw: jest.fn().mockResolvedValue([]),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
 
@@ -331,6 +338,39 @@ describe('AttendanceService', () => {
       expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
+    it('H1-a) Lưu trong 1 transaction duy nhất: khoá hàng tài khoản TRƯỚC khi đọc số phép, rồi mới ghi chấm công và số phép', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'Sale One', remainingLeaveDays: 2 },
+      ]);
+
+      await service.bulkSave({ upserts: [npCell], deletes: [] }, adminUser);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const order = (m: jest.Mock) => m.mock.invocationCallOrder[0];
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(order(prisma.$queryRaw)).toBeLessThan(
+        order(prisma.attendanceRecord.findMany),
+      );
+      expect(order(prisma.attendanceRecord.findMany)).toBeLessThan(
+        order(prisma.attendanceRecord.upsert),
+      );
+      expect(order(prisma.attendanceRecord.upsert)).toBeLessThan(
+        order(prisma.account.update),
+      );
+    });
+
+    it('H1-b) Ghi số phép lỗi giữa chừng → cả lần lưu thất bại (transaction rollback) và KHÔNG ghi audit log nào', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'Sale One', remainingLeaveDays: 2 },
+      ]);
+      prisma.account.update.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.bulkSave({ upserts: [npCell], deletes: [] }, adminUser),
+      ).rejects.toThrow('db down');
+      expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
     it('26) remaining_leave_days = null (Admin chưa đặt số ban đầu) → coi như 0 → chặn NP', async () => {
       prisma.account.findMany.mockResolvedValue([
         { id: 'sale-1', fullName: 'Sale One', remainingLeaveDays: null },
@@ -363,6 +403,36 @@ describe('AttendanceService', () => {
         data: { remainingLeaveDays: 2 },
       });
       expect(result).toEqual({ saved: 0, deleted: 1 });
+    });
+
+    it('27b) Chỉ tải bản ghi đúng nhân viên + đúng ngày đang sửa (không tải cả lịch sử)', async () => {
+      prisma.attendanceRecord.findMany.mockResolvedValueOnce([]);
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'Sale One', remainingLeaveDays: 1 },
+      ]);
+      await service.bulkSave(
+        {
+          upserts: [],
+          deletes: [
+            { account_id: 'sale-1', date: '2026-07-14' },
+            { account_id: 'sale-1', date: '2026-07-15' },
+          ],
+        },
+        adminUser,
+      );
+      expect(prisma.attendanceRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            accountId: { in: ['sale-1'] },
+            date: {
+              in: [
+                new Date('2026-07-14T00:00:00.000Z'),
+                new Date('2026-07-15T00:00:00.000Z'),
+              ],
+            },
+          },
+        }),
+      );
     });
 
     it('28) Đổi 1 ô từ NP sang trạng thái khác (present) → hoàn lại 1 ngày phép', async () => {

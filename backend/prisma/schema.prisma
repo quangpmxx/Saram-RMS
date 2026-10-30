@@ -1346,6 +1346,9 @@ model SalesEntryRecord {
   updatedById    String    @map("updated_by") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
+  /// Xoá mềm (rà soát 2026-10-30) — trước đây xoá vĩnh viễn; mọi truy vấn bỏ qua dòng có deleted_at.
+  deletedAt      DateTime? @map("deleted_at")
+  deletedById    String?   @map("deleted_by") @db.Uuid
 
   saleUser   Account?     @relation("SalesEntrySaleUser", fields: [saleUserId], references: [id])
   pickupUser Account?     @relation("SalesEntryPickupUser", fields: [pickupUserId], references: [id])

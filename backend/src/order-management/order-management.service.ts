@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -94,6 +98,22 @@ export class OrderManagementService {
     });
     if (!existing) {
       throw new NotFoundException('Không tìm thấy đơn hàng này');
+    }
+
+    // Rà soát 2026-10-30 (S1): khoá ngoại company_id là ON DELETE SET NULL —
+    // xoá đơn đang được dùng sẽ làm mất tên công ty ở mọi dòng. Chặn và báo rõ.
+    const [shuttleCount, salesCount] = await Promise.all([
+      this.prisma.shuttleRecord.count({
+        where: { companyId: id, deletedAt: null },
+      }),
+      this.prisma.salesEntryRecord.count({
+        where: { companyId: id, deletedAt: null },
+      }),
+    ]);
+    if (shuttleCount + salesCount > 0) {
+      throw new ConflictException(
+        `Đơn hàng đang được dùng ở ${shuttleCount} dòng Đưa đón và ${salesCount} dòng DS Sale — không thể xóa`,
+      );
     }
 
     await this.prisma.orderRecord.delete({ where: { id } });

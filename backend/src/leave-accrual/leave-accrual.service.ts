@@ -79,21 +79,29 @@ export class LeaveAccrualService {
       );
     });
 
-    await Promise.all(
-      toAccrue.map((e) =>
-        this.prisma.account.update({
-          where: { id: e.id },
+    // Rà soát 2026-10-31 (H1): trước đây ghi đè (số đã đọc + 1) nên nếu chấm
+    // công đổi số phép giữa lúc đọc và ghi thì bị mất cập nhật; và 2 lần chạy
+    // đồng thời có thể cộng trùng. Giờ: tăng nguyên tử (increment) và chỉ cộng
+    // khi lastLeaveAccrualAt VẪN đúng giá trị đã đọc (ai cộng trước thì bỏ qua).
+    // Bước đầu chuẩn hoá số phép null → 0 vì increment trên NULL vẫn là NULL.
+    const accrued: string[] = [];
+    for (const e of toAccrue) {
+      const [, credited] = await this.prisma.$transaction([
+        this.prisma.account.updateMany({
+          where: { id: e.id, remainingLeaveDays: null },
+          data: { remainingLeaveDays: 0 },
+        }),
+        this.prisma.account.updateMany({
+          where: { id: e.id, lastLeaveAccrualAt: e.lastLeaveAccrualAt },
           data: {
-            remainingLeaveDays: (e.remainingLeaveDays ?? 0) + 1,
+            remainingLeaveDays: { increment: 1 },
             lastLeaveAccrualAt: now,
           },
         }),
-      ),
-    );
+      ]);
+      if (credited.count > 0) accrued.push(e.fullName);
+    }
 
-    return {
-      checked: employees.length,
-      accrued: toAccrue.map((e) => e.fullName),
-    };
+    return { checked: employees.length, accrued };
   }
 }
