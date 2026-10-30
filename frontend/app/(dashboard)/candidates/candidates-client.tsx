@@ -394,8 +394,8 @@ export function CandidatesClient({
         scrollTop: scrollContainerRef.current?.scrollTop ?? 0,
         search: window.location.search,
       };
-      sessionStorage.setItem(LIST_STATE_SESSION_KEY, JSON.stringify(state));
-      if (viewMode !== "care") clearSavedCareState();
+      sessionStorage.setItem(`${LIST_STATE_SESSION_KEY}:${currentUserId}`, JSON.stringify(state));
+      if (viewMode !== "care") clearSavedCareState(currentUserId);
     } catch {
       // sessionStorage không khả dụng (chế độ ẩn danh chặn...) — bỏ qua, không chặn điều hướng.
     }
@@ -423,7 +423,8 @@ export function CandidatesClient({
     ].some((key) => searchParams.has(key));
     let raw: string | null = null;
     try {
-      raw = sessionStorage.getItem(LIST_STATE_SESSION_KEY);
+      // Lưu riêng theo tài khoản — xem careStateKey() ở care-warehouse-panel.tsx.
+      raw = sessionStorage.getItem(`${LIST_STATE_SESSION_KEY}:${currentUserId}`);
     } catch {
       return;
     }

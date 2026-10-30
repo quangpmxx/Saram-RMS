@@ -108,6 +108,14 @@ const REALTIME_DEBOUNCE_MS = 600;
  * sessionStorage với danh sách chính (LIST_STATE_SESSION_KEY).
  */
 const CARE_STATE_SESSION_KEY = "saram_rms_care_warehouse_state";
+/**
+ * Lưu RIÊNG theo tài khoản (2026-10-30): trước đây dùng chung 1 khoá, đổi tài
+ * khoản trên cùng trình duyệt thì tài khoản sau nhận lại bộ lọc/trang của
+ * tài khoản trước.
+ */
+function careStateKey(accountId: string): string {
+  return `${CARE_STATE_SESSION_KEY}:${accountId}`;
+}
 
 interface SavedCareState {
   filters: CareFilters;
@@ -119,9 +127,9 @@ interface SavedCareState {
 }
 
 /** Mở data từ tab khác (không phải Kho) → bỏ trạng thái Kho đã lưu, quay lại không bị đè bộ lọc cũ. */
-export function clearSavedCareState() {
+export function clearSavedCareState(accountId: string) {
   try {
-    sessionStorage.removeItem(CARE_STATE_SESSION_KEY);
+    sessionStorage.removeItem(careStateKey(accountId));
   } catch {
     // sessionStorage không khả dụng — bỏ qua.
   }
@@ -269,7 +277,7 @@ export function CareWarehousePanel({
         scrollTop: tableScrollRef.current?.scrollTop ?? 0,
         search: window.location.search,
       };
-      sessionStorage.setItem(CARE_STATE_SESSION_KEY, JSON.stringify(state));
+      sessionStorage.setItem(careStateKey(currentUserId), JSON.stringify(state));
     } catch {
       // sessionStorage không khả dụng — bỏ qua, không chặn điều hướng.
     }
@@ -281,7 +289,7 @@ export function CareWarehousePanel({
     if (initialAssigneeId) return;
     let saved: SavedCareState;
     try {
-      const raw = sessionStorage.getItem(CARE_STATE_SESSION_KEY);
+      const raw = sessionStorage.getItem(careStateKey(currentUserId));
       if (!raw) return;
       saved = JSON.parse(raw) as SavedCareState;
     } catch {
