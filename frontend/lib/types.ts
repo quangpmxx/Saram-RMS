@@ -840,11 +840,21 @@ export interface AppNotification {
  * Đơn phản ánh ẩn danh (2026-10-28) — GET /anonymous-feedback (chỉ Quản
  * lý/Admin). Cố ý KHÔNG có thông tin người gửi.
  */
+export interface AnonymousFeedbackRecipient {
+  id: string;
+  full_name: string;
+  role: AccountRole;
+}
+
 export interface AnonymousFeedback {
   id: string;
   /** Tiêu đề đơn. */
   subject: string;
   content: string;
+  /** Người nhận đã chọn — rỗng = gửi tất cả Admin + Quản lý. */
+  recipients: AnonymousFeedbackRecipient[];
+  /** Số ảnh đính kèm — tải qua GET /anonymous-feedback/:id/images/:index. */
+  image_count: number;
   created_at: string;
 }
 

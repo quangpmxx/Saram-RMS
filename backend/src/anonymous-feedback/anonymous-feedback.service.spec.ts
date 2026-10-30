@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -19,9 +23,9 @@ describe('AnonymousFeedbackService', () => {
     anonymousFeedback: {
       create: jest.Mock;
       findMany: jest.Mock;
-      findUnique: jest.Mock;
+      findFirst: jest.Mock;
     };
-    account: { findMany: jest.Mock };
+    account: { findMany: jest.Mock; count: jest.Mock };
     notification: { create: jest.Mock };
   };
   let realtime: { emitNotificationCreated: jest.Mock };
@@ -33,12 +37,13 @@ describe('AnonymousFeedbackService', () => {
           .fn()
           .mockResolvedValue({ id: 'fb-1', subject: DTO.subject }),
         findMany: jest.fn().mockResolvedValue([]),
-        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       account: {
         findMany: jest
           .fn()
           .mockResolvedValue([{ id: 'admin-1' }, { id: 'manager-1' }]),
+        count: jest.fn(),
       },
       notification: {
         create: jest.fn().mockImplementation(({ data }) =>
@@ -119,6 +124,40 @@ describe('AnonymousFeedbackService', () => {
       }
     });
 
+    it('chọn người nhận: chỉ báo đúng người đó; người nhận phải là Admin/Quản lý đang hoạt động', async () => {
+      prisma.account.count.mockResolvedValue(1);
+      await service.create(
+        { ...DTO, recipient_ids: JSON.stringify(['manager-1']) },
+        user('sale'),
+      );
+      expect(prisma.anonymousFeedback.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ recipientIds: ['manager-1'] }),
+        }),
+      );
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { in: ['manager-1'] } }),
+        }),
+      );
+
+      prisma.account.count.mockResolvedValue(0);
+      await expect(
+        service.create(
+          { ...DTO, recipient_ids: JSON.stringify(['sale-9']) },
+          user('sale'),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('ảnh không phải JPEG/PNG/WebP (theo nội dung file) → báo lỗi, không lưu đơn', async () => {
+      const fake = { buffer: Buffer.from('<script>alert(1)</script>') };
+      await expect(
+        service.create(DTO, user('sale'), [fake as Express.Multer.File]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.anonymousFeedback.create).not.toHaveBeenCalled();
+    });
+
     it('lỗi gửi thông báo không làm hỏng việc gửi đơn', async () => {
       prisma.account.findMany.mockRejectedValue(new Error('db'));
       await expect(service.create(DTO, user('sale'))).resolves.toBeDefined();
@@ -144,26 +183,59 @@ describe('AnonymousFeedbackService', () => {
 
     it('truy vấn KHÔNG chọn cột người gửi, kết quả không có thông tin người gửi', async () => {
       prisma.anonymousFeedback.findMany.mockResolvedValue([
-        { id: 'fb-1', ...DTO, createdAt: new Date('2026-10-28T03:00:00Z') },
+        {
+          id: 'fb-1',
+          ...DTO,
+          recipientIds: [],
+          imageFiles: [],
+          createdAt: new Date('2026-10-28T03:00:00Z'),
+        },
       ]);
       const rows = await service.list({}, user('admin'));
       const select = prisma.anonymousFeedback.findMany.mock.calls[0][0].select;
       expect(select).not.toHaveProperty('senderId');
       expect(select).not.toHaveProperty('sender');
       expect(Object.keys(rows[0]).sort()).toEqual(
-        ['content', 'created_at', 'id', 'subject'].sort(),
+        [
+          'content',
+          'created_at',
+          'id',
+          'image_count',
+          'recipients',
+          'subject',
+        ].sort(),
       );
     });
 
+    it('chỉ thấy đơn gửi tất cả hoặc đơn có chọn mình', async () => {
+      await service.list({}, user('manager', 'manager-7'));
+      expect(prisma.anonymousFeedback.findMany.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({
+          OR: [
+            { recipientIds: { isEmpty: true } },
+            { recipientIds: { has: 'manager-7' } },
+          ],
+        }),
+      );
+    });
+
+    it('xem ảnh của đơn không gửi cho mình → không tìm thấy', async () => {
+      prisma.anonymousFeedback.findFirst.mockResolvedValue(null);
+      await expect(
+        service.getImage('fb-1', 0, user('admin')),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
     it('xem chi tiết cũng không chọn cột người gửi', async () => {
-      prisma.anonymousFeedback.findUnique.mockResolvedValue({
+      prisma.anonymousFeedback.findFirst.mockResolvedValue({
         id: 'fb-1',
         ...DTO,
+        recipientIds: [],
+        imageFiles: [],
         createdAt: new Date(),
       });
       await service.findOne('fb-1', user('manager'));
-      const select =
-        prisma.anonymousFeedback.findUnique.mock.calls[0][0].select;
+      const select = prisma.anonymousFeedback.findFirst.mock.calls[0][0].select;
       expect(select).not.toHaveProperty('senderId');
       expect(select).not.toHaveProperty('sender');
     });

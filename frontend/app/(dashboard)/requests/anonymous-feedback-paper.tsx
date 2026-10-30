@@ -19,10 +19,13 @@ export const PAPER_FONT = '"Times New Roman", Times, "Noto Serif", serif';
 export function AnonymousFeedbackPaper({
   subjectSlot,
   contentSlot,
+  attachmentsSlot,
   date,
 }: {
   subjectSlot: ReactNode;
   contentSlot: ReactNode;
+  /** Ảnh đính kèm hiện ngay trên lá đơn, dưới phần nội dung (2026-10-30). */
+  attachmentsSlot?: ReactNode;
   /** "YYYY-MM-DD" theo giờ Việt Nam — ngày gửi đơn. */
   date: string;
 }) {
@@ -47,6 +50,7 @@ export function AnonymousFeedbackPaper({
             <p className="font-semibold">Nội dung phản ánh:</p>
             <div className="mt-2">{contentSlot}</div>
           </div>
+          {attachmentsSlot}
         </div>
 
         <div className="mt-auto pt-10 text-right text-[13px] text-slate-700 sm:text-sm">

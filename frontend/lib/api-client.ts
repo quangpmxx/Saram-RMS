@@ -58,4 +58,14 @@ export async function clientApiUpload<T>(path: string, formData: FormData): Prom
   return parseResponse<T>(res, path);
 }
 
+/**
+ * Tải 1 file (vd ảnh cần đăng nhập mới xem được) về dạng Blob — gửi kèm
+ * cookie phiên, dùng với URL.createObjectURL() để hiện trong <img>.
+ */
+export async function clientApiBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${PUBLIC_API_URL}${path}`, { credentials: "include" });
+  if (!res.ok) await parseResponse<unknown>(res, path);
+  return res.blob();
+}
+
 export { ApiError };

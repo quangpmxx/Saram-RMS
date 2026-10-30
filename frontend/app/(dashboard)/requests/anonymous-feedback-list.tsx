@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { MessageSquareWarning } from "lucide-react";
+import { MessageSquareWarning, Paperclip } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import type { AnonymousFeedback, AppRealtimeEvent } from "@/lib/types";
 import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
@@ -16,6 +16,7 @@ import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useToast } from "@/lib/toast-context";
 import { apiErrorMessage } from "./leave-request-client";
 import { AnonymousFeedbackPaper, vnDateOnly } from "./anonymous-feedback-paper";
+import { FeedbackStoredImages } from "./feedback-images";
 
 function buildQuery(date: DateRangeValue): string {
   const query = new URLSearchParams();
@@ -103,6 +104,12 @@ export function AnonymousFeedbackList() {
                     {item.subject}
                   </td>
                   <td className="max-w-[320px] truncate px-4 py-3 text-slate-500" title={item.content}>
+                    {item.image_count > 0 && (
+                      <span className="mr-1.5 inline-flex items-center gap-0.5 rounded bg-slate-100 px-1 text-[11px] text-slate-600">
+                        <Paperclip className="h-3 w-3" strokeWidth={2} />
+                        {item.image_count} ảnh
+                      </span>
+                    )}
                     {item.content}
                   </td>
                 </tr>
@@ -129,10 +136,19 @@ export function AnonymousFeedbackList() {
             </Button>
           }
         >
+          <p className="mb-3 text-sm text-slate-600">
+            Gửi tới:{" "}
+            <span className="font-medium text-slate-800">
+              {openItem.recipients.length
+                ? openItem.recipients.map((r) => r.full_name).join(", ")
+                : "Tất cả Admin và Quản lý"}
+            </span>
+          </p>
           <AnonymousFeedbackPaper
             date={vnDateOnly(openItem.created_at)}
             subjectSlot={<span className="font-medium">{openItem.subject}</span>}
             contentSlot={<p className="leading-7 break-words whitespace-pre-wrap">{openItem.content}</p>}
+            attachmentsSlot={<FeedbackStoredImages feedbackId={openItem.id} count={openItem.image_count} />}
           />
         </Modal>
       )}

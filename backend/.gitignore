@@ -12,3 +12,6 @@ coverage
 # git sẽ không đi vào thư mục con đã bị loại trừ để áp negation pattern.)
 /uploads/avatars/*
 !/uploads/avatars/.gitkeep
+
+# Ảnh đính kèm đơn phản ánh ẩn danh — thư mục RIÊNG, không phục vụ tĩnh.
+/private-uploads/
