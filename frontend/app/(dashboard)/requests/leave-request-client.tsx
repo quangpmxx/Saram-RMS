@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Select } from "@/components/ui/form";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useToast } from "@/lib/toast-context";
 import { CreateLeaveRequestModal } from "./create-leave-request-modal";
@@ -85,6 +86,9 @@ export function LeaveRequestClient({
   const searchParams = useSearchParams();
   const toast = useToast();
   const [requests, setRequests] = useState(initialRequests);
+  // Bấm tiêu đề "Thời gian nghỉ"/"Ngày gửi" (yêu cầu người dùng 2026-10-30).
+  const [sort, setSort] = useState<SortState<"start_date" | "created_at">>({ key: "created_at", order: "desc" });
+  const sortedRequests = sortRows(requests, sort.order, (request) => request[sort.key]);
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | "all">("all");
   const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
@@ -235,15 +239,19 @@ export function LeaveRequestClient({
             <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
                 {showEmployeeColumn && <th className="px-4 py-3">Nhân viên</th>}
-                <th className="px-4 py-3">Thời gian nghỉ</th>
+                <SortableTh sortKey="start_date" sort={sort} onSort={setSort} className="px-4 py-3">
+                  Thời gian nghỉ
+                </SortableTh>
                 <th className="px-4 py-3">Số ngày</th>
                 <th className="px-4 py-3">Lý do</th>
                 <th className="px-4 py-3">Trạng thái</th>
-                <th className="px-4 py-3">Ngày gửi</th>
+                <SortableTh sortKey="created_at" sort={sort} onSort={setSort} className="px-4 py-3">
+                  Ngày gửi
+                </SortableTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {requests.map((request) => (
+              {sortedRequests.map((request) => (
                 <tr
                   key={request.id}
                   className="cursor-pointer transition-colors hover:bg-slate-50"

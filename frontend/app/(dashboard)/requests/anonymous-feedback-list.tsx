@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useToast } from "@/lib/toast-context";
@@ -33,6 +34,9 @@ export function AnonymousFeedbackList() {
   const [items, setItems] = useState<AnonymousFeedback[] | null>(null);
   const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
   const [openItem, setOpenItem] = useState<AnonymousFeedback | null>(null);
+  // Bấm tiêu đề "Ngày gửi" để đổi chiều (yêu cầu người dùng 2026-10-30).
+  const [sort, setSort] = useState<SortState<"created_at">>({ key: "created_at", order: "desc" });
+  const rows = sortRows(items ?? [], sort.order, (item) => item.created_at);
 
   const load = useCallback(
     (date: DateRangeValue, silent = false) =>
@@ -72,13 +76,15 @@ export function AnonymousFeedbackList() {
           <table className="w-full text-left text-sm">
             <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
               <tr>
-                <th className="px-4 py-3">Ngày gửi</th>
+                <SortableTh sortKey="created_at" sort={sort} onSort={setSort} className="px-4 py-3">
+                  Ngày gửi
+                </SortableTh>
                 <th className="px-4 py-3">Tiêu đề</th>
                 <th className="px-4 py-3">Nội dung</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(items ?? []).map((item) => (
+              {rows.map((item) => (
                 <tr
                   key={item.id}
                   className="cursor-pointer transition-colors hover:bg-slate-50"

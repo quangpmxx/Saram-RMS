@@ -91,7 +91,11 @@ export class AuditLogService {
       this.prisma.auditLog.findMany({
         where,
         include: AUDIT_LOG_INCLUDE,
-        orderBy: { createdAt: 'desc' },
+        // Bấm tiêu đề "Thời gian" để đổi chiều (mặc định mới nhất trước).
+        orderBy: [
+          { createdAt: query.order ?? 'desc' },
+          { id: query.order ?? 'desc' },
+        ],
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),

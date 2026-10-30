@@ -22,6 +22,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { type DateRangeValue, EMPTY_DATE_RANGE } from "@/lib/date-range";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { useToast } from "@/lib/toast-context";
 
 const VIOLATION_TYPE_OPTIONS: Array<{ value: ReportViolationType; label: string }> = [
@@ -57,6 +58,7 @@ const STATUS_BADGE: Record<ReportViolationStatus, string> = {
 };
 
 const PAGE_SIZE = 20;
+type PenaltySortKey = "stt" | "report_date" | "deadline" | "submitted_at";
 const EMPLOYEE_ROLES = ["sale"];
 
 function formatDateOnly(value: string): string {
@@ -111,6 +113,12 @@ export function CheckPenaltyPanel({
   const [keyword, setKeyword] = useState("");
   const [keywordInput, setKeywordInput] = useState("");
   const [page, setPage] = useState(1);
+  // Bấm tiêu đề STT/Ngày báo cáo/Hạn nộp/Thời gian nộp (yêu cầu người dùng 2026-10-30).
+  const [sort, setSort] = useState<SortState<PenaltySortKey>>({ key: "stt", order: "asc" });
+  function handleSort(next: SortState<PenaltySortKey>) {
+    setSort(next);
+    setPage(1);
+  }
 
   const [data, setData] = useState<PaginatedResult<ReportViolation> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,6 +159,7 @@ export function CheckPenaltyPanel({
     if (violationType) params.set("violation_type", violationType);
     if (status) params.set("status", status);
     if (keyword) params.set("keyword", keyword);
+    applySortParams(params, sort);
     return params;
   }
 
@@ -178,7 +187,7 @@ export function CheckPenaltyPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, teamId, accountId, violationType, status, keyword, page, refreshKey]);
+  }, [dateRange, teamId, accountId, violationType, status, keyword, page, sort, refreshKey]);
 
   /**
    * Yêu cầu người dùng (Mục 2) — "Check phạt mới xuất hiện ngay với người
@@ -448,12 +457,20 @@ export function CheckPenaltyPanel({
             <table className="w-full text-left text-sm">
               <thead className="bg-brand-50 text-xs font-semibold tracking-wide text-brand-900 uppercase">
                 <tr>
-                  <th className="px-4 py-3">STT</th>
-                  <th className="px-4 py-3">Ngày báo cáo</th>
+                  <SortableTh sortKey="stt" sort={sort} onSort={handleSort} className="px-4 py-3">
+                    STT
+                  </SortableTh>
+                  <SortableTh sortKey="report_date" sort={sort} onSort={handleSort} className="px-4 py-3">
+                    Ngày báo cáo
+                  </SortableTh>
                   <th className="px-4 py-3">Nhân viên</th>
                   <th className="px-4 py-3">Nhóm</th>
-                  <th className="px-4 py-3">Hạn nộp</th>
-                  <th className="px-4 py-3">Thời gian nộp thực tế</th>
+                  <SortableTh sortKey="deadline" sort={sort} onSort={handleSort} className="px-4 py-3">
+                    Hạn nộp
+                  </SortableTh>
+                  <SortableTh sortKey="submitted_at" sort={sort} onSort={handleSort} className="px-4 py-3">
+                    Thời gian nộp thực tế
+                  </SortableTh>
                   <th className="px-4 py-3">Loại vi phạm</th>
                   <th className="px-4 py-3">Trạng thái</th>
                   <th className="px-4 py-3">Ghi chú</th>
@@ -463,7 +480,10 @@ export function CheckPenaltyPanel({
               <tbody className="divide-y divide-slate-100">
                 {items.map((violation, index) => (
                   <tr key={violation.id} className="transition-colors hover:bg-slate-50">
-                    <td className="px-4 py-2.5 text-slate-500">{(page - 1) * PAGE_SIZE + index + 1}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{sort.key === "stt" && sort.order === "desc"
+                        ? total - ((page - 1) * PAGE_SIZE + index)
+                        : (page - 1) * PAGE_SIZE + index + 1}
+                    </td>
                     <td className="px-4 py-2.5 text-slate-700">{formatDateOnly(violation.report_date)}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">

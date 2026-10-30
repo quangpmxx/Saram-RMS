@@ -10,9 +10,22 @@ import {
   Min,
 } from 'class-validator';
 import {
+  SORT_ORDERS,
+  type SortOrder,
+} from '../../common/utils/sort-order.util';
+import {
   ReportViolationStatus,
   ReportViolationType,
 } from '../../../generated/prisma/client';
+
+/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): STT / Ngày báo cáo / Hạn nộp / Thời gian nộp thực tế. */
+export const REPORT_PENALTY_SORTS = [
+  'stt',
+  'report_date',
+  'deadline',
+  'submitted_at',
+] as const;
+export type ReportPenaltySort = (typeof REPORT_PENALTY_SORTS)[number];
 
 const VIOLATION_TYPE_VALUES: ReportViolationType[] = [
   'late_submission',
@@ -74,4 +87,12 @@ export class ListReportPenaltyQueryDto {
   @IsOptional()
   @IsString()
   keyword?: string;
+
+  @IsOptional()
+  @IsIn(REPORT_PENALTY_SORTS)
+  sort?: ReportPenaltySort;
+
+  @IsOptional()
+  @IsIn(SORT_ORDERS)
+  order?: SortOrder;
 }

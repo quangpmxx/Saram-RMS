@@ -40,6 +40,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { CheckPenaltyPanel } from "./check-penalty-panel";
 import { CareProgressPanel } from "./care-progress-panel";
 import { CARE_PROGRESS_ROLES } from "@/components/care-progress/care-progress-block";
@@ -270,6 +271,9 @@ export function ReportsClient({
   const [accountId, setAccountId] = useState("");
   const [summary, setSummary] = useState(initialSummary);
   const [rows, setRows] = useState(initialRows);
+  // Bấm tiêu đề "Ngày" (yêu cầu người dùng 2026-10-30); chưa bấm = thứ tự máy chủ trả.
+  const [dateSort, setDateSort] = useState<SortState<"date"> | null>(null);
+  const sortedRows = dateSort ? sortRows(rows, dateSort.order, (row) => row.date) : rows;
   const [loading, setLoading] = useState(false);
   /** Dòng "hôm nay của chính mình" — độc lập với bộ lọc đang xem, quyết định nút Nhập/Sửa (Mục 2, 4). */
   const [myTodayRow, setMyTodayRow] = useState<DailyReportRow | null>(
@@ -571,7 +575,9 @@ export function ReportsClient({
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 z-10 bg-white">
               <tr className="border-b border-brand-400 text-xs text-slate-500">
-                <th className="border-r border-slate-100 py-2 pr-3 font-medium">Ngày</th>
+                <SortableTh sortKey="date" sort={dateSort} onSort={setDateSort} className="border-r border-slate-100 py-2 pr-3 font-medium">
+                  Ngày
+                </SortableTh>
                 <th className="border-r border-slate-100 py-2 pr-3 font-medium">Nhân viên</th>
                 <th className="border-r border-slate-100 py-2 pr-3 font-medium">Nhóm</th>
                 {METRIC_CARDS.map(({ key, label }) => (
@@ -584,7 +590,7 @@ export function ReportsClient({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {sortedRows.map((row) => (
                 <tr
                   key={`${row.account.id}_${row.date}`}
                   className="border-b border-brand-400 last:border-0 hover:bg-slate-50"

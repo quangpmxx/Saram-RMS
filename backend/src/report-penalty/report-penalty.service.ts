@@ -9,7 +9,11 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
-import { ListReportPenaltyQueryDto } from './dto/list-report-penalty-query.dto';
+import {
+  ListReportPenaltyQueryDto,
+  type ReportPenaltySort,
+} from './dto/list-report-penalty-query.dto';
+import { flipOrder, type SortOrder } from '../common/utils/sort-order.util';
 import { UpdateViolationStatusDto } from './dto/update-violation-status.dto';
 import { UpdateReportDeadlineDto } from './dto/update-report-deadline.dto';
 import {
@@ -110,6 +114,32 @@ function toViolationResponse(
  * DailyReport đã có (daily-reports.service.ts) — KHÔNG đụng tới cách nhân
  * viên nhập báo cáo (Mục 10).
  */
+/**
+ * Thứ tự danh sách Check phạt khi bấm tiêu đề cột (yêu cầu người dùng
+ * 2026-10-30). STT tăng dần = mặc định (ngày báo cáo mới nhất trước);
+ * chưa nộp (Thời gian nộp trống) luôn xếp cuối.
+ */
+function violationOrderBy(
+  sort: ReportPenaltySort | undefined,
+  order: SortOrder = 'asc',
+): Prisma.ReportViolationOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'report_date':
+      return [{ reportDate: order }, { createdAt: order }, { id: order }];
+    case 'deadline':
+      return [{ deadlineSnapshot: order }, { id: order }];
+    case 'submitted_at':
+      return [
+        { actualSubmittedAt: { sort: order, nulls: 'last' } },
+        { id: order },
+      ];
+    default: {
+      const dir = flipOrder(order);
+      return [{ reportDate: dir }, { createdAt: dir }, { id: dir }];
+    }
+  }
+}
+
 @Injectable()
 export class ReportPenaltyService {
   constructor(
@@ -436,7 +466,7 @@ export class ReportPenaltyService {
       this.prisma.reportViolation.findMany({
         where,
         include: VIOLATION_INCLUDE,
-        orderBy: [{ reportDate: 'desc' }, { createdAt: 'desc' }],
+        orderBy: violationOrderBy(query.sort, query.order),
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),

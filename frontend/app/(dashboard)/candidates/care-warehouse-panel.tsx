@@ -45,6 +45,7 @@ import { Checkbox, Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
+import { SortableTh, applySortParams, type SortOrder } from "@/components/ui/sortable-th";
 import { SourceBadge } from "./source-badge";
 import { shouldOpenRowDetail } from "./row-click";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
@@ -74,6 +75,8 @@ interface CareFilters {
   /** Bộ lọc Nhóm/Nhân viên riêng của thanh Tiến độ (không ảnh hưởng danh sách). */
   stats_team_id: string;
   stats_assignee_id: string;
+  /** Bấm tiêu đề STT (yêu cầu người dùng 2026-10-30): desc = đảo thứ tự mặc định. */
+  stt_order: SortOrder;
 }
 
 const EMPTY_FILTERS: CareFilters = {
@@ -89,6 +92,7 @@ const EMPTY_FILTERS: CareFilters = {
   stats_range: { preset: "this_month", ...computeDateRange("this_month") },
   stats_team_id: "",
   stats_assignee_id: "",
+  stt_order: "asc",
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
@@ -166,6 +170,7 @@ function buildQuery(filters: CareFilters, page: number, pageSize: number): strin
   q.set("stats_to", range.to || toDateOnly(new Date()));
   if (filters.stats_team_id) q.set("stats_team_id", filters.stats_team_id);
   if (filters.stats_assignee_id) q.set("stats_assignee_id", filters.stats_assignee_id);
+  if (filters.stt_order === "desc") applySortParams(q, { key: "stt", order: "desc" });
   return q.toString();
 }
 
@@ -670,7 +675,14 @@ export function CareWarehousePanel({
                     />
                   </th>
                 )}
-                <th className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap">STT</th>
+                <SortableTh
+                  sortKey="stt"
+                  sort={{ key: "stt", order: applied.stt_order }}
+                  onSort={(next) => applyFilters({ ...filters, stt_order: next.order })}
+                  className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap"
+                >
+                  STT
+                </SortableTh>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Lao động</th>
                 <th className="w-px border-r border-slate-100 px-2 py-2 text-center whitespace-nowrap">Trạng thái</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Sale được giao</th>
@@ -723,7 +735,9 @@ export function CareWarehousePanel({
                       </td>
                     )}
                     <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">
-                      {((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
+                      {applied.stt_order === "desc"
+                        ? (data?.total ?? 0) - (((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index)
+                        : ((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
                     </td>
                     <td className="border-r border-slate-100 px-2 py-2">
                       <Link

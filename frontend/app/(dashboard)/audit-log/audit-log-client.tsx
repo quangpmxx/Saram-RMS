@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Select } from "@/components/ui/form";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal } from "@/components/ui/modal";
+import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 
@@ -80,6 +81,15 @@ export function AuditLogClient({
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<AuditLogEntry | null>(null);
 
+  // Bấm tiêu đề "Thời gian" để đổi chiều (mặc định mới nhất trước).
+  const [sort, setSort] = useState<SortState<"time">>({ key: "time", order: "desc" });
+  const sortRef = useRef(sort);
+  function handleSort(next: SortState<"time">) {
+    sortRef.current = next;
+    setSort(next);
+    void refresh(1).catch(() => undefined);
+  }
+
   const refreshSeqRef = useRef(0);
   async function refresh(page = 1) {
     // Bỏ kết quả của lượt tải cũ về muộn (đổi bộ lọc liên tục).
@@ -87,6 +97,7 @@ export function AuditLogClient({
     setLoading(true);
     try {
       const query = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+      applySortParams(query, sortRef.current);
       if (filters.account_id) query.set("account_id", filters.account_id);
       if (filters.action_type) query.set("action_type", filters.action_type);
       if (filters.entity_type) query.set("entity_type", filters.entity_type);
@@ -208,7 +219,9 @@ export function AuditLogClient({
             <table className="w-full text-left text-sm">
               <thead className="bg-brand-50/60 text-xs font-semibold tracking-wide text-brand-900 uppercase">
                 <tr>
-                  <th className="px-4 py-3">Thời gian</th>
+                  <SortableTh sortKey="time" sort={sort} onSort={handleSort} className="px-4 py-3">
+                    Thời gian
+                  </SortableTh>
                   <th className="px-4 py-3">Tài khoản thực hiện</th>
                   <th className="px-4 py-3">Loại hành động</th>
                   <th className="px-4 py-3">Đối tượng tác động</th>

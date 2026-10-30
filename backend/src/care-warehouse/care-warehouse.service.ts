@@ -312,11 +312,13 @@ export class CareWarehouseService {
       return true;
     });
 
-    // Data lâu chưa được chăm sóc nhất lên đầu.
+    // Data lâu chưa được chăm sóc nhất lên đầu; bấm tiêu đề STT để đảo
+    // ngược (yêu cầu người dùng 2026-10-30).
+    const dir = query.order === 'desc' ? -1 : 1;
     filtered.sort((a, b) => {
       const ta = totals.get(a)?.lastAt?.getTime() ?? 0;
       const tb = totals.get(b)?.lastAt?.getTime() ?? 0;
-      return ta - tb || a.localeCompare(b);
+      return dir * (ta - tb || a.localeCompare(b));
     });
 
     const pageIds = filtered.slice(

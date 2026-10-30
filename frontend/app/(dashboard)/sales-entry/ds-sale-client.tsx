@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Checkbox } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { SortableTh, type SortState } from "@/components/ui/sortable-th";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import type {
   AccountRole,
@@ -56,6 +57,8 @@ const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
 
 // Mục 8, yêu cầu người dùng — kích thước cột gợi ý (px).
 const CHECK_COL_WIDTH = 36;
+type DsSaleSortKey = "stt" | "date_of_birth" | "join_date";
+
 const STT_COL_WIDTH = 56;
 const CODE_COL_WIDTH = 100;
 const NAME_COL_WIDTH = 200;
@@ -268,6 +271,16 @@ export function DsSaleClient({
   const cellRefs = useRef<Map<string, HTMLInputElement | HTMLTextAreaElement | null>>(new Map());
   const focusFieldOnMount = useRef<string | null>(null);
 
+  // Bấm tiêu đề STT/Ngày sinh/Ngày vào (yêu cầu người dùng 2026-10-30). Ref
+  // để loadPage (useCallback) đọc được ngay giá trị mới.
+  const [sort, setSort] = useState<SortState<DsSaleSortKey>>({ key: "stt", order: "asc" });
+  const sortRef = useRef(sort);
+  function handleSort(next: SortState<DsSaleSortKey>) {
+    sortRef.current = next;
+    setSort(next);
+    void loadPage(1, appliedFilters, pageSize);
+  }
+
   const loadSeqRef = useRef(0);
   const loadPage = useCallback(
     async (targetPage: number, filters = appliedFilters, size = pageSize) => {
@@ -284,6 +297,8 @@ export function DsSaleClient({
           company_id: filters.company_id || undefined,
           sale_user_id: filters.sale_user_id || undefined,
           pickup_user_id: filters.pickup_user_id || undefined,
+          sort: sortRef.current.key,
+          order: sortRef.current.order,
         });
         if (seq !== loadSeqRef.current) return;
         setSheetRows(result.items.map(toSheetRow));
@@ -793,12 +808,15 @@ export function DsSaleClient({
               >
                 <Checkbox checked={allSelected} onChange={toggleSelectAll} className="border-white/40" />
               </th>
-              <th
+              <SortableTh
+                sortKey="stt"
+                sort={sort}
+                onSort={handleSort}
                 className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER_CORNER)}
                 style={{ position: "sticky", left: STT_LEFT }}
               >
                 STT
-              </th>
+              </SortableTh>
               <th
                 className={cn(
                   "sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white",
@@ -819,18 +837,28 @@ export function DsSaleClient({
               >
                 Họ tên
               </th>
-              <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
+              <SortableTh
+                sortKey="date_of_birth"
+                sort={sort}
+                onSort={handleSort}
+                className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}
+              >
                 Ngày sinh
-              </th>
+              </SortableTh>
               <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
                 Số CMT/CCCD
               </th>
               <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
                 Quê quán
               </th>
-              <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
+              <SortableTh
+                sortKey="join_date"
+                sort={sort}
+                onSort={handleSort}
+                className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}
+              >
                 Ngày vào
-              </th>
+              </SortableTh>
               <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
                 Công ty làm
               </th>
@@ -864,7 +892,13 @@ export function DsSaleClient({
                     style={{ position: "sticky", left: STT_LEFT }}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <span>{isBlankDraft ? "" : sttBase + rowIndex + 1}</span>
+                      <span>
+                        {isBlankDraft
+                          ? ""
+                          : sort.key === "stt" && sort.order === "desc"
+                            ? total - (sttBase + rowIndex)
+                            : sttBase + rowIndex + 1}
+                      </span>
                       <SaveStatusDot status={row.status} />
                     </div>
                   </td>

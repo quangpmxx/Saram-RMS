@@ -10,6 +10,14 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import {
+  SORT_ORDERS,
+  type SortOrder,
+} from '../../common/utils/sort-order.util';
+
+/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): STT (thứ tự mặc định: lâu chưa chăm sóc nhất trước). */
+export const CARE_WAREHOUSE_SORTS = ['stt'] as const;
+export type CareWarehouseSort = (typeof CARE_WAREHOUSE_SORTS)[number];
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -100,4 +108,12 @@ export class ListCareWarehouseQueryDto {
   @IsString()
   @MaxLength(100)
   search?: string;
+
+  @IsOptional()
+  @IsIn(CARE_WAREHOUSE_SORTS)
+  sort?: CareWarehouseSort;
+
+  @IsOptional()
+  @IsIn(SORT_ORDERS)
+  order?: SortOrder;
 }

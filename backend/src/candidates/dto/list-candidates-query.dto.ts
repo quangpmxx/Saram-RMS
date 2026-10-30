@@ -10,6 +10,15 @@ import {
   Min,
 } from 'class-validator';
 
+import {
+  SORT_ORDERS,
+  type SortOrder,
+} from '../../common/utils/sort-order.util';
+
+/** Cột bấm để sắp xếp ở tab Tất cả/Chờ phân chia: STT (thứ tự mặc định) / Ngày lên số. */
+export const CANDIDATE_SORTS = ['stt', 'date'] as const;
+export type CandidateSort = (typeof CANDIDATE_SORTS)[number];
+
 export const LEAD_STATE_FILTERS = ['held', 'pending_close', 'closed'] as const;
 export type LeadStateFilter = (typeof LEAD_STATE_FILTERS)[number];
 
@@ -100,4 +109,12 @@ export class ListCandidatesQueryDto {
   @IsOptional()
   @IsIn(LEAD_STATE_FILTERS)
   lead_state?: LeadStateFilter;
+
+  @IsOptional()
+  @IsIn(CANDIDATE_SORTS)
+  sort?: CandidateSort;
+
+  @IsOptional()
+  @IsIn(SORT_ORDERS)
+  order?: SortOrder;
 }

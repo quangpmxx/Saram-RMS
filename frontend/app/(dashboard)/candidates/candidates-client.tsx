@@ -4,6 +4,7 @@ import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMY } from "@/lib/date-format";
 import { LEAD_STATE_OPTIONS, type LeadStateFilter } from "@/lib/lead-state";
 import { DaySeparatorRow } from "@/components/day-separator-row";
+import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -112,6 +113,9 @@ type ModalState =
   | { mode: "transfer"; candidate: Candidate }
   | { mode: "remind"; candidate: Candidate };
 
+type CandidateSortKey = "stt" | "date";
+const DEFAULT_CANDIDATE_SORT: SortState<CandidateSortKey> = { key: "stt", order: "asc" };
+
 /** "care" = Kho chăm sóc (2026-10-28) — khác "care_pool" (Cột chăm sóc cũ, đã ẩn khỏi UI). */
 type ViewMode = "all" | "pending" | "care_pool" | "mine" | "care";
 /** Vai trò xem được tab Kho chăm sóc — MKT chỉ xem (toàn công ty), khớp backend. */
@@ -133,6 +137,8 @@ interface SavedListState {
   viewMode: ViewMode;
   filters: Filters;
   scrollTop: number;
+  /** Cột đang sắp xếp (bấm tiêu đề STT/Ngày). Bản lưu cũ không có → mặc định. */
+  sort?: SortState<CandidateSortKey>;
   /** Query string lúc lưu — quay lại đúng URL này (vd mở từ thông báo/Dashboard) vẫn khôi phục được. */
   search?: string;
 }
@@ -233,6 +239,10 @@ export function CandidatesClient({
   /** Tìm kiếm khi gõ: hẹn giờ chờ ngừng gõ + số thứ tự lượt tải (bỏ kết quả của lượt cũ về muộn). */
   const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRequestSeqRef = useRef(0);
+  // Bấm tiêu đề STT/Ngày để sắp xếp (yêu cầu người dùng 2026-10-30). Ref để
+  // fetchPage đọc được ngay giá trị mới (state chưa kịp cập nhật).
+  const [sort, setSort] = useState<SortState<CandidateSortKey>>(DEFAULT_CANDIDATE_SORT);
+  const sortRef = useRef(sort);
 
   useSetPageTitle("Data lao động");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
@@ -345,6 +355,7 @@ export function CandidatesClient({
   ): Promise<PaginatedResult<Candidate>> {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
     if (activeFilters.source_id) query.set("source_id", activeFilters.source_id);
+    if (mode !== "care_pool") applySortParams(query, sortRef.current);
 
     if (mode === "pending") {
       return clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
@@ -381,6 +392,7 @@ export function CandidatesClient({
         pageSize,
         viewMode,
         filters,
+        sort,
         scrollTop: scrollContainerRef.current?.scrollTop ?? 0,
         search: window.location.search,
       };
@@ -436,16 +448,21 @@ export function CandidatesClient({
         return;
       }
       try {
+        sortRef.current = saved.sort ?? DEFAULT_CANDIDATE_SORT;
         const result = await fetchPage(saved.page, saved.viewMode, saved.pageSize, saved.filters);
         // Người dùng đã tự chọn tab trong lúc chờ tải → KHÔNG đè lại bằng tab
         // cũ đã lưu (lỗi: bấm "Kho chăm sóc" xong bị bật về "Tất cả").
-        if (userPickedViewRef.current) return;
+        if (userPickedViewRef.current) {
+          sortRef.current = DEFAULT_CANDIDATE_SORT;
+          return;
+        }
         setCandidates(result.items);
         setTotal(result.total);
         setPage(saved.page);
         setPageSize(saved.pageSize);
         setViewMode(saved.viewMode);
         setFilters(saved.filters);
+        setSort(sortRef.current);
         // Đợi 1 khung hình để bảng render đủ dữ liệu mới (đủ chiều cao để
         // cuộn tới đúng vị trí) rồi mới đặt lại scrollTop.
         requestAnimationFrame(() => {
@@ -457,6 +474,12 @@ export function CandidatesClient({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function handleSort(next: SortState<CandidateSortKey>) {
+    sortRef.current = next;
+    setSort(next);
+    void refresh(1);
+  }
 
   async function refresh(targetPage = page, mode: ViewMode = viewMode, targetPageSize = pageSize) {
     if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
@@ -1068,7 +1091,7 @@ export function CandidatesClient({
                   tự động nên nhận toàn bộ phần còn lại (trước đây mọi cột đều px nên
                   bảng phóng to đều tất cả, kể cả ô tick/STT). */}
               {canSelect && <col className="w-6" />}
-              <col className="w-7" />
+              <col className="w-9" />
               <col className="w-[6%]" />
               <col className="w-[17%]" />
               <col className="w-[6%]" />
@@ -1093,8 +1116,12 @@ export function CandidatesClient({
                     />
                   </th>
                 )}
-                <th className="border-r border-slate-100 px-0 py-2 text-center">STT</th>
-                <th className="border-r border-slate-100 px-0.5 py-2 text-center">Ngày</th>
+                <SortableTh sortKey="stt" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-0 py-2 text-center">
+                  STT
+                </SortableTh>
+                <SortableTh sortKey="date" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-0.5 py-2 text-center">
+                  Ngày
+                </SortableTh>
                 <th className="border-r border-slate-100 px-1.5 py-2 text-center">Thông tin lao động</th>
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nguồn</th>
                 <th className="border-r border-slate-100 px-1 py-2 text-center">Nhân viên</th>
@@ -1148,7 +1175,9 @@ export function CandidatesClient({
                       </td>
                     )}
                     <td className="border-r border-slate-100 px-0 py-2 text-center text-[10px] text-slate-500 tabular-nums">
-                      {(page - 1) * pageSize + index + 1}
+                      {sort.key === "stt" && sort.order === "desc"
+                        ? total - ((page - 1) * pageSize + index)
+                        : (page - 1) * pageSize + index + 1}
                     </td>
 
                     <td className="border-r border-slate-100 px-0.5 py-2 text-center whitespace-nowrap">

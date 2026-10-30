@@ -168,6 +168,49 @@ describe('ShuttleService', () => {
       });
     });
 
+    it('bấm tiêu đề Ngày tăng dần: offset đếm các ngày CŨ hơn', async () => {
+      prisma.$transaction.mockResolvedValue([45, [record]]);
+      prisma.shuttleRecord.count.mockResolvedValue(18);
+
+      const result = await service.list({
+        page: 2,
+        page_size: 20,
+        sort: 'date',
+        order: 'asc',
+      });
+
+      expect(result.first_day_offset).toBe(2);
+      expect(prisma.shuttleRecord.count).toHaveBeenCalledWith({
+        where: { AND: [{}, { date: { lt: record.date } }] },
+      });
+      expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ date: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        }),
+      );
+    });
+
+    it('STT giảm dần: đảo thứ tự trong ngày, trả tổng số dòng từng ngày', async () => {
+      prisma.$transaction.mockResolvedValue([1, [record]]);
+      prisma.shuttleRecord.groupBy = jest
+        .fn()
+        .mockResolvedValue([{ date: record.date, _count: { _all: 7 } }]);
+
+      const result = await service.list({
+        page: 1,
+        page_size: 20,
+        sort: 'stt',
+        order: 'desc',
+      });
+
+      expect(result.day_counts).toEqual({ '2026-07-13': 7 });
+      expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ date: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
+
     it('lọc theo keyword (tên hoặc SĐT), company_id, type, sale_user_id, driver_user_id, status, khoảng ngày', async () => {
       prisma.$transaction.mockResolvedValue([0, []]);
 

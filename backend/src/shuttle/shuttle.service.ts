@@ -17,7 +17,11 @@ import { PaginatedResult } from '../common/interfaces/paginated-result.interface
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
 import { UpdateShuttleDto } from './dto/update-shuttle.dto';
-import { ListShuttleQueryDto } from './dto/list-shuttle-query.dto';
+import {
+  ListShuttleQueryDto,
+  type ShuttleSort,
+} from './dto/list-shuttle-query.dto';
+import type { SortOrder } from '../common/utils/sort-order.util';
 import { CreateShuttleOptionDto } from './dto/create-shuttle-option.dto';
 import { UpdateShuttleOptionDto } from './dto/update-shuttle-option.dto';
 import {
@@ -78,6 +82,35 @@ type OptionField = (typeof OPTION_FIELDS)[number];
  * không giới hạn theo nhóm/người phụ trách (khớp @Roles() bỏ trống ở
  * controller).
  */
+/**
+ * Thứ tự Danh sách đưa đón khi bấm tiêu đề Ngày/STT/Giờ PV (yêu cầu người
+ * dùng 2026-10-30). Các dòng luôn gom theo ngày (STT đánh riêng từng ngày):
+ * - Ngày: đổi chiều ngày, trong ngày giữ thứ tự mặc định.
+ * - STT giảm dần: ngày mới nhất trước, trong ngày đảo ngược thứ tự.
+ * - Giờ PV: ngày mới nhất trước, trong ngày theo giờ PV (giờ trống cuối).
+ */
+function shuttleOrderBy(
+  sort: ShuttleSort | undefined,
+  order: SortOrder = 'asc',
+): Prisma.ShuttleRecordOrderByWithRelationInput[] {
+  const newestInDay: Prisma.ShuttleRecordOrderByWithRelationInput[] = [
+    { createdAt: 'desc' },
+    { id: 'desc' },
+  ];
+  if (sort === 'date') return [{ date: order }, ...newestInDay];
+  if (sort === 'interview_time') {
+    return [
+      { date: 'desc' },
+      { interviewTime: { sort: order, nulls: 'last' } },
+      ...newestInDay,
+    ];
+  }
+  if (sort === 'stt' && order === 'desc') {
+    return [{ date: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }];
+  }
+  return [{ date: 'desc' }, ...newestInDay];
+}
+
 @Injectable()
 export class ShuttleService {
   private readonly logger = new Logger(ShuttleService.name);
@@ -100,6 +133,12 @@ export class ShuttleService {
        * STT của ngày đó nối tiếp đúng thay vì bắt đầu lại từ 1 khi sang trang.
        */
       first_day_offset: number;
+      /**
+       * Chỉ có khi STT giảm dần (`sort=stt&order=desc`): tổng số dòng của
+       * từng ngày có mặt trên trang ("YYYY-MM-DD" → số dòng), để đánh STT
+       * đếm ngược từ số lớn nhất của ngày.
+       */
+      day_counts?: Record<string, number>;
     }
   > {
     const where: Prisma.ShuttleRecordWhereInput = {};
@@ -128,22 +167,47 @@ export class ShuttleService {
       this.prisma.shuttleRecord.findMany({
         where,
         include: SHUTTLE_INCLUDE,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        orderBy: shuttleOrderBy(query.sort, query.order),
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),
     ]);
 
-    // Sắp theo ngày giảm dần → chỉ ngày của dòng đầu trang mới có thể bị
-    // chia sang trang trước: offset = số dòng đã bỏ qua − số dòng của các
-    // ngày mới hơn.
+    // Các dòng luôn gom theo ngày → chỉ ngày của dòng đầu trang mới có thể
+    // bị chia sang trang trước: offset = số dòng đã bỏ qua − số dòng của các
+    // ngày đứng trước (mới hơn khi ngày giảm dần, cũ hơn khi tăng dần).
+    const dateOrder = query.sort === 'date' ? (query.order ?? 'asc') : 'desc';
     let firstDayOffset = 0;
     const skipped = (query.page - 1) * query.page_size;
     if (skipped > 0 && records.length > 0) {
-      const newerDays = await this.prisma.shuttleRecord.count({
-        where: { AND: [where, { date: { gt: records[0].date } }] },
+      const earlierDays = await this.prisma.shuttleRecord.count({
+        where: {
+          AND: [
+            where,
+            {
+              date:
+                dateOrder === 'desc'
+                  ? { gt: records[0].date }
+                  : { lt: records[0].date },
+            },
+          ],
+        },
       });
-      firstDayOffset = Math.max(0, skipped - newerDays);
+      firstDayOffset = Math.max(0, skipped - earlierDays);
+    }
+
+    let dayCounts: Record<string, number> | undefined;
+    if (query.sort === 'stt' && query.order === 'desc' && records.length) {
+      const groups = await this.prisma.shuttleRecord.groupBy({
+        by: ['date'],
+        where: {
+          AND: [where, { date: { in: records.map((r) => r.date) } }],
+        },
+        _count: { _all: true },
+      });
+      dayCounts = Object.fromEntries(
+        groups.map((g) => [g.date.toISOString().slice(0, 10), g._count._all]),
+      );
     }
 
     return {
@@ -151,6 +215,7 @@ export class ShuttleService {
       page: query.page,
       page_size: query.page_size,
       first_day_offset: firstDayOffset,
+      ...(dayCounts ? { day_counts: dayCounts } : {}),
       items: records.map(toShuttleResponse),
     };
   }

@@ -20,6 +20,9 @@ export interface ListDsSaleParams {
   company_id?: string;
   sale_user_id?: string;
   pickup_user_id?: string;
+  /** Cột đang sắp xếp (bấm tiêu đề STT/Ngày sinh/Ngày vào). */
+  sort?: "stt" | "date_of_birth" | "join_date";
+  order?: "asc" | "desc";
 }
 
 function toQueryString(params: Record<string, string | number | undefined>): string {

@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -8,6 +9,14 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import {
+  SORT_ORDERS,
+  type SortOrder,
+} from '../../common/utils/sort-order.util';
+
+/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): STT / Ngày sinh / Ngày vào. */
+export const DS_SALE_SORTS = ['stt', 'date_of_birth', 'join_date'] as const;
+export type DsSaleSort = (typeof DS_SALE_SORTS)[number];
 
 /** GET /sales-entry/ds-sale — query lọc + phân trang (Mục 10/11, yêu cầu người dùng). */
 export class ListDsSaleQueryDto {
@@ -49,4 +58,12 @@ export class ListDsSaleQueryDto {
   @IsOptional()
   @IsUUID()
   pickup_user_id?: string;
+
+  @IsOptional()
+  @IsIn(DS_SALE_SORTS)
+  sort?: DsSaleSort;
+
+  @IsOptional()
+  @IsIn(SORT_ORDERS)
+  order?: SortOrder;
 }

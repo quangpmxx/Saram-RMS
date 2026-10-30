@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -8,6 +9,14 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import {
+  SORT_ORDERS,
+  type SortOrder,
+} from '../../common/utils/sort-order.util';
+
+/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): Ngày / STT (trong ngày) / Giờ PV. */
+export const SHUTTLE_SORTS = ['date', 'stt', 'interview_time'] as const;
+export type ShuttleSort = (typeof SHUTTLE_SORTS)[number];
 
 /** Dự án phụ — nâng cấp toàn diện: GET /shuttle (Danh sách đưa đón) — query. */
 export class ListShuttleQueryDto {
@@ -70,4 +79,12 @@ export class ListShuttleQueryDto {
   @IsOptional()
   @IsString()
   interview_result?: string;
+
+  @IsOptional()
+  @IsIn(SHUTTLE_SORTS)
+  sort?: ShuttleSort;
+
+  @IsOptional()
+  @IsIn(SORT_ORDERS)
+  order?: SortOrder;
 }

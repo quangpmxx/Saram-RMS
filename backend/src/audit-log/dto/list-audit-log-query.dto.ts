@@ -2,13 +2,22 @@ import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Min,
 } from 'class-validator';
+import {
+  SORT_ORDERS,
+  type SortOrder,
+} from '../../common/utils/sort-order.util';
 import { AuditActionType } from '../../../generated/prisma/enums';
+
+/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): Thời gian. */
+export const AUDIT_LOG_SORTS = ['time'] as const;
+export type AuditLogSort = (typeof AUDIT_LOG_SORTS)[number];
 
 /** Mục 9, docs/13-api-design.md — GET /audit-log (query). */
 export class ListAuditLogQueryDto {
@@ -47,4 +56,12 @@ export class ListAuditLogQueryDto {
   @IsOptional()
   @IsDateString()
   date_to?: string;
+
+  @IsOptional()
+  @IsIn(AUDIT_LOG_SORTS)
+  sort?: AuditLogSort;
+
+  @IsOptional()
+  @IsIn(SORT_ORDERS)
+  order?: SortOrder;
 }

@@ -895,6 +895,8 @@ export interface LeaveRequest {
 export interface ShuttleListResult extends PaginatedResult<ShuttleRecord> {
   /** Số dòng cùng ngày với dòng đầu trang đã nằm ở các trang trước. */
   first_day_offset?: number;
+  /** Chỉ có khi STT giảm dần: "YYYY-MM-DD" → tổng số dòng của ngày đó. */
+  day_counts?: Record<string, number>;
 }
 
 export interface ShuttleRecord {

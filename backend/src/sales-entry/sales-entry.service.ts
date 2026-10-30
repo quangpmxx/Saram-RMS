@@ -10,7 +10,11 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import type { PaginatedResult } from '../common/interfaces/paginated-result.interface';
-import { ListDsSaleQueryDto } from './dto/list-ds-sale-query.dto';
+import {
+  ListDsSaleQueryDto,
+  type DsSaleSort,
+} from './dto/list-ds-sale-query.dto';
+import { flipOrder, type SortOrder } from '../common/utils/sort-order.util';
 import { UpsertDsSaleRowDto } from './dto/upsert-ds-sale-row.dto';
 import {
   DS_SALE_INCLUDE,
@@ -24,6 +28,29 @@ import {
 /** "" hoặc chỉ khoảng trắng đều coi như chưa nhập — dùng để chặn lưu dòng hoàn toàn rỗng (Mục 9/14, yêu cầu người dùng). */
 function isBlank(value: string | null | undefined): boolean {
   return value === null || value === undefined || value.trim() === '';
+}
+
+/**
+ * Thứ tự DS Sale khi bấm tiêu đề STT/Ngày sinh/Ngày vào (yêu cầu người dùng
+ * 2026-10-30). STT tăng dần = mặc định (dòng mới nhập trước); ngày trống
+ * luôn xếp cuối.
+ */
+function dsSaleOrderBy(
+  sort: DsSaleSort | undefined,
+  order: SortOrder = 'asc',
+): Prisma.SalesEntryRecordOrderByWithRelationInput[] {
+  const byNewest: Prisma.SalesEntryRecordOrderByWithRelationInput[] = [
+    { createdAt: 'desc' },
+    { id: 'desc' },
+  ];
+  if (sort === 'date_of_birth') {
+    return [{ dateOfBirth: { sort: order, nulls: 'last' } }, ...byNewest];
+  }
+  if (sort === 'join_date') {
+    return [{ joinDate: { sort: order, nulls: 'last' } }, ...byNewest];
+  }
+  const dir = flipOrder(order);
+  return [{ createdAt: dir }, { id: dir }];
 }
 
 @Injectable()
@@ -45,7 +72,9 @@ export class SalesEntryService {
       this.prisma.salesEntryRecord.findMany({
         where,
         include: DS_SALE_INCLUDE,
-        orderBy: { createdAt: 'desc' },
+        // Bấm tiêu đề STT/Ngày sinh/Ngày vào (yêu cầu người dùng 2026-10-30).
+        // STT tăng dần = mặc định (dòng mới nhập trước); ngày trống xếp cuối.
+        orderBy: dsSaleOrderBy(query.sort, query.order),
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
       }),

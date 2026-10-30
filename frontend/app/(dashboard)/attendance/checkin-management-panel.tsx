@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { useToast } from "@/lib/toast-context";
 
 const EMPLOYEE_ROLES = ["leader", "mkt", "sale"];
@@ -70,6 +71,7 @@ export function CheckinManagementPanel({
   const [teamId, setTeamId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [statusFilter, setStatusFilter] = useState<CheckinStatusFilter>("all");
+  const [timeSort, setTimeSort] = useState<SortState<"time"> | null>(null);
   const [data, setData] = useState<CheckinListResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,7 +219,10 @@ export function CheckinManagementPanel({
     }
   }
 
-  const employees = data?.employees ?? [];
+  // Bấm tiêu đề "Giờ Check in" (yêu cầu người dùng 2026-10-30); chưa check in luôn ở cuối.
+  const employees = timeSort
+    ? sortRows(data?.employees ?? [], timeSort.order, (e) => e.checkin?.checked_in_at)
+    : (data?.employees ?? []);
 
   // Nghi vấn gian lận (yêu cầu trực tiếp người dùng, 2026-07-15): "2 tài
   // khoản chấm công đều hiển thị chung 1 IP máy" (nhờ người đến trước Check
@@ -303,7 +308,9 @@ export function CheckinManagementPanel({
                   <th className="px-4 py-3">Nhóm</th>
                   <th className="px-4 py-3">Chức vụ</th>
                   <th className="px-4 py-3">Trạng thái</th>
-                  <th className="px-4 py-3">Giờ Check in</th>
+                  <SortableTh sortKey="time" sort={timeSort} onSort={setTimeSort} firstOrder="asc" className="px-4 py-3">
+                    Giờ Check in
+                  </SortableTh>
                   <th className="px-4 py-3">Địa chỉ</th>
                   <th className="px-4 py-3">Khoảng cách</th>
                   <th className="px-4 py-3">Địa chỉ IP</th>

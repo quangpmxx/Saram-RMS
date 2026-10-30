@@ -126,7 +126,7 @@ describe('AuditLogService', () => {
         expect.objectContaining({
           skip: 10,
           take: 10,
-          orderBy: { createdAt: 'desc' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
       );
     });

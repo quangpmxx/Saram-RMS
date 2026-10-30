@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Select, Field } from "@/components/ui/form";
+import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { SourceBadge } from "../candidates/source-badge";
 
@@ -37,6 +38,9 @@ export function DuplicatesClient({
   const [teamId, setTeamId] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  // Bấm tiêu đề "Ngày up" (yêu cầu người dùng 2026-10-30) — áp cho mọi nhóm
+  // đang mở; mặc định máy chủ trả bản up sớm nhất trước.
+  const [dateSort, setDateSort] = useState<SortState<"uploaded_at">>({ key: "uploaded_at", order: "asc" });
 
   async function refresh(page = 1) {
     setLoading(true);
@@ -115,13 +119,15 @@ export function DuplicatesClient({
                           <tr className="text-xs text-slate-500">
                             <th className="py-2 pr-3 font-medium">Tên lao động</th>
                             <th className="py-2 pr-3 font-medium">Nguồn</th>
-                            <th className="py-2 pr-3 font-medium">Ngày up</th>
+                            <SortableTh sortKey="uploaded_at" sort={dateSort} onSort={setDateSort} className="py-2 pr-3 font-medium">
+                              Ngày up
+                            </SortableTh>
                             <th className="py-2 pr-3 font-medium">Nhân viên phụ trách</th>
                             <th className="py-2 pr-3 font-medium"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
-                          {group.matches.map((candidate) => (
+                          {sortRows(group.matches, dateSort.order, (c) => c.uploaded_at).map((candidate) => (
                             <tr key={candidate.id}>
                               <td className="py-2 pr-3 font-medium text-slate-800">{candidate.full_name}</td>
                               <td className="py-2 pr-3">

@@ -27,7 +27,10 @@ import { Modal } from "@/components/ui/modal";
 import { ColorPalette } from "@/components/ui/color-palette";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
+import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
+
+type ShuttleSortKey = "date" | "stt" | "interview_time";
 
 /**
  * Dự án phụ — nâng cấp toàn diện: ô "thả ra", không đóng khung (yêu cầu
@@ -932,6 +935,12 @@ export function ShuttleClient({
   const [page, setPage] = useState(initialResult.page);
   const [pageSize, setPageSize] = useState(initialResult.page_size);
   const [firstDayOffset, setFirstDayOffset] = useState(initialResult.first_day_offset ?? 0);
+  // Bấm tiêu đề Ngày/STT/Giờ PV (yêu cầu người dùng 2026-10-30). Ref để
+  // buildShuttleQuery đọc được ngay giá trị mới.
+  const [sort, setSort] = useState<SortState<ShuttleSortKey>>({ key: "stt", order: "asc" });
+  const sortRef = useRef(sort);
+  /** Chỉ có khi STT giảm dần: tổng số dòng từng ngày để đếm ngược STT. */
+  const [dayCounts, setDayCounts] = useState<Record<string, number> | null>(null);
   /**
    * Cột STT (yêu cầu người dùng 2026-10-28): đánh số riêng theo từng ngày
    * (28/10: 1,2,3...; 29/10: 1,2...) theo đúng thứ tự đang hiển thị. Ngày
@@ -947,10 +956,13 @@ export function ShuttleClient({
         currentDate = record.date;
         n = index === 0 ? firstDayOffset : 0;
       }
-      map.set(record.id, ++n);
+      ++n;
+      // STT giảm dần: đếm ngược từ tổng số dòng của ngày.
+      const dayTotal = dayCounts?.[record.date];
+      map.set(record.id, dayTotal ? dayTotal - n + 1 : n);
     });
     return map;
-  }, [records, firstDayOffset]);
+  }, [records, firstDayOffset, dayCounts]);
   const [options, setOptions] = useState(initialOptions);
   // Yêu cầu trực tiếp người dùng (2026-07-26): "công ty chính là đơn hàng"
   // — KHÔNG có cơ chế thêm/sửa/xóa nào trong trang Đưa đón nữa (quản lý
@@ -1050,6 +1062,7 @@ export function ShuttleClient({
     if (activeFilters.driver_user_id) query.set("driver_user_id", activeFilters.driver_user_id);
     if (activeFilters.status) query.set("status", activeFilters.status);
     if (activeFilters.interview_result) query.set("interview_result", activeFilters.interview_result);
+    applySortParams(query, sortRef.current);
     return query;
   }
 
@@ -1062,6 +1075,7 @@ export function ShuttleClient({
     if (seq !== refreshSeqRef.current) return;
     setRecords(result.items);
     setFirstDayOffset(result.first_day_offset ?? 0);
+    setDayCounts(result.day_counts ?? null);
     setRowDrafts(buildRowDrafts(result.items));
     setTotal(result.total);
     setPage(result.page);
@@ -1083,6 +1097,7 @@ export function ShuttleClient({
       const priorRecordById = new Map(records.map((r) => [r.id, r]));
       setRecords(result.items);
       setFirstDayOffset(result.first_day_offset ?? 0);
+      setDayCounts(result.day_counts ?? null);
       setTotal(result.total);
       setRowDrafts((prev) => {
         const next: Record<string, ShuttleFormValue> = {};
@@ -1192,6 +1207,11 @@ export function ShuttleClient({
    */
   const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshSeqRef = useRef(0);
+  function handleSort(next: SortState<ShuttleSortKey>) {
+    sortRef.current = next;
+    setSort(next);
+    void refresh(1, pageSize, filters);
+  }
   function handleKeywordChange(keyword: string) {
     applyFiltersNow({ ...filters, keyword }, 350);
   }
@@ -1503,7 +1523,7 @@ export function ShuttleClient({
           >
             <colgroup>
               <col className="w-[66px]" />
-              <col className="w-[38px]" />
+              <col className="w-[46px]" />
               <col className="w-[190px]" />
               <col className="w-[130px]" />
               <col className="w-[120px]" />
@@ -1519,15 +1539,27 @@ export function ShuttleClient({
             </colgroup>
             <thead className="sticky top-0 z-10 bg-[#3f5d52] text-[11px] font-bold tracking-wide text-white uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)]">
               <tr>
-                <th className="border-r border-slate-100 px-3 py-2.5">Ngày</th>
-                <th className="border-r border-slate-100 px-1 py-2.5">STT</th>
+                <SortableTh sortKey="date" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-3 py-2.5">
+                  Ngày
+                </SortableTh>
+                <SortableTh sortKey="stt" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-1 py-2.5">
+                  STT
+                </SortableTh>
                 <th className="border-r border-slate-100 px-3 py-2.5">Thông tin lao động</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Công ty</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Khu vực</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Loại hình</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Sale</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">NV Đưa đón</th>
-                <th className="border-r border-slate-100 px-3 py-2.5">Giờ PV</th>
+                <SortableTh
+                  sortKey="interview_time"
+                  sort={sort}
+                  onSort={handleSort}
+                  firstOrder="asc"
+                  className="border-r border-slate-100 px-3 py-2.5"
+                >
+                  Giờ PV
+                </SortableTh>
                 <th className="border-r border-slate-100 px-3 py-2.5">Nhà thầu</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Tình trạng</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Kết quả</th>
