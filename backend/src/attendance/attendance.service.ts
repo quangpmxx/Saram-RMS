@@ -330,57 +330,74 @@ export class AttendanceService {
       await this.assertEmployeesInScope([...referencedIds], currentUser);
     }
 
-    const npBalanceUpdates = await this.checkAndComputeNpBalanceChanges(dto);
+    // Rà soát 2026-10-31 (H1): đọc số phép → ghi bảng chấm công → ghi số phép
+    // chạy trong CÙNG 1 transaction, và khoá hàng tài khoản (FOR UPDATE) để hai
+    // lần lưu đồng thời cho cùng nhân viên phải xếp hàng — trước đây mỗi bước là
+    // 1 lệnh rời, số phép tính từ ảnh chụp cũ nên lần lưu sau đè mất lần trước.
+    // Mọi truy vấn trong transaction PHẢI dùng `tx` (không dùng this.prisma).
+    const { upserted, npBalanceUpdates } = await this.prisma.$transaction(
+      async (tx) => {
+        const lockIds = [...referencedIds];
+        if (lockIds.length > 0) {
+          await tx.$queryRaw`SELECT id FROM accounts WHERE id = ANY(${lockIds}::uuid[]) ORDER BY id FOR UPDATE`;
+        }
 
-    // Mỗi ô ứng với 1 khóa duy nhất (account_id, date) độc lập với các ô
-    // khác — không cần bọc chung 1 $transaction nguyên tử cho cả lô, chạy
-    // song song bằng Promise.all cho đơn giản và đúng kiểu dữ liệu.
-    const upserted = await Promise.all(
-      dto.upserts.map((cell) =>
-        this.prisma.attendanceRecord.upsert({
-          where: {
-            accountId_date: {
+        const npBalanceUpdates = await this.checkAndComputeNpBalanceChanges(
+          dto,
+          tx,
+        );
+
+        // Mỗi ô ứng với 1 khóa duy nhất (account_id, date) độc lập với các ô
+        // khác.
+        const upserted: Prisma.AttendanceRecordGetPayload<object>[] = [];
+        for (const cell of dto.upserts) {
+          upserted.push(
+            await tx.attendanceRecord.upsert({
+              where: {
+                accountId_date: {
+                  accountId: cell.account_id,
+                  date: dateOnlyToUtcMidnight(cell.date),
+                },
+              },
+              create: {
+                accountId: cell.account_id,
+                date: dateOnlyToUtcMidnight(cell.date),
+                status: cell.status,
+                note: cell.note ?? null,
+                createdById: currentUser.id,
+                updatedById: currentUser.id,
+              },
+              update: {
+                status: cell.status,
+                note: cell.note ?? null,
+                updatedById: currentUser.id,
+              },
+            }),
+          );
+        }
+        for (const cell of dto.deletes) {
+          await tx.attendanceRecord.deleteMany({
+            where: {
               accountId: cell.account_id,
               date: dateOnlyToUtcMidnight(cell.date),
             },
-          },
-          create: {
-            accountId: cell.account_id,
-            date: dateOnlyToUtcMidnight(cell.date),
-            status: cell.status,
-            note: cell.note ?? null,
-            createdById: currentUser.id,
-            updatedById: currentUser.id,
-          },
-          update: {
-            status: cell.status,
-            note: cell.note ?? null,
-            updatedById: currentUser.id,
-          },
-        }),
-      ),
-    );
-    await Promise.all(
-      dto.deletes.map((cell) =>
-        this.prisma.attendanceRecord.deleteMany({
-          where: {
-            accountId: cell.account_id,
-            date: dateOnlyToUtcMidnight(cell.date),
-          },
-        }),
-      ),
-    );
+          });
+        }
 
-    // Cập nhật số phép còn lại SAU khi ghi bảng chấm công thành công — chỉ
-    // những nhân viên có ô NP thay đổi mới có trong danh sách này (delta=0
-    // đã bị lọc sẵn ở checkAndComputeNpBalanceChanges()).
-    await Promise.all(
-      npBalanceUpdates.map((update) =>
-        this.prisma.account.update({
-          where: { id: update.accountId },
-          data: { remainingLeaveDays: update.newBalance },
-        }),
-      ),
+        // Cập nhật số phép còn lại CÙNG transaction với bảng chấm công — chỉ
+        // những nhân viên có ô NP thay đổi mới có trong danh sách này
+        // (delta=0 đã bị lọc sẵn ở checkAndComputeNpBalanceChanges()). Hàng
+        // tài khoản đang bị khoá nên giá trị đã đọc không thể bị đổi giữa chừng.
+        for (const update of npBalanceUpdates) {
+          await tx.account.update({
+            where: { id: update.accountId },
+            data: { remainingLeaveDays: update.newBalance },
+          });
+        }
+
+        return { upserted, npBalanceUpdates };
+      },
+      { timeout: 30000 },
     );
 
     // Ghi audit log SAU khi transaction đã commit (Mục 7, yêu cầu người
@@ -428,6 +445,7 @@ export class AttendanceService {
    */
   private async checkAndComputeNpBalanceChanges(
     dto: BulkSaveAttendanceDto,
+    db: Prisma.TransactionClient,
   ): Promise<
     Array<{ accountId: string; oldBalance: number; newBalance: number }>
   > {
@@ -442,7 +460,7 @@ export class AttendanceService {
     const dates = [
       ...new Set(cells.map((c) => dateOnlyToUtcMidnight(c.date).getTime())),
     ].map((ms) => new Date(ms));
-    const existing = await this.prisma.attendanceRecord.findMany({
+    const existing = await db.attendanceRecord.findMany({
       where: { accountId: { in: accountIds }, date: { in: dates } },
       select: { accountId: true, date: true, status: true },
     });
@@ -479,7 +497,7 @@ export class AttendanceService {
 
     if (npDeltaByAccount.size === 0) return [];
 
-    const accounts = await this.prisma.account.findMany({
+    const accounts = await db.account.findMany({
       where: { id: { in: [...npDeltaByAccount.keys()] } },
       select: { id: true, fullName: true, remainingLeaveDays: true },
     });
