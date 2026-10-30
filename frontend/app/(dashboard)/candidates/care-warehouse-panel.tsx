@@ -310,12 +310,19 @@ export function CareWarehousePanel({
   // Truy vấn mới nhất đã gửi — kết quả của truy vấn cũ về muộn (người dùng
   // vừa đổi bộ lọc) bị bỏ qua, không đè lên kết quả mới (gây nhảy dữ liệu).
   const latestKeyRef = useRef<string | null>(null);
+  /**
+   * Lỗi của lần tải gần nhất (2026-10-30): trước đây lỗi lúc tải ngầm bị bỏ
+   * qua và bảng hiện "Không có data nào" như Kho trống thật — giờ hiện lỗi
+   * kèm nút Tải lại.
+   */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(
     (key: string, silent = false) => {
       latestKeyRef.current = key;
       return clientApi<CareWarehouseListResult>(`/care-warehouse?${key}`)
         .then((result) => {
           if (latestKeyRef.current !== key) return;
+          setLoadError(null);
           setData(result);
           onWarehouseTotal?.(result.stats.warehouse_total);
           // Bỏ chọn những data không còn trên trang (vd vừa được giao/rời Kho).
@@ -326,7 +333,9 @@ export function CareWarehousePanel({
           });
         })
         .catch((error: unknown) => {
-          if (!silent && latestKeyRef.current === key) toast.error(errorText(error));
+          if (latestKeyRef.current !== key) return;
+          setLoadError(errorText(error));
+          if (!silent) toast.error(errorText(error));
         })
         .finally(() => {
           if (latestKeyRef.current === key) setLoadedKey(key);
@@ -342,10 +351,12 @@ export function CareWarehousePanel({
     void load(queryKey, !activeRef.current);
   }, [load, queryKey]);
 
-  // Chuyển sang tab Kho: làm mới nền (dữ liệu tải ngầm/lần trước vẫn hiện ngay).
+  // Chuyển sang tab Kho: làm mới nền (dữ liệu tải ngầm/lần trước vẫn hiện
+  // ngay). Chưa có dữ liệu (lần tải ngầm lỗi) thì tải lại và báo lỗi nếu có.
   useEffect(() => {
-    if (active && !activeRef.current) void load(queryKey, true);
+    if (active && !activeRef.current) void load(queryKey, data !== null);
     activeRef.current = active;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi đổi tab, không chạy lại khi dữ liệu về
   }, [active, load, queryKey]);
 
   // Realtime: mọi thay đổi có thể làm data vào/ra Kho hoặc đổi trạng thái
@@ -880,7 +891,15 @@ export function CareWarehousePanel({
             </tbody>
           </table>
         </div>
-        {!isLoading && items.length === 0 && (
+        {!isLoading && items.length === 0 && loadError && (
+          <div className="flex flex-col items-center gap-2 p-6 text-center text-sm">
+            <p className="text-red-600">Không tải được Kho chăm sóc: {loadError}</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => void load(queryKey)}>
+              Tải lại
+            </Button>
+          </div>
+        )}
+        {!isLoading && items.length === 0 && !loadError && (
           <EmptyState
             title="Không có data nào trong Kho khớp bộ lọc"
             description="Data vào Kho khi đã có người phụ trách, đã có ít nhất 1 ghi chú, không có lịch gọi lại hôm nay và chưa bị dừng chăm sóc."
