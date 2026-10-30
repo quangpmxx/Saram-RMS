@@ -222,9 +222,12 @@ export class CareWarehouseService {
 
     const leads = await this.prisma.lead.findMany({
       where: leadWhere,
-      select: { id: true },
+      select: { id: true, uploadedAt: true },
     });
     const ids = leads.map((l) => l.id);
+    const uploadedAt = new Map(
+      leads.map((l) => [l.id, l.uploadedAt.getTime()]),
+    );
 
     const { summaries, totals, lastAssigned } = await this.loadLeadSummaries(
       leadWhere,
@@ -325,14 +328,14 @@ export class CareWarehouseService {
       return true;
     });
 
-    // Data lâu chưa được chăm sóc nhất lên đầu; bấm tiêu đề STT để đảo
-    // ngược (yêu cầu người dùng 2026-10-30).
+    // Xếp theo ngày giờ lên số giảm dần — mới nhất trước, giống tab Tất cả
+    // (yêu cầu người dùng 2026-10-30, thay cho "lâu chưa chăm sóc nhất lên
+    // đầu"); bấm tiêu đề STT để đảo ngược.
     const dir = query.order === 'desc' ? -1 : 1;
-    filtered.sort((a, b) => {
-      const ta = totals.get(a)?.lastAt?.getTime() ?? 0;
-      const tb = totals.get(b)?.lastAt?.getTime() ?? 0;
-      return dir * (ta - tb || a.localeCompare(b));
-    });
+    filtered.sort(
+      (a, b) =>
+        dir * (uploadedAt.get(b)! - uploadedAt.get(a)! || b.localeCompare(a)),
+    );
 
     const pageIds = filtered.slice(
       (query.page - 1) * query.page_size,

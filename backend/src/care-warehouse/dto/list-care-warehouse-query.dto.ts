@@ -15,7 +15,7 @@ import {
   type SortOrder,
 } from '../../common/utils/sort-order.util';
 
-/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): STT (thứ tự mặc định: lâu chưa chăm sóc nhất trước). */
+/** Cột bấm tiêu đề để sắp xếp (yêu cầu người dùng 2026-10-30): STT (thứ tự mặc định: ngày giờ lên số mới nhất trước). */
 export const CARE_WAREHOUSE_SORTS = ['stt'] as const;
 export type CareWarehouseSort = (typeof CARE_WAREHOUSE_SORTS)[number];
 
