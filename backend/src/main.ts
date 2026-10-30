@@ -13,6 +13,21 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   app.use(cookieParser());
+  // Header bảo mật cơ bản (rà soát 2026-10-30) — không chặn tải chéo nguồn
+  // ảnh đại diện từ frontend nên KHÔNG đặt Cross-Origin-Resource-Policy.
+  app.disable('x-powered-by');
+  app.use(
+    (
+      _req: unknown,
+      res: { setHeader(k: string, v: string): void },
+      next: () => void,
+    ) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      next();
+    },
+  );
 
   // Dự án phụ — nâng cấp toàn diện (2026-07-15, module Check in GPS — Phase
   // 3, Mục 5, yêu cầu người dùng: "Backend phải lấy IP từ request và xử lý

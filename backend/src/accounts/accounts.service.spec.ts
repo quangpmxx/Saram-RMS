@@ -8,9 +8,11 @@ import { Test } from '@nestjs/testing';
 import { AccountsService } from './accounts.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { Prisma } from '../../generated/prisma/client';
 
 describe('AccountsService', () => {
+  let realtime: { disconnectAccount: jest.Mock };
   let service: AccountsService;
   let prisma: {
     account: {
@@ -55,12 +57,14 @@ describe('AccountsService', () => {
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
 
+    realtime = { disconnectAccount: jest.fn() };
     const moduleRef = await Test.createTestingModule({
       providers: [
         AccountsService,
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: { get: () => '123456' } },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: RealtimeService, useValue: realtime },
       ],
     }).compile();
 
@@ -318,6 +322,8 @@ describe('AccountsService', () => {
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'delete' }),
       );
+      // Ngắt realtime để không nhận sự kiện sau khi bị khoá.
+      expect(realtime.disconnectAccount).toHaveBeenCalledWith('acc-1');
     });
   });
 

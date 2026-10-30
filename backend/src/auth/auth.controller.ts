@@ -55,6 +55,7 @@ export class AuthController {
     const { token, account } = await this.authService.login(
       dto,
       req.headers['user-agent'],
+      req.ip,
     );
     res.cookie(
       ACCESS_TOKEN_COOKIE,

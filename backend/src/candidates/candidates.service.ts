@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -806,8 +807,11 @@ export class CandidatesService {
       currentUser,
     );
 
-    await this.prisma.lead.update({
-      where: { id },
+    // Ghi CÓ ĐIỀU KIỆN "chưa có người phụ trách" trong cùng câu lệnh: 2 người
+    // bấm Nhận/phân chia cùng lúc thì chỉ 1 người thành công (rà soát
+    // 2026-10-30 — trước đây người sau đè người trước).
+    const { count } = await this.prisma.lead.updateMany({
+      where: { id, deletedAt: null, assignedToId: null },
       data: {
         assignedToId: target.id,
         assignedTeamId: target.teamId,
@@ -815,6 +819,11 @@ export class CandidatesService {
         assignmentMethod: 'manual',
       },
     });
+    if (count === 0) {
+      throw new ConflictException(
+        'Data này vừa được người khác nhận/phân chia — vui lòng tải lại danh sách',
+      );
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -855,17 +864,35 @@ export class CandidatesService {
       return { assigned_count: 0 };
     }
 
+    // Điều kiện "chưa có người phụ trách" nằm ngay trong câu lệnh ghi; data bị
+    // người khác nhận mất trong lúc này thì bỏ qua (rà soát 2026-10-30).
+    const assignedAt = new Date();
     await this.prisma.lead.updateMany({
-      where: { id: { in: eligible.map((lead) => lead.id) } },
+      where: {
+        id: { in: eligible.map((lead) => lead.id) },
+        deletedAt: null,
+        assignedToId: null,
+      },
       data: {
         assignedToId: target.id,
         assignedTeamId: target.teamId,
-        assignedAt: new Date(),
+        assignedAt,
         assignmentMethod: 'manual',
       },
     });
+    const won = await this.prisma.lead.findMany({
+      where: {
+        id: { in: eligible.map((lead) => lead.id) },
+        assignedToId: target.id,
+        assignedAt,
+      },
+      select: { id: true },
+    });
+    if (won.length === 0) {
+      return { assigned_count: 0 };
+    }
 
-    for (const lead of eligible) {
+    for (const lead of won) {
       await this.auditLog.log({
         accountId: currentUser.id,
         actionType: 'assign',
@@ -879,7 +906,7 @@ export class CandidatesService {
     // cũng phải đồng bộ realtime như gán từng cái — 1 truy vấn duy nhất lấy
     // đủ CANDIDATE_INCLUDE cho toàn bộ lead vừa đổi, tránh N+1.
     const updatedLeads = await this.prisma.lead.findMany({
-      where: { id: { in: eligible.map((lead) => lead.id) } },
+      where: { id: { in: won.map((lead) => lead.id) } },
       include: CANDIDATE_INCLUDE,
     });
     for (const lead of updatedLeads) {
@@ -890,7 +917,7 @@ export class CandidatesService {
       );
     }
 
-    return { assigned_count: eligible.length };
+    return { assigned_count: won.length };
   }
 
   /** Mục 5, docs/13: POST /candidate/:id/transfer — Leader (nhóm mình)/Quản lý/Admin. */

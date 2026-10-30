@@ -21,6 +21,7 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import type { UiTheme } from './dto/update-theme.dto';
+import { LoginAttemptLimiter } from './login-attempt-limiter';
 
 export interface LoginResult {
   token: string;
@@ -39,10 +40,15 @@ export class AuthService {
     private readonly auditLog: AuditLogService,
   ) {}
 
+  /** Chống dò mật khẩu — xem login-attempt-limiter.ts. */
+  private readonly loginLimiter = new LoginAttemptLimiter();
+
   async login(
     dto: LoginDto,
     deviceInfo: string | undefined,
+    ip?: string,
   ): Promise<LoginResult> {
+    this.loginLimiter.assertAllowed(dto.username, ip);
     // Yêu cầu trực tiếp người dùng (2026-07-16): tên đăng nhập không phân
     // biệt hoa/thường ("ADMIN"/"Admin"/"admin" đều đăng nhập được) —
     // `findFirst` + `mode: 'insensitive'` thay cho `findUnique` (chỉ so
@@ -54,6 +60,7 @@ export class AuthService {
 
     // Không tiết lộ tài khoản có tồn tại hay không qua nội dung lỗi.
     if (!account || account.status === 'inactive') {
+      this.loginLimiter.recordFailure(dto.username, ip);
       throw new UnauthorizedException('Tên đăng nhập hoặc mật khẩu không đúng');
     }
 
@@ -62,8 +69,10 @@ export class AuthService {
       account.passwordHash,
     );
     if (!passwordMatches) {
+      this.loginLimiter.recordFailure(dto.username, ip);
       throw new UnauthorizedException('Tên đăng nhập hoặc mật khẩu không đúng');
     }
+    this.loginLimiter.recordSuccess(dto.username);
 
     // Mục 8, docs/09: cho phép đăng nhập nhiều thiết bị cùng lúc — mỗi lần
     // đăng nhập tạo 1 session mới, không thu hồi các session khác.

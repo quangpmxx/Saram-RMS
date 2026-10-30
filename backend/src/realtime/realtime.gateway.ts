@@ -242,6 +242,16 @@ export class RealtimeGateway
    * lọc theo field `module` trong payload thay vì mở nhiều kênh Socket.IO
    * khác nhau, vẫn cùng 1 connection/gateway DUY NHẤT.
    */
+  /**
+   * Ngắt mọi kết nối của 1 tài khoản (rà soát 2026-10-30): gọi khi tài khoản
+   * bị khoá/xoá/đổi nhóm — phòng realtime chỉ xác định lúc kết nối, không
+   * ngắt thì người đó vẫn nhận sự kiện của phạm vi cũ. Trình duyệt tự kết nối
+   * lại: còn hoạt động thì vào đúng phòng mới, đã khoá thì bị từ chối.
+   */
+  disconnectAccount(accountId: string): void {
+    this.server.in(userRoom(accountId)).disconnectSockets(true);
+  }
+
   broadcastAppEvent(targets: AppEventTargets, payload: AppRealtimeEvent): void {
     const rooms: string[] = [];
     if (targets.broadcastAll) {

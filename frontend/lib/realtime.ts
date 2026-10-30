@@ -53,11 +53,27 @@ let socket: Socket | null = null;
 
 function getSocket(): Socket {
   if (!socket) {
-    socket = io({
+    const s = io({
       path: SOCKET_PATH,
       withCredentials: true,
       autoConnect: true,
     });
+    // Server chủ động ngắt (tài khoản bị khoá/đổi nhóm — rà soát 2026-10-30)
+    // thì Socket.IO KHÔNG tự kết nối lại → tự thử lại vài lần: còn hoạt động
+    // thì vào đúng phòng mới, đã bị khoá thì bị từ chối và dừng thử.
+    let retries = 0;
+    let connectedAt = 0;
+    s.on("connect", () => {
+      connectedAt = Date.now();
+    });
+    s.on("disconnect", (reason) => {
+      if (reason !== "io server disconnect") return;
+      if (Date.now() - connectedAt > 30_000) retries = 0;
+      if (retries >= 3) return;
+      retries++;
+      setTimeout(() => s.connect(), 2_000 * retries);
+    });
+    socket = s;
   }
   return socket;
 }
