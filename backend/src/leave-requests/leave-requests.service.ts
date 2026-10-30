@@ -244,14 +244,20 @@ export class LeaveRequestsService {
     return toLeaveRequestResponse(updated);
   }
 
-  /** Mục yêu cầu người dùng: bước duyệt cuối cùng — CHỈ Admin. */
+  /**
+   * Bước duyệt cuối — Admin và Quản lý (rà soát phân quyền 2026-10-30).
+   * Admin/Quản lý duyệt tắt được cả đơn đang chờ Leader (không cần Leader
+   * duyệt trước) — 1 lần duyệt là xong cả 2 bước.
+   */
   async adminDecide(
     id: string,
     dto: LeaveRequestDecisionDto,
     currentUser: AuthenticatedUser,
   ): Promise<LeaveRequestResponseDto> {
-    if (currentUser.role !== 'admin') {
-      throw new ForbiddenException('Chỉ Admin được duyệt bước này');
+    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+      throw new ForbiddenException(
+        'Chỉ Admin hoặc Quản lý được duyệt bước này',
+      );
     }
 
     const request = await this.prisma.leaveRequest.findUnique({
@@ -261,10 +267,11 @@ export class LeaveRequestsService {
     if (!request) {
       throw new NotFoundException('Không tìm thấy đơn xin nghỉ phép');
     }
-    if (request.status !== 'pending_admin') {
-      throw new BadRequestException(
-        'Đơn này không ở trạng thái chờ Admin duyệt',
-      );
+    if (
+      request.status !== 'pending_admin' &&
+      request.status !== 'pending_leader'
+    ) {
+      throw new BadRequestException('Đơn này không còn ở trạng thái chờ duyệt');
     }
 
     const nextStatus = dto.decision === 'approved' ? 'approved' : 'rejected';
@@ -295,7 +302,7 @@ export class LeaveRequestsService {
       id,
       dto.decision === 'approved'
         ? 'Đơn xin nghỉ phép của bạn đã được duyệt'
-        : `Đơn xin nghỉ phép của bạn đã bị Admin từ chối${dto.note ? `: ${dto.note.trim()}` : ''}`,
+        : `Đơn xin nghỉ phép của bạn đã bị ${currentUser.role === 'manager' ? 'Quản lý' : 'Admin'} từ chối${dto.note ? `: ${dto.note.trim()}` : ''}`,
       currentUser,
     );
 
@@ -341,7 +348,8 @@ export class LeaveRequestsService {
     currentUser: AuthenticatedUser,
   ): Promise<void> {
     const admins = await this.prisma.account.findMany({
-      where: { role: 'admin', status: 'active' },
+      // Quản lý cũng duyệt bước cuối → nhận thông báo cùng Admin.
+      where: { role: { in: ['admin', 'manager'] }, status: 'active' },
       select: { id: true },
     });
     await this.notify(

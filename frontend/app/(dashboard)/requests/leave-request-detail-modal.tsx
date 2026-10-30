@@ -105,8 +105,11 @@ export function LeaveRequestDetailModal({
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Admin/Quản lý duyệt tắt được cả đơn đang chờ Leader (rà soát phân quyền 2026-10-30).
   const canLeaderDecide = currentUser.role === "leader" && request.status === "pending_leader";
-  const canAdminDecide = currentUser.role === "admin" && request.status === "pending_admin";
+  const canAdminDecide =
+    (currentUser.role === "admin" || currentUser.role === "manager") &&
+    (request.status === "pending_admin" || request.status === "pending_leader");
 
   async function handleDecision(stage: "leader" | "admin", decision: "approved" | "rejected") {
     setIsSubmitting(true);
@@ -161,7 +164,7 @@ export function LeaveRequestDetailModal({
     adminBlock = canAdminDecide ? (
       <DecisionActions note={note} onNoteChange={setNote} isSubmitting={isSubmitting} onDecide={(d) => void handleDecision("admin", d)} />
     ) : (
-      <p className="text-xs text-slate-400 italic">Đang chờ Admin duyệt</p>
+      <p className="text-xs text-slate-400 italic">Đang chờ Admin/Quản lý duyệt</p>
     );
   } else {
     adminBlock = <p className="text-xs text-slate-400 italic">Chưa tới lượt</p>;

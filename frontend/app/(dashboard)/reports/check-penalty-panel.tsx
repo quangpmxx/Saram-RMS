@@ -101,7 +101,8 @@ export function CheckPenaltyPanel({
   saleMembers: TeamMember[];
 }) {
   const toast = useToast();
-  const isAdmin = currentUserRole === "admin";
+  // Đổi giờ hạn nộp: Admin và Quản lý (rà soát phân quyền 2026-10-30).
+  const isAdmin = currentUserRole === "admin" || currentUserRole === "manager";
   const canManage = currentUserRole === "admin" || currentUserRole === "manager";
   const saleOptions = saleMembers.filter((m) => EMPLOYEE_ROLES.includes(m.role));
 

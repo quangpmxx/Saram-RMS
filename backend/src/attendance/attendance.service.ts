@@ -25,8 +25,11 @@ const EMPLOYEE_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
 /** Mục 8, yêu cầu người dùng: Admin/Quản lý/Leader/Nhân viên đều xem được (phạm vi khác nhau). */
 const VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'mkt', 'sale']);
 
-/** Mục 8, yêu cầu người dùng: chỉ Admin/Quản lý/Leader được chỉnh — Nhân viên chỉ xem. */
-const EDIT_ROLES = new Set(['admin', 'manager', 'leader']);
+/**
+ * Chỉ Admin/Quản lý chấm công & sửa vị trí (rà soát phân quyền 2026-10-30);
+ * Leader xem cả nhóm, nhân viên xem của mình.
+ */
+const EDIT_ROLES = new Set(['admin', 'manager']);
 
 const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 

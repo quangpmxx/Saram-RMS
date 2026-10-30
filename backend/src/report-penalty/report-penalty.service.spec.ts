@@ -325,10 +325,24 @@ describe('ReportPenaltyService', () => {
       expect(prisma.reportViolation.update).not.toHaveBeenCalled();
     });
 
-    it('Không phải Admin -> bị chặn đổi hạn (Mục 5: "Chỉ Admin được thay đổi")', async () => {
-      await expect(
-        service.updateDeadline({ hour: 20, minute: 0 }, manager),
-      ).rejects.toThrow(ForbiddenException);
+    it('Quản lý cũng đổi được hạn nộp', async () => {
+      prisma.reportDeadlineConfig.findFirst.mockResolvedValue(null);
+      prisma.reportDeadlineConfig.create.mockResolvedValue({
+        id: 'cfg-1',
+        hour: 21,
+        minute: 0,
+        updatedAt: new Date('2026-07-15T10:00:00.000Z'),
+        updatedBy: { fullName: 'Quản lý' },
+      });
+
+      const result = await service.updateDeadline(
+        { hour: 21, minute: 0 },
+        manager,
+      );
+      expect(result.hour).toBe(21);
+    });
+
+    it('Không phải Admin/Quản lý -> bị chặn đổi hạn', async () => {
       await expect(
         service.updateDeadline({ hour: 20, minute: 0 }, leader),
       ).rejects.toThrow(ForbiddenException);

@@ -194,9 +194,10 @@ export class ReportPenaltyService {
     dto: UpdateReportDeadlineDto,
     currentUser: AuthenticatedUser,
   ): Promise<ReportDeadlineResponseDto> {
-    if (currentUser.role !== 'admin') {
+    // Quản lý cũng đổi được giờ hạn nộp (rà soát phân quyền 2026-10-30).
+    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
       throw new ForbiddenException(
-        'Chỉ Admin được thay đổi thời hạn nộp báo cáo',
+        'Chỉ Admin/Quản lý được thay đổi thời hạn nộp báo cáo',
       );
     }
 

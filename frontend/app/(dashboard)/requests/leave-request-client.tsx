@@ -118,7 +118,7 @@ export function LeaveRequestClient({
   const canViewFeedback = FEEDBACK_VIEW_ROLES.includes(currentUser.role);
   const canSendFeedback = !canViewFeedback;
   const isLeader = currentUser.role === "leader";
-  const isAdmin = currentUser.role === "admin";
+  const isAdmin = currentUser.role === "admin" || currentUser.role === "manager";
   // Sale/MKT chỉ bao giờ thấy đúng đơn của chính mình (1 người) — các vai
   // trò còn lại (kể cả Leader, nay đã thấy CẢ đơn của chính mình LẪN đơn
   // thành viên nhóm) đều có thể thấy đơn của nhiều người khác nhau cùng lúc.

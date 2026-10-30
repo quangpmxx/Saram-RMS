@@ -267,14 +267,10 @@ describe('AttendanceService', () => {
       );
     });
 
-    it('16) Leader lưu công cho đúng nhân viên trong nhóm mình → thành công', async () => {
-      prisma.account.findUnique.mockResolvedValueOnce({ teamId: 'team-A' });
-      prisma.account.findMany.mockResolvedValueOnce([{ id: 'sale-1' }]);
-      const result = await service.bulkSave(
-        { upserts: [cell], deletes: [] },
-        leaderUser,
-      );
-      expect(result).toEqual({ saved: 1, deleted: 0 });
+    it('16) Leader không chấm công được (chỉ Admin/Quản lý) → ForbiddenException', async () => {
+      await expect(
+        service.bulkSave({ upserts: [cell], deletes: [] }, leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 

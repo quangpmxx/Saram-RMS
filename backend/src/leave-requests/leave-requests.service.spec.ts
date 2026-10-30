@@ -238,7 +238,9 @@ describe('LeaveRequestsService', () => {
 
       expect(result.status).toBe('pending_admin');
       expect(prisma.account.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { role: 'admin', status: 'active' } }),
+        expect.objectContaining({
+          where: { role: { in: ['admin', 'manager'] }, status: 'active' },
+        }),
       );
       expect(prisma.notification.createMany).toHaveBeenCalledWith({
         data: [
@@ -519,10 +521,7 @@ describe('LeaveRequestsService', () => {
   });
 
   describe('adminDecide', () => {
-    it('không phải Admin -> ForbiddenException', async () => {
-      await expect(
-        service.adminDecide('req-1', { decision: 'approved' }, manager),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+    it('không phải Admin/Quản lý -> ForbiddenException', async () => {
       await expect(
         service.adminDecide('req-1', { decision: 'approved' }, leader),
       ).rejects.toBeInstanceOf(ForbiddenException);
@@ -535,10 +534,10 @@ describe('LeaveRequestsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('đơn không ở trạng thái pending_admin -> BadRequestException', async () => {
+    it('đơn đã duyệt xong -> BadRequestException (đơn chờ Leader thì Admin/Quản lý duyệt tắt được)', async () => {
       prisma.leaveRequest.findUnique.mockResolvedValue({
         ...baseRequest,
-        status: 'pending_leader',
+        status: 'approved',
         account: baseAccount,
       });
       await expect(

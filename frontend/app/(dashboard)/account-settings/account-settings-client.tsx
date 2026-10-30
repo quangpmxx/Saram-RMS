@@ -213,7 +213,8 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
               (2026-07-15): "Trong phần Cài đặt tài khoản dành cho Admin,
               thêm mục 'Cài đặt Check in'" — CHỈ hiện với Admin, backend
               (checkin.service.ts) kiểm tra quyền lại lần nữa. */}
-          {user.role === "admin" && (
+          {/* Quản lý cũng cấu hình được (rà soát phân quyền 2026-10-30). */}
+          {(user.role === "admin" || user.role === "manager") && (
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Cài đặt Check in</h3>
               <p className="mt-1 text-xs text-slate-500">Vị trí công ty dùng để xác định nhân viên Check in trong/ngoài phạm vi.</p>

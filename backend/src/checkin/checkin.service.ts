@@ -47,6 +47,11 @@ const VIEW_ROLES = new Set(['admin', 'manager']);
 
 /** Mục 10: chỉ Admin/Quản lý "xem chi tiết GPS, IP, thiết bị" của người KHÁC — Leader/Nhân viên chỉ xem được đầy đủ bản ghi CỦA CHÍNH MÌNH. */
 const FULL_DETAIL_ROLES = new Set(['admin', 'manager']);
+/**
+ * Reset / duyệt hợp lệ / ghi chú Check in và cấu hình vị trí công ty — Admin
+ * và Quản lý (rà soát phân quyền 2026-10-30; trước đây chỉ Admin).
+ */
+const CHECKIN_ADMIN_ROLES = new Set(['admin', 'manager']);
 
 /** Mục 3, yêu cầu người dùng: "Accuracy lớn hơn 100m -> Cần xác minh". */
 const ACCURACY_NEEDS_VERIFICATION_METERS = 100;
@@ -415,9 +420,9 @@ export class CheckinService {
   async getCompanyLocation(
     currentUser: AuthenticatedUser,
   ): Promise<CompanyLocationResponseDto | null> {
-    if (currentUser.role !== 'admin') {
+    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
       throw new ForbiddenException(
-        'Chỉ Admin được xem cấu hình vị trí công ty',
+        'Chỉ Admin/Quản lý được xem cấu hình vị trí công ty',
       );
     }
     const config = await this.prisma.companyLocationConfig.findFirst({
@@ -442,9 +447,9 @@ export class CheckinService {
     dto: UpdateCompanyLocationDto,
     currentUser: AuthenticatedUser,
   ): Promise<CompanyLocationResponseDto> {
-    if (currentUser.role !== 'admin') {
+    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
       throw new ForbiddenException(
-        'Chỉ Admin được thay đổi cấu hình vị trí công ty',
+        'Chỉ Admin/Quản lý được thay đổi cấu hình vị trí công ty',
       );
     }
 
@@ -603,8 +608,8 @@ export class CheckinService {
     reason: string,
     currentUser: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    if (currentUser.role !== 'admin') {
-      throw new ForbiddenException('Chỉ Admin được Reset Check in');
+    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+      throw new ForbiddenException('Chỉ Admin/Quản lý được Reset Check in');
     }
 
     const record = await this.prisma.checkinRecord.findUnique({
@@ -652,9 +657,9 @@ export class CheckinService {
     recordId: string,
     currentUser: AuthenticatedUser,
   ): Promise<CheckinRecordResponseDto> {
-    if (currentUser.role !== 'admin') {
+    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
       throw new ForbiddenException(
-        'Chỉ Admin được xác nhận trạng thái Check in',
+        'Chỉ Admin/Quản lý được xác nhận trạng thái Check in',
       );
     }
 
@@ -703,8 +708,10 @@ export class CheckinService {
     note: string,
     currentUser: AuthenticatedUser,
   ): Promise<CheckinRecordResponseDto> {
-    if (currentUser.role !== 'admin') {
-      throw new ForbiddenException('Chỉ Admin được sửa ghi chú Check in');
+    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+      throw new ForbiddenException(
+        'Chỉ Admin/Quản lý được sửa ghi chú Check in',
+      );
     }
 
     const record = await this.prisma.checkinRecord.findUnique({

@@ -387,13 +387,11 @@ describe('CheckinService (Phase 1+2+3+4)', () => {
   });
 
   describe('company location config (Mục 7)', () => {
-    it('16) Chỉ Admin xem/sửa được cấu hình vị trí công ty', async () => {
+    it('16) Chỉ Admin/Quản lý xem/sửa được cấu hình vị trí công ty', async () => {
       await expect(service.getCompanyLocation(sale)).rejects.toThrow(
         ForbiddenException,
       );
-      await expect(service.getCompanyLocation(manager)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(service.getCompanyLocation(manager)).resolves.toBeDefined();
       await expect(service.getCompanyLocation(admin)).resolves.toBeDefined();
 
       const dto = {

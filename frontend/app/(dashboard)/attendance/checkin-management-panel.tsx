@@ -100,7 +100,8 @@ export function CheckinManagementPanel({
   // hỏi lại (yêu cầu người dùng 2026-10-28: bỏ mọi hộp xác nhận thao tác).
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  const isAdmin = currentUserRole === "admin";
+  // Reset / duyệt / ghi chú Check in: Admin và Quản lý (rà soát phân quyền 2026-10-30).
+  const isAdmin = currentUserRole === "admin" || currentUserRole === "manager";
   const filteredAccountOptions = accountOptions.filter((a) => EMPLOYEE_ROLES.includes(a.role));
 
   // Đo chiều cao thật của header hệ thống + thanh bộ lọc bằng ResizeObserver
