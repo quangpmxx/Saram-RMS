@@ -101,6 +101,8 @@ const ASSIGNER_ROLES: AccountRole[] = ["admin", "manager", "leader"];
 const CARE_NOTE_COLLAPSED_HEIGHT = 44;
 /** Gộp nhiều sự kiện realtime liên tiếp (vd giao 50 data 1 lần) thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 600;
+/** Tab Kho đang ẩn: gộp các sự kiện realtime liên tiếp trong 15 giây thành 1 lần tải. */
+const HIDDEN_RELOAD_DEBOUNCE_MS = 15000;
 
 /**
  * Mở 1 data từ Kho rồi bấm "Quay lại"/"Lưu thông tin" → về đúng bộ lọc,
@@ -371,8 +373,14 @@ export function CareWarehousePanel({
   // chăm sóc → tải lại nhẹ trang hiện tại (không reset bộ lọc/trang/lựa chọn).
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleReload = useCallback(() => {
+    // Tab Kho đang ẩn: vẫn tải ngầm (để số "Chăm sóc (N)" trên tab luôn đúng)
+    // nhưng gộp thưa hơn nhiều — API Kho nặng (đo 2026-10-30: ~3,5s), không nên
+    // tải lại theo từng sự kiện khi người dùng không nhìn vào.
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => void load(queryKey, true), REALTIME_DEBOUNCE_MS);
+    timerRef.current = setTimeout(
+      () => void load(queryKey, true),
+      activeRef.current ? REALTIME_DEBOUNCE_MS : HIDDEN_RELOAD_DEBOUNCE_MS,
+    );
   }, [load, queryKey]);
   useEffect(
     () => () => {

@@ -375,59 +375,101 @@ export class DashboardService {
     const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
     const extraWhere = this.buildExtraWhere(currentUser, query);
     const sourceFiltered = Boolean(query.source_id);
+    if (teams.length === 0) return [];
 
-    return Promise.all(
-      teams.map(async (team) => {
-        const where: Prisma.LeadWhereInput = {
-          assignedTeamId: team.id,
-          deletedAt: null,
-          ...dateWhere,
-          ...extraWhere,
-        };
-        // Sale trong nhóm này (thu hẹp thêm theo account_id nếu có lọc) —
-        // dùng để tính 5 chỉ số Shuttle-based cho đúng nhóm (Mục "resolve
-        // sale account ids", computeShuttleKpi()).
-        const teamSales = await this.prisma.account.findMany({
-          where: {
-            role: 'sale',
-            teamId: team.id,
-            ...(query.account_id ? { id: query.account_id } : {}),
+    // Tối ưu 2026-10-30: trước đây mỗi nhóm chạy ~10 truy vấn riêng (54 truy
+    // vấn với 5 nhóm, kể cả 3 bước phễu bị bỏ đi). Giờ gom cho mọi nhóm bằng
+    // vài truy vấn groupBy/findMany; công thức từng chỉ số giữ nguyên.
+    const teamIds = teams.map((t) => t.id);
+    const baseWhere: Prisma.LeadWhereInput = {
+      deletedAt: null,
+      ...dateWhere,
+      ...extraWhere,
+      assignedTeamId: { in: teamIds },
+    };
+    const countByTeam = (
+      rows: { assignedTeamId: string | null; _count: { _all: number } }[],
+    ) => new Map(rows.map((r) => [r.assignedTeamId, r._count._all]));
+
+    const [leadRows, employedRows, carePoolRows, sales] = await Promise.all([
+      this.prisma.lead.groupBy({
+        by: ['assignedTeamId'],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ['assignedTeamId'],
+        where: {
+          ...baseWhere,
+          interviews: {
+            some: { deletedAt: null, employmentStatus: { code: 'EMPLOYED' } },
           },
-          select: { id: true },
-        });
-        const teamSaleAccountIds = teamSales.map((s) => s.id);
-
-        const [leadCount, funnel, carePoolCount, kpi] = await Promise.all([
-          this.prisma.lead.count({ where }),
-          this.computeFunnel(where),
-          this.prisma.lead.count({
-            where: {
-              assignedTeamId: team.id,
-              deletedAt: null,
-              enteredCarePoolAt: { not: null },
-              removedFromCarePoolAt: null,
-            },
-          }),
-          this.computeKpiBreakdown(
-            where,
-            teamSaleAccountIds,
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ['assignedTeamId'],
+        where: {
+          assignedTeamId: { in: teamIds },
+          deletedAt: null,
+          enteredCarePoolAt: { not: null },
+          removedFromCarePoolAt: null,
+        },
+        _count: { _all: true },
+      }),
+      // Sale của từng nhóm (thu hẹp thêm theo account_id nếu có lọc) — dùng
+      // để tính 5 chỉ số Shuttle-based cho đúng nhóm (computeShuttleKpi()).
+      this.prisma.account.findMany({
+        where: {
+          role: 'sale',
+          teamId: { in: teamIds },
+          ...(query.account_id ? { id: query.account_id } : {}),
+        },
+        select: { id: true, teamId: true },
+      }),
+    ]);
+    // Đưa đón của mọi Sale trong các nhóm: 1 truy vấn, chia lại theo nhóm phía
+    // dưới (có lọc nguồn thì chỉ số Đưa đón luôn rỗng — như cũ).
+    const shuttleRows: ShuttleRow[] =
+      sourceFiltered || sales.length === 0
+        ? []
+        : await this.findShuttleRows(
+            sales.map((s) => s.id),
             query.date_from,
             query.date_to,
-            sourceFiltered,
-          ),
-        ]);
-        const employedStep = funnel.find((step) => step.code === 'EMPLOYED');
+          );
 
-        return {
-          team_id: team.id,
-          team_name: team.name,
-          lead_count: leadCount,
-          conversion_rate: employedStep?.percentage ?? 0,
-          care_pool_count: carePoolCount,
-          kpi,
-        };
-      }),
-    );
+    const leadCounts = countByTeam(leadRows);
+    const employedCounts = countByTeam(employedRows);
+    const carePoolCounts = countByTeam(carePoolRows);
+    const teamBySale = new Map(sales.map((s) => [s.id, s.teamId]));
+    const shuttleByTeam = new Map<string, ShuttleRow[]>();
+    for (const row of shuttleRows) {
+      const teamId = teamBySale.get(row.saleUserId as string);
+      if (!teamId) continue;
+      const list = shuttleByTeam.get(teamId);
+      if (list) list.push(row);
+      else shuttleByTeam.set(teamId, [row]);
+    }
+
+    return teams.map((team) => {
+      const leadCount = leadCounts.get(team.id) ?? 0;
+      const employed = employedCounts.get(team.id) ?? 0;
+      const hasSales = sales.some((s) => s.teamId === team.id);
+      const shuttle =
+        sourceFiltered || !hasSales
+          ? EMPTY_SHUTTLE_KPI
+          : tallyShuttle(shuttleByTeam.get(team.id) ?? []);
+      return {
+        team_id: team.id,
+        team_name: team.name,
+        lead_count: leadCount,
+        conversion_rate:
+          leadCount > 0 ? round1((employed / leadCount) * 100) : 0,
+        care_pool_count: carePoolCounts.get(team.id) ?? 0,
+        kpi: this.buildKpiBreakdown(leadCount, shuttle),
+      };
+    });
   }
 
   /**

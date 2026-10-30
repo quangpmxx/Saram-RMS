@@ -33,7 +33,6 @@ import {
   wasCareStoppedAt,
 } from './care-metrics';
 import {
-  countCareDays,
   vnDateOnly,
   vnDayRange,
   vnMonthKey,
@@ -527,12 +526,23 @@ export class CareWarehouseService {
         endedAt: true,
       },
     });
-    // Tổng số lần chăm sóc = số ngày khác nhau có ghi chú → cần mốc từng
-    // ghi chú (groupBy không gom được theo ngày giờ VN).
-    const allNotes = await this.prisma.leadNote.findMany({
-      where: { ...CARE_NOTE_WHERE, lead: leadWhere },
-      select: { leadId: true, createdAt: true },
-    });
+    // Tổng số lần chăm sóc = số ngày (giờ VN, UTC+7) khác nhau có ghi chú +
+    // mốc ghi chú cuối. Gộp ngay ở DB thay vì tải mọi ghi chú về rồi đếm
+    // (tối ưu 2026-10-30; cùng điều kiện với CARE_NOTE_WHERE). Cột created_at
+    // lưu UTC nên cộng 7 giờ rồi lấy ngày = ngày giờ VN, khớp vnDayIndex().
+    const totalRows = ids.length
+      ? await this.prisma.$queryRaw<
+          { lead_id: string; days: bigint; last_at: Date }[]
+        >`
+          SELECT n.lead_id, COUNT(DISTINCT ((n.created_at + INTERVAL '7 hours')::date)) AS days,
+                 MAX(n.created_at) AS last_at
+          FROM lead_notes n
+          JOIN accounts a ON a.id = n.created_by
+          WHERE n.lead_id = ANY(${ids}::uuid[])
+            AND n.is_deleted = false
+            AND a.username <> ${SYSTEM_USERNAME}
+          GROUP BY n.lead_id`
+      : [];
     const assignmentMax = await this.prisma.careAssignment.groupBy({
       by: ['leadId'],
       where: { lead: leadWhere },
@@ -560,19 +570,10 @@ export class CareWarehouseService {
         ),
       );
     }
-    const notesByLead = new Map<string, Date[]>();
-    for (const n of allNotes) {
-      const list = notesByLead.get(n.leadId);
-      if (list) list.push(n.createdAt);
-      else notesByLead.set(n.leadId, [n.createdAt]);
-    }
     const totals = new Map(
-      [...notesByLead].map(([leadId, dates]) => [
-        leadId,
-        {
-          count: countCareDays(dates),
-          lastAt: new Date(Math.max(...dates.map((d) => d.getTime()))),
-        },
+      totalRows.map((r) => [
+        r.lead_id,
+        { count: Number(r.days), lastAt: new Date(r.last_at) },
       ]),
     );
     const lastAssigned = new Map(
