@@ -514,6 +514,7 @@ export class DashboardService {
 
     const rows = await this.prisma.shuttleRecord.findMany({
       where: {
+        deletedAt: null,
         saleUserId: { in: saleAccountIds },
         date: {
           gte: dateFrom ? new Date(dateFrom) : undefined,

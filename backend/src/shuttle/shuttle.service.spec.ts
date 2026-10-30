@@ -166,7 +166,7 @@ describe('ShuttleService', () => {
 
       expect(result.first_day_offset).toBe(3);
       expect(prisma.shuttleRecord.count).toHaveBeenCalledWith({
-        where: { AND: [{}, { date: { gt: record.date } }] },
+        where: { AND: [{ deletedAt: null }, { date: { gt: record.date } }] },
       });
     });
 
@@ -183,7 +183,7 @@ describe('ShuttleService', () => {
 
       expect(result.first_day_offset).toBe(2);
       expect(prisma.shuttleRecord.count).toHaveBeenCalledWith({
-        where: { AND: [{}, { date: { lt: record.date } }] },
+        where: { AND: [{ deletedAt: null }, { date: { lt: record.date } }] },
       });
       expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -231,6 +231,7 @@ describe('ShuttleService', () => {
 
       expect(prisma.shuttleRecord.count).toHaveBeenCalledWith({
         where: {
+          deletedAt: null,
           OR: [
             { fullName: { contains: '0901', mode: 'insensitive' } },
             { phoneNumber: { contains: '0901', mode: 'insensitive' } },
@@ -322,14 +323,16 @@ describe('ShuttleService', () => {
       );
     });
 
-    it('xóa thành công (hard delete), ghi audit log', async () => {
+    it('xoá mềm (giữ dòng, ghi deleted_at + người xoá), ghi audit log', async () => {
       prisma.shuttleRecord.findUnique.mockResolvedValue(record);
-      prisma.shuttleRecord.delete.mockResolvedValue(record);
+      prisma.shuttleRecord.update.mockResolvedValue(record);
 
       await service.remove('record-1', currentUser);
 
-      expect(prisma.shuttleRecord.delete).toHaveBeenCalledWith({
+      expect(prisma.shuttleRecord.delete).not.toHaveBeenCalled();
+      expect(prisma.shuttleRecord.update).toHaveBeenCalledWith({
         where: { id: 'record-1' },
+        data: { deletedAt: expect.any(Date), deletedById: currentUser.id },
       });
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({

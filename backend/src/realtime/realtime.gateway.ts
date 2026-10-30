@@ -203,6 +203,9 @@ export class RealtimeGateway
     if (!account || account.status === 'inactive') {
       throw new Error('Tài khoản không còn hoạt động');
     }
+    if (account.mustChangePassword) {
+      throw new Error('Tài khoản cần đổi mật khẩu trước');
+    }
 
     return { id: account.id, role: account.role, sessionId: session.id };
   }

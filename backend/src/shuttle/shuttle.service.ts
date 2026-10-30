@@ -130,7 +130,8 @@ export class ShuttleService {
       day_counts?: Record<string, number>;
     }
   > {
-    const where: Prisma.ShuttleRecordWhereInput = {};
+    // Bỏ qua dòng đã xoá mềm (rà soát 2026-10-30).
+    const where: Prisma.ShuttleRecordWhereInput = { deletedAt: null };
 
     if (query.keyword) {
       where.OR = [
@@ -261,7 +262,7 @@ export class ShuttleService {
     const existing = await this.prisma.shuttleRecord.findUnique({
       where: { id },
     });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy dòng đưa đón');
     }
 
@@ -415,11 +416,15 @@ export class ShuttleService {
     const existing = await this.prisma.shuttleRecord.findUnique({
       where: { id },
     });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy dòng đưa đón');
     }
 
-    await this.prisma.shuttleRecord.delete({ where: { id } });
+    // Xoá mềm — giữ lịch sử, khôi phục được bằng cách xoá deleted_at.
+    await this.prisma.shuttleRecord.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: currentUser.id },
+    });
 
     await this.auditLog.log({
       accountId: currentUser.id,

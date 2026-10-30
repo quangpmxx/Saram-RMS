@@ -45,6 +45,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) {
     redirect("/login");
   }
+  // Đang dùng mật khẩu mặc định → đổi mật khẩu trước (rà soát 2026-10-30).
+  if (user.must_change_password) {
+    redirect("/doi-mat-khau");
+  }
 
   // Rà soát phân quyền 2026-10-30: menu hiện ĐỦ mọi mục (kể cả "Phân quyền")
   // với mọi tài khoản; bấm vào trang không có quyền → trang tự chuyển sang

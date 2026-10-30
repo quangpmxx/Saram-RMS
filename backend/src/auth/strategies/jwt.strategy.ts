@@ -52,6 +52,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       .update({ where: { id: session.id }, data: { lastActiveAt: new Date() } })
       .catch(() => undefined);
 
-    return { id: account.id, role: account.role, sessionId: session.id };
+    return {
+      id: account.id,
+      role: account.role,
+      sessionId: session.id,
+      mustChangePassword: account.mustChangePassword,
+    };
   }
 }

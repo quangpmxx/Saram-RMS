@@ -110,6 +110,7 @@ export class AccountsService {
           fullName: dto.full_name,
           username: dto.username,
           passwordHash,
+          mustChangePassword: true,
           role: dto.role,
           teamId,
           createdById,
@@ -284,7 +285,11 @@ export class AccountsService {
     );
     const passwordHash = await hashPassword(defaultPassword);
 
-    await this.prisma.account.update({ where: { id }, data: { passwordHash } });
+    // Đặt lại về mật khẩu mặc định → bắt đổi ở lần đăng nhập tới.
+    await this.prisma.account.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: true },
+    });
 
     await this.auditLog.log({
       accountId: actorId,

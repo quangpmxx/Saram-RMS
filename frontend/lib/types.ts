@@ -59,6 +59,8 @@ export interface Account {
   nickname: string | null;
   username: string;
   role: AccountRole;
+  /** Đang dùng mật khẩu mặc định → phải đổi ở /doi-mat-khau trước khi dùng hệ thống. */
+  must_change_password: boolean;
   team_id: string | null;
   team_name: string | null;
   status: AccountStatus;

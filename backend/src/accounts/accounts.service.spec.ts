@@ -410,7 +410,7 @@ describe('AccountsService', () => {
 
       expect(prisma.account.update).toHaveBeenCalledWith({
         where: { id: 'acc-1' },
-        data: { passwordHash: expect.any(String) },
+        data: { passwordHash: expect.any(String), mustChangePassword: true },
       });
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'reset_password' }),
