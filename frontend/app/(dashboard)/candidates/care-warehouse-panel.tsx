@@ -731,7 +731,7 @@ export function CareWarehousePanel({
                         )}
                         {care.assigned_pending && <Badge variant="danger">Đã giao, chưa xử lý</Badge>}
                         {item.care_stop_requested_at && (
-                          <Badge variant="warning" title="Sale đề nghị dừng chăm sóc — mở Chi tiết để duyệt">
+                          <Badge variant="info" title="Sale đề nghị dừng chăm sóc — mở Chi tiết để duyệt">
                             Chờ duyệt đóng
                           </Badge>
                         )}
