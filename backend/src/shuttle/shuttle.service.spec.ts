@@ -17,6 +17,7 @@ describe('ShuttleService', () => {
       update: jest.Mock;
       delete: jest.Mock;
       count: jest.Mock;
+      groupBy: jest.Mock;
     };
     shuttleOption: {
       findUnique: jest.Mock;
@@ -76,6 +77,7 @@ describe('ShuttleService', () => {
         update: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
+        groupBy: jest.fn(),
       },
       shuttleOption: {
         findUnique: jest.fn(),
@@ -192,9 +194,9 @@ describe('ShuttleService', () => {
 
     it('STT giảm dần: đảo thứ tự trong ngày, trả tổng số dòng từng ngày', async () => {
       prisma.$transaction.mockResolvedValue([1, [record]]);
-      prisma.shuttleRecord.groupBy = jest
-        .fn()
-        .mockResolvedValue([{ date: record.date, _count: { _all: 7 } }]);
+      prisma.shuttleRecord.groupBy.mockResolvedValue([
+        { date: record.date, _count: { _all: 7 } },
+      ]);
 
       const result = await service.list({
         page: 1,
