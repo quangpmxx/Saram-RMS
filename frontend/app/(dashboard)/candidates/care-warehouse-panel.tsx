@@ -687,7 +687,17 @@ export function CareWarehousePanel({
                 <th className="w-px border-r border-slate-100 px-2 py-2 text-center whitespace-nowrap">Trạng thái</th>
                 <th className="border-r border-slate-100 px-2 py-2 text-center">Sale được giao</th>
                 <th className="min-w-[300px] border-r border-slate-100 px-2 py-2 text-center">Nội dung ghi chú</th>
-                <th className="border-r border-slate-100 px-2 py-2 text-center">Lần CS tháng / tổng</th>
+                {/* Tách "Lần CS tháng / tổng" thành 2 cột hẹp vừa dữ liệu (yêu cầu người dùng 2026-10-30). */}
+                <th className="w-px border-r border-slate-100 px-1.5 py-2 text-center leading-tight">
+                  <span className="whitespace-nowrap">CS trong</span>
+                  <br />
+                  <span className="whitespace-nowrap">tháng</span>
+                </th>
+                <th className="w-px border-r border-slate-100 px-1.5 py-2 text-center leading-tight">
+                  <span className="whitespace-nowrap">Tổng</span>
+                  <br />
+                  <span className="whitespace-nowrap">lượt CS</span>
+                </th>
                 {hasActions && <th className="px-2 py-2 text-center">Hành động</th>}
               </tr>
             </thead>
@@ -805,8 +815,11 @@ export function CareWarehousePanel({
                         collapsedMaxHeight={CARE_NOTE_COLLAPSED_HEIGHT}
                       />
                     </td>
-                    <td className="border-r border-slate-100 px-2 py-2 text-center font-medium text-slate-700">
-                      {care.month_care_count} / {care.total_care_count}
+                    <td className="w-px border-r border-slate-100 px-1.5 py-2 text-center font-medium text-slate-700 tabular-nums">
+                      {care.month_care_count}
+                    </td>
+                    <td className="w-px border-r border-slate-100 px-1.5 py-2 text-center font-medium text-slate-700 tabular-nums">
+                      {care.total_care_count}
                     </td>
                     {hasActions && (
                       <td className="px-2 py-2">
