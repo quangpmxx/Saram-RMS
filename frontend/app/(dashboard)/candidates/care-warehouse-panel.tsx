@@ -677,7 +677,7 @@ export function CareWarehousePanel({
                 {hasActions && <th className="px-2 py-2 text-center">Hành động</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-brand-400">
               {items.map((item, index) => {
                 const care = item.care;
                 const open = care.open_assignment;
