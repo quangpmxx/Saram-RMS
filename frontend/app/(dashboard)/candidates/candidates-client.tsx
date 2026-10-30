@@ -35,6 +35,13 @@ import {
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import {
+  canDecideStop,
+  canDeleteLeads,
+  canEditLead,
+  canProcessLead,
+  type LeadViewer,
+} from "@/lib/lead-permissions";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type {
   AccountRole,
@@ -255,8 +262,9 @@ export function CandidatesClient({
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
   // Có quyền xoá data (Admin; MKT với data mình up) → cũng được tick chọn để "Xoá data đã chọn".
-  // Xoá data: Admin, Quản lý, MKT — mọi data (rà soát phân quyền 2026-10-30).
-  const canDeleteAny = currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt";
+  // Quyền trên từng data dùng chung với trang chi tiết — lib/lead-permissions.ts.
+  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId };
+  const canDeleteAny = canDeleteLeads(currentUserRole);
   const canSelect = canAssign || canDeleteAny;
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
   const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
@@ -295,45 +303,10 @@ export function CandidatesClient({
     };
   }, [candidates, viewMode]);
 
-  function canModify(candidate: Candidate): boolean {
-    // MKT sửa được mọi data (rà soát phân quyền 2026-10-30).
-    if (currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt") return true;
-    if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-    // Dự án phụ — nâng cấp toàn diện: Sale sửa được ứng viên KHÔNG phải của
-    // mình nếu cùng nhóm, NHƯNG chỉ khi ứng viên đã được xử lý ít nhất 1 lần
-    // (last_activity_at khác null) — khớp assertCanModify()/loadLeadForUpdate()
-    // ở backend, tránh giành số hoàn toàn mới của đồng nghiệp.
-    if (currentUserRole === "sale") {
-      if (candidate.assigned_to?.id === currentUserId) return true;
-      return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
-    }
-    return false;
-  }
-
   /** Khớp decideStopRequest() ở backend: Leader (nhóm của data)/Quản lý/Admin. */
   function canApproveStop(candidate: Candidate): boolean {
     if (isReadOnly || !candidate.care_stop_requested_at || candidate.care_stopped_at) return false;
-    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-    return currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId;
-  }
-
-  /**
-   * Dự án phụ — nâng cấp toàn diện: cho sửa cột "Kết quả" (đổi ý từ "Tình
-   * trạng Zalo" — vẫn dùng chung field zalo_status kỹ thuật cũ, chỉ đổi tên
-   * hiển thị + giá trị) ngay tại bảng danh sách, không cần vào trang Chi
-   * tiết. Khớp ĐÚNG phạm vi quyền của canUpdatePipeline() ở trang Chi tiết /
-   * loadLeadForUpdate() ở backend — KHÔNG gồm MKT (cùng nhóm field "tiến
-   * trình cuộc gọi", không phải field cơ bản MKT được sửa qua canModify()).
-   */
-  function canUpdateZaloStatus(candidate: Candidate): boolean {
-    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-    if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-    // Sale xử lý hộ mọi data trong nhóm đã có người phụ trách (rà soát phân quyền 2026-10-30).
-    if (currentUserRole === "sale") {
-      if (candidate.assigned_to?.id === currentUserId) return true;
-      return candidate.assigned_team_id === currentUserTeamId && candidate.assigned_to !== null;
-    }
-    return false;
+    return canDecideStop(candidate, viewer);
   }
 
   /**
@@ -1337,7 +1310,7 @@ export function CandidatesClient({
                           "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
                           status ? "ring-1 ring-inset ring-black/10" : "border border-slate-200 text-slate-600",
                         );
-                        if (!canUpdateZaloStatus(candidate)) {
+                        if (!canProcessLead(candidate, viewer)) {
                           return (
                             <span style={pillStyle} className={pillClass}>
                               {status ? shortZaloFriendName(status.name) : "--"}
@@ -1380,7 +1353,7 @@ export function CandidatesClient({
                           Chờ duyệt đóng
                         </span>
                       ) : null}
-                      {canUpdateZaloStatus(candidate) ? (
+                      {canProcessLead(candidate, viewer) ? (
                         // Chỉ 1 lựa chọn thật ("Đã gửi CCCD") nên bấm = đảo trạng thái
                         // (có/không) thay vì mở danh sách chọn — mũi tên chỉ là gợi ý
                         // hình ảnh giống ô chọn, không phải dropdown thật (select gốc
@@ -1417,7 +1390,7 @@ export function CandidatesClient({
 
                     <td className="px-1 py-2">
                       <div className="flex flex-wrap items-center gap-0.5">
-                        {canModify(candidate) && (
+                        {canEditLead(candidate, viewer) && (
                           <ActionLink
                             icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />}
                             title="Sửa"

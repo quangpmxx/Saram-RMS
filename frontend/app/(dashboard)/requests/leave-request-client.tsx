@@ -140,8 +140,10 @@ export function LeaveRequestClient({
       if (nextDate.to) query.set("date_to", new Date(`${nextDate.to}T23:59:59.999`).toISOString());
       const result = await clientApi<LeaveRequest[]>(`/leave-request?${query.toString()}`);
       setRequests(result);
-    } catch {
-      // Bỏ qua lỗi tải nền — danh sách cũ vẫn hiển thị.
+    } catch (err) {
+      // Báo lỗi thay vì im lặng — đổi bộ lọc mà tải lỗi thì danh sách cũ vẫn
+      // hiện như đã lọc xong (rà soát 2026-10-30).
+      toast.error(apiErrorMessage(err));
     }
   }
 

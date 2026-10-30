@@ -38,58 +38,18 @@ import { Modal } from "@/components/ui/modal";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { InlineEditField } from "./inline-edit-field";
+import {
+  canDecideStop as canDecideLeadStop,
+  canEditLead,
+  canProcessLead,
+  canQuickEditLead,
+  canToggleHold as canToggleLeadHold,
+  type LeadViewer,
+} from "@/lib/lead-permissions";
 import { InlineNoteComposer } from "./inline-note-composer";
 import { NoteTimeline } from "../note-timeline";
 import { ActivityPanel } from "./activity-panel";
 
-/**
- * Mục 8, docs/09 + Mục 6, docs/13: ai được cập nhật cuộc gọi/thêm ghi chú
- * (KHÔNG gồm MKT).
- * Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm xử lý được lead
- * KHÔNG phải của mình, NHƯNG chỉ khi lead đã được xử lý ít nhất 1 lần
- * (last_activity_at khác null) — khớp loadLeadForUpdate() ở backend.
- */
-function canUpdatePipeline(
-  candidate: Candidate,
-  currentUserId: string,
-  currentUserRole: AccountRole,
-  currentUserTeamId: string | null,
-): boolean {
-  if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-  // Sale xử lý hộ mọi data trong nhóm đã có người phụ trách (rà soát phân quyền 2026-10-30).
-  if (currentUserRole === "sale") {
-    if (candidate.assigned_to?.id === currentUserId) return true;
-    return candidate.assigned_team_id === currentUserTeamId && candidate.assigned_to !== null;
-  }
-  if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-  return false;
-}
-
-/**
- * Mục 4, docs/13 (PUT /candidate/:id) — dùng để hiện/ẩn khả năng sửa Số
- * điện thoại trên trang Chi tiết ứng viên, khớp đúng phạm vi quyền của
- * assertCanModify() ở backend (candidates.service.ts): Admin/Quản lý
- * không giới hạn; MKT chỉ data do mình upload (giữ nguyên, không mở rộng);
- * Leader chỉ nhóm mình.
- * Dự án phụ — nâng cấp toàn diện: Sale khác trong cùng nhóm sửa được lead
- * KHÔNG phải của mình, NHƯNG chỉ khi lead đã được xử lý ít nhất 1 lần
- * (last_activity_at khác null).
- */
-function canEditCandidate(
-  candidate: Candidate,
-  currentUserId: string,
-  currentUserRole: AccountRole,
-  currentUserTeamId: string | null,
-): boolean {
-  // MKT sửa được mọi data (rà soát phân quyền 2026-10-30).
-  if (currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt") return true;
-  if (currentUserRole === "sale") {
-    if (candidate.assigned_to?.id === currentUserId) return true;
-    return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
-  }
-  if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-  return false;
-}
 
 function formatDateTime(value: string): string {
   return formatHMDMY(value);
@@ -210,24 +170,18 @@ export function CandidateDetailClient({
    */
   const [conflictNoteId, setConflictNoteId] = useState<string | null>(null);
 
-  const canUpdate = canUpdatePipeline(candidate, currentUserId, currentUserRole, currentUserTeamId);
-  const canEditPhone = canEditCandidate(candidate, currentUserId, currentUserRole, currentUserTeamId);
+  // Quyền dùng chung với trang danh sách — lib/lead-permissions.ts.
+  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId };
+  const canUpdate = canProcessLead(candidate, viewer);
+  const canEditPhone = canEditLead(candidate, viewer);
   // Mục 2.2, docs/12: "Đánh dấu/Bỏ đánh dấu giữ số" — hiện với Sale (lead của
   // mình); Admin/Quản lý kế thừa quyền này không giới hạn (yêu cầu bổ sung
   // "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp dưới").
   // Sale giữ được mọi số mình xem được (rà soát phân quyền 2026-10-30). Số
   // người khác đang giữ: chỉ người giữ (hoặc Admin) bỏ giữ — khớp setHold().
-  const canToggleHold =
-    currentUserRole === "admin" ||
-    (candidate.is_held
-      ? candidate.held_by?.id === currentUserId
-      : currentUserRole === "manager" || currentUserRole === "sale");
+  const canToggleHold = canToggleLeadHold(candidate, viewer);
   // Sửa nhanh Năm sinh/Địa chỉ — khớp assertCanQuickEdit() ở backend.
-  const canQuickEdit =
-    !isReadOnly &&
-    (currentUserRole === "admin" ||
-      ((!candidate.is_held || candidate.held_by?.id === currentUserId) &&
-        (canEditPhone || canUpdate)));
+  const canQuickEdit = !isReadOnly && canQuickEditLead(candidate, viewer);
   // Kho chăm sóc (2026-10-28) — "Dừng/Tiếp tục chăm sóc", khớp
   // assertCanStop() ở backend: Admin/Quản lý mọi data; Leader data nhóm
   // mình; Sale khi là người phụ trách gốc HOẶC đang được giao chăm sóc.
@@ -242,11 +196,7 @@ export function CandidateDetailClient({
   // Sale bấm "Dừng chăm sóc" chỉ tạo ĐỀ NGHỊ chờ duyệt; Leader (nhóm của
   // data)/Quản lý/Admin duyệt hoặc từ chối — khớp decideStopRequest() ở backend.
   const isStopPending = Boolean(candidate.care_stop_requested_at) && !candidate.care_stopped_at;
-  const canDecideStop =
-    !isReadOnly &&
-    (currentUserRole === "admin" ||
-      currentUserRole === "manager" ||
-      (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
+  const canDecideStop = !isReadOnly && canDecideLeadStop(candidate, viewer);
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   // Sale: chỉ ghi chú của chính mình; Admin/Quản lý kế thừa quyền này, xóa được ghi chú bất kỳ.
   // Leader xoá được ghi chú của mọi Sale trên data nhóm mình (rà soát phân quyền 2026-10-30).
