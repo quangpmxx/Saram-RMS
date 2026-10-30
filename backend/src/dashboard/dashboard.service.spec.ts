@@ -368,6 +368,78 @@ describe('DashboardService', () => {
       expect(result[0].kpi).toBeDefined();
     });
 
+    it('gom query: số liệu từng Sale khớp đúng, Sale không có dữ liệu = 0', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 's1', fullName: 'A', avatarUrl: null, teamId: 't1' },
+        { id: 's2', fullName: 'B', avatarUrl: null, teamId: 't1' },
+      ]);
+      prisma.leadNote.groupBy.mockResolvedValue([
+        { createdById: 's1', _count: { _all: 5 } },
+      ]);
+      // Thứ tự gọi lead.groupBy: new_leads → potential → employed.
+      prisma.lead.groupBy
+        .mockResolvedValueOnce([
+          { assignedToId: 's1', _count: { _all: 10 } },
+          { assignedToId: 's2', _count: { _all: 4 } },
+        ])
+        .mockResolvedValueOnce([{ assignedToId: 's1', _count: { _all: 3 } }])
+        .mockResolvedValueOnce([{ assignedToId: 's2', _count: { _all: 1 } }]);
+      prisma.interviewAppointment.groupBy.mockResolvedValue([
+        { createdById: 's2', _count: { _all: 2 } },
+      ]);
+      prisma.shuttleRecord.findMany.mockResolvedValue([
+        { saleUserId: 's1', status: 'Đã đón', interviewResult: 'Đỗ PV' },
+        { saleUserId: 's1', status: 'Chưa đón được', interviewResult: null },
+      ]);
+
+      const [a, b] = await service.getPerformance({}, adminUser);
+
+      expect(a).toMatchObject({
+        account_id: 's1',
+        calls: 5,
+        potential_leads: 3,
+        interview_count: 0,
+        employed_count: 0,
+      });
+      expect(a.kpi).toMatchObject({
+        new_leads: 10,
+        interview_scheduled: 2,
+        attended: 1,
+        no_show: 1,
+        passed: 1,
+        failed: 0,
+        schedule_rate: 20,
+      });
+      expect(b).toMatchObject({
+        account_id: 's2',
+        calls: 0,
+        potential_leads: 0,
+        interview_count: 2,
+        employed_count: 1,
+      });
+      expect(b.kpi).toMatchObject({ new_leads: 4, interview_scheduled: 0 });
+      // Chỉ 1 query shuttle cho tất cả Sale, không phải 1 query/Sale.
+      expect(prisma.shuttleRecord.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('lọc theo Nguồn → 5 chỉ số Đưa đón về 0 và không truy vấn Đưa đón', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 's1', fullName: 'A', avatarUrl: null, teamId: 't1' },
+      ]);
+      const [a] = await service.getPerformance(
+        { source_id: 'src-1' },
+        adminUser,
+      );
+      expect(a.kpi.interview_scheduled).toBe(0);
+      expect(prisma.shuttleRecord.findMany).not.toHaveBeenCalled();
+    });
+
+    it('không có Sale nào → trả mảng rỗng, không chạy query thống kê', async () => {
+      prisma.account.findMany.mockResolvedValue([]);
+      await expect(service.getPerformance({}, adminUser)).resolves.toEqual([]);
+      expect(prisma.leadNote.groupBy).not.toHaveBeenCalled();
+    });
+
     it('account_id thu hẹp danh sách Sale còn đúng 1 người', async () => {
       await service.getPerformance({ account_id: 'sale-9' }, adminUser);
       expect(prisma.account.findMany).toHaveBeenCalledWith(
