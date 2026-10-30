@@ -1143,6 +1143,26 @@ describe('CandidatesService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('từ chối chuyển data đang giữ số cho người khác người giữ số', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...assignedLead,
+        isHeld: true,
+        heldById: 'sale-1',
+      });
+      prisma.account.findUnique
+        .mockResolvedValueOnce({ teamId: 'team-1' }) // getOwnTeamId(leader)
+        .mockResolvedValueOnce({
+          ...saleAccount,
+          id: 'sale-2',
+          teamId: 'team-1',
+        });
+
+      await expect(
+        service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(prisma.lead.update).not.toHaveBeenCalled();
+    });
+
     it('chuyển thành công, ghi audit log kèm lý do', async () => {
       prisma.lead.findUnique.mockResolvedValue(assignedLead);
       prisma.account.findUnique

@@ -71,7 +71,8 @@ export type SkipReason =
   | 'team_mismatch'
   | 'duplicate_in_request'
   | 'already_assigned_same'
-  | 'assigned_to_other';
+  | 'assigned_to_other'
+  | 'held_by_other';
 
 const SKIP_MESSAGES: Record<SkipReason, string> = {
   not_eligible: 'Data không còn đủ điều kiện trong Kho chăm sóc',
@@ -81,6 +82,8 @@ const SKIP_MESSAGES: Record<SkipReason, string> = {
   already_assigned_same: 'Data đang được giao cho chính Sale này',
   assigned_to_other:
     'Data đang được giao cho Sale khác và chưa xử lý — dùng "Giao lại" nếu muốn đổi người',
+  held_by_other:
+    'Data đang được giữ số — không giao cho người khác cho tới khi bỏ giữ số',
 };
 
 export interface AccountRef {
@@ -685,9 +688,11 @@ export class CareWarehouseService {
     const now = new Date();
     const monthStart = vnMonthStart(now);
     const teamIds = [...new Set(assignees.map((a) => a.teamId!))];
+    // Data đang giữ số không được chia ngẫu nhiên (yêu cầu người dùng 2026-10-30).
     const leadWhere: Prisma.LeadWhereInput = {
       ...this.eligibleWhere(now),
       assignedTeamId: { in: teamIds },
+      isHeld: false,
     };
     const leads = await this.prisma.lead.findMany({
       where: leadWhere,
@@ -803,7 +808,12 @@ export class CareWarehouseService {
 
       const eligible = await tx.lead.findMany({
         where: { id: { in: leadIds }, ...this.eligibleWhere(now) },
-        select: { id: true, assignedTeamId: true },
+        select: {
+          id: true,
+          assignedTeamId: true,
+          isHeld: true,
+          heldById: true,
+        },
       });
       const eligibleById = new Map(eligible.map((l) => [l.id, l]));
       const open = await this.loadOpenAssignments(tx, leadIds, monthStart, now);
@@ -840,6 +850,11 @@ export class CareWarehouseService {
         }
         if (lead.assignedTeamId !== assigneeById.get(p.assigneeId)?.teamId) {
           skip('team_mismatch');
+          continue;
+        }
+        // Đang giữ số: chỉ người giữ số mới được giao/tự nhận.
+        if (lead.isHeld && lead.heldById !== p.assigneeId) {
+          skip('held_by_other');
           continue;
         }
         const current = open.get(p.leadId);
@@ -966,12 +981,15 @@ export class CareWarehouseService {
       await this.lockLeads(tx, [leadId]);
       const lead = await tx.lead.findFirst({
         where: { id: leadId, ...this.eligibleWhere(now) },
-        select: { assignedTeamId: true },
+        select: { assignedTeamId: true, isHeld: true, heldById: true },
       });
       if (!lead) throw new BadRequestException(SKIP_MESSAGES.not_eligible);
       this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
       if (lead.assignedTeamId !== assignee.teamId) {
         throw new BadRequestException(SKIP_MESSAGES.team_mismatch);
+      }
+      if (lead.isHeld && lead.heldById !== assigneeId) {
+        throw new ConflictException(SKIP_MESSAGES.held_by_other);
       }
       const open = await this.loadOpenAssignments(
         tx,

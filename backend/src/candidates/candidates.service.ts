@@ -925,6 +925,12 @@ export class CandidatesService {
         'Chỉ được chuyển cho Sale trong cùng nhóm đang phụ trách ứng viên này',
       );
     }
+    // Đang giữ số thì không chia cho người khác (yêu cầu người dùng 2026-10-30).
+    if (lead.isHeld && lead.heldById !== target.id) {
+      throw new UnprocessableEntityException(
+        'Ứng viên đang được giữ số — không chuyển cho người khác cho tới khi bỏ giữ số',
+      );
+    }
 
     const oldAccountId = lead.assignedToId;
 

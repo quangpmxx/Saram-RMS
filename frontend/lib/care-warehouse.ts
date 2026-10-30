@@ -77,7 +77,8 @@ export type CareSkipReason =
   | "team_mismatch"
   | "duplicate_in_request"
   | "already_assigned_same"
-  | "assigned_to_other";
+  | "assigned_to_other"
+  | "held_by_other";
 
 export interface CareAssignResult {
   batch_id: string | null;

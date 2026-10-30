@@ -1372,7 +1372,7 @@ export function CandidatesClient({
                             onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
                           />
                         )}
-                        {canAssign && candidate.assigned_to && (
+                        {canAssign && candidate.assigned_to && !candidate.is_held && (
                           <ActionLink
                             icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
                             title="Chuyển"

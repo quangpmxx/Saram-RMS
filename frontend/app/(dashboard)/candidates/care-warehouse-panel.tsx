@@ -684,6 +684,9 @@ export function CareWarehousePanel({
                 const isMine = open?.assignee?.id === currentUserId;
                 const isPending = pendingId === item.id;
                 const teamName = item.assigned_team_id ? teamNameById.get(item.assigned_team_id) : undefined;
+                // Đang giữ số: không giao/nhận cho người khác người giữ số (backend cũng chặn).
+                const heldById = item.is_held ? (item.held_by?.id ?? null) : undefined;
+                const canGiveHeld = heldById === undefined || saleOptions.some((s) => s.id === heldById);
                 return (
                   <tr
                     key={item.id}
@@ -746,6 +749,12 @@ export function CareWarehousePanel({
                           <Badge variant="warning">Chưa chăm sóc</Badge>
                         )}
                         {care.assigned_pending && <Badge variant="danger">Đã giao, chưa xử lý</Badge>}
+                        {item.is_held && (
+                          <span className="flex flex-col rounded-lg bg-accent-50 px-2.5 py-0.5 text-xs leading-tight font-medium whitespace-nowrap text-accent-700 ring-1 ring-accent-600/20 ring-inset">
+                            <span>Số đang được giữ bởi</span>
+                            <span className="font-semibold">{item.held_by?.name ?? "—"}</span>
+                          </span>
+                        )}
                         {item.care_stop_requested_at && (
                           <Badge variant="info" title="Sale đề nghị dừng chăm sóc — mở Chi tiết để duyệt">
                             Chờ duyệt đóng
@@ -781,7 +790,7 @@ export function CareWarehousePanel({
                     {hasActions && (
                       <td className="px-2 py-2">
                         <div className="flex flex-col items-center gap-1">
-                          {canClaim && !care.assigned_pending && !isMine && (
+                          {canClaim && !care.assigned_pending && !isMine && (heldById === undefined || heldById === currentUserId) && (
                             <Button
                               type="button"
                               size="xs"
@@ -806,7 +815,7 @@ export function CareWarehousePanel({
                               Duyệt đóng
                             </Button>
                           )}
-                          {canAssign && (
+                          {canAssign && canGiveHeld && (
                             <Button
                               type="button"
                               size="xs"
@@ -915,7 +924,9 @@ export function CareWarehousePanel({
               : ""
           }`}
           saleOptions={saleOptions.filter(
-            (s) => !modal.item.assigned_team_id || s.team_id === modal.item.assigned_team_id,
+            (s) =>
+              (!modal.item.assigned_team_id || s.team_id === modal.item.assigned_team_id) &&
+              (!modal.item.is_held || s.id === modal.item.held_by?.id),
           )}
           onClose={() => setModal({ mode: "none" })}
           onConfirm={async (assigneeId) => {
