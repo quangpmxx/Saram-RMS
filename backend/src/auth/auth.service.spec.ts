@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { join } from 'path';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,6 +12,9 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import * as passwordUtil from '../common/utils/password.util';
 
 jest.mock('../common/utils/password.util');
+
+/** Mật khẩu mặc định giả lập (DEFAULT_PASSWORD trong .env). */
+const DEFAULT_PASSWORD = 'mac-dinh-test';
 jest.mock('fs/promises', () => ({
   unlink: jest.fn().mockResolvedValue(undefined),
 }));
@@ -57,6 +61,10 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwtService },
         { provide: AuditLogService, useValue: auditLog },
+        {
+          provide: ConfigService,
+          useValue: { get: () => DEFAULT_PASSWORD },
+        },
       ],
     }).compile();
 
@@ -238,7 +246,7 @@ describe('AuthService', () => {
 
       expect(prisma.account.update).toHaveBeenCalledWith({
         where: { id: account.id },
-        data: { passwordHash: 'new-hashed' },
+        data: { passwordHash: 'new-hashed', mustChangePassword: false },
       });
       expect(prisma.session.update).not.toHaveBeenCalled();
       expect(auditLog.log).toHaveBeenCalledWith(
@@ -248,6 +256,51 @@ describe('AuthService', () => {
           fieldChanged: 'password',
         }),
       );
+    });
+  });
+
+  describe('bắt đổi mật khẩu (rà soát 2026-10-30)', () => {
+    it('đăng nhập bằng mật khẩu mặc định → bật cờ phải đổi mật khẩu', async () => {
+      prisma.account.findFirst.mockResolvedValue({
+        ...account,
+        mustChangePassword: false,
+      });
+      prisma.session.create.mockResolvedValue({
+        id: 's-9',
+        accountId: account.id,
+      });
+      jest.mocked(passwordUtil.comparePassword).mockResolvedValue(true);
+
+      const result = await service.login(
+        { username: 'admin', password: DEFAULT_PASSWORD },
+        'jest-agent',
+      );
+
+      expect(prisma.account.update).toHaveBeenCalledWith({
+        where: { id: account.id },
+        data: { mustChangePassword: true },
+      });
+      expect(result.account.must_change_password).toBe(true);
+    });
+
+    it('không cho đổi sang mật khẩu mặc định hoặc giữ nguyên mật khẩu cũ', async () => {
+      prisma.account.findUnique.mockResolvedValue(account);
+      jest.mocked(passwordUtil.comparePassword).mockResolvedValue(true);
+      await expect(
+        service.changePassword(account.id, {
+          current_password: 'cu-123456',
+          new_password: DEFAULT_PASSWORD,
+          confirm_password: DEFAULT_PASSWORD,
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      await expect(
+        service.changePassword(account.id, {
+          current_password: 'cu-123456',
+          new_password: 'cu-123456',
+          confirm_password: 'cu-123456',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(prisma.account.update).not.toHaveBeenCalled();
     });
   });
 

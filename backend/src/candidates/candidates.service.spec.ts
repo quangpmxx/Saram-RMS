@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
   UnprocessableEntityException,
@@ -998,7 +999,7 @@ describe('CandidatesService', () => {
     it('Dự án phụ — nâng cấp toàn diện: Sale tự nhận data cho chính mình qua nút "Nhận data"', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
       prisma.account.findUnique.mockResolvedValue(saleAccount);
-      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.updateMany.mockResolvedValue({ count: 1 });
       prisma.lead.findUniqueOrThrow.mockResolvedValue({
         ...baseLead,
         assignedToId: 'sale-1',
@@ -1008,8 +1009,8 @@ describe('CandidatesService', () => {
         service.assign('lead-1', { account_id: 'sale-1' }, saleUser),
       ).resolves.toBeDefined();
 
-      expect(prisma.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: { id: 'lead-1', deletedAt: null, assignedToId: null },
         data: {
           assignedToId: 'sale-1',
           assignedTeamId: 'team-1',
@@ -1017,6 +1018,16 @@ describe('CandidatesService', () => {
           assignmentMethod: 'manual',
         },
       });
+    });
+
+    it('2 người cùng nhận: người chậm hơn bị báo data vừa có người nhận', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      prisma.lead.updateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, saleUser),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(auditLog.log).not.toHaveBeenCalled();
     });
 
     it('từ chối nếu account_id không phải vai trò Sale', async () => {
@@ -1047,7 +1058,7 @@ describe('CandidatesService', () => {
       prisma.account.findUnique
         .mockResolvedValueOnce(saleAccount) // account đích (team-1)
         .mockResolvedValueOnce({ teamId: 'team-1' }); // getOwnTeamId(leader) → cùng nhóm
-      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.updateMany.mockResolvedValue({ count: 1 });
       prisma.lead.findUniqueOrThrow.mockResolvedValue({
         ...baseLead,
         assignedToId: 'sale-1',
@@ -1057,8 +1068,8 @@ describe('CandidatesService', () => {
         service.assign('lead-1', { account_id: 'sale-1' }, leaderUser),
       ).resolves.toBeDefined();
 
-      expect(prisma.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: { id: 'lead-1', deletedAt: null, assignedToId: null },
         data: {
           assignedToId: 'sale-1',
           assignedTeamId: 'team-1',
@@ -1074,7 +1085,7 @@ describe('CandidatesService', () => {
     it('Quản lý/Admin phân chia không giới hạn theo nhóm', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
       prisma.account.findUnique.mockResolvedValue(saleAccount);
-      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.updateMany.mockResolvedValue({ count: 1 });
       prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
 
       await expect(
@@ -1087,6 +1098,7 @@ describe('CandidatesService', () => {
     it('bỏ qua các lead không hợp lệ (đã xóa/đã phân chia/không tồn tại), chỉ gán lead hợp lệ', async () => {
       prisma.account.findUnique.mockResolvedValue(saleAccount);
       prisma.lead.findMany
+        .mockResolvedValueOnce([{ id: 'lead-1' }, { id: 'lead-2' }])
         .mockResolvedValueOnce([{ id: 'lead-1' }, { id: 'lead-2' }])
         .mockResolvedValueOnce([
           { ...baseLead, id: 'lead-1' },

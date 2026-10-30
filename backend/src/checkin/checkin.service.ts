@@ -12,12 +12,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CreateCheckinDto } from './dto/create-checkin.dto';
-import { CheckinPreviewQueryDto } from './dto/checkin-preview-query.dto';
 import { UpdateCompanyLocationDto } from './dto/update-company-location.dto';
 import { ListCheckinQueryDto } from './dto/list-checkin-query.dto';
 import {
   CheckinListResponseDto,
-  CheckinPreviewResponseDto,
   CheckinRecordResponseDto,
   CheckinStatusResponseDto,
   CompanyLocationResponseDto,
@@ -235,49 +233,6 @@ export class CheckinService {
       device: parsedUa.device,
       operating_system: parsedUa.operatingSystem,
       browser: parsedUa.browser,
-    };
-  }
-
-  /**
-   * Mục 2/3, yêu cầu người dùng: hiển thị khoảng cách/trạng thái TRƯỚC khi
-   * xác nhận — dùng CHUNG logic tính với checkin() (qua computeDistanceAndStatus())
-   * để không bao giờ lệch giữa preview và kết quả lưu thật, nhưng KHÔNG ghi
-   * DB và KHÔNG trả tọa độ công ty ra ngoài (Mục 7).
-   */
-  async preview(
-    query: CheckinPreviewQueryDto,
-    currentUser: AuthenticatedUser,
-    userAgent: string | undefined,
-  ): Promise<CheckinPreviewResponseDto> {
-    if (!CHECKIN_ROLES.includes(currentUser.role)) {
-      throw new ForbiddenException(
-        'Vai trò của bạn không sử dụng tính năng Check in',
-      );
-    }
-
-    const companyLocation = await this.prisma.companyLocationConfig.findFirst();
-    if (!companyLocation) {
-      return {
-        company_location_configured: false,
-        distance_from_company_meters: null,
-        status: null,
-        location_label: null,
-      };
-    }
-
-    const { distance, status } = this.computeDistanceAndStatus(
-      query.latitude,
-      query.longitude,
-      query.accuracy,
-      Boolean(userAgent),
-      companyLocation,
-    );
-
-    return {
-      company_location_configured: true,
-      distance_from_company_meters: distance,
-      status,
-      location_label: status === 'valid' ? 'Công ty' : null,
     };
   }
 

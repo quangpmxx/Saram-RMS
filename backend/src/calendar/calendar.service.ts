@@ -47,7 +47,7 @@ export function dailyOccurrences(
 }
 
 /** Mục 2.6 & 8, docs/09: Admin/Quản lý/MKT xem toàn bộ, không giới hạn nhóm. */
-const FULL_ACCESS_ROLES = new Set(['admin', 'manager', 'mkt']);
+const VIEW_ALL_LEADS_ROLES = new Set(['admin', 'manager', 'mkt']);
 
 /**
  * Mục 7, docs/13-api-design.md — GET /calendar: gộp lịch hẹn PV + lịch gọi
@@ -175,7 +175,7 @@ export class CalendarService {
   ): Promise<Record<string, unknown>> {
     const where: Record<string, unknown> = { deletedAt: null };
 
-    if (FULL_ACCESS_ROLES.has(currentUser.role)) {
+    if (VIEW_ALL_LEADS_ROLES.has(currentUser.role)) {
       if (query.team_id) {
         where.assignedTeamId = query.team_id;
       }

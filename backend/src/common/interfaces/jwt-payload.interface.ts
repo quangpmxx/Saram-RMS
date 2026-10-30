@@ -12,4 +12,6 @@ export interface AuthenticatedUser {
   id: string;
   role: AccountRole;
   sessionId: string;
+  /** Đang bị bắt đổi mật khẩu — xem PasswordChangeGuard. */
+  mustChangePassword?: boolean;
 }

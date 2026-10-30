@@ -18,6 +18,11 @@ import { AppRealtimeAction, AppRealtimeEvent } from './app-event.interface';
 export class RealtimeService {
   constructor(private readonly gateway: RealtimeGateway) {}
 
+  /** Ngắt kết nối realtime của 1 tài khoản — xem RealtimeGateway.disconnectAccount(). */
+  disconnectAccount(accountId: string): void {
+    this.gateway.disconnectAccount(accountId);
+  }
+
   private targetsFromCandidate(
     candidate: CandidateResponseDto,
   ): LeadEventTargets {

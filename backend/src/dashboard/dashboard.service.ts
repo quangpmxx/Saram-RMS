@@ -1,17 +1,16 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
-import { ReportFunnelQueryDto } from './dto/report-funnel-query.dto';
 import {
-  BySourceReportDto,
   DashboardSummaryDto,
   FunnelStep,
   KpiBreakdown,
   SalePerformanceDto,
   TeamSummaryDto,
 } from './dto/dashboard-response.dto';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 /**
  * Rà soát phân quyền 2026-10-30 — Dashboard:
@@ -23,7 +22,6 @@ import {
  *   (khớp tab Chờ phân chia); Quản lý/Admin/MKT toàn bộ.
  */
 const FULL_VIEW_ROLES = new Set(['admin', 'manager', 'mkt']);
-const REPORT_VIEW_ROLES = new Set(['admin', 'manager', 'leader']);
 
 /** Bám sát đúng 3 trạng thái phỏng vấn tính là "đã đến PV" — SCHEDULED chưa đến, NO_SHOW là bùng (không đến). */
 const ATTENDED_INTERVIEW_STATUS_CODES = ['ATTENDED', 'PASSED', 'FAILED'];
@@ -46,6 +44,36 @@ const SHUTTLE_RESULT_FAILED = 'Trượt PV';
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+type ShuttleKpi = Pick<
+  KpiBreakdown,
+  'interview_scheduled' | 'attended' | 'no_show' | 'passed' | 'failed'
+>;
+type ShuttleRow = {
+  saleUserId: string | null;
+  status: string | null;
+  interviewResult: string | null;
+};
+
+const EMPTY_SHUTTLE_KPI: ShuttleKpi = {
+  interview_scheduled: 0,
+  attended: 0,
+  no_show: 0,
+  passed: 0,
+  failed: 0,
+};
+
+function tallyShuttle(rows: ShuttleRow[]): ShuttleKpi {
+  return {
+    interview_scheduled: rows.length,
+    attended: rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED).length,
+    no_show: rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW).length,
+    passed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED)
+      .length,
+    failed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_FAILED)
+      .length,
+  };
 }
 
 /**
@@ -162,7 +190,7 @@ export class DashboardService {
     query = await this.sanitizeQuery(query, currentUser);
     const teamId =
       currentUser.role === 'leader'
-        ? ((await this.getOwnTeamId(currentUser.id)) ?? '__none__')
+        ? ((await findOwnTeamId(this.prisma, currentUser.id)) ?? '__none__')
         : query.team_id;
     const accountId =
       currentUser.role === 'sale' ? currentUser.id : query.account_id;
@@ -239,62 +267,99 @@ export class DashboardService {
       : {};
     const sourceFiltered = Boolean(query.source_id);
 
-    return Promise.all(
-      sales.map(async (sale) => {
-        const leadWhere: Prisma.LeadWhereInput = {
-          assignedToId: sale.id,
-          deletedAt: null,
-          ...leadDateWhere,
-          ...sourceWhere,
-        };
-        const [calls, potentialLeads, interviewCount, employedCount, kpi] =
-          await Promise.all([
-            this.prisma.leadNote.count({
-              where: { createdById: sale.id, ...noteDateWhere },
-            }),
-            this.prisma.lead.count({
-              where: { ...leadWhere, callResult: { code: 'POTENTIAL' } },
-            }),
-            this.prisma.interviewAppointment.count({
-              where: {
-                createdById: sale.id,
-                deletedAt: null,
-                ...interviewDateWhere,
-              },
-            }),
-            this.prisma.lead.count({
-              where: {
-                ...leadWhere,
-                interviews: {
-                  some: {
-                    deletedAt: null,
-                    employmentStatus: { code: 'EMPLOYED' },
-                  },
-                },
-              },
-            }),
-            this.computeKpiBreakdown(
-              leadWhere,
-              [sale.id],
-              query.date_from,
-              query.date_to,
-              sourceFiltered,
-            ),
-          ]);
+    const saleIds = sales.map((sale) => sale.id);
+    if (saleIds.length === 0) return [];
+    const leadWhere: Prisma.LeadWhereInput = {
+      assignedToId: { in: saleIds },
+      deletedAt: null,
+      ...leadDateWhere,
+      ...sourceWhere,
+    };
 
-        return {
-          account_id: sale.id,
-          full_name: sale.fullName,
-          avatar_url: sale.avatarUrl,
-          team_id: sale.teamId,
-          calls,
-          potential_leads: potentialLeads,
-          interview_count: interviewCount,
-          employed_count: employedCount,
-          kpi,
-        };
+    // Mỗi chỉ số gom 1 query cho TẤT CẢ Sale (trước đây mỗi Sale chạy ~6 query).
+    const [
+      callRows,
+      newLeadRows,
+      potentialRows,
+      interviewRows,
+      employedRows,
+      shuttleBySale,
+    ] = await Promise.all([
+      this.prisma.leadNote.groupBy({
+        by: ['createdById'],
+        where: { createdById: { in: saleIds }, ...noteDateWhere },
+        _count: { _all: true },
       }),
-    );
+      this.prisma.lead.groupBy({
+        by: ['assignedToId'],
+        where: leadWhere,
+        _count: { _all: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ['assignedToId'],
+        where: { ...leadWhere, callResult: { code: 'POTENTIAL' } },
+        _count: { _all: true },
+      }),
+      this.prisma.interviewAppointment.groupBy({
+        by: ['createdById'],
+        where: {
+          createdById: { in: saleIds },
+          deletedAt: null,
+          ...interviewDateWhere,
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ['assignedToId'],
+        where: {
+          ...leadWhere,
+          interviews: {
+            some: {
+              deletedAt: null,
+              employmentStatus: { code: 'EMPLOYED' },
+            },
+          },
+        },
+        _count: { _all: true },
+      }),
+      this.computeShuttleKpiBySale(
+        saleIds,
+        query.date_from,
+        query.date_to,
+        sourceFiltered,
+      ),
+    ]);
+
+    const countBy = (
+      rows: Array<{ _count: { _all: number } }>,
+      key: 'createdById' | 'assignedToId',
+    ) =>
+      new Map(
+        rows.map((row) => [
+          (row as unknown as Record<string, string>)[key],
+          row._count._all,
+        ]),
+      );
+    const callsBySale = countBy(callRows, 'createdById');
+    const newLeadsBySale = countBy(newLeadRows, 'assignedToId');
+    const potentialBySale = countBy(potentialRows, 'assignedToId');
+    const interviewsBySale = countBy(interviewRows, 'createdById');
+    const employedBySale = countBy(employedRows, 'assignedToId');
+
+    return sales.map((sale) => ({
+      account_id: sale.id,
+      full_name: sale.fullName,
+      avatar_url: sale.avatarUrl,
+      team_id: sale.teamId,
+      calls: callsBySale.get(sale.id) ?? 0,
+      potential_leads: potentialBySale.get(sale.id) ?? 0,
+      interview_count: interviewsBySale.get(sale.id) ?? 0,
+      employed_count: employedBySale.get(sale.id) ?? 0,
+      kpi: this.buildKpiBreakdown(
+        newLeadsBySale.get(sale.id) ?? 0,
+        shuttleBySale.get(sale.id) ?? EMPTY_SHUTTLE_KPI,
+      ),
+    }));
   }
 
   /** Mục 8, docs/13: GET /dashboard/by-team — "Quản lý, Admin". */
@@ -360,93 +425,6 @@ export class DashboardService {
           conversion_rate: employedStep?.percentage ?? 0,
           care_pool_count: carePoolCount,
           kpi,
-        };
-      }),
-    );
-  }
-
-  /** Mục 8, docs/13: GET /report/funnel — "Leader, Quản lý, Admin". */
-  async getFunnel(
-    query: ReportFunnelQueryDto,
-    currentUser: AuthenticatedUser,
-  ): Promise<FunnelStep[]> {
-    if (!REPORT_VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xem báo cáo phễu chuyển đổi',
-      );
-    }
-
-    const teamId = await this.resolveTeamIdForRestrictedRole(
-      currentUser,
-      query.team_id,
-    );
-    const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
-    const where: Prisma.LeadWhereInput = {
-      deletedAt: null,
-      ...(teamId ? { assignedTeamId: teamId } : {}),
-      ...(query.account_id ? { assignedToId: query.account_id } : {}),
-      ...dateWhere,
-    };
-
-    return this.computeFunnel(where);
-  }
-
-  /** Mục 8, docs/13: GET /report/by-source — "Leader, Quản lý, Admin". */
-  async getBySource(
-    query: DashboardQueryDto,
-    currentUser: AuthenticatedUser,
-  ): Promise<BySourceReportDto[]> {
-    if (!REPORT_VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException(
-        'Bạn không có quyền xem báo cáo theo nguồn kênh',
-      );
-    }
-
-    const teamId = await this.resolveTeamIdForRestrictedRole(
-      currentUser,
-      query.team_id,
-    );
-    const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
-    const baseWhere: Prisma.LeadWhereInput = {
-      deletedAt: null,
-      ...(teamId ? { assignedTeamId: teamId } : {}),
-      ...dateWhere,
-    };
-
-    const sources = await this.prisma.leadSource.findMany();
-
-    return Promise.all(
-      sources.map(async (source) => {
-        const where: Prisma.LeadWhereInput = {
-          ...baseWhere,
-          sourceId: source.id,
-        };
-        const [leadCount, potentialCount, employedCount] = await Promise.all([
-          this.prisma.lead.count({ where }),
-          this.prisma.lead.count({
-            where: { ...where, callResult: { code: 'POTENTIAL' } },
-          }),
-          this.prisma.lead.count({
-            where: {
-              ...where,
-              interviews: {
-                some: {
-                  deletedAt: null,
-                  employmentStatus: { code: 'EMPLOYED' },
-                },
-              },
-            },
-          }),
-        ]);
-
-        return {
-          source_id: source.id,
-          source_name: source.name,
-          lead_count: leadCount,
-          potential_rate:
-            leadCount > 0 ? round1((potentialCount / leadCount) * 100) : 0,
-          employed_rate:
-            leadCount > 0 ? round1((employedCount / leadCount) * 100) : 0,
         };
       }),
     );
@@ -553,6 +531,13 @@ export class DashboardService {
       this.computeShuttleKpi(saleAccountIds, dateFrom, dateTo, sourceFiltered),
     ]);
 
+    return this.buildKpiBreakdown(newLeads, shuttle);
+  }
+
+  private buildKpiBreakdown(
+    newLeads: number,
+    shuttle: ShuttleKpi,
+  ): KpiBreakdown {
     const pct = (count: number) =>
       newLeads > 0 ? round1((count / newLeads) * 100) : 0;
 
@@ -585,42 +570,54 @@ export class DashboardService {
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
-  ): Promise<
-    Pick<
-      KpiBreakdown,
-      'interview_scheduled' | 'attended' | 'no_show' | 'passed' | 'failed'
-    >
-  > {
+  ): Promise<ShuttleKpi> {
     if (sourceFiltered || saleAccountIds.length === 0) {
-      return {
-        interview_scheduled: 0,
-        attended: 0,
-        no_show: 0,
-        passed: 0,
-        failed: 0,
-      };
+      return EMPTY_SHUTTLE_KPI;
     }
+    const rows = await this.findShuttleRows(saleAccountIds, dateFrom, dateTo);
+    return tallyShuttle(rows);
+  }
 
-    const rows = await this.prisma.shuttleRecord.findMany({
+  /** Như computeShuttleKpi() nhưng tách riêng từng Sale bằng đúng 1 query. */
+  private async computeShuttleKpiBySale(
+    saleAccountIds: string[],
+    dateFrom: string | undefined,
+    dateTo: string | undefined,
+    sourceFiltered: boolean,
+  ): Promise<Map<string, ShuttleKpi>> {
+    const result = new Map<string, ShuttleKpi>();
+    if (sourceFiltered || saleAccountIds.length === 0) return result;
+
+    const rows = await this.findShuttleRows(saleAccountIds, dateFrom, dateTo);
+    const rowsBySale = new Map<string, ShuttleRow[]>();
+    for (const row of rows) {
+      const saleId = row.saleUserId as string;
+      const list = rowsBySale.get(saleId);
+      if (list) list.push(row);
+      else rowsBySale.set(saleId, [row]);
+    }
+    for (const [saleId, saleRows] of rowsBySale) {
+      result.set(saleId, tallyShuttle(saleRows));
+    }
+    return result;
+  }
+
+  private findShuttleRows(
+    saleAccountIds: string[],
+    dateFrom: string | undefined,
+    dateTo: string | undefined,
+  ): Promise<ShuttleRow[]> {
+    return this.prisma.shuttleRecord.findMany({
       where: {
+        deletedAt: null,
         saleUserId: { in: saleAccountIds },
         date: {
           gte: dateFrom ? new Date(dateFrom) : undefined,
           lte: dateTo ? new Date(dateTo) : undefined,
         },
       },
-      select: { status: true, interviewResult: true },
+      select: { saleUserId: true, status: true, interviewResult: true },
     });
-
-    return {
-      interview_scheduled: rows.length,
-      attended: rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED).length,
-      no_show: rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW).length,
-      passed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED)
-        .length,
-      failed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_FAILED)
-        .length,
-    };
   }
 
   /**
@@ -699,7 +696,8 @@ export class DashboardService {
           OR: [
             {
               assignedTeamId:
-                (await this.getOwnTeamId(currentUser.id)) ?? '__none__',
+                (await findOwnTeamId(this.prisma, currentUser.id)) ??
+                '__none__',
             },
             { assignedTeamId: null },
           ],
@@ -730,7 +728,7 @@ export class DashboardService {
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       if (teamId) where.assignedTeamId = teamId;
     } else if (currentUser.role === 'leader' || currentUser.role === 'sale') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.assignedTeamId = ownTeamId ?? '__none__';
     } else {
       return 0;
@@ -750,7 +748,7 @@ export class DashboardService {
   ): Promise<DashboardQueryDto> {
     if (FULL_VIEW_ROLES.has(currentUser.role)) return query;
     if (currentUser.role === 'leader' && query.account_id) {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       const member = await this.prisma.account.findFirst({
         where: { id: query.account_id, teamId: ownTeamId ?? '__none__' },
         select: { id: true },
@@ -766,16 +764,9 @@ export class DashboardService {
     teamId?: string,
   ): Promise<string | undefined> {
     if (currentUser.role === 'leader') {
-      return (await this.getOwnTeamId(currentUser.id)) ?? '__none__';
+      return (await findOwnTeamId(this.prisma, currentUser.id)) ?? '__none__';
     }
     return teamId;
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-    });
-    return account?.teamId ?? null;
   }
 
   private buildDateWhere(

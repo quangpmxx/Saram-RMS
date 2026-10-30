@@ -5,6 +5,7 @@ import {
   LeaveRequest,
   LeaveRequestStatus,
 } from '../../../generated/prisma/client';
+import { ROLE_LABEL } from '../../common/constants/role-label';
 
 /** Khớp NamedRefWithRole ở các module khác (candidates) — dùng chung shape cho mọi tài khoản tham chiếu. */
 export interface LeaveRequestPersonDto {
@@ -43,17 +44,6 @@ export interface LeaveRequestResponseDto {
   created_at: string;
   updated_at: string;
 }
-
-const ROLE_LABEL: Record<AccountRole, string> = {
-  admin: 'Admin',
-  manager: 'Manager',
-  leader: 'Leader',
-  mkt: 'NV MKT',
-  sale: 'NV Sale',
-  accounting: 'Kế toán',
-  order_staff: 'NV QL Đơn hàng',
-  shuttle_staff: 'NV Đưa đón',
-};
 
 function toPersonDto(
   account: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>,

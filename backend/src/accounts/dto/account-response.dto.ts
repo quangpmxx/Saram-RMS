@@ -8,6 +8,8 @@ export interface AccountResponseDto {
   nickname: string | null;
   username: string;
   role: string;
+  /** Đang bị bắt đổi mật khẩu (dùng mật khẩu mặc định) — rà soát 2026-10-30. */
+  must_change_password: boolean;
   team_id: string | null;
   team_name: string | null;
   status: string;
@@ -47,6 +49,7 @@ export function toAccountResponse(
     nickname: account.nickname,
     username: account.username,
     role: account.role,
+    must_change_password: account.mustChangePassword,
     team_id: account.teamId,
     team_name: account.team?.name ?? null,
     status: account.status,

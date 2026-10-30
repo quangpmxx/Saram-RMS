@@ -35,6 +35,13 @@ import {
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import {
+  canDecideStop,
+  canDeleteLeads,
+  canEditLead,
+  canProcessLead,
+  type LeadViewer,
+} from "@/lib/lead-permissions";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type {
   AccountRole,
@@ -74,7 +81,6 @@ import { shouldOpenRowDetail } from "./row-click";
 import { SourceBadge } from "./source-badge";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
-import { CarePoolTable } from "./care-pool-table";
 import { DistributionRuleModal } from "./distribution-rule-modal";
 import { CareWarehousePanel, clearSavedCareState, type CareSaleOption } from "./care-warehouse-panel";
 
@@ -118,8 +124,8 @@ type CandidateSortKey = "stt" | "date";
 /** Mặc định khi vào: ngày giờ lên số giảm dần (yêu cầu người dùng 2026-10-30). */
 const DEFAULT_CANDIDATE_SORT: SortState<CandidateSortKey> = { key: "date", order: "desc" };
 
-/** "care" = Kho chăm sóc (2026-10-28) — khác "care_pool" (Cột chăm sóc cũ, đã ẩn khỏi UI). */
-type ViewMode = "all" | "pending" | "care_pool" | "mine" | "care";
+/** "care" = Kho chăm sóc (2026-10-28). Cột chăm sóc cũ ("care_pool") đã gỡ hẳn (rà soát 2026-10-30). */
+type ViewMode = "all" | "pending" | "mine" | "care";
 /** Vai trò xem được tab Kho chăm sóc — MKT chỉ xem (toàn công ty), khớp backend. */
 const CARE_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "mkt"];
 
@@ -255,8 +261,9 @@ export function CandidatesClient({
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
   // Có quyền xoá data (Admin; MKT với data mình up) → cũng được tick chọn để "Xoá data đã chọn".
-  // Xoá data: Admin, Quản lý, MKT — mọi data (rà soát phân quyền 2026-10-30).
-  const canDeleteAny = currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt";
+  // Quyền trên từng data dùng chung với trang chi tiết — lib/lead-permissions.ts.
+  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId };
+  const canDeleteAny = canDeleteLeads(currentUserRole);
   const canSelect = canAssign || canDeleteAny;
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
   const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
@@ -295,45 +302,10 @@ export function CandidatesClient({
     };
   }, [candidates, viewMode]);
 
-  function canModify(candidate: Candidate): boolean {
-    // MKT sửa được mọi data (rà soát phân quyền 2026-10-30).
-    if (currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt") return true;
-    if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-    // Dự án phụ — nâng cấp toàn diện: Sale sửa được ứng viên KHÔNG phải của
-    // mình nếu cùng nhóm, NHƯNG chỉ khi ứng viên đã được xử lý ít nhất 1 lần
-    // (last_activity_at khác null) — khớp assertCanModify()/loadLeadForUpdate()
-    // ở backend, tránh giành số hoàn toàn mới của đồng nghiệp.
-    if (currentUserRole === "sale") {
-      if (candidate.assigned_to?.id === currentUserId) return true;
-      return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
-    }
-    return false;
-  }
-
   /** Khớp decideStopRequest() ở backend: Leader (nhóm của data)/Quản lý/Admin. */
   function canApproveStop(candidate: Candidate): boolean {
     if (isReadOnly || !candidate.care_stop_requested_at || candidate.care_stopped_at) return false;
-    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-    return currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId;
-  }
-
-  /**
-   * Dự án phụ — nâng cấp toàn diện: cho sửa cột "Kết quả" (đổi ý từ "Tình
-   * trạng Zalo" — vẫn dùng chung field zalo_status kỹ thuật cũ, chỉ đổi tên
-   * hiển thị + giá trị) ngay tại bảng danh sách, không cần vào trang Chi
-   * tiết. Khớp ĐÚNG phạm vi quyền của canUpdatePipeline() ở trang Chi tiết /
-   * loadLeadForUpdate() ở backend — KHÔNG gồm MKT (cùng nhóm field "tiến
-   * trình cuộc gọi", không phải field cơ bản MKT được sửa qua canModify()).
-   */
-  function canUpdateZaloStatus(candidate: Candidate): boolean {
-    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-    if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
-    // Sale xử lý hộ mọi data trong nhóm đã có người phụ trách (rà soát phân quyền 2026-10-30).
-    if (currentUserRole === "sale") {
-      if (candidate.assigned_to?.id === currentUserId) return true;
-      return candidate.assigned_team_id === currentUserTeamId && candidate.assigned_to !== null;
-    }
-    return false;
+    return canDecideStop(candidate, viewer);
   }
 
   /**
@@ -353,16 +325,10 @@ export function CandidatesClient({
   ): Promise<PaginatedResult<Candidate>> {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
     if (activeFilters.source_id) query.set("source_id", activeFilters.source_id);
-    if (mode !== "care_pool") applySortParams(query, sortRef.current);
+    applySortParams(query, sortRef.current);
 
     if (mode === "pending") {
       return clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
-    }
-    if (mode === "care_pool") {
-      // Mục 5, docs/13: GET /care-pool không nhận cùng bộ filter với /candidate
-      // (chỉ page/page_size/team_id) — dùng query riêng, không lẫn filters hiện tại.
-      const carePoolQuery = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
-      return clientApi<PaginatedResult<Candidate>>(`/care-pool?${carePoolQuery.toString()}`);
     }
 
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
@@ -564,9 +530,7 @@ export function CandidatesClient({
         ? updated.assigned_to === null
         : viewMode === "mine"
           ? updated.assigned_to?.id === currentUserId
-          : viewMode === "care_pool"
-            ? event.change_type !== "care_pool_removed"
-            : true;
+          : true;
 
     if (wasShown) {
       if (stillEligible) {
@@ -578,7 +542,7 @@ export function CandidatesClient({
       return;
     }
 
-    if (event.change_type === "created" || event.change_type === "care_pool_entered") {
+    if (event.change_type === "created") {
       void silentRefetchCurrentPage();
     }
   }
@@ -945,8 +909,7 @@ export function CandidatesClient({
 
       {viewMode !== "care" && (
       <>
-      {viewMode !== "care_pool" && (
-      // UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng.
+      {/* UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng. */}
       <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
         {(viewMode === "all" || viewMode === "mine") && (
           <Field uiSize="xs" label="Tìm kiếm" className="min-w-[200px] flex-1">
@@ -1030,9 +993,8 @@ export function CandidatesClient({
           Tìm kiếm
         </Button>
       </Card>
-      )}
 
-      {viewMode !== "care_pool" && canSelect && selectedIds.size > 0 && (
+      {canSelect && selectedIds.size > 0 && (
         <Card className="mb-2 flex flex-wrap items-center justify-between gap-3 p-2.5">
           <span className="text-sm text-slate-600">
             Đã chọn {selectedIds.size} lao động
@@ -1074,16 +1036,6 @@ export function CandidatesClient({
       )}
 
       <Card className="overflow-hidden p-0">
-        {viewMode === "care_pool" ? (
-          <CarePoolTable
-            candidates={candidates}
-            currentUserId={currentUserId}
-            currentUserRole={currentUserRole}
-            teamNameById={teamNameById}
-            onChanged={() => refresh(page, "care_pool")}
-            onBanner={(b) => (b.type === "success" ? toast.success(b.text) : toast.error(b.text))}
-          />
-        ) : (
         <div ref={scrollContainerRef} className="max-h-[calc(100vh-180px)] overflow-auto">
           {/* Dự án phụ — nâng cấp toàn diện: bọc riêng <table> trong 1 div có
               "zoom" (không phải transform: scale) — zoom tính lại layout thật
@@ -1337,7 +1289,7 @@ export function CandidatesClient({
                           "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
                           status ? "ring-1 ring-inset ring-black/10" : "border border-slate-200 text-slate-600",
                         );
-                        if (!canUpdateZaloStatus(candidate)) {
+                        if (!canProcessLead(candidate, viewer)) {
                           return (
                             <span style={pillStyle} className={pillClass}>
                               {status ? shortZaloFriendName(status.name) : "--"}
@@ -1380,7 +1332,7 @@ export function CandidatesClient({
                           Chờ duyệt đóng
                         </span>
                       ) : null}
-                      {canUpdateZaloStatus(candidate) ? (
+                      {canProcessLead(candidate, viewer) ? (
                         // Chỉ 1 lựa chọn thật ("Đã gửi CCCD") nên bấm = đảo trạng thái
                         // (có/không) thay vì mở danh sách chọn — mũi tên chỉ là gợi ý
                         // hình ảnh giống ô chọn, không phải dropdown thật (select gốc
@@ -1417,7 +1369,7 @@ export function CandidatesClient({
 
                     <td className="px-1 py-2">
                       <div className="flex flex-wrap items-center gap-0.5">
-                        {canModify(candidate) && (
+                        {canEditLead(candidate, viewer) && (
                           <ActionLink
                             icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />}
                             title="Sửa"
@@ -1475,8 +1427,7 @@ export function CandidatesClient({
           </table>
           </div>
         </div>
-        )}
-        {viewMode !== "care_pool" && candidates.length === 0 && (
+        {candidates.length === 0 && (
           <EmptyState
             title={viewMode === "pending" ? "Không có lao động nào đang chờ phân chia" : "Chưa có lao động nào khớp bộ lọc"}
             icon={<Search className="h-5 w-5" strokeWidth={1.75} />}

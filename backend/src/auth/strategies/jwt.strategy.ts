@@ -9,6 +9,8 @@ import {
   JwtPayload,
 } from '../../common/interfaces/jwt-payload.interface';
 
+const LAST_ACTIVE_WRITE_INTERVAL_MS = 60_000;
+
 function cookieExtractor(req: Request): string | null {
   const cookies = req?.cookies as Record<string, string> | undefined;
   return cookies?.['access_token'] ?? null;
@@ -48,10 +50,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Cập nhật hoạt động gần nhất của phiên — không chặn request nếu ghi thất bại.
-    void this.prisma.session
-      .update({ where: { id: session.id }, data: { lastActiveAt: new Date() } })
-      .catch(() => undefined);
+    // Chỉ ghi khi giá trị cũ đã quá LAST_ACTIVE_WRITE_INTERVAL_MS để tránh 1 lần
+    // ghi DB cho mỗi request (Dashboard mở ra là 4 request song song).
+    const now = Date.now();
+    if (
+      !session.lastActiveAt ||
+      now - session.lastActiveAt.getTime() > LAST_ACTIVE_WRITE_INTERVAL_MS
+    ) {
+      void this.prisma.session
+        .update({
+          where: { id: session.id },
+          data: { lastActiveAt: new Date(now) },
+        })
+        .catch(() => undefined);
+    }
 
-    return { id: account.id, role: account.role, sessionId: session.id };
+    return {
+      id: account.id,
+      role: account.role,
+      sessionId: session.id,
+      mustChangePassword: account.mustChangePassword,
+    };
   }
 }

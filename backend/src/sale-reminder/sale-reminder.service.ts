@@ -93,7 +93,7 @@ export class SaleReminderService {
 
     for (const sale of sales) {
       const lastRecord = await this.prisma.shuttleRecord.findFirst({
-        where: { saleUserId: sale.id },
+        where: { saleUserId: sale.id, deletedAt: null },
         orderBy: { date: 'desc' },
         select: { date: true },
       });

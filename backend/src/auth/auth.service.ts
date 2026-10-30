@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { comparePassword, hashPassword } from '../common/utils/password.util';
@@ -21,6 +22,7 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import type { UiTheme } from './dto/update-theme.dto';
+import { LoginAttemptLimiter } from './login-attempt-limiter';
 
 export interface LoginResult {
   token: string;
@@ -37,12 +39,18 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly auditLog: AuditLogService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /** Chống dò mật khẩu — xem login-attempt-limiter.ts. */
+  private readonly loginLimiter = new LoginAttemptLimiter();
 
   async login(
     dto: LoginDto,
     deviceInfo: string | undefined,
+    ip?: string,
   ): Promise<LoginResult> {
+    this.loginLimiter.assertAllowed(dto.username, ip);
     // Yêu cầu trực tiếp người dùng (2026-07-16): tên đăng nhập không phân
     // biệt hoa/thường ("ADMIN"/"Admin"/"admin" đều đăng nhập được) —
     // `findFirst` + `mode: 'insensitive'` thay cho `findUnique` (chỉ so
@@ -54,6 +62,7 @@ export class AuthService {
 
     // Không tiết lộ tài khoản có tồn tại hay không qua nội dung lỗi.
     if (!account || account.status === 'inactive') {
+      this.loginLimiter.recordFailure(dto.username, ip);
       throw new UnauthorizedException('Tên đăng nhập hoặc mật khẩu không đúng');
     }
 
@@ -62,7 +71,22 @@ export class AuthService {
       account.passwordHash,
     );
     if (!passwordMatches) {
+      this.loginLimiter.recordFailure(dto.username, ip);
       throw new UnauthorizedException('Tên đăng nhập hoặc mật khẩu không đúng');
+    }
+    this.loginLimiter.recordSuccess(dto.username);
+
+    // Đăng nhập bằng mật khẩu mặc định → bắt đổi mật khẩu (rà soát
+    // 2026-10-30). Áp cho cả tài khoản cũ chưa từng đổi mật khẩu.
+    if (
+      !account.mustChangePassword &&
+      dto.password === this.configService.get<string>('DEFAULT_PASSWORD')
+    ) {
+      account.mustChangePassword = true;
+      await this.prisma.account.update({
+        where: { id: account.id },
+        data: { mustChangePassword: true },
+      });
     }
 
     // Mục 8, docs/09: cho phép đăng nhập nhiều thiết bị cùng lúc — mỗi lần
@@ -143,10 +167,23 @@ export class AuthService {
       throw new UnprocessableEntityException('Mật khẩu hiện tại không đúng');
     }
 
+    if (
+      dto.new_password === this.configService.get<string>('DEFAULT_PASSWORD')
+    ) {
+      throw new UnprocessableEntityException(
+        'Mật khẩu mới không được trùng mật khẩu mặc định',
+      );
+    }
+    if (dto.new_password === dto.current_password) {
+      throw new UnprocessableEntityException(
+        'Mật khẩu mới phải khác mật khẩu hiện tại',
+      );
+    }
+
     const passwordHash = await hashPassword(dto.new_password);
     await this.prisma.account.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: { passwordHash, mustChangePassword: false },
     });
 
     await this.auditLog.log({

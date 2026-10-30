@@ -17,6 +17,7 @@ import {
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 const TEAM_SELECT = { id: true, name: true } as const;
 
@@ -35,6 +36,7 @@ export class AccountsService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly auditLog: AuditLogService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(
@@ -108,6 +110,7 @@ export class AccountsService {
           fullName: dto.full_name,
           username: dto.username,
           passwordHash,
+          mustChangePassword: true,
           role: dto.role,
           teamId,
           createdById,
@@ -187,6 +190,13 @@ export class AccountsService {
     }
 
     await this.logFieldChanges(actorId, id, existing, dto);
+    // Bị khoá hoặc đổi nhóm → ngắt realtime để không nhận sự kiện phạm vi cũ.
+    if (
+      account.status !== existing.status ||
+      account.teamId !== existing.teamId
+    ) {
+      this.realtime.disconnectAccount(id);
+    }
 
     return toAccountResponse(account);
   }
@@ -205,6 +215,7 @@ export class AccountsService {
       where: { id },
       data: { status: 'inactive' },
     });
+    this.realtime.disconnectAccount(id);
 
     await this.auditLog.log({
       accountId: actorId,
@@ -250,6 +261,8 @@ export class AccountsService {
       throw error;
     }
 
+    this.realtime.disconnectAccount(id);
+
     await this.auditLog.log({
       accountId: actorId,
       actionType: 'delete',
@@ -272,7 +285,11 @@ export class AccountsService {
     );
     const passwordHash = await hashPassword(defaultPassword);
 
-    await this.prisma.account.update({ where: { id }, data: { passwordHash } });
+    // Đặt lại về mật khẩu mặc định → bắt đổi ở lần đăng nhập tới.
+    await this.prisma.account.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: true },
+    });
 
     await this.auditLog.log({
       accountId: actorId,

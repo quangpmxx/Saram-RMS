@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DashboardService } from './dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,8 +9,8 @@ describe('DashboardService', () => {
     team: { findMany: jest.Mock };
     lead: { count: jest.Mock; groupBy: jest.Mock };
     leadSource: { findMany: jest.Mock };
-    leadNote: { count: jest.Mock };
-    interviewAppointment: { count: jest.Mock };
+    leadNote: { count: jest.Mock; groupBy: jest.Mock };
+    interviewAppointment: { count: jest.Mock; groupBy: jest.Mock };
     shuttleRecord: { findMany: jest.Mock };
   };
 
@@ -41,8 +40,14 @@ describe('DashboardService', () => {
         groupBy: jest.fn().mockResolvedValue([]),
       },
       leadSource: { findMany: jest.fn().mockResolvedValue([]) },
-      leadNote: { count: jest.fn().mockResolvedValue(0) },
-      interviewAppointment: { count: jest.fn().mockResolvedValue(0) },
+      leadNote: {
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      interviewAppointment: {
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       shuttleRecord: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
@@ -181,32 +186,6 @@ describe('DashboardService', () => {
     });
   });
 
-  describe('getFunnel/getBySource — Mục 8, docs/13: Leader/Quản lý/Admin', () => {
-    it('Sale/MKT bị từ chối cả 2 API', async () => {
-      await expect(service.getFunnel({}, saleUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getFunnel({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getBySource({}, saleUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      await expect(service.getBySource({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-    });
-
-    it('getFunnel: account_id thu hẹp theo đúng 1 Sale', async () => {
-      await service.getFunnel({ account_id: 'sale-9' }, adminUser);
-      expect(prisma.lead.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ assignedToId: 'sale-9' }),
-        }),
-      );
-    });
-  });
-
   describe('computeFunnel — tỷ lệ % so với bước Lead đầu tiên', () => {
     it('tính đúng % làm tròn 1 chữ số thập phân, bước Lead luôn 100%', async () => {
       prisma.lead.count
@@ -216,7 +195,7 @@ describe('DashboardService', () => {
         .mockResolvedValueOnce(3) // PASSED
         .mockResolvedValueOnce(1); // EMPLOYED
 
-      const funnel = await service.getFunnel({}, adminUser);
+      const funnel = await service['computeFunnel']({});
 
       expect(funnel).toEqual([
         { code: 'LEAD', label: 'Lead', count: 10, percentage: 100 },
@@ -234,7 +213,7 @@ describe('DashboardService', () => {
 
     it('bước Lead = 0 → tất cả % là 0, không chia cho 0', async () => {
       prisma.lead.count.mockResolvedValue(0);
-      const funnel = await service.getFunnel({}, adminUser);
+      const funnel = await service['computeFunnel']({});
       expect(
         funnel.every((step) => step.percentage === 0 || step.code === 'LEAD'),
       ).toBe(true);
@@ -387,6 +366,78 @@ describe('DashboardService', () => {
         team_id: 'team-1',
       });
       expect(result[0].kpi).toBeDefined();
+    });
+
+    it('gom query: số liệu từng Sale khớp đúng, Sale không có dữ liệu = 0', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 's1', fullName: 'A', avatarUrl: null, teamId: 't1' },
+        { id: 's2', fullName: 'B', avatarUrl: null, teamId: 't1' },
+      ]);
+      prisma.leadNote.groupBy.mockResolvedValue([
+        { createdById: 's1', _count: { _all: 5 } },
+      ]);
+      // Thứ tự gọi lead.groupBy: new_leads → potential → employed.
+      prisma.lead.groupBy
+        .mockResolvedValueOnce([
+          { assignedToId: 's1', _count: { _all: 10 } },
+          { assignedToId: 's2', _count: { _all: 4 } },
+        ])
+        .mockResolvedValueOnce([{ assignedToId: 's1', _count: { _all: 3 } }])
+        .mockResolvedValueOnce([{ assignedToId: 's2', _count: { _all: 1 } }]);
+      prisma.interviewAppointment.groupBy.mockResolvedValue([
+        { createdById: 's2', _count: { _all: 2 } },
+      ]);
+      prisma.shuttleRecord.findMany.mockResolvedValue([
+        { saleUserId: 's1', status: 'Đã đón', interviewResult: 'Đỗ PV' },
+        { saleUserId: 's1', status: 'Chưa đón được', interviewResult: null },
+      ]);
+
+      const [a, b] = await service.getPerformance({}, adminUser);
+
+      expect(a).toMatchObject({
+        account_id: 's1',
+        calls: 5,
+        potential_leads: 3,
+        interview_count: 0,
+        employed_count: 0,
+      });
+      expect(a.kpi).toMatchObject({
+        new_leads: 10,
+        interview_scheduled: 2,
+        attended: 1,
+        no_show: 1,
+        passed: 1,
+        failed: 0,
+        schedule_rate: 20,
+      });
+      expect(b).toMatchObject({
+        account_id: 's2',
+        calls: 0,
+        potential_leads: 0,
+        interview_count: 2,
+        employed_count: 1,
+      });
+      expect(b.kpi).toMatchObject({ new_leads: 4, interview_scheduled: 0 });
+      // Chỉ 1 query shuttle cho tất cả Sale, không phải 1 query/Sale.
+      expect(prisma.shuttleRecord.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('lọc theo Nguồn → 5 chỉ số Đưa đón về 0 và không truy vấn Đưa đón', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 's1', fullName: 'A', avatarUrl: null, teamId: 't1' },
+      ]);
+      const [a] = await service.getPerformance(
+        { source_id: 'src-1' },
+        adminUser,
+      );
+      expect(a.kpi.interview_scheduled).toBe(0);
+      expect(prisma.shuttleRecord.findMany).not.toHaveBeenCalled();
+    });
+
+    it('không có Sale nào → trả mảng rỗng, không chạy query thống kê', async () => {
+      prisma.account.findMany.mockResolvedValue([]);
+      await expect(service.getPerformance({}, adminUser)).resolves.toEqual([]);
+      expect(prisma.leadNote.groupBy).not.toHaveBeenCalled();
     });
 
     it('account_id thu hẹp danh sách Sale còn đúng 1 người', async () => {

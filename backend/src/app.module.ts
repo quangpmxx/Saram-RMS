@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
+import { PasswordChangeGuard } from './common/guards/password-change.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -13,12 +14,10 @@ import { CandidatesModule } from './candidates/candidates.module';
 import { ImportsModule } from './imports/imports.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CalendarModule } from './calendar/calendar.module';
-import { CarePoolModule } from './care-pool/care-pool.module';
 import { CareWarehouseModule } from './care-warehouse/care-warehouse.module';
 import { DistributionModule } from './distribution/distribution.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
-import { ColumnWidthModule } from './column-width/column-width.module';
 import { ShuttleModule } from './shuttle/shuttle.module';
 import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
 import { DailyReportsModule } from './daily-reports/daily-reports.module';
@@ -54,12 +53,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     ImportsModule,
     CatalogModule,
     CalendarModule,
-    CarePoolModule,
     CareWarehouseModule,
     DistributionModule,
     DashboardModule,
     NotificationModule,
-    ColumnWidthModule,
     ShuttleModule,
     SaleReminderModule,
     DailyReportsModule,
@@ -82,6 +79,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     // tra vai trò (@Roles()) — áp dụng toàn cục để không route nào bị quên
     // gắn guard. Thứ tự chạy theo thứ tự khai báo: JwtAuthGuard trước.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // Bắt đổi mật khẩu (rà soát 2026-10-30) — ngay sau xác thực.
+    { provide: APP_GUARD, useClass: PasswordChangeGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     // Dự án phụ — nâng cấp toàn diện (2026-07-24): "Phân quyền" phiên bản
     // đơn giản — chạy SAU RolesGuard, chỉ THÊM giới hạn (NONE/VIEW), không

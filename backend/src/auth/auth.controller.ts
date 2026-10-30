@@ -26,6 +26,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ACCESS_TOKEN_COOKIE, buildCookieOptions } from './auth-cookie.util';
+import { AllowPasswordChange } from '../common/decorators/allow-password-change.decorator';
 
 /** Dự án phụ — nâng cấp toàn diện: ảnh đại diện tự upload (POST /me/avatar). */
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -55,6 +56,7 @@ export class AuthController {
     const { token, account } = await this.authService.login(
       dto,
       req.headers['user-agent'],
+      req.ip,
     );
     res.cookie(
       ACCESS_TOKEN_COOKIE,
@@ -65,6 +67,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @AllowPasswordChange()
   @HttpCode(HttpStatus.OK)
   async logout(
     @CurrentUser() user: AuthenticatedUser,
@@ -79,11 +82,13 @@ export class AuthController {
   }
 
   @Get('me')
+  @AllowPasswordChange()
   async me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user.id);
   }
 
   @Put('me/password')
+  @AllowPasswordChange()
   @HttpCode(HttpStatus.OK)
   async changePassword(
     @Body() dto: ChangePasswordDto,

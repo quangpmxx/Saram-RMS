@@ -171,6 +171,9 @@ model Account {
   nickname           String?       @db.VarChar(150)
   username           String        @unique @db.VarChar(50)
   passwordHash       String        @map("password_hash") @db.VarChar(255)
+  /// Phải đổi mật khẩu trước khi dùng hệ thống (rà soát 2026-10-30): bật khi
+  /// đăng nhập bằng mật khẩu mặc định / Admin tạo mới hoặc đặt lại mật khẩu.
+  mustChangePassword Boolean       @default(false) @map("must_change_password")
   role               AccountRole
   teamId             String?       @map("team_id") @db.Uuid
   status             AccountStatus @default(active)
@@ -345,6 +348,11 @@ model AuditLog {
 
   account Account @relation(fields: [accountId], references: [id])
 
+  /// Index theo đúng truy vấn thật (rà soát 2026-10-30): lịch sử từng data,
+  /// trang Nhật ký (khoảng thời gian), Nhật ký lọc theo người thực hiện.
+  @@index([entityType, entityId, createdAt])
+  @@index([createdAt])
+  @@index([accountId, createdAt])
   @@map("audit_logs")
 }
 
@@ -921,16 +929,16 @@ model LeaveRequest {
 /// nhưng KHÔNG BAO GIỜ trả ra API/giao diện/thông báo/nhật ký — người gửi
 /// cũng không xem lại được đơn đã gửi (xem anonymous-feedback.service.ts).
 model AnonymousFeedback {
-  id        String   @id @default(uuid()) @db.Uuid
-  senderId  String   @map("sender_id") @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  senderId     String   @map("sender_id") @db.Uuid
   /// Tiêu đề đơn (2026-10-28: bỏ "Kính gửi" theo yêu cầu người dùng — chỉ còn tiêu đề + nội dung).
-  subject   String   @db.VarChar(300)
-  content   String
+  subject      String   @db.VarChar(300)
+  content      String
   /// Người nhận do nhân viên chọn (Admin/Quản lý) — rỗng = tất cả Admin + Quản lý (2026-10-30).
   recipientIds String[] @default([]) @map("recipient_ids") @db.Uuid
   /// Tên file ảnh đính kèm theo thứ tự, lưu ở private-uploads/anonymous-feedback (không phục vụ tĩnh).
   imageFiles   String[] @default([]) @map("image_files")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   sender Account @relation("AnonymousFeedbackSender", fields: [senderId], references: [id])
 
@@ -1004,6 +1012,10 @@ model ShuttleRecord {
   company    OrderRecord? @relation(fields: [companyId], references: [id])
   saleUser   Account?     @relation("ShuttleRecordSaleUser", fields: [saleUserId], references: [id])
   driverUser Account?     @relation("ShuttleRecordDriverUser", fields: [driverUserId], references: [id])
+
+  /// Xoá mềm (rà soát 2026-10-30) — trước đây xoá vĩnh viễn; mọi truy vấn bỏ qua dòng có deleted_at.
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by") @db.Uuid
 
   @@index([date])
   @@index([status])

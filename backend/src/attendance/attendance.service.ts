@@ -11,6 +11,7 @@ import {
   AttendanceGridDto,
   AttendanceStatusValue,
 } from './dto/attendance-response.dto';
+import { ROLE_LABEL } from '../common/constants/role-label';
 
 /**
  * Vai trò xuất hiện dưới dạng 1 DÒNG trong bảng chấm công — khớp đúng danh
@@ -32,18 +33,6 @@ const VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'mkt', 'sale']);
 const EDIT_ROLES = new Set(['admin', 'manager']);
 
 const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-
-/** Khớp đúng ACCOUNT_ROLE_LABEL ở frontend (lib/types.ts) — dùng cho cột "Vị trí" khi xuất Excel. */
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Admin',
-  manager: 'Manager',
-  leader: 'Leader',
-  mkt: 'NV MKT',
-  sale: 'NV Sale',
-  accounting: 'Kế toán',
-  order_staff: 'NV QL Đơn hàng',
-  shuttle_staff: 'NV Đưa đón',
-};
 
 /** Khớp đúng STATUS_META ở frontend (attendance-client.tsx) — ký hiệu + màu nền/chữ khi xuất Excel. */
 const STATUS_META: Record<

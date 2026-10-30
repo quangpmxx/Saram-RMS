@@ -16,6 +16,7 @@ import { TeamMemberResponseDto } from './dto/team-member-response.dto';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 const LEADER_SELECT = { id: true, fullName: true } as const;
 const TEAM_INCLUDE = {
@@ -38,7 +39,7 @@ export class TeamsService {
     const where: Prisma.TeamWhereInput = {};
 
     if (currentUser.role === 'leader') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.id = ownTeamId ?? '__none__';
     }
 
@@ -193,7 +194,7 @@ export class TeamsService {
     }
 
     if (currentUser.role === 'leader') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (ownTeamId !== teamId) {
         throw new ForbiddenException('Bạn chỉ được xem nhóm của mình');
       }
@@ -222,13 +223,6 @@ export class TeamsService {
       assigned_count: assignedCountByAccountId.get(member.id) ?? 0,
       care_pool_count: 0,
     }));
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-    });
-    return account?.teamId ?? null;
   }
 
   private async assertAccountIsLeader(accountId: string): Promise<void> {

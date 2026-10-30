@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -42,6 +43,7 @@ import { LeadDuplicateService } from './lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
 import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { RealtimeService } from '../realtime/realtime.service';
+import { findOwnTeamId } from '../common/utils/account-team.util';
 
 /** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia (cho người khác)/chuyển lead. */
 const ASSIGNMENT_ROLES = new Set(['admin', 'manager', 'leader']);
@@ -63,8 +65,8 @@ export interface CreateCandidateResult {
   duplicate_warning: DuplicateWarning | null;
 }
 
-/** Vai trò luôn xem/sửa được toàn bộ ứng viên — Mục 2.6 & Mục 8, docs/09. */
-const FULL_ACCESS_ROLES = new Set(['admin', 'manager', 'mkt']);
+/** Vai trò XEM được toàn bộ data mọi nhóm (sửa/xoá kiểm riêng ở assertCanModify/assertCanDelete) — Mục 2.6 & Mục 8, docs/09. */
+const VIEW_ALL_LEADS_ROLES = new Set(['admin', 'manager', 'mkt']);
 
 /**
  * Thứ tự tab Tất cả / Chờ phân chia: mặc định ngày giờ lên số giảm dần — mới
@@ -223,7 +225,7 @@ export class CandidatesService {
       orderBy: { uploadedAt: 'asc' },
     });
 
-    const visibleMatches = FULL_ACCESS_ROLES.has(currentUser.role)
+    const visibleMatches = VIEW_ALL_LEADS_ROLES.has(currentUser.role)
       ? others
       : await this.filterMatchesByOwnTeam(others, currentUser);
 
@@ -258,7 +260,7 @@ export class CandidatesService {
     if (currentUser.role !== 'leader' && currentUser.role !== 'sale') {
       return [];
     }
-    const ownTeamId = await this.getOwnTeamId(currentUser.id);
+    const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
     if (!ownTeamId) {
       return [];
     }
@@ -309,10 +311,10 @@ export class CandidatesService {
       byPhone.set(member.phoneNumber, list);
     }
 
-    const isFullAccess = FULL_ACCESS_ROLES.has(currentUser.role);
+    const isFullAccess = VIEW_ALL_LEADS_ROLES.has(currentUser.role);
     const ownTeamId = isFullAccess
       ? null
-      : await this.getOwnTeamId(currentUser.id);
+      : await findOwnTeamId(this.prisma, currentUser.id);
 
     const groups: DuplicateGroupDto[] = [];
     for (const [phoneNumber, groupMembers] of byPhone) {
@@ -749,7 +751,7 @@ export class CandidatesService {
     // đúng data của nhóm mình (hoặc data thật sự chưa có nhóm, vd Excel cũ)
     // — Admin/Quản lý/MKT vẫn xem toàn bộ như cũ (Mục 2.6, docs/09).
     if (currentUser.role === 'leader' || currentUser.role === 'sale') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.OR = [
         { assignedTeamId: teamId ?? '__none__' },
         { assignedTeamId: null },
@@ -806,8 +808,11 @@ export class CandidatesService {
       currentUser,
     );
 
-    await this.prisma.lead.update({
-      where: { id },
+    // Ghi CÓ ĐIỀU KIỆN "chưa có người phụ trách" trong cùng câu lệnh: 2 người
+    // bấm Nhận/phân chia cùng lúc thì chỉ 1 người thành công (rà soát
+    // 2026-10-30 — trước đây người sau đè người trước).
+    const { count } = await this.prisma.lead.updateMany({
+      where: { id, deletedAt: null, assignedToId: null },
       data: {
         assignedToId: target.id,
         assignedTeamId: target.teamId,
@@ -815,6 +820,11 @@ export class CandidatesService {
         assignmentMethod: 'manual',
       },
     });
+    if (count === 0) {
+      throw new ConflictException(
+        'Data này vừa được người khác nhận/phân chia — vui lòng tải lại danh sách',
+      );
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -855,17 +865,35 @@ export class CandidatesService {
       return { assigned_count: 0 };
     }
 
+    // Điều kiện "chưa có người phụ trách" nằm ngay trong câu lệnh ghi; data bị
+    // người khác nhận mất trong lúc này thì bỏ qua (rà soát 2026-10-30).
+    const assignedAt = new Date();
     await this.prisma.lead.updateMany({
-      where: { id: { in: eligible.map((lead) => lead.id) } },
+      where: {
+        id: { in: eligible.map((lead) => lead.id) },
+        deletedAt: null,
+        assignedToId: null,
+      },
       data: {
         assignedToId: target.id,
         assignedTeamId: target.teamId,
-        assignedAt: new Date(),
+        assignedAt,
         assignmentMethod: 'manual',
       },
     });
+    const won = await this.prisma.lead.findMany({
+      where: {
+        id: { in: eligible.map((lead) => lead.id) },
+        assignedToId: target.id,
+        assignedAt,
+      },
+      select: { id: true },
+    });
+    if (won.length === 0) {
+      return { assigned_count: 0 };
+    }
 
-    for (const lead of eligible) {
+    for (const lead of won) {
       await this.auditLog.log({
         accountId: currentUser.id,
         actionType: 'assign',
@@ -879,7 +907,7 @@ export class CandidatesService {
     // cũng phải đồng bộ realtime như gán từng cái — 1 truy vấn duy nhất lấy
     // đủ CANDIDATE_INCLUDE cho toàn bộ lead vừa đổi, tránh N+1.
     const updatedLeads = await this.prisma.lead.findMany({
-      where: { id: { in: eligible.map((lead) => lead.id) } },
+      where: { id: { in: won.map((lead) => lead.id) } },
       include: CANDIDATE_INCLUDE,
     });
     for (const lead of updatedLeads) {
@@ -890,7 +918,7 @@ export class CandidatesService {
       );
     }
 
-    return { assigned_count: eligible.length };
+    return { assigned_count: won.length };
   }
 
   /** Mục 5, docs/13: POST /candidate/:id/transfer — Leader (nhóm mình)/Quản lý/Admin. */
@@ -912,7 +940,7 @@ export class CandidatesService {
       throw new ForbiddenException('Bạn không có quyền chuyển ứng viên');
     }
     if (currentUser.role === 'leader') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (!teamId || lead.assignedTeamId !== teamId) {
         throw new ForbiddenException(
           'Bạn chỉ được chuyển ứng viên trong nhóm mình',
@@ -1087,7 +1115,7 @@ export class CandidatesService {
       throw new ForbiddenException('Bạn không có quyền nhắc gọi lại');
     }
     if (currentUser.role === 'leader') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (!ownTeamId || lead.assignedTeamId !== ownTeamId) {
         throw new ForbiddenException(
           'Bạn chỉ được nhắc gọi lại cho ứng viên trong nhóm mình',
@@ -1128,7 +1156,7 @@ export class CandidatesService {
     }
 
     if (currentUser.role === 'leader') {
-      const ownTeamId = await this.getOwnTeamId(currentUser.id);
+      const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (!ownTeamId || target.teamId !== ownTeamId) {
         throw new ForbiddenException(
           'Bạn chỉ được phân chia cho Sale trong nhóm mình',
@@ -1183,7 +1211,7 @@ export class CandidatesService {
     const assignedToFilter =
       filters?.assigned_to === 'me' ? currentUser.id : filters?.assigned_to;
 
-    if (FULL_ACCESS_ROLES.has(currentUser.role)) {
+    if (VIEW_ALL_LEADS_ROLES.has(currentUser.role)) {
       if (filters?.team_id) {
         where.assignedTeamId = filters.team_id;
       }
@@ -1194,7 +1222,7 @@ export class CandidatesService {
     }
 
     if (currentUser.role === 'leader' || currentUser.role === 'sale') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (assignedToFilter) {
         // Tab "Cá nhân" — thu hẹp về đúng 1 người, KHÔNG gộp thêm lead chờ
         // phân chia (khác nghĩa "cá nhân").
@@ -1237,11 +1265,11 @@ export class CandidatesService {
   ): Promise<string[]> {
     if (ids.length === 0) return [];
     const where: Prisma.LeadWhereInput = { id: { in: ids }, deletedAt: null };
-    if (!FULL_ACCESS_ROLES.has(currentUser.role)) {
+    if (!VIEW_ALL_LEADS_ROLES.has(currentUser.role)) {
       if (currentUser.role !== 'leader' && currentUser.role !== 'sale') {
         return [];
       }
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.OR = [
         { assignedTeamId: null },
         ...(teamId ? [{ assignedTeamId: teamId }] : []),
@@ -1258,7 +1286,7 @@ export class CandidatesService {
     lead: Lead,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
-    if (FULL_ACCESS_ROLES.has(currentUser.role)) {
+    if (VIEW_ALL_LEADS_ROLES.has(currentUser.role)) {
       return;
     }
 
@@ -1269,7 +1297,7 @@ export class CandidatesService {
       // gộp "Chờ phân chia" vào "Tất cả". Sửa (assertCanModify) vẫn đòi hỏi
       // đã thuộc đúng nhóm — lead chờ phân chia chỉ XEM được, phải "Nhận
       // data" trước mới sửa được.
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (
         lead.assignedTeamId === null ||
         (teamId && lead.assignedTeamId === teamId)
@@ -1321,7 +1349,7 @@ export class CandidatesService {
       // ứng viên KHÔNG phải của mình, NHƯNG chỉ khi ứng viên đó đã được xử
       // lý ít nhất 1 lần (lastActivityAt khác null) — tôn trọng quyền xử lý
       // số hoàn toàn mới của người phụ trách gốc, tránh giành số.
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (
         teamId &&
         lead.assignedTeamId === teamId &&
@@ -1337,7 +1365,7 @@ export class CandidatesService {
     }
 
     if (currentUser.role === 'leader') {
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (teamId && lead.assignedTeamId === teamId) {
         return;
       }
@@ -1377,7 +1405,7 @@ export class CandidatesService {
     if (currentUser.role === 'manager' || currentUser.role === 'mkt') return;
     if (currentUser.role === 'sale' || currentUser.role === 'leader') {
       if (lead.assignedToId === currentUser.id) return;
-      const teamId = await this.getOwnTeamId(currentUser.id);
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (
         teamId &&
         lead.assignedTeamId === teamId &&
@@ -1387,13 +1415,6 @@ export class CandidatesService {
       }
     }
     throw new ForbiddenException('Bạn không có quyền sửa ứng viên này');
-  }
-
-  private async getOwnTeamId(accountId: string): Promise<string | null> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-    });
-    return account?.teamId ?? null;
   }
 
   private async assertSourceExists(sourceId: string): Promise<void> {
