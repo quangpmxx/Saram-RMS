@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   History,
@@ -423,6 +424,21 @@ export function CareWarehousePanel({
     }
   }
 
+  /** Duyệt đề nghị dừng chăm sóc của Sale ngay tại bảng (giống nút ở trang Chi tiết). */
+  async function handleApproveStop(item: CareWarehouseItem) {
+    if (!window.confirm(`Duyệt đóng data "${item.full_name}"? Data sẽ dừng chăm sóc.`)) return;
+    setPendingId(item.id);
+    try {
+      await clientApi(`/care-warehouse/${item.id}/stop-request/approve`, { method: "POST" });
+      toast.success("Đã duyệt — data đã đóng");
+      await reloadNow();
+    } catch (error) {
+      toast.error(errorText(error));
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function handleRevoke(item: CareWarehouseItem) {
     setPendingId(item.id);
     try {
@@ -775,6 +791,19 @@ export function CareWarehousePanel({
                             >
                               <UserCheck className="h-3.5 w-3.5" strokeWidth={2} />
                               Nhận
+                            </Button>
+                          )}
+                          {canAssign && item.care_stop_requested_at && (
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              className="border-brand-300 text-brand-700 hover:bg-brand-50"
+                              disabled={isPending}
+                              onClick={() => void handleApproveStop(item)}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
+                              Duyệt đóng
                             </Button>
                           )}
                           {canAssign && (

@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
   Cake,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -291,6 +292,13 @@ export function CandidatesClient({
       return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
     }
     return false;
+  }
+
+  /** Khớp decideStopRequest() ở backend: Leader (nhóm của data)/Quản lý/Admin. */
+  function canApproveStop(candidate: Candidate): boolean {
+    if (isReadOnly || !candidate.care_stop_requested_at || candidate.care_stopped_at) return false;
+    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
+    return currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId;
   }
 
   function canDelete(candidate: Candidate): boolean {
@@ -668,6 +676,20 @@ export function CandidatesClient({
       await clientApi(`/candidate/${candidate.id}`, { method: "DELETE" });
       await refresh();
       toast.success(`Đã xóa lao động "${candidate.full_name}"`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleApproveStop(candidate: Candidate) {
+    if (!window.confirm(`Duyệt đóng data "${candidate.full_name}"? Data sẽ dừng chăm sóc.`)) return;
+    setPendingId(candidate.id);
+    try {
+      await clientApi(`/care-warehouse/${candidate.id}/stop-request/approve`, { method: "POST" });
+      await refresh();
+      toast.success("Đã duyệt — data đã đóng");
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
@@ -1363,6 +1385,17 @@ export function CandidatesClient({
                             title="Nhắc gọi lại"
                             onClick={() => setModal({ mode: "remind", candidate })}
                           />
+                        )}
+                        {canApproveStop(candidate) && (
+                          <ActionLink
+                            icon={<CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />}
+                            title="Duyệt đóng (Sale đề nghị dừng chăm sóc)"
+                            className="bg-brand-50 text-brand-700 ring-1 ring-brand-600/20"
+                            disabled={pendingId === candidate.id}
+                            onClick={() => void handleApproveStop(candidate)}
+                          >
+                            Duyệt đóng
+                          </ActionLink>
                         )}
                         {canDelete(candidate) && (
                           <ActionLink
