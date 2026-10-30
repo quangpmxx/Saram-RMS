@@ -96,7 +96,8 @@ export class CandidatesController {
   }
 
   @Post()
-  @Roles('mkt', 'admin')
+  // Quản lý cũng được thêm data thủ công (rà soát phân quyền 2026-10-30).
+  @Roles('mkt', 'manager', 'admin')
   create(
     @Body() dto: CreateCandidateDto,
     @CurrentUser() user: AuthenticatedUser,

@@ -20,6 +20,7 @@ export function InlineEditField({
   editValue,
   inputType = "text",
   alwaysEditable = false,
+  readOnly = false,
   onSave,
   onDraftChange,
 }: {
@@ -28,6 +29,8 @@ export function InlineEditField({
   editValue: string;
   inputType?: "text" | "number";
   alwaysEditable?: boolean;
+  /** Không có quyền sửa → chỉ hiện giá trị (rà soát phân quyền 2026-10-30). */
+  readOnly?: boolean;
   onSave: (value: string) => Promise<void>;
   /**
    * Yêu cầu trực tiếp người dùng (2026-07-27): "khi ấn lưu thông tin thì
@@ -60,6 +63,15 @@ export function InlineEditField({
     } finally {
       setIsSaving(false);
     }
+  }
+
+  if (readOnly) {
+    return (
+      <div className="flex justify-between gap-3">
+        <dt className="text-slate-500">{label}</dt>
+        <dd className="text-right break-words text-slate-800">{displayValue}</dd>
+      </div>
+    );
   }
 
   if (isEditing) {

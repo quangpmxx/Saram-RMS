@@ -192,8 +192,11 @@ describe('LeadPipelineService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
-    it('Dự án phụ — nâng cấp toàn diện: Sale khác cùng nhóm KHÔNG được xử lý lead chưa ai đụng tới (lastActivityAt=null)', async () => {
-      prisma.lead.findUnique.mockResolvedValue(baseLead); // lastActivityAt: null
+    it('Sale khác cùng nhóm KHÔNG được xử lý data chưa có người phụ trách', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedToId: null,
+      });
       prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
       await expect(
         service.updateCallStatus(

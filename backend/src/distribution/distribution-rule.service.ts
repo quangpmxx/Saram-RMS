@@ -313,9 +313,11 @@ export class DistributionRuleService {
     teamId: string,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
+    // Admin cấu hình được cho mọi nhóm (rà soát phân quyền 2026-10-30).
+    if (currentUser.role === 'admin') return;
     if (currentUser.role !== 'leader') {
       throw new ForbiddenException(
-        'Chỉ Leader mới được cấu hình tự động phân chia',
+        'Chỉ Leader hoặc Admin mới được cấu hình tự động phân chia',
       );
     }
     const ownTeamId = await this.getOwnTeamId(currentUser.id);

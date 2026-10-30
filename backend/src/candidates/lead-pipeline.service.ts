@@ -463,7 +463,19 @@ export class LeadPipelineService {
       currentUser.role === 'admin' || currentUser.role === 'manager';
     const isOwnNote =
       currentUser.role === 'sale' && note.createdById === currentUser.id;
-    if (!isFullAccess && !isOwnNote) {
+    // Leader xoá được ghi chú của mọi Sale trên data nhóm mình (rà soát
+    // phân quyền 2026-10-30) — cùng phạm vi với quyền sửa ghi chú.
+    let isTeamLeader = false;
+    if (currentUser.role === 'leader') {
+      const [lead, account] = await Promise.all([
+        this.prisma.lead.findUnique({ where: { id } }),
+        this.prisma.account.findUnique({ where: { id: currentUser.id } }),
+      ]);
+      isTeamLeader = Boolean(
+        lead && account?.teamId && lead.assignedTeamId === account.teamId,
+      );
+    }
+    if (!isFullAccess && !isOwnNote && !isTeamLeader) {
       throw new ForbiddenException(
         'Bạn chỉ được xóa ghi chú do chính mình ghi',
       );
@@ -822,7 +834,9 @@ export class LeadPipelineService {
       // thái cuộc gọi/PV/lịch gọi lại...), NHƯNG chỉ khi lead đã được xử lý
       // ít nhất 1 lần (lastActivityAt khác null) — tôn trọng quyền xử lý số
       // hoàn toàn mới của người phụ trách gốc, tránh giành số.
-      if (sameTeam && lead.lastActivityAt !== null) {
+      // Rà soát phân quyền 2026-10-30: Sale xử lý hộ (ghi chú, trạng thái,
+      // lịch...) MỌI data trong nhóm mình, miễn data đã có người phụ trách.
+      if (sameTeam && lead.assignedToId !== null) {
         return lead;
       }
       // Phase 5 — Mục 8, docs/09: Sale cũng xử lý được lead trong cột chăm

@@ -486,6 +486,7 @@ export class CandidatesService {
     if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy ứng viên');
     }
+    await this.assertCanQuickEdit(existing, currentUser);
 
     if (dto.birth_year !== undefined && dto.birth_year !== null) {
       const currentYear = new Date().getFullYear();
@@ -602,10 +603,11 @@ export class CandidatesService {
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       // không giới hạn theo người phụ trách.
     } else if (currentUser.role === 'sale') {
-      if (lead.assignedToId !== currentUser.id) {
-        throw new ForbiddenException(
-          'Bạn chỉ được giữ số ứng viên đang phụ trách',
-        );
+      // Sale giữ được mọi số mình xem được, kể cả data không do mình phụ
+      // trách (rà soát phân quyền 2026-10-30) — trừ số người khác đang giữ.
+      await this.assertInScope(lead, currentUser);
+      if (isHeld && lead.isHeld && lead.heldById !== currentUser.id) {
+        throw new ForbiddenException('Số này đang được người khác giữ');
       }
     } else {
       throw new ForbiddenException(
@@ -1306,13 +1308,9 @@ export class CandidatesService {
       return;
     }
 
+    // MKT sửa được thông tin mọi data (rà soát phân quyền 2026-10-30).
     if (currentUser.role === 'mkt') {
-      if (lead.uploadedById === currentUser.id) {
-        return;
-      }
-      throw new ForbiddenException(
-        'Bạn chỉ được sửa dữ liệu do chính mình upload',
-      );
+      return;
     }
 
     if (currentUser.role === 'sale') {
@@ -1349,15 +1347,46 @@ export class CandidatesService {
     throw new ForbiddenException('Bạn không có quyền thực hiện hành động này');
   }
 
-  /** Mục 4, docs/13: Admin (mọi ứng viên) hoặc MKT (chỉ data do mình upload). */
+  /**
+   * Xoá (mềm) data: Admin, Quản lý, MKT — mọi data (rà soát phân quyền
+   * 2026-10-30; trước đây MKT chỉ xoá data mình up, Quản lý không xoá được).
+   */
   private assertCanDelete(lead: Lead, currentUser: AuthenticatedUser): void {
-    if (currentUser.role === 'admin') {
-      return;
-    }
-    if (currentUser.role === 'mkt' && lead.uploadedById === currentUser.id) {
+    if (['admin', 'manager', 'mkt'].includes(currentUser.role)) {
       return;
     }
     throw new ForbiddenException('Bạn không có quyền xóa ứng viên này');
+  }
+
+  /**
+   * Sửa nhanh Năm sinh/Địa chỉ (rà soát phân quyền 2026-10-30): ai được sửa
+   * data (assertCanModify) HOẶC được xử lý hộ data đó (Sale/Leader cùng
+   * nhóm, data đã có người phụ trách) — người gọi điện cập nhật được thông
+   * tin vừa hỏi. Data người khác đang giữ số: chỉ người giữ (hoặc Admin).
+   */
+  private async assertCanQuickEdit(
+    lead: Lead,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    if (currentUser.role === 'admin') return;
+    if (lead.isHeld && lead.heldById !== currentUser.id) {
+      throw new ForbiddenException(
+        'Ứng viên này đang được giữ số, chỉ người đang giữ mới sửa được',
+      );
+    }
+    if (currentUser.role === 'manager' || currentUser.role === 'mkt') return;
+    if (currentUser.role === 'sale' || currentUser.role === 'leader') {
+      if (lead.assignedToId === currentUser.id) return;
+      const teamId = await this.getOwnTeamId(currentUser.id);
+      if (
+        teamId &&
+        lead.assignedTeamId === teamId &&
+        (currentUser.role === 'leader' || lead.assignedToId !== null)
+      ) {
+        return;
+      }
+    }
+    throw new ForbiddenException('Bạn không có quyền sửa ứng viên này');
   }
 
   private async getOwnTeamId(accountId: string): Promise<string | null> {

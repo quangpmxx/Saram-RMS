@@ -392,8 +392,12 @@ describe('CandidatesService', () => {
       ).resolves.toBeDefined();
     });
 
-    it('MKT khác không được sửa data không phải của mình', async () => {
-      prisma.lead.findUnique.mockResolvedValue(baseLead);
+    it('MKT sửa được mọi data nhưng không sửa được data người khác đang giữ số', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        isHeld: true,
+        heldById: 'sale-2',
+      });
 
       await expect(
         service.update('lead-1', { full_name: 'X' }, otherMktUser),
@@ -548,11 +552,11 @@ describe('CandidatesService', () => {
   });
 
   describe('removeBulk (Xoá data đã chọn)', () => {
-    it('xoá mềm từng data có quyền, bỏ qua data không có quyền/không còn tồn tại', async () => {
+    it('xoá mềm từng data, bỏ qua data không còn tồn tại', async () => {
       const others = {
         ...baseLead,
         id: 'lead-2',
-        uploadedById: 'someone-else',
+        deletedAt: new Date(),
       };
       prisma.lead.findUnique.mockImplementation(
         ({ where }: { where: { id: string } }) =>
@@ -628,12 +632,17 @@ describe('CandidatesService', () => {
       });
     });
 
-    it('MKT khác không được xóa data không phải của mình', async () => {
+    it('MKT và Quản lý xoá được data không phải do mình up', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findMany.mockResolvedValue([]);
 
       await expect(
         service.remove('lead-1', otherMktUser),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).resolves.toBeUndefined();
+      await expect(
+        service.remove('lead-1', managerUser),
+      ).resolves.toBeUndefined();
     });
 
     it('Sale/Leader không có quyền xóa dù là ứng viên của mình', async () => {
@@ -664,12 +673,32 @@ describe('CandidatesService', () => {
       heldAt: new Date('2026-01-01'),
     };
 
-    it('Giữ số (hold): giữ nguyên quy tắc cũ — Sale chỉ giữ được lead đang phụ trách', async () => {
-      prisma.lead.findUnique.mockResolvedValue({
+    it('Giữ số (hold): Sale giữ được số nhóm mình kể cả không do mình phụ trách, không giữ được số nhóm khác hoặc số người khác đang giữ', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.update.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+      const teamLead = {
         ...baseLead,
+        assignedTeamId: 'team-1',
         assignedToId: 'sale-2',
-      });
+      };
 
+      prisma.lead.findUnique.mockResolvedValue(teamLead);
+      await expect(service.hold('lead-1', saleUser)).resolves.toBeDefined();
+
+      prisma.lead.findUnique.mockResolvedValue({
+        ...teamLead,
+        assignedTeamId: 'team-2',
+      });
+      await expect(service.hold('lead-1', saleUser)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+
+      prisma.lead.findUnique.mockResolvedValue({
+        ...teamLead,
+        isHeld: true,
+        heldById: 'sale-2',
+      });
       await expect(service.hold('lead-1', saleUser)).rejects.toBeInstanceOf(
         ForbiddenException,
       );

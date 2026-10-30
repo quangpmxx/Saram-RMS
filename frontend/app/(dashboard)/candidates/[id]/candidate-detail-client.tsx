@@ -56,9 +56,10 @@ function canUpdatePipeline(
   currentUserTeamId: string | null,
 ): boolean {
   if (currentUserRole === "admin" || currentUserRole === "manager") return true;
+  // Sale xử lý hộ mọi data trong nhóm đã có người phụ trách (rà soát phân quyền 2026-10-30).
   if (currentUserRole === "sale") {
     if (candidate.assigned_to?.id === currentUserId) return true;
-    return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
+    return candidate.assigned_team_id === currentUserTeamId && candidate.assigned_to !== null;
   }
   if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
   return false;
@@ -80,8 +81,8 @@ function canEditCandidate(
   currentUserRole: AccountRole,
   currentUserTeamId: string | null,
 ): boolean {
-  if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-  if (currentUserRole === "mkt") return candidate.uploaded_by.id === currentUserId;
+  // MKT sửa được mọi data (rà soát phân quyền 2026-10-30).
+  if (currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt") return true;
   if (currentUserRole === "sale") {
     if (candidate.assigned_to?.id === currentUserId) return true;
     return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
@@ -214,10 +215,19 @@ export function CandidateDetailClient({
   // Mục 2.2, docs/12: "Đánh dấu/Bỏ đánh dấu giữ số" — hiện với Sale (lead của
   // mình); Admin/Quản lý kế thừa quyền này không giới hạn (yêu cầu bổ sung
   // "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp dưới").
+  // Sale giữ được mọi số mình xem được (rà soát phân quyền 2026-10-30). Số
+  // người khác đang giữ: chỉ người giữ (hoặc Admin) bỏ giữ — khớp setHold().
   const canToggleHold =
     currentUserRole === "admin" ||
-    currentUserRole === "manager" ||
-    (currentUserRole === "sale" && candidate.assigned_to?.id === currentUserId);
+    (candidate.is_held
+      ? candidate.held_by?.id === currentUserId
+      : currentUserRole === "manager" || currentUserRole === "sale");
+  // Sửa nhanh Năm sinh/Địa chỉ — khớp assertCanQuickEdit() ở backend.
+  const canQuickEdit =
+    !isReadOnly &&
+    (currentUserRole === "admin" ||
+      ((!candidate.is_held || candidate.held_by?.id === currentUserId) &&
+        (canEditPhone || canUpdate)));
   // Kho chăm sóc (2026-10-28) — "Dừng/Tiếp tục chăm sóc", khớp
   // assertCanStop() ở backend: Admin/Quản lý mọi data; Leader data nhóm
   // mình; Sale khi là người phụ trách gốc HOẶC đang được giao chăm sóc.
@@ -239,10 +249,12 @@ export function CandidateDetailClient({
       (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   // Sale: chỉ ghi chú của chính mình; Admin/Quản lý kế thừa quyền này, xóa được ghi chú bất kỳ.
+  // Leader xoá được ghi chú của mọi Sale trên data nhóm mình (rà soát phân quyền 2026-10-30).
   const canDeleteNote = (note: Note) =>
     currentUserRole === "admin" ||
     currentUserRole === "manager" ||
-    (currentUserRole === "sale" && note.created_by.id === currentUserId);
+    (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
+    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId);
   // Sửa ghi chú — khớp đúng phạm vi quyền của updateNote() ở backend
   // (lead-pipeline.service.ts): Sale (ghi chú của mình), Leader (ghi chú
   // trên lead thuộc nhóm mình), Quản lý/Admin (không giới hạn), MKT không có quyền.
@@ -844,6 +856,7 @@ export function CandidateDetailClient({
                 editValue={candidate.birth_year?.toString() ?? ""}
                 inputType="number"
                 alwaysEditable
+                readOnly={!canQuickEdit}
                 onDraftChange={setBirthYearDraft}
                 onSave={async () => {
                   // Enter = lưu tất cả thay đổi trên trang (yêu cầu người dùng 2026-10-29).
@@ -857,6 +870,7 @@ export function CandidateDetailClient({
                 displayValue={candidate.address ?? "—"}
                 editValue={candidate.address ?? ""}
                 alwaysEditable
+                readOnly={!canQuickEdit}
                 onDraftChange={setAddressDraft}
                 onSave={async () => {
                   await saveAllChanges();

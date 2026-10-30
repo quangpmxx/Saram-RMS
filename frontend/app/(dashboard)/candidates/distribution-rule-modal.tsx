@@ -3,29 +3,37 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { DistributionRule, TeamMember } from "@/lib/types";
+import type { DistributionRule, Team, TeamMember } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { Select } from "@/components/ui/form";
+import { Field, Select } from "@/components/ui/form";
 
 /**
  * Mục 3, docs/09 + Mục 5, docs/12-ui-design.md — popup "cấu hình vòng quay
  * tự động phân chia": Leader chọn + sắp xếp thứ tự Sale tham gia, kích
- * hoạt/tạm dừng. Chỉ hiện với Leader (nhóm mình) — đúng phạm vi quyền
- * PUT/activate/pause đã chốt tại Mục 5, docs/13 (Quản lý/Admin chỉ xem).
+ * hoạt/tạm dừng. Leader cấu hình nhóm mình; Admin cấu hình mọi nhóm — truyền
+ * `teams` để chọn nhóm, thành viên tự tải theo nhóm đã chọn (rà soát phân
+ * quyền 2026-10-30).
  */
 export function DistributionRuleModal({
-  teamId,
-  teamMembers,
+  teamId: initialTeamId,
+  teamMembers: givenMembers,
+  teams,
   onClose,
   onChanged,
 }: {
   teamId: string;
-  teamMembers: TeamMember[];
+  /** Thành viên nhóm (Leader). Bỏ trống thì tự tải theo nhóm đang chọn (Admin). */
+  teamMembers?: TeamMember[];
+  /** Có danh sách nhóm → hiện ô chọn nhóm (Admin). */
+  teams?: Team[];
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const [teamId, setTeamId] = useState(initialTeamId);
+  const [loadedMembers, setLoadedMembers] = useState<TeamMember[]>([]);
+  const teamMembers = givenMembers ?? loadedMembers;
   const [rule, setRule] = useState<DistributionRule | null>(null);
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
   const [addAccountId, setAddAccountId] = useState("");
@@ -36,11 +44,15 @@ export function DistributionRuleModal({
 
   useEffect(() => {
     let cancelled = false;
-    clientApi<DistributionRule>(`/distribution-rule/${teamId}`)
-      .then((result) => {
+    Promise.all([
+      clientApi<DistributionRule>(`/distribution-rule/${teamId}`),
+      givenMembers ? Promise.resolve(null) : clientApi<TeamMember[]>(`/team/${teamId}/member`),
+    ])
+      .then(([result, members]) => {
         if (cancelled) return;
         setRule(result);
         setOrderedIds(result.members.map((member) => member.account_id));
+        if (members) setLoadedMembers(members.filter((m) => m.role === "sale" && m.status === "active"));
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
@@ -51,7 +63,14 @@ export function DistributionRuleModal({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- givenMembers chỉ quyết định có tải thành viên hay không
   }, [teamId]);
+
+  function switchTeam(nextTeamId: string) {
+    setIsLoading(true);
+    setError(null);
+    setTeamId(nextTeamId);
+  }
 
   const memberById = new Map(teamMembers.map((member) => [member.id, member]));
   const availableToAdd = teamMembers.filter((member) => !orderedIds.includes(member.id));
@@ -137,6 +156,17 @@ export function DistributionRuleModal({
         <p className="text-sm text-slate-500">Đang tải...</p>
       ) : (
         <div className="flex flex-col gap-3">
+          {teams && (
+            <Field label="Nhóm">
+              <Select value={teamId} onChange={(event) => switchTeam(event.target.value)}>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
             <span className="flex items-center gap-2 text-sm text-slate-700">
               Trạng thái:

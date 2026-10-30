@@ -24,6 +24,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Shuffle,
   StickyNote,
   Trash2,
   Upload,
@@ -254,7 +255,8 @@ export function CandidatesClient({
 
   const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
   // Có quyền xoá data (Admin; MKT với data mình up) → cũng được tick chọn để "Xoá data đã chọn".
-  const canDeleteAny = currentUserRole === "admin" || currentUserRole === "mkt";
+  // Xoá data: Admin, Quản lý, MKT — mọi data (rà soát phân quyền 2026-10-30).
+  const canDeleteAny = currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt";
   const canSelect = canAssign || canDeleteAny;
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
   const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
@@ -294,8 +296,8 @@ export function CandidatesClient({
   }, [candidates, viewMode]);
 
   function canModify(candidate: Candidate): boolean {
-    if (currentUserRole === "admin" || currentUserRole === "manager") return true;
-    if (currentUserRole === "mkt") return candidate.uploaded_by.id === currentUserId;
+    // MKT sửa được mọi data (rà soát phân quyền 2026-10-30).
+    if (currentUserRole === "admin" || currentUserRole === "manager" || currentUserRole === "mkt") return true;
     if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
     // Dự án phụ — nâng cấp toàn diện: Sale sửa được ứng viên KHÔNG phải của
     // mình nếu cùng nhóm, NHƯNG chỉ khi ứng viên đã được xử lý ít nhất 1 lần
@@ -315,12 +317,6 @@ export function CandidatesClient({
     return currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId;
   }
 
-  function canDelete(candidate: Candidate): boolean {
-    if (currentUserRole === "admin") return true;
-    if (currentUserRole === "mkt") return candidate.uploaded_by.id === currentUserId;
-    return false;
-  }
-
   /**
    * Dự án phụ — nâng cấp toàn diện: cho sửa cột "Kết quả" (đổi ý từ "Tình
    * trạng Zalo" — vẫn dùng chung field zalo_status kỹ thuật cũ, chỉ đổi tên
@@ -332,9 +328,10 @@ export function CandidatesClient({
   function canUpdateZaloStatus(candidate: Candidate): boolean {
     if (currentUserRole === "admin" || currentUserRole === "manager") return true;
     if (currentUserRole === "leader") return candidate.assigned_team_id === currentUserTeamId;
+    // Sale xử lý hộ mọi data trong nhóm đã có người phụ trách (rà soát phân quyền 2026-10-30).
     if (currentUserRole === "sale") {
       if (candidate.assigned_to?.id === currentUserId) return true;
-      return candidate.assigned_team_id === currentUserTeamId && candidate.last_activity_at !== null;
+      return candidate.assigned_team_id === currentUserTeamId && candidate.assigned_to !== null;
     }
     return false;
   }
@@ -657,7 +654,7 @@ export function CandidatesClient({
   const selectedAssignedCount = selectedOnPage.length - selectedUnassignedIds.length;
   const allOnPageSelected = candidates.length > 0 && candidates.every((c) => selectedIds.has(c.id));
   // "Xoá data đã chọn" chỉ gồm data mình có quyền xoá (backend kiểm lại từng data).
-  const selectedDeletableIds = selectedOnPage.filter((c) => canDelete(c)).map((c) => c.id);
+  const selectedDeletableIds = (canDeleteAny ? selectedOnPage : []).map((c) => c.id);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   /** Xoá (mềm) các data đã tick chọn — hỏi xác nhận trước (yêu cầu người dùng 2026-10-30). */
@@ -900,11 +897,27 @@ export function CandidatesClient({
                     Tải data cũ
                   </Button>
                 )}
-                <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
-                  <Plus className="h-4 w-4" strokeWidth={2.5} />
-                  Thêm lao động mới
-                </Button>
               </>
+            )}
+            {/* Admin cấu hình Chia tự động cho mọi nhóm (rà soát phân quyền 2026-10-30). */}
+            {currentUserRole === "admin" && teams.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isReadOnly}
+                onClick={() => setIsDistributionModalOpen(true)}
+              >
+                <Shuffle className="h-4 w-4" strokeWidth={2} />
+                Chia tự động
+              </Button>
+            )}
+            {/* Thêm data thủ công: MKT, Quản lý, Admin (rà soát phân quyền 2026-10-30). */}
+            {(currentUserRole === "mkt" || currentUserRole === "manager" || currentUserRole === "admin") && (
+              <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+                Thêm lao động mới
+              </Button>
             )}
           </div>
         </div>
@@ -1442,7 +1455,7 @@ export function CandidatesClient({
                             Duyệt đóng
                           </ActionLink>
                         )}
-                        {canDelete(candidate) && (
+                        {canDeleteAny && (
                           <ActionLink
                             icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
                             title="Xóa"
@@ -1609,7 +1622,15 @@ export function CandidatesClient({
         />
       )}
 
-      {isDistributionModalOpen && currentUserTeamId && (
+      {isDistributionModalOpen && currentUserRole === "admin" && teams.length > 0 && (
+        <DistributionRuleModal
+          teamId={teams[0].id}
+          teams={teams}
+          onClose={() => setIsDistributionModalOpen(false)}
+          onChanged={() => toast.success("Đã cập nhật cấu hình tự động phân chia")}
+        />
+      )}
+      {isDistributionModalOpen && currentUserRole !== "admin" && currentUserTeamId && (
         <DistributionRuleModal
           teamId={currentUserTeamId}
           teamMembers={teamMembers}

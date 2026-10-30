@@ -121,10 +121,15 @@ describe('DistributionRuleService', () => {
   });
 
   describe('updateRule', () => {
-    it('Chỉ Leader (nhóm mình) mới được cấu hình', async () => {
+    it('Chỉ Leader (nhóm mình) hoặc Admin mới được cấu hình', async () => {
       prisma.team.findUnique.mockResolvedValue(team);
+      const managerUser = {
+        id: 'm-1',
+        role: 'manager' as const,
+        sessionId: 's',
+      };
       await expect(
-        service.updateRule('team-1', { account_ids: [] }, adminUser),
+        service.updateRule('team-1', { account_ids: [] }, managerUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       prisma.account.findUnique.mockResolvedValue({ teamId: 'team-2' });
