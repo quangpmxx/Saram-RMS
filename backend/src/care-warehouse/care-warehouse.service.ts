@@ -1511,21 +1511,34 @@ export class CareWarehouseService {
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.page_size,
         take: query.page_size,
-        include: {
-          createdBy: { select: ACCOUNT_REF_SELECT },
-          assignments: {
-            orderBy: { assignedAt: 'asc' },
-            include: {
-              lead: {
-                select: { id: true, fullName: true, phoneNumber: true },
-              },
-              assignee: { select: ACCOUNT_REF_SELECT },
-              endedBy: { select: ACCOUNT_REF_SELECT },
-            },
-          },
-        },
+        include: { createdBy: { select: ACCOUNT_REF_SELECT } },
       }),
     ]);
+
+    // Lịch sử phân công chỉ cần số data mỗi đợt + tên người nhận (yêu cầu người
+    // dùng 2026-10-31) — KHÔNG tải chi tiết từng data như trước. Lấy người nhận
+    // khác nhau của các đợt trong trang bằng đúng 1 truy vấn.
+    const recipientRows =
+      batches.length === 0
+        ? []
+        : await this.prisma.careAssignment.findMany({
+            where: { batchId: { in: batches.map((b) => b.id) } },
+            distinct: ['batchId', 'assigneeId'],
+            select: {
+              batchId: true,
+              assignee: { select: ACCOUNT_REF_SELECT },
+            },
+          });
+    const assigneesByBatch = new Map<
+      string,
+      ReturnType<typeof toAccountRef>[]
+    >();
+    for (const row of recipientRows) {
+      const list = assigneesByBatch.get(row.batchId) ?? [];
+      list.push(toAccountRef(row.assignee));
+      assigneesByBatch.set(row.batchId, list);
+    }
+
     return {
       total,
       page: query.page,
@@ -1536,7 +1549,7 @@ export class CareWarehouseService {
         created_at: b.createdAt.toISOString(),
         created_by: toAccountRef(b.createdBy),
         lead_count: b.leadCount,
-        assignments: b.assignments.map((a) => this.toAssignmentResponse(a)),
+        assignees: assigneesByBatch.get(b.id) ?? [],
       })),
     };
   }

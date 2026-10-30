@@ -286,12 +286,17 @@ export class SalesEntryService {
     if (currentUser.role === 'sale') {
       where.saleUserId = currentUser.id;
     } else if (currentUser.role === 'leader') {
+      // Leader xoá được dòng của Sale trong nhóm mình, và dòng CHƯA GÁN Sale do
+      // chính mình tạo (quyết định người dùng 2026-10-31) — không xoá được dòng
+      // chưa gán do người khác tạo.
       const teamId = await findOwnTeamId(this.prisma, currentUser.id);
-      if (teamId) {
-        where.saleUser = { teamId };
-      } else {
-        where.saleUserId = { in: [] };
-      }
+      const ownUnassigned: Prisma.SalesEntryRecordWhereInput = {
+        saleUserId: null,
+        createdById: currentUser.id,
+      };
+      where.OR = teamId
+        ? [{ saleUser: { teamId } }, ownUnassigned]
+        : [ownUnassigned];
     }
 
     // Xoá mềm (rà soát 2026-10-30): chỉ đụng các dòng trong phạm vi quyền và
