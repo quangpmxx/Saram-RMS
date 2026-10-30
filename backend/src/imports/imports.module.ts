@@ -4,10 +4,11 @@ import { CandidatesModule } from '../candidates/candidates.module';
 import { DistributionModule } from '../distribution/distribution.module';
 import { ImportsController } from './imports.controller';
 import { ImportsService } from './imports.service';
+import { LegacyImportService } from './legacy-import.service';
 
 @Module({
   imports: [AuditLogModule, CandidatesModule, DistributionModule],
   controllers: [ImportsController],
-  providers: [ImportsService],
+  providers: [ImportsService, LegacyImportService],
 })
 export class ImportsModule {}

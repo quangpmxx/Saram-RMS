@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  History,
   MapPin,
   Pencil,
   Phone,
@@ -66,6 +67,7 @@ import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { DuplicatePhone } from "./duplicate-phone";
 import { ActionLink } from "./action-link";
+import { LegacyImportModal } from "./legacy-import-modal";
 import { shouldOpenRowDetail } from "./row-click";
 import { SourceBadge } from "./source-badge";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
@@ -105,6 +107,7 @@ type ModalState =
   | { mode: "create" }
   | { mode: "edit"; candidate: Candidate }
   | { mode: "import" }
+  | { mode: "legacy-import" }
   | { mode: "assign"; candidateIds: string[] }
   | { mode: "transfer"; candidate: Candidate }
   | { mode: "remind"; candidate: Candidate };
@@ -861,6 +864,18 @@ export function CandidatesClient({
                   <Upload className="h-4 w-4" strokeWidth={2} />
                   Nhập từ Excel
                 </Button>
+                {currentUserRole === "admin" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isReadOnly}
+                    onClick={() => setModal({ mode: "legacy-import" })}
+                  >
+                    <History className="h-4 w-4" strokeWidth={2} />
+                    Tải data cũ
+                  </Button>
+                )}
                 <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
                   <Plus className="h-4 w-4" strokeWidth={2.5} />
                   Thêm lao động mới
@@ -1498,6 +1513,17 @@ export function CandidatesClient({
             setModal({ mode: "none" });
             await refresh();
             toast.success("Đã cập nhật lao động");
+          }}
+        />
+      )}
+
+      {modal.mode === "legacy-import" && (
+        <LegacyImportModal
+          teams={teams}
+          onClose={() => setModal({ mode: "none" })}
+          onFinished={async (result) => {
+            await refresh();
+            toast.success(`Đã tải ${result.created} data cũ vào ${result.team}`);
           }}
         />
       )}
