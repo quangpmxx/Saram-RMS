@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type Account, type PaginatedResult, type Team } from "@/lib/types";
+
+/** GET /notification/recipients — tài khoản đang hoạt động để chọn người nhận. */
+type Recipient = Pick<Account, "id" | "full_name" | "role" | "team_name">;
 import { roleAccentTextStyle } from "@/lib/role-accent";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -32,7 +35,7 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
   const [content, setContent] = useState("");
   const [targetType, setTargetType] = useState<"team" | "account">("team");
   const [teams, setTeams] = useState<Team[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<Recipient[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,12 +46,13 @@ function SendNotificationModal({ onClose }: { onClose: () => void }) {
     let cancelled = false;
     Promise.all([
       clientApi<PaginatedResult<Team>>("/team?page=1&page_size=200"),
-      clientApi<PaginatedResult<Account>>("/account?page=1&page_size=200&status=active"),
+      // API riêng cho gửi thông báo (Admin + Quản lý) — /account chỉ Admin dùng được.
+      clientApi<Recipient[]>("/notification/recipients"),
     ])
       .then(([teamResult, accountResult]) => {
         if (cancelled) return;
         setTeams(teamResult.items);
-        setAccounts(accountResult.items);
+        setAccounts(accountResult);
       })
       .catch(() => {
         if (!cancelled) setError("Không tải được danh sách nhóm/tài khoản");

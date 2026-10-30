@@ -77,6 +77,27 @@ export class NotificationService {
    * nhận với status='sent' (gửi ngay lập tức trong ứng dụng, không qua
    * hàng đợi/worker như 2 loại nhắc lịch Zalo hiện có).
    */
+  async listRecipients(): Promise<
+    { id: string; full_name: string; role: string; team_name: string | null }[]
+  > {
+    const accounts = await this.prisma.account.findMany({
+      where: { status: 'active' },
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        team: { select: { name: true } },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    return accounts.map((a) => ({
+      id: a.id,
+      full_name: a.fullName,
+      role: a.role,
+      team_name: a.team?.name ?? null,
+    }));
+  }
+
   async sendAdminMessage(
     dto: SendNotificationDto,
     currentUser: AuthenticatedUser,

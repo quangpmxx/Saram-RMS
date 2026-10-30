@@ -108,7 +108,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                     <PageTitleSlot />
                   </div>
                   <div className="ml-auto flex items-center gap-3">
-                    {user.role === "admin" && <SendNotificationButton />}
+                    {(user.role === "admin" || user.role === "manager") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
                     <NotificationBell userId={user.id} />

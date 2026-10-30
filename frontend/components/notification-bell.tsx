@@ -33,7 +33,7 @@ import { Avatar } from "@/components/ui/avatar";
 const TYPE_LABEL: Record<AppNotification["type"], string> = {
   callback_reminder: "Nhắc lịch gọi lại",
   interview_reminder: "Nhắc lịch phỏng vấn",
-  admin_message: "Thông báo từ quản trị viên",
+  admin_message: "Thông báo từ Admin/Quản lý",
   new_data_uploaded: "Data mới về nhóm",
   manual_callback_reminder: "Nhắc gọi lại",
   leave_request_pending_leader: "Đơn xin nghỉ phép cần duyệt",

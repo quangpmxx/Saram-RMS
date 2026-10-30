@@ -12,7 +12,7 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
  * (chỉ thông báo của chính mình).
  *
  * Dự án phụ — nâng cấp toàn diện: POST /notification (soạn + gửi thông báo
- * thủ công) — CHỈ Admin, gắn @Roles('admin') riêng cho route này.
+ * thủ công) — Admin và Quản lý (Quản lý thêm 2026-10-30, yêu cầu người dùng).
  */
 @Controller('notification')
 export class NotificationController {
@@ -26,8 +26,15 @@ export class NotificationController {
     return this.notificationService.list(query, user);
   }
 
+  /** Danh sách tài khoản đang hoạt động để chọn người nhận thông báo. */
+  @Get('recipients')
+  @Roles('admin', 'manager')
+  recipients() {
+    return this.notificationService.listRecipients();
+  }
+
   @Post()
-  @Roles('admin')
+  @Roles('admin', 'manager')
   send(
     @Body() dto: SendNotificationDto,
     @CurrentUser() user: AuthenticatedUser,
