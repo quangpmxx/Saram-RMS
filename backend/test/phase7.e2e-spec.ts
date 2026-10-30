@@ -51,10 +51,21 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
     'p7_sale_b1',
   ];
 
-  async function createLead(fullName: string, phone: string, sourceId: string) {
+  async function createLead(
+    fullName: string,
+    phone: string,
+    sourceId: string,
+    // Bắt buộc chọn nhóm khi up data (CreateCandidateDto) — mặc định nhóm A.
+    teamId: string = teamAId,
+  ) {
     const res = await mktAgent
       .post('/candidate')
-      .send({ full_name: fullName, phone_number: phone, source_id: sourceId })
+      .send({
+        full_name: fullName,
+        phone_number: phone,
+        source_id: sourceId,
+        team_id: teamId,
+      })
       .expect(201);
     return res.body.candidate.id as string;
   }
@@ -78,6 +89,9 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -367,7 +381,12 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
     });
 
     // ── Dữ liệu Team B (chỉ để test cách ly team_id + by-team) ────────────
-    const leadB1 = await createLead('P7 Lead B1', '0910000101', facebookId);
+    const leadB1 = await createLead(
+      'P7 Lead B1',
+      '0910000101',
+      facebookId,
+      teamBId,
+    );
     await assign(leadB1, leaderBAgent, saleB1.id);
   }, 30000);
 
@@ -382,12 +401,12 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
         .query({ team_id: teamAId })
         .expect(200);
 
-      expect(res.body.new_leads_total).toBe(7); // lead1..6 + lead8 (lead7 pending không gán team)
+      expect(res.body.new_leads_total).toBe(8); // lead1..8 — lead7 chờ phân chia nhưng vẫn thuộc Team A (bắt buộc chọn nhóm khi up data)
       const bySource = res.body.new_leads_by_source as Array<{
         source_name: string;
         count: number;
       }>;
-      expect(bySource.find((s) => s.source_name === 'Facebook')?.count).toBe(5); // 1,2,4,6,8
+      expect(bySource.find((s) => s.source_name === 'Facebook')?.count).toBe(6); // 1,2,4,6,7,8
       expect(bySource.find((s) => s.source_name === 'TikTok')?.count).toBe(1); // 3
       expect(bySource.find((s) => s.source_name === 'Zalo')?.count).toBe(1); // 5
 
@@ -396,7 +415,7 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
         count: number;
         percentage: number;
       }>;
-      expect(funnel.find((s) => s.code === 'LEAD')?.count).toBe(7);
+      expect(funnel.find((s) => s.code === 'LEAD')?.count).toBe(8);
       expect(funnel.find((s) => s.code === 'INTERVIEW_SCHEDULED')?.count).toBe(
         4,
       ); // 3,4,5,6
@@ -409,7 +428,7 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
 
     it('Leader A tự động bị ép về đúng nhóm mình dù không truyền team_id — số liệu khớp Admin lọc theo Team A', async () => {
       const res = await leaderAAgent.get('/dashboard/summary').expect(200);
-      expect(res.body.new_leads_total).toBe(7);
+      expect(res.body.new_leads_total).toBe(8);
       expect(res.body.care_pool_count).toBe(1);
     });
 
@@ -441,7 +460,7 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
         .get('/dashboard/summary')
         .query({ team_id: teamAId })
         .expect(200);
-      expect(withoutFilter.body.new_leads_total).toBe(8); // 7 cũ + 1 backdated
+      expect(withoutFilter.body.new_leads_total).toBe(9); // 8 cũ + 1 backdated
 
       const withFilter = await adminAgent
         .get('/dashboard/summary')
@@ -451,7 +470,7 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
           date_to: '2030-01-01',
         })
         .expect(200);
-      expect(withFilter.body.new_leads_total).toBe(7); // loại bỏ lead backdate về 2020
+      expect(withFilter.body.new_leads_total).toBe(8); // loại bỏ lead backdate về 2020
     });
 
     it('pending_count tăng đúng 1 khi có thêm 1 lead chờ phân chia mới (so sánh tương đối, tránh phụ thuộc dữ liệu file test khác)', async () => {

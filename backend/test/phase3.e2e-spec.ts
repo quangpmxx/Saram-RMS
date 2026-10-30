@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { bootstrapTestApp } from './utils/bootstrap-app';
+import { teamOf } from './utils/team-of';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hashPassword } from '../src/common/utils/password.util';
 
@@ -48,6 +49,9 @@ describe('Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú (e2e)', () =>
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -222,6 +226,7 @@ describe('Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú (e2e)', () =>
         full_name: 'Ứng viên Phase3',
         phone_number: '0940000001',
         source_id: facebookSourceId,
+        team_id: await teamOf(prisma, saleA.id),
       })
       .expect(201);
     leadId = createRes.body.candidate.id as string;
@@ -275,9 +280,30 @@ describe('Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú (e2e)', () =>
     expect(detail.body.call_result.id).toBe(potentialResultId);
   });
 
-  it('Sale B không được cập nhật lead không phải của mình', async () => {
+  it('Sale B không được cập nhật lead của Sale A khi lead chưa được xử lý lần nào', async () => {
+    // Sale cùng nhóm ĐƯỢC xử lý tiếp lead đã có người xử lý ít nhất 1 lần
+    // (lastActivityAt khác null — xem loadLeadForUpdate). leadId dùng chung
+    // đã được Sale A xử lý nên dùng 1 lead mới, chưa xử lý lần nào.
+    const shared = await prisma.lead.findUniqueOrThrow({
+      where: { id: leadId },
+    });
+    const freshRes = await mktAgent
+      .post('/candidate')
+      .send({
+        full_name: 'Ứng viên Phase3 chưa xử lý',
+        phone_number: '0940000099',
+        source_id: facebookSourceId,
+        team_id: shared.assignedTeamId,
+      })
+      .expect(201);
+    const freshId = freshRes.body.candidate.id as string;
+    await leaderAgent
+      .post(`/candidate/${freshId}/assign`)
+      .send({ account_id: shared.assignedToId })
+      .expect(200);
+
     await saleBAgent
-      .put(`/candidate/${leadId}/call-status`)
+      .put(`/candidate/${freshId}/call-status`)
       .send({ call_status_id: notAnsweredStatusId })
       .expect(403);
   });

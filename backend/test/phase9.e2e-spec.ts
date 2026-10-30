@@ -35,13 +35,22 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
     'phase9_manager',
   ];
 
-  async function createLead(phone: string, fullName = `Ứng viên ${phone}`) {
+  async function createLead(
+    phone: string,
+    fullName = `Ứng viên ${phone}`,
+    // Bắt buộc chọn nhóm khi up data (CreateCandidateDto) — mặc định nhóm A.
+    teamName = 'Phase9 Nhóm A',
+  ) {
+    const team = await prisma.team.findFirstOrThrow({
+      where: { name: teamName },
+    });
     const res = await mktAgent
       .post('/candidate')
       .send({
         full_name: fullName,
         phone_number: phone,
         source_id: facebookSourceId,
+        team_id: team.id,
       })
       .expect(201);
     return res.body.candidate.id as string;
@@ -55,6 +64,9 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.leadNote.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -231,7 +243,11 @@ describe('Phase 9 — Nhật ký, Trùng lặp nâng cao & Phân quyền chi ti�
     beforeAll(async () => {
       leadA1 = await createLead(dupPhone);
       leadA2 = await createLead(dupPhone);
-      leadCrossTeam = await createLead(dupPhone);
+      leadCrossTeam = await createLead(
+        dupPhone,
+        `Ứng viên ${dupPhone}`,
+        'Phase9 Nhóm B',
+      );
       await leaderAAgent
         .post(`/candidate/${leadA1}/assign`)
         .send({

@@ -16,6 +16,8 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
   let prisma: PrismaService;
   let facebookSourceId: string;
   let zaloSourceId: string;
+  // Bắt buộc chọn nhóm khi up data (CreateCandidateDto).
+  let teamId: string;
 
   let mktAAgent: ReturnType<typeof request.agent>;
   let mktBAgent: ReturnType<typeof request.agent>;
@@ -65,6 +67,9 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     // Xóa sessions + audit_logs trước accounts — nếu chạy lại bộ test này
     // nhiều lần, các bản ghi từ lần chạy trước vẫn còn tham chiếu tới
@@ -102,6 +107,11 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     ).id;
     zaloSourceId = (
       await prisma.leadSource.findUniqueOrThrow({ where: { name: 'Zalo' } })
+    ).id;
+
+    teamId = (
+      (await prisma.team.findFirst({ where: { name: 'Phase1 Nhóm' } })) ??
+      (await prisma.team.create({ data: { name: 'Phase1 Nhóm' } }))
     ).id;
 
     const passwordHash = await hashPassword('123456');
@@ -161,6 +171,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
         full_name: 'Nguyễn Văn A',
         phone_number: '0900000001',
         source_id: facebookSourceId,
+        team_id: teamId,
         mkt_note: 'ghi chú',
       })
       .expect(201);
@@ -256,6 +267,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
         full_name: 'X',
         phone_number: '0900000002',
         source_id: facebookSourceId,
+        team_id: teamId,
       })
       .expect(403);
 
@@ -265,6 +277,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
         full_name: 'X',
         phone_number: '090',
         source_id: facebookSourceId,
+        team_id: teamId,
       })
       .expect(401);
   });
@@ -276,6 +289,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
         full_name: 'Bản ghi trùng',
         phone_number: '0900000001',
         source_id: zaloSourceId,
+        team_id: teamId,
       })
       .expect(201);
 
@@ -303,6 +317,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
         full_name: 'Của MKT B',
         phone_number: '0900000099',
         source_id: facebookSourceId,
+        team_id: teamId,
       })
       .expect(201);
     const leadId = created.body.candidate.id as string;

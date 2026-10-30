@@ -52,6 +52,8 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
   async function createLead(
     agent: ReturnType<typeof request.agent>,
     phone: string,
+    // Bắt buộc chọn nhóm khi up data (CreateCandidateDto) — mặc định nhóm 1.
+    teamId: string = team1Id,
   ): Promise<string> {
     const res = await agent
       .post('/candidate')
@@ -59,6 +61,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
         full_name: `Ứng viên ${phone}`,
         phone_number: phone,
         source_id: facebookSourceId,
+        team_id: teamId,
       })
       .expect(201);
     return res.body.candidate.id as string;
@@ -79,6 +82,9 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
     await prisma.interviewAppointment.deleteMany({});
     await prisma.callbackSchedule.deleteMany({});
     await prisma.notification.deleteMany({});
+    // Kho chăm sóc: care_assignments tham chiếu leads (RESTRICT) — dọn trước leads.
+    await prisma.careAssignment.deleteMany({});
+    await prisma.careAssignmentBatch.deleteMany({});
     await prisma.lead.deleteMany({});
     await prisma.session.deleteMany({
       where: { account: { username: { in: USERNAMES } } },
@@ -90,7 +96,9 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
       where: { username: { in: USERNAMES } },
     });
     await prisma.team.deleteMany({
-      where: { name: { in: ['Phase2 Nhóm 1', 'Phase2 Nhóm 2'] } },
+      where: {
+        name: { in: ['Phase2 Nhóm 1', 'Phase2 Nhóm 2', 'Phase2 Nhóm 3'] },
+      },
     });
 
     await prisma.leadSource.upsert({
@@ -230,20 +238,28 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
     await app.close();
   });
 
-  it('lead mới từ MKT xuất hiện ở "Chờ phân chia" cho MKT/Leader/Admin, không cho Sale', async () => {
+  it('lead mới (nhóm 1) xuất hiện ở "Chờ phân chia" cho Admin và Leader/Sale nhóm 1, không cho nhóm 2', async () => {
+    // Up data bắt buộc chọn nhóm; Leader/Sale chỉ thấy "Chờ phân chia" của
+    // nhóm mình, Sale được xem để tự nhận data (xem getPending()).
     const leadId = await createLead(mktAgent, '0930000001');
+    const has = (res: { body: { items: { id: string }[] } }) =>
+      res.body.items.some((item) => item.id === leadId);
 
-    const forLeader1 = await leader1Agent.get('/candidate/pending').expect(200);
-    expect(
-      forLeader1.body.items.some((item: { id: string }) => item.id === leadId),
-    ).toBe(true);
-
-    const forAdmin = await adminAgent.get('/candidate/pending').expect(200);
-    expect(
-      forAdmin.body.items.some((item: { id: string }) => item.id === leadId),
-    ).toBe(true);
-
-    await sale1aAgent.get('/candidate/pending').expect(403);
+    expect(has(await leader1Agent.get('/candidate/pending').expect(200))).toBe(
+      true,
+    );
+    expect(has(await adminAgent.get('/candidate/pending').expect(200))).toBe(
+      true,
+    );
+    expect(has(await sale1aAgent.get('/candidate/pending').expect(200))).toBe(
+      true,
+    );
+    expect(has(await leader2Agent.get('/candidate/pending').expect(200))).toBe(
+      false,
+    );
+    expect(has(await sale2aAgent.get('/candidate/pending').expect(200))).toBe(
+      false,
+    );
   });
 
   it('MKT không có quyền phân chia/chuyển lead', async () => {
@@ -274,7 +290,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
 
     const sale1aList = await sale1aAgent
       .get('/candidate')
-      .query({ page_size: 50 })
+      .query({ page_size: 50, assigned_to: 'me' })
       .expect(200);
     expect(
       sale1aList.body.items.some((item: { id: string }) => item.id === leadId),
@@ -282,7 +298,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
 
     const sale1bList = await sale1bAgent
       .get('/candidate')
-      .query({ page_size: 50 })
+      .query({ page_size: 50, assigned_to: 'me' })
       .expect(200);
     expect(
       sale1bList.body.items.some((item: { id: string }) => item.id === leadId),
@@ -324,7 +340,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
 
     const sale1aList = await sale1aAgent
       .get('/candidate')
-      .query({ page_size: 50 })
+      .query({ page_size: 50, assigned_to: 'me' })
       .expect(200);
     expect(
       sale1aList.body.items.some((item: { id: string }) => item.id === leadId),
@@ -332,7 +348,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
 
     const sale1bList = await sale1bAgent
       .get('/candidate')
-      .query({ page_size: 50 })
+      .query({ page_size: 50, assigned_to: 'me' })
       .expect(200);
     expect(
       sale1bList.body.items.some((item: { id: string }) => item.id === leadId),
@@ -387,7 +403,7 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
 
     const sale1aList = await sale1aAgent
       .get('/candidate')
-      .query({ page_size: 50 })
+      .query({ page_size: 50, assigned_to: 'me' })
       .expect(200);
     const ids = sale1aList.body.items.map((item: { id: string }) => item.id);
     expect(ids).toEqual(expect.arrayContaining([leadId1, leadId2]));
@@ -443,13 +459,21 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
         .send({ account_id: sale1bId })
         .expect(200);
 
-      leadTeam2Id = await createLead(mktAgent, DUP_PHONE);
+      leadTeam2Id = await createLead(mktAgent, DUP_PHONE, team2Id);
       await leader2Agent
         .post(`/candidate/${leadTeam2Id}/assign`)
         .send({ account_id: sale2aId })
         .expect(200);
 
-      leadPendingId = await createLead(mktAgent, DUP_PHONE);
+      // Up data bắt buộc chọn nhóm — lead "chưa phân chia" đặt ở 1 nhóm thứ 3,
+
+      // ngoài phạm vi mọi Leader/Sale trong bộ test (giữ đúng ý kịch bản cũ).
+
+      const team3 = await prisma.team.create({
+        data: { name: 'Phase2 Nhóm 3' },
+      });
+
+      leadPendingId = await createLead(mktAgent, DUP_PHONE, team3.id);
     });
 
     it('Admin xem được toàn bộ các lần trùng, không giới hạn nhóm', async () => {
