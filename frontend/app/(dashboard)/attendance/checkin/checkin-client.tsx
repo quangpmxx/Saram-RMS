@@ -43,7 +43,7 @@ type GpsState = "idle" | "requesting" | "granted" | "denied";
  * trang này ở các Phase sau, không tạo trang riêng.
  */
 export function CheckinClient({ user }: { user: Account }) {
-  useSetPageTitle("Check in", "Chấm công bằng vị trí GPS.");
+  useSetPageTitle("Check in");
   const toast = useToast();
   const router = useRouter();
 
