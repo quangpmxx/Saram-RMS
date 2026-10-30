@@ -18,10 +18,11 @@ import {
   suggestAccount,
   zaloFriendCode,
 } from './legacy-import.util';
+import {
+  SYSTEM_FULL_NAME,
+  SYSTEM_USERNAME,
+} from '../common/utils/system-account.util';
 
-/** Tài khoản đứng tên các ghi chú nhập từ sheet cũ — không đăng nhập được. */
-const SYSTEM_USERNAME = 'he_thong';
-const SYSTEM_FULL_NAME = 'Hệ thống';
 const DEFAULT_SOURCE = 'Khác';
 export const LEGACY_MAX_ROWS = 5000;
 

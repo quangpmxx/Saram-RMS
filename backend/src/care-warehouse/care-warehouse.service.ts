@@ -9,6 +9,7 @@ import {
 import { CareAssignmentMethod, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
+import { SYSTEM_USERNAME } from '../common/utils/system-account.util';
 import {
   CANDIDATE_INCLUDE,
   CandidateResponseDto,
@@ -65,6 +66,17 @@ type Tx = Prisma.TransactionClient;
 
 /** Đợt giao tới 500 data trên PGlite (dev) có thể vượt mặc định 5 giây của Prisma. */
 const TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 };
+
+/**
+ * Ghi chú được tính là 1 lần chăm sóc: chưa xoá và KHÔNG phải ghi chú
+ * "Hệ thống" chép từ sheet khi Tải data cũ (yêu cầu người dùng 2026-10-30)
+ * — data cũ vừa tải lên là "Chưa chăm sóc". Điều kiện vào Kho (có ít nhất
+ * 1 ghi chú) vẫn tính cả ghi chú Hệ thống.
+ */
+const CARE_NOTE_WHERE: Prisma.LeadNoteWhereInput = {
+  isDeleted: false,
+  createdBy: { username: { not: SYSTEM_USERNAME } },
+};
 
 export type SkipReason =
   | 'not_eligible'
@@ -462,7 +474,7 @@ export class CareWarehouseService {
     const notes = assignments.length
       ? await this.prisma.leadNote.findMany({
           where: {
-            isDeleted: false,
+            ...CARE_NOTE_WHERE,
             ...(from ? { createdAt: { gte: from } } : {}),
             lead: { ...leadWhere, careAssignments: { some: assignmentWhere } },
           },
@@ -496,7 +508,7 @@ export class CareWarehouseService {
   ) {
     const monthNotes = await this.prisma.leadNote.findMany({
       where: {
-        isDeleted: false,
+        ...CARE_NOTE_WHERE,
         createdAt: { gte: monthStart },
         lead: leadWhere,
       },
@@ -515,7 +527,7 @@ export class CareWarehouseService {
     // Tổng số lần chăm sóc = số ngày khác nhau có ghi chú → cần mốc từng
     // ghi chú (groupBy không gom được theo ngày giờ VN).
     const allNotes = await this.prisma.leadNote.findMany({
-      where: { isDeleted: false, lead: leadWhere },
+      where: { ...CARE_NOTE_WHERE, lead: leadWhere },
       select: { leadId: true, createdAt: true },
     });
     const assignmentMax = await this.prisma.careAssignment.groupBy({
@@ -1797,7 +1809,7 @@ export class CareWarehouseService {
     );
     const caredRows = await this.prisma.leadNote.findMany({
       where: {
-        isDeleted: false,
+        ...CARE_NOTE_WHERE,
         createdAt: { gte: monthRange.start, lt: cutoff },
         lead: leadWhere,
       },
