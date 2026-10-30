@@ -21,11 +21,9 @@ import {
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { AccountRole, LeadRealtimeEvent, Note, PaginatedResult } from "@/lib/types";
 import {
-  CARE_END_REASON_LABEL,
   CARE_METHOD_LABEL,
   CARE_PRIORITY_LABEL,
   CARE_RELEVANT_CHANGES,
-  type CareAccountRef,
   type CareAssignResult,
   type CareBatch,
   type CareRandomPreview,
@@ -139,17 +137,6 @@ export function clearSavedCareState(accountId: string) {
 
 function errorText(error: unknown): string {
   return error instanceof ApiError ? error.message : "Có lỗi xảy ra";
-}
-
-/** Lượt giao tự hết hạn khi sang tháng mới (giờ Việt Nam) — khớp backend. */
-function isSameVnMonth(iso: string): boolean {
-  const month = (d: Date) =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-    }).format(d);
-  return month(new Date(iso)) === month(new Date());
 }
 
 function saleLabel(option: CareSaleOption): string {
@@ -1442,7 +1429,6 @@ function BatchHistoryModal({ teamId, onClose }: { teamId: string; onClose: () =>
   const toast = useToast();
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PaginatedResult<CareBatch> | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     const q = new URLSearchParams({ page: String(page), page_size: "20" });
@@ -1491,57 +1477,23 @@ function BatchHistoryModal({ teamId, onClose }: { teamId: string; onClose: () =>
         <p className="text-sm text-slate-400">Chưa có đợt phân công nào.</p>
       ) : (
         <div className="space-y-2">
-          {data.items.map((batch) => {
-            const assignees = new Map<string, CareAccountRef>();
-            for (const a of batch.assignments) assignees.set(a.assignee.id, a.assignee);
-            const isOpen = expanded === batch.id;
-            return (
-              <div key={batch.id} className="rounded-lg border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setExpanded(isOpen ? null : batch.id)}
-                  className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50"
-                >
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-800">{formatDMYHM(batch.created_at)}</span>
-                    <Badge variant="info">{CARE_METHOD_LABEL[batch.method]}</Badge>
-                    <span className="text-slate-500">
-                      bởi <NameWithRoleHint account={batch.created_by} />
-                    </span>
-                  </span>
-                  <span className="text-slate-600">
-                    {batch.lead_count} data → {[...assignees.values()].map((a) => a.name).join(", ")}
-                  </span>
-                </button>
-                {isOpen && (
-                  <table className="w-full border-t border-slate-100 text-xs">
-                    <tbody>
-                      {batch.assignments.map((a) => (
-                        <tr key={a.id} className="border-b border-slate-50">
-                          <td className="px-3 py-1">
-                            <Link href={`/candidates/${a.lead.id}`} className="hover:text-brand-700 hover:underline">
-                              {a.lead.full_name}
-                            </Link>{" "}
-                            <span className="text-slate-400">{a.lead.phone_number}</span>
-                          </td>
-                          <td className="px-3 py-1">{a.assignee.name}</td>
-                          <td className="px-3 py-1 text-slate-500">
-                            {a.end_reason
-                              ? `${CARE_END_REASON_LABEL[a.end_reason]} ${formatDMYHM(a.ended_at)}${
-                                  a.ended_by ? ` (${a.ended_by.name})` : ""
-                                }`
-                              : isSameVnMonth(a.assigned_at)
-                                ? "Đang giao"
-                                : "Hết hạn (sang tháng mới)"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            );
-          })}
+          {data.items.map((batch) => (
+            <div
+              key={batch.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs"
+            >
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-slate-800">{formatDMYHM(batch.created_at)}</span>
+                <Badge variant="info">{CARE_METHOD_LABEL[batch.method]}</Badge>
+                <span className="text-slate-500">
+                  bởi <NameWithRoleHint account={batch.created_by} />
+                </span>
+              </span>
+              <span className="text-slate-600">
+                {batch.lead_count} data → {batch.assignees.map((a) => a.name).join(", ")}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </Modal>

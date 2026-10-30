@@ -122,7 +122,8 @@ export interface CareBatch {
   created_at: string;
   created_by: CareAccountRef;
   lead_count: number;
-  assignments: CareAssignmentRow[];
+  /** Người nhận khác nhau của đợt (không còn chi tiết từng data). */
+  assignees: CareAccountRef[];
 }
 
 /** GET /care-progress — khối Dashboard và tab "Tiến độ chăm sóc" dùng chung. */
