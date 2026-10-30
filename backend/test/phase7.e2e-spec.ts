@@ -541,42 +541,7 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
     });
   });
 
-  describe('GET /report/funnel', () => {
-    it('Sale/MKT bị từ chối (403)', async () => {
-      await saleA1Agent.get('/report/funnel').expect(403);
-      await mktAgent.get('/report/funnel').expect(403);
-    });
-
-    it('Quản lý lọc theo team_id + account_id → đúng phễu của riêng Sale A2', async () => {
-      const res = await managerAgent
-        .get('/report/funnel')
-        .query({ team_id: teamAId, account_id: saleA2Id })
-        .expect(200);
-      const steps = new Map(
-        res.body.map((s: { code: string; count: number }) => [s.code, s.count]),
-      );
-      expect(steps.get('LEAD')).toBe(2); // lead4, lead5
-      expect(steps.get('ATTENDED')).toBe(2);
-      expect(steps.get('PASSED')).toBe(1); // lead5
-      expect(steps.get('EMPLOYED')).toBe(0);
-    });
-  });
-
-  describe('GET /report/by-source', () => {
-    it('Sale/MKT bị từ chối (403)', async () => {
-      await saleA1Agent.get('/report/by-source').expect(403);
-      await mktAgent.get('/report/by-source').expect(403);
-    });
-
-    it('Leader A xem đúng breakdown theo nguồn trong nhóm mình', async () => {
-      const res = await leaderAAgent.get('/report/by-source').expect(200);
-      const bySource = new Map(
-        res.body.map((s: { source_name: string }) => [s.source_name, s]),
-      );
-      const facebook = bySource.get('Facebook') as { lead_count: number };
-      expect(facebook.lead_count).toBeGreaterThanOrEqual(5);
-    });
-  });
+  // /report/funnel và /report/by-source đã được gỡ ở B5 (tổng rà soát 2026-10-30).
 
   describe('Kết quả breakdown dùng để mở đúng danh sách ứng viên đã lọc sẵn', () => {
     it('GET /candidate với team_id + source_id (từ số liệu breakdown) trả về đúng tập con', async () => {

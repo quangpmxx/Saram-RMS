@@ -24,7 +24,8 @@ Kế hoạch gốc và các quyết định nằm trong file Excel "Saram-RMS - 
 ## 3. Giới hạn của lần kiểm tra này (nói rõ để không hiểu nhầm)
 
 - **Chưa đo lại thời gian thực tế sau B7.** Mốc trước B7 (DB tạm, trung vị 12 lần): mở Dashboard 0,9–1,3 giây; ranking ≈500 ms; performance 58–508 ms tuỳ vai trò. Mức cải thiện hiện chỉ được chứng minh bằng số query giảm, chưa bằng giây. Nên đo lại bằng đúng kịch bản cũ trước khi tuyên bố con số.
-- **Chưa chạy e2e phân quyền theo vai trò trên DB tạm** (các bộ `test/*.e2e-spec.ts` cần database). B6 chỉ gồm unit test. Nên chạy `npm run test:e2e` trên DB tạm trước khi đưa lên máy chủ thật.
+- **E2e (đã chạy 30-10-2026 trên DB tạm sạch, so với commit trước tổng rà soát `d84b791`):** không có hồi quy do đợt này gây ra. Cả hai bản đều fail cùng **25 test cũ** (test lỗi thời so với các lần đổi phân quyền trước đó, vd kỳ vọng 403 nhưng Dashboard đã mở cho mọi vai trò; tài khoản tạo qua API rồi đăng nhập bằng `123456`) — chưa được sửa trong đợt này. 4 test của `/report/funnel`, `/report/by-source` đã xoá cùng endpoint (B5); phase5 xoá cùng module Care-pool.
+- **Chạy e2e phải đặt `DEFAULT_PASSWORD` khác `123456`** và dùng DB sạch mỗi lần chạy (test không chạy lại được trên DB đã dùng). Nếu để `DEFAULT_PASSWORD=123456`, mọi tài khoản test đăng nhập bằng mật khẩu mặc định sẽ bị chặn 403 vì tính năng bắt đổi mật khẩu (B8) — đúng thiết kế, không phải lỗi.
 - `npx tsc --noEmit` ở backend báo 3 lỗi kiểu `Buffer` có sẵn trong `attendance.service.spec.ts` và `test/phase6.e2e-spec.ts` — không thuộc đợt này, không ảnh hưởng chạy thật.
 
 ## 4. Hướng dẫn triển khai lên VPS
