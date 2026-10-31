@@ -628,12 +628,32 @@ export class CandidatesService {
       );
     }
 
-    await this.prisma.lead.update({
-      where: { id },
+    // Rà soát 2026-10-31: kiểm tra quyền ở trên đọc lead TRƯỚC khi ghi — 2 người
+    // bấm "Giữ số" cùng lúc đều qua được kiểm tra rồi người sau đè người trước
+    // (cả hai đều báo thành công). Đưa điều kiện vào chính câu lệnh ghi để chỉ
+    // một người thắng; Admin (và Quản lý khi giữ số) vẫn ghi đè như quy tắc cũ.
+    const unrestricted =
+      currentUser.role === 'admin' ||
+      (currentUser.role === 'manager' && isHeld);
+    const { count } = await this.prisma.lead.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        ...(unrestricted
+          ? {}
+          : { OR: [{ isHeld: false }, { heldById: currentUser.id }] }),
+      },
       data: isHeld
         ? { isHeld: true, heldById: currentUser.id, heldAt: new Date() }
         : { isHeld: false, heldById: null, heldAt: null },
     });
+    if (count === 0) {
+      throw new ConflictException(
+        isHeld
+          ? 'Số này vừa được người khác giữ — vui lòng tải lại'
+          : 'Số này vừa được người khác giữ/bỏ giữ — vui lòng tải lại',
+      );
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -973,10 +993,25 @@ export class CandidatesService {
 
     const oldAccountId = lead.assignedToId;
 
-    await this.prisma.lead.update({
-      where: { id },
+    // Rà soát 2026-10-31: các kiểm tra ở trên đọc lead TRƯỚC khi ghi — nếu giữa
+    // chừng có người giữ số / chuyển / phân chia lại thì việc chuyển này sẽ đè
+    // lên (vd chuyển cho người khác ngay khi Sale vừa giữ số). Chỉ ghi khi lead
+    // VẪN đúng trạng thái đã kiểm tra.
+    const { count } = await this.prisma.lead.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        assignedToId: oldAccountId,
+        assignedTeamId: lead.assignedTeamId,
+        OR: [{ isHeld: false }, { heldById: target.id }],
+      },
       data: { assignedToId: target.id, assignedAt: new Date() },
     });
+    if (count === 0) {
+      throw new ConflictException(
+        'Ứng viên vừa bị người khác thay đổi (giữ số/chuyển/phân chia) — vui lòng tải lại rồi thử lại',
+      );
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,

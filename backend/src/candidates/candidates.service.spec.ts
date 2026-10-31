@@ -107,7 +107,7 @@ describe('CandidatesService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn(),
         groupBy: jest.fn(),
       },
@@ -719,10 +719,60 @@ describe('CandidatesService', () => {
       prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
 
       await expect(service.unhold('lead-1', saleUser)).resolves.toBeDefined();
-      expect(prisma.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          OR: [{ isHeld: false }, { heldById: 'sale-1' }],
+        },
         data: { isHeld: false, heldById: null, heldAt: null },
       });
+    });
+
+    it('Race: 2 Sale cùng bấm Giữ số — người sau (đã qua kiểm tra nhưng số vừa bị giữ) nhận ConflictException, không đè người trước', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedTeamId: 'team-1',
+        assignedToId: 'sale-2',
+      });
+      // Giữa lúc kiểm tra và ghi, người khác đã giữ → điều kiện ghi không khớp.
+      prisma.lead.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.hold('lead-1', saleUser)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(auditLog.log).not.toHaveBeenCalled();
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ isHeld: false }, { heldById: 'sale-1' }],
+          }),
+        }),
+      );
+    });
+
+    it('Giữ số bởi Admin/Quản lý: không bị chặn bởi điều kiện "chưa ai giữ" (ghi đè như quy tắc cũ)', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+
+      await service.hold('lead-1', managerUser);
+
+      const where = (
+        prisma.lead.updateMany.mock.calls[0] as [
+          { where: Record<string, unknown> },
+        ]
+      )[0].where;
+      expect(where.OR).toBeUndefined();
+    });
+
+    it('Race: bỏ giữ số khi số vừa được người khác giữ → ConflictException', async () => {
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+      prisma.lead.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.unhold('lead-1', saleUser)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('Bỏ giữ số (unhold): Sale khác — dù cùng phụ trách lead nhưng KHÔNG phải người giữ số — cũng KHÔNG bỏ được', async () => {
@@ -1227,8 +1277,14 @@ describe('CandidatesService', () => {
         ),
       ).resolves.toBeDefined();
 
-      expect(prisma.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          assignedToId: 'sale-1',
+          assignedTeamId: 'team-1',
+          OR: [{ isHeld: false }, { heldById: 'sale-2' }],
+        },
         data: { assignedToId: 'sale-2', assignedAt: expect.any(Date) },
       });
       expect(auditLog.log).toHaveBeenCalledWith(
@@ -1238,6 +1294,23 @@ describe('CandidatesService', () => {
           newValue: 'sale-2 | reason: Sale A nghỉ phép',
         }),
       );
+    });
+
+    it('Race: Sale vừa giữ số (hoặc lead vừa bị chuyển/phân chia lại) giữa lúc kiểm tra và ghi → ConflictException, KHÔNG ghi audit', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.account.findUnique
+        .mockResolvedValueOnce({ teamId: 'team-1' }) // getOwnTeamId(leader)
+        .mockResolvedValueOnce({
+          ...saleAccount,
+          id: 'sale-2',
+          teamId: 'team-1',
+        });
+      prisma.lead.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(auditLog.log).not.toHaveBeenCalled();
     });
   });
 
