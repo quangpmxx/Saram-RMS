@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { LeadDuplicateService } from '../candidates/lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
+import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import {
   ImportJobResponseDto,
@@ -43,6 +44,7 @@ export class ImportsService {
     private readonly auditLog: AuditLogService,
     private readonly duplicateService: LeadDuplicateService,
     private readonly distributionRuleService: DistributionRuleService,
+    private readonly leadNotice: LeadAssignmentNoticeService,
   ) {}
 
   /**
@@ -158,6 +160,8 @@ export class ImportsService {
 
     let successCount = 0;
     let duplicateCount = 0;
+    // Số data tự động chia được cho từng người — gộp thành 1 thông báo/người ở cuối.
+    const autoAssignedByAccount = new Map<string, number>();
     const errors: ImportRowError[] = [];
     let totalRows = 0;
 
@@ -221,7 +225,16 @@ export class ImportsService {
 
       // Phase 6 — mỗi lead từ import cũng là "lead mới về", áp dụng tự động
       // phân chia (nếu có nhóm đang bật) giống hệt lead nhập tay.
-      await this.distributionRuleService.tryAutoAssign(created);
+      const assigned = await this.distributionRuleService.tryAutoAssign(
+        created,
+        { notify: false },
+      );
+      if (assigned.assignedToId) {
+        autoAssignedByAccount.set(
+          assigned.assignedToId,
+          (autoAssignedByAccount.get(assigned.assignedToId) ?? 0) + 1,
+        );
+      }
 
       const matches = await this.duplicateService.syncDuplicateFlags(
         created.phoneNumber,
@@ -252,5 +265,10 @@ export class ImportsService {
       entityId: jobId,
       newValue: `success=${successCount}, error=${errors.length}, duplicate=${duplicateCount}`,
     });
+
+    // Thông báo cho người được tự động chia (yêu cầu người dùng 2026-11-01).
+    for (const [accountId, count] of autoAssignedByAccount) {
+      await this.leadNotice.notifyAutoAssignedBulk(count, accountId);
+    }
   }
 }

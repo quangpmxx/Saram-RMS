@@ -82,10 +82,29 @@ describe('NotificationService', () => {
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          OR: [{ accountId: 'admin-1' }, { account: { role: 'sale' } }],
+          OR: [
+            { accountId: 'admin-1' },
+            { account: { role: 'sale' }, type: { not: 'lead_assigned' } },
+          ],
         },
       }),
     );
+  });
+
+  it('Admin thấy thông báo của Sale (quy tắc cũ) NHƯNG không thấy loại "được chia data" của Sale khác — tránh ngập chuông', async () => {
+    await service.list({ page: 1, page_size: 20 }, adminUser);
+
+    const where = (
+      prisma.notification.findMany.mock.calls[0] as [
+        { where: { OR: Array<Record<string, unknown>> } },
+      ]
+    )[0].where;
+    // Nhánh "thông báo của chính Admin" không bị lọc theo loại → Admin vẫn nhận lead_assigned của mình.
+    expect(where.OR[0]).toEqual({ accountId: 'admin-1' });
+    expect(where.OR[1]).toEqual({
+      account: { role: 'sale' },
+      type: { not: 'lead_assigned' },
+    });
   });
 
   it('Dự án phụ — nâng cấp toàn diện: Admin vẫn lọc thêm được theo status', async () => {
@@ -97,7 +116,10 @@ describe('NotificationService', () => {
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          OR: [{ accountId: 'admin-1' }, { account: { role: 'sale' } }],
+          OR: [
+            { accountId: 'admin-1' },
+            { account: { role: 'sale' }, type: { not: 'lead_assigned' } },
+          ],
           status: 'pending',
         },
       }),

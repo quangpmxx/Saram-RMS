@@ -41,6 +41,7 @@ import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { DuplicateGroupDto } from './dto/duplicate-group.dto';
 import { LeadDuplicateService } from './lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
+import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { RealtimeService } from '../realtime/realtime.service';
 import { findOwnTeamId } from '../common/utils/account-team.util';
@@ -91,6 +92,7 @@ export class CandidatesService {
     private readonly duplicateService: LeadDuplicateService,
     private readonly distributionRuleService: DistributionRuleService,
     private readonly realtime: RealtimeService,
+    private readonly leadNotice: LeadAssignmentNoticeService,
   ) {}
 
   async list(
@@ -860,6 +862,7 @@ export class CandidatesService {
     });
     const finalResponse = toCandidateResponse(final);
     this.realtime.emitCandidateChange('assigned', finalResponse, currentUser);
+    await this.leadNotice.notifyAssigned(lead, target.id, currentUser);
     return finalResponse;
   }
 
@@ -907,7 +910,7 @@ export class CandidatesService {
         assignedToId: target.id,
         assignedAt,
       },
-      select: { id: true },
+      select: { id: true, fullName: true, phoneNumber: true },
     });
     if (won.length === 0) {
       return { assigned_count: 0 };
@@ -934,6 +937,17 @@ export class CandidatesService {
       this.realtime.emitCandidateChange(
         'assigned',
         toCandidateResponse(lead),
+        currentUser,
+      );
+    }
+
+    // Báo cho người nhận: 1 data thì nêu tên, nhiều data thì gộp 1 thông báo.
+    if (won.length === 1) {
+      await this.leadNotice.notifyAssigned(won[0], target.id, currentUser);
+    } else {
+      await this.leadNotice.notifyAssignedBulk(
+        won.length,
+        target.id,
         currentUser,
       );
     }
@@ -1032,6 +1046,12 @@ export class CandidatesService {
       'transferred',
       finalResponse,
       currentUser,
+    );
+    await this.leadNotice.notifyAssigned(
+      lead,
+      target.id,
+      currentUser,
+      'transfer',
     );
     return finalResponse;
   }

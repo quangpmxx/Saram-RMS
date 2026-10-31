@@ -4,11 +4,16 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { NotificationScannerService } from './notification-scanner.service';
+import { LeadAssignmentNoticeService } from './lead-assignment-notice.service';
 
 @Module({
   imports: [AuditLogModule, RealtimeModule],
   controllers: [NotificationController],
-  providers: [NotificationService, NotificationScannerService],
-  exports: [NotificationScannerService],
+  providers: [
+    NotificationService,
+    NotificationScannerService,
+    LeadAssignmentNoticeService,
+  ],
+  exports: [NotificationScannerService, LeadAssignmentNoticeService],
 })
 export class NotificationModule {}

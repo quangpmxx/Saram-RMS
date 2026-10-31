@@ -39,6 +39,15 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
   let sale2aId: string;
 
   const server = () => app.getHttpServer();
+
+  /** Thông báo của 1 tài khoản (GET /notification) — dùng kiểm tra "được chia data" (2026-11-01). */
+  const notificationsOf = async (agent: ReturnType<typeof request.agent>) =>
+    (await agent.get('/notification').query({ page_size: 50 }).expect(200)).body
+      .items as Array<{
+      type: string;
+      lead_id: string | null;
+      content: string | null;
+    }>;
   const USERNAMES = [
     'phase2_mkt',
     'phase2_leader1',
@@ -310,6 +319,61 @@ describe('Phase 2 — Phân chia thủ công & Không gian Sale/Leader (e2e)', (
       .expect(200);
     expect(
       pending.body.items.some((item: { id: string }) => item.id === leadId),
+    ).toBe(false);
+  });
+
+  it('Chia thủ công: Sale được chia nhận thông báo lead_assigned (gắn lead_id), Sale khác không nhận', async () => {
+    const leadId = await createLead(mktAgent, '0930000091');
+    await leader1Agent
+      .post(`/candidate/${leadId}/assign`)
+      .send({ account_id: sale1aId })
+      .expect(200);
+
+    const mine = (await notificationsOf(sale1aAgent)).find(
+      (n) => n.type === 'lead_assigned' && n.lead_id === leadId,
+    );
+    expect(mine).toBeDefined();
+    expect(mine?.content).toContain('Bạn được chia data');
+
+    const others = await notificationsOf(sale1bAgent);
+    // (Sale B vẫn nhận "data mới về nhóm" như mọi thành viên nhóm — chỉ kiểm loại "được chia".)
+    expect(
+      others.some((n) => n.type === 'lead_assigned' && n.lead_id === leadId),
+    ).toBe(false);
+  });
+
+  it('Chuyển data: Sale nhận data nhận thông báo "được chuyển"', async () => {
+    const leadId = await createLead(mktAgent, '0930000092');
+    await leader1Agent
+      .post(`/candidate/${leadId}/assign`)
+      .send({ account_id: sale1aId })
+      .expect(200);
+    await leader1Agent
+      .post(`/candidate/${leadId}/transfer`)
+      .send({ new_account_id: sale1bId })
+      .expect(200);
+
+    const toB = (await notificationsOf(sale1bAgent)).find(
+      (n) => n.type === 'lead_assigned' && n.lead_id === leadId,
+    );
+    expect(toB?.content).toContain('Bạn được chuyển data');
+  });
+
+  it('Chia hàng loạt: người nhận chỉ có 1 thông báo gộp "N data mới" (không báo từng data)', async () => {
+    const id1 = await createLead(mktAgent, '0930000093');
+    const id2 = await createLead(mktAgent, '0930000094');
+    await leader1Agent
+      .post('/candidate/assign-bulk')
+      .send({ candidate_ids: [id1, id2], account_id: sale1aId })
+      .expect(200);
+
+    const items = await notificationsOf(sale1aAgent);
+    expect(items.some((n) => n.content === 'Bạn được chia 2 data mới')).toBe(
+      true,
+    );
+    // Không có thông báo riêng cho từng data trong lượt hàng loạt.
+    expect(
+      items.some((n) => n.type === 'lead_assigned' && n.lead_id === id1),
     ).toBe(false);
   });
 

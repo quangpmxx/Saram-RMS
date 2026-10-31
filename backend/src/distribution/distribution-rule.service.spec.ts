@@ -7,6 +7,7 @@ import { Test } from '@nestjs/testing';
 import { DistributionRuleService } from './distribution-rule.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 
 describe('DistributionRuleService', () => {
   let service: DistributionRuleService;
@@ -24,6 +25,7 @@ describe('DistributionRuleService', () => {
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
+  let leadNotice: { notifyAutoAssigned: jest.Mock };
 
   const leaderUser = {
     id: 'leader-1',
@@ -60,12 +62,16 @@ describe('DistributionRuleService', () => {
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+    leadNotice = {
+      notifyAutoAssigned: jest.fn().mockResolvedValue(undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         DistributionRuleService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: LeadAssignmentNoticeService, useValue: leadNotice },
       ],
     }).compile();
 
@@ -310,6 +316,90 @@ describe('DistributionRuleService', () => {
   });
 
   describe('tryAutoAssign', () => {
+    /** Dựng 1 quy tắc đang bật với 3 Sale hợp lệ để kiểm thông báo. */
+    function setupActiveRule() {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-a', status: 'active', teamId: 'team-1' },
+        { id: 'sale-b', status: 'active', teamId: 'team-1' },
+        { id: 'sale-c', status: 'active', teamId: 'team-1' },
+      ]);
+      prisma.distributionRule.findMany.mockResolvedValue([
+        {
+          id: 'rule-1',
+          teamId: 'team-1',
+          isActive: true,
+          createdById: 'leader-1',
+          lastAssignedPosition: 0,
+          members: [
+            { accountId: 'sale-a', orderIndex: 0 },
+            { accountId: 'sale-b', orderIndex: 1 },
+            { accountId: 'sale-c', orderIndex: 2 },
+          ],
+        },
+      ]);
+      prisma.lead.update.mockImplementation(({ data }) =>
+        Promise.resolve({
+          id: 'lead-1',
+          fullName: 'Nguyễn A',
+          phoneNumber: '0900000001',
+          ...data,
+        }),
+      );
+      prisma.$transaction.mockImplementation((ops: Promise<unknown>[]) =>
+        Promise.all(ops),
+      );
+    }
+
+    it('tự động chia xong → thông báo cho người nhận (sale-a), kèm đúng data đã chia', async () => {
+      setupActiveRule();
+
+      await service.tryAutoAssign({
+        id: 'lead-1',
+        assignedToId: null,
+      } as never);
+
+      expect(leadNotice.notifyAutoAssigned).toHaveBeenCalledTimes(1);
+      expect(leadNotice.notifyAutoAssigned).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'lead-1', assignedToId: 'sale-a' }),
+        'sale-a',
+      );
+    });
+
+    it('notify=false (nhập Excel — nơi gọi tự gộp thông báo) → không báo từng data', async () => {
+      setupActiveRule();
+
+      const result = (await service.tryAutoAssign(
+        { id: 'lead-1', assignedToId: null } as never,
+        { notify: false },
+      )) as unknown as { assignedToId: string };
+
+      expect(result.assignedToId).toBe('sale-a');
+      expect(leadNotice.notifyAutoAssigned).not.toHaveBeenCalled();
+    });
+
+    it('không có quy tắc nào chia được → không gửi thông báo', async () => {
+      prisma.distributionRule.findMany.mockResolvedValue([]);
+
+      await service.tryAutoAssign({
+        id: 'lead-1',
+        assignedToId: null,
+      } as never);
+
+      expect(leadNotice.notifyAutoAssigned).not.toHaveBeenCalled();
+    });
+
+    it('gửi thông báo lỗi không làm hỏng việc chia (lead vẫn được gán, không ném lỗi)', async () => {
+      setupActiveRule();
+      leadNotice.notifyAutoAssigned.mockRejectedValue(new Error('boom'));
+
+      const result = (await service.tryAutoAssign({
+        id: 'lead-1',
+        assignedToId: null,
+      } as never)) as unknown as { assignedToId: string | null };
+
+      expect(result.assignedToId).toBe('sale-a'); // kết quả chia vẫn được trả về đúng
+    });
+
     const rule = (
       overrides: Partial<{
         lastAssignedPosition: number;

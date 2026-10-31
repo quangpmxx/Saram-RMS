@@ -808,7 +808,11 @@ export interface AppNotification {
     /** Kho chăm sóc: Sale được giao data chăm sóc (giao 1 data thì có lead_id). */
     | "care_assigned"
     /** Đưa đón: nhập dòng mới / đổi Tình trạng / đổi Kết quả — chi tiết ở `meta`. */
-    | "shuttle_update";
+    | "shuttle_update"
+    /** Được chia/chuyển data (2026-11-01): thủ công, hàng loạt, tự động — chỉ 1 data thì có lead_id. */
+    | "lead_assigned"
+    /** Hệ thống nhắc Sale chưa có người phỏng vấn quá 3 ngày (sender luôn null). */
+    | "sale_no_shuttle_reminder";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;

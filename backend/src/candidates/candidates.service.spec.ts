@@ -11,6 +11,7 @@ import { LeadDuplicateService } from './lead-duplicate.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
+import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
 describe('CandidatesService', () => {
@@ -38,6 +39,7 @@ describe('CandidatesService', () => {
   };
   let auditLog: { log: jest.Mock };
   let distributionRuleService: { tryAutoAssign: jest.Mock };
+  let leadNotice: { notifyAssigned: jest.Mock; notifyAssignedBulk: jest.Mock };
   let realtimeService: {
     emitCandidateChange: jest.Mock;
     emitNoteChange: jest.Mock;
@@ -130,6 +132,10 @@ describe('CandidatesService', () => {
         .fn()
         .mockImplementation((lead: unknown) => Promise.resolve(lead)),
     };
+    leadNotice = {
+      notifyAssigned: jest.fn().mockResolvedValue(undefined),
+      notifyAssignedBulk: jest.fn().mockResolvedValue(undefined),
+    };
     realtimeService = {
       emitCandidateChange: jest.fn(),
       emitNoteChange: jest.fn(),
@@ -145,6 +151,7 @@ describe('CandidatesService', () => {
         { provide: AuditLogService, useValue: auditLog },
         { provide: DistributionRuleService, useValue: distributionRuleService },
         { provide: RealtimeService, useValue: realtimeService },
+        { provide: LeadAssignmentNoticeService, useValue: leadNotice },
       ],
     }).compile();
 
@@ -1130,6 +1137,25 @@ describe('CandidatesService', () => {
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ actionType: 'assign', entityType: 'lead' }),
       );
+      // Báo cho Sale được chia (yêu cầu 2026-11-01).
+      expect(leadNotice.notifyAssigned).toHaveBeenCalledWith(
+        baseLead,
+        'sale-1',
+        leaderUser,
+      );
+    });
+
+    it('Race: data vừa có người khác nhận (updateMany count=0) → ConflictException, KHÔNG gửi thông báo', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique
+        .mockResolvedValueOnce(saleAccount)
+        .mockResolvedValueOnce({ teamId: 'team-1' });
+      prisma.lead.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, leaderUser),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(leadNotice.notifyAssigned).not.toHaveBeenCalled();
     });
 
     it('Quản lý/Admin phân chia không giới hạn theo nhóm', async () => {
@@ -1171,6 +1197,52 @@ describe('CandidatesService', () => {
         select: { id: true },
       });
       expect(auditLog.log).toHaveBeenCalledTimes(2);
+      // Nhiều data → 1 thông báo gộp cho người nhận.
+      expect(leadNotice.notifyAssignedBulk).toHaveBeenCalledWith(
+        2,
+        'sale-1',
+        adminUser,
+      );
+      expect(leadNotice.notifyAssigned).not.toHaveBeenCalled();
+    });
+
+    it('chỉ 1 data được gán → thông báo nêu rõ tên data (không gộp)', async () => {
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      const won = {
+        id: 'lead-1',
+        fullName: 'Nguyễn A',
+        phoneNumber: '0900000001',
+      };
+      prisma.lead.findMany
+        .mockResolvedValueOnce([{ id: 'lead-1' }])
+        .mockResolvedValueOnce([won])
+        .mockResolvedValueOnce([{ ...baseLead, id: 'lead-1' }]);
+      prisma.lead.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.assignBulk(
+        { candidate_ids: ['lead-1'], account_id: 'sale-1' },
+        adminUser,
+      );
+
+      expect(leadNotice.notifyAssigned).toHaveBeenCalledWith(
+        won,
+        'sale-1',
+        adminUser,
+      );
+      expect(leadNotice.notifyAssignedBulk).not.toHaveBeenCalled();
+    });
+
+    it('assigned_count=0 → không gửi thông báo nào', async () => {
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+      prisma.lead.findMany.mockResolvedValue([]);
+
+      await service.assignBulk(
+        { candidate_ids: ['lead-1'], account_id: 'sale-1' },
+        adminUser,
+      );
+
+      expect(leadNotice.notifyAssigned).not.toHaveBeenCalled();
+      expect(leadNotice.notifyAssignedBulk).not.toHaveBeenCalled();
     });
 
     it('trả về assigned_count=0 nếu không có lead nào hợp lệ, không gọi updateMany', async () => {
@@ -1294,6 +1366,12 @@ describe('CandidatesService', () => {
           newValue: 'sale-2 | reason: Sale A nghỉ phép',
         }),
       );
+      expect(leadNotice.notifyAssigned).toHaveBeenCalledWith(
+        assignedLead,
+        'sale-2',
+        leaderUser,
+        'transfer',
+      );
     });
 
     it('Race: Sale vừa giữ số (hoặc lead vừa bị chuyển/phân chia lại) giữa lúc kiểm tra và ghi → ConflictException, KHÔNG ghi audit', async () => {
@@ -1311,6 +1389,7 @@ describe('CandidatesService', () => {
         service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(auditLog.log).not.toHaveBeenCalled();
+      expect(leadNotice.notifyAssigned).not.toHaveBeenCalled();
     });
   });
 

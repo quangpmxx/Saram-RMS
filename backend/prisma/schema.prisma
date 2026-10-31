@@ -821,6 +821,9 @@ enum NotificationType {
   /// Đưa đón (2026-10-29): nhập dòng mới / đổi Tình trạng / đổi Kết quả —
   /// báo mọi tài khoản có quyền xem Danh sách đưa đón. Dữ liệu dựng nhãn màu ở `meta`.
   shuttle_update
+  /// Chia/chuyển data cho Sale (2026-11-01): thủ công, hàng loạt, tự động chia (kể cả
+  /// khi nhập Excel). Gắn lead_id khi chỉ 1 data để bấm vào mở trang Chi tiết.
+  lead_assigned
 
   @@map("notification_type")
 }

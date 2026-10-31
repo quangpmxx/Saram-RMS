@@ -44,6 +44,8 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   care_stop_decided: "Kết quả đề nghị dừng chăm sóc",
   care_assigned: "Được giao data chăm sóc",
   shuttle_update: "Danh sách đưa đón",
+  lead_assigned: "Được chia data",
+  sale_no_shuttle_reminder: "Nhắc nhở chưa có người phỏng vấn",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -76,6 +78,9 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   care_stop_decided: 60_000,
   care_assigned: 60_000,
   shuttle_update: 15_000,
+  lead_assigned: 60_000,
+  // Trước đây thiếu loại này trong bảng → thời gian hiển thị là undefined → toast tự đóng ngay.
+  sale_no_shuttle_reminder: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -133,6 +138,8 @@ function notificationTarget(n: AppNotification): string | null {
   // Được giao nhiều data chăm sóc 1 lần — mở Kho, lọc sẵn "Được giao".
   if (n.type === "care_assigned") return "/candidates?view=care&care_scope=assigned";
   if (n.type === "shuttle_update") return "/shuttle";
+  // Được chia nhiều data 1 lần (không có lead_id) — mở danh sách Data lao động.
+  if (n.type === "lead_assigned") return "/candidates";
   return null;
 }
 
@@ -144,7 +151,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type.startsWith("leave_request_")) return <FileText className={className} strokeWidth={2} />;
   if (type === "anonymous_feedback_created") return <MessageSquareWarning className={className} strokeWidth={2} />;
   if (type.startsWith("care_stop_")) return <PauseCircle className={className} strokeWidth={2} />;
-  if (type === "care_assigned") return <UserCheck className={className} strokeWidth={2} />;
+  if (type === "care_assigned" || type === "lead_assigned") return <UserCheck className={className} strokeWidth={2} />;
   if (type === "shuttle_update") return <Bus className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }

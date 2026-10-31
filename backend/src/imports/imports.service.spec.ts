@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { LeadDuplicateService } from '../candidates/lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
+import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 
 async function buildSampleWorkbookBuffer(
   rows: Array<[string, string, string, string?, string?, string?]>,
@@ -34,6 +35,7 @@ describe('ImportsService', () => {
   let duplicateService: { syncDuplicateFlags: jest.Mock };
   let auditLog: { log: jest.Mock };
   let distributionRuleService: { tryAutoAssign: jest.Mock };
+  let leadNotice: { notifyAutoAssignedBulk: jest.Mock };
 
   const mktUser = { id: 'mkt-1', role: 'mkt' as const, sessionId: 's' };
   const sources = [
@@ -61,6 +63,10 @@ describe('ImportsService', () => {
         .mockImplementation((lead: unknown) => Promise.resolve(lead)),
     };
 
+    leadNotice = {
+      notifyAutoAssignedBulk: jest.fn().mockResolvedValue(undefined),
+    };
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         ImportsService,
@@ -68,6 +74,7 @@ describe('ImportsService', () => {
         { provide: AuditLogService, useValue: auditLog },
         { provide: LeadDuplicateService, useValue: duplicateService },
         { provide: DistributionRuleService, useValue: distributionRuleService },
+        { provide: LeadAssignmentNoticeService, useValue: leadNotice },
       ],
     }).compile();
 
@@ -216,6 +223,71 @@ describe('ImportsService', () => {
 
       expect(result.success_count).toBe(1);
       expect(result.errors).toEqual([{ row: 3, message: 'Thiếu SĐT' }]);
+    });
+  });
+
+  describe('processImport — thông báo tự động chia (yêu cầu 2026-11-01)', () => {
+    const runProcess = async (rows: Array<[string, string, string]>) => {
+      const buffer = await buildSampleWorkbookBuffer(rows);
+      await (
+        service as unknown as {
+          processImport: (
+            jobId: string,
+            buf: Buffer,
+            uploadedById: string,
+          ) => Promise<void>;
+        }
+      ).processImport('job-1', buffer, mktUser.id);
+    };
+
+    it('gộp 1 thông báo cho mỗi người được tự động chia (không báo từng dòng), tryAutoAssign gọi với notify=false', async () => {
+      prisma.lead.create.mockImplementation(
+        ({ data }: { data: { phoneNumber: string } }) =>
+          Promise.resolve({
+            id: `lead-${data.phoneNumber}`,
+            phoneNumber: data.phoneNumber,
+          }),
+      );
+      // 3 dòng: A, B, A → sale-a nhận 2, sale-b nhận 1.
+      const owners = ['sale-a', 'sale-b', 'sale-a'];
+      let i = 0;
+      distributionRuleService.tryAutoAssign.mockImplementation((lead: object) =>
+        Promise.resolve({ ...lead, assignedToId: owners[i++] }),
+      );
+
+      await runProcess([
+        ['Dòng 1', '0900000011', 'Facebook'],
+        ['Dòng 2', '0900000012', 'Facebook'],
+        ['Dòng 3', '0900000013', 'Facebook'],
+      ]);
+
+      for (const call of distributionRuleService.tryAutoAssign.mock.calls) {
+        expect(call[1]).toEqual({ notify: false });
+      }
+      expect(leadNotice.notifyAutoAssignedBulk).toHaveBeenCalledTimes(2);
+      expect(leadNotice.notifyAutoAssignedBulk).toHaveBeenCalledWith(
+        2,
+        'sale-a',
+      );
+      expect(leadNotice.notifyAutoAssignedBulk).toHaveBeenCalledWith(
+        1,
+        'sale-b',
+      );
+    });
+
+    it('không dòng nào được tự động chia (chưa bật vòng quay) → không gửi thông báo', async () => {
+      prisma.lead.create.mockImplementation(
+        ({ data }: { data: { phoneNumber: string } }) =>
+          Promise.resolve({
+            id: `lead-${data.phoneNumber}`,
+            phoneNumber: data.phoneNumber,
+            assignedToId: null,
+          }),
+      );
+
+      await runProcess([['Dòng 1', '0900000021', 'Facebook']]);
+
+      expect(leadNotice.notifyAutoAssignedBulk).not.toHaveBeenCalled();
     });
   });
 

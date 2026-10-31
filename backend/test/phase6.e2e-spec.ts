@@ -316,6 +316,28 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
     expect(lead2.assigned_to?.id).toBe(saleBId);
     expect(lead3.assigned_to?.id).toBe(saleCId);
     expect(lead4.assigned_to?.id).toBe(saleAId);
+
+    // Tự động chia xong → người nhận được thông báo (yêu cầu 2026-11-01).
+    const fetchNotifications = async (agent: typeof saleAAgent) =>
+      (await agent.get('/notification').query({ page_size: 50 }).expect(200))
+        .body.items as Array<{
+        type: string;
+        lead_id: string | null;
+        content: string | null;
+      }>;
+    const saleANotices = await fetchNotifications(saleAAgent);
+    for (const lead of [lead1, lead4]) {
+      const n = saleANotices.find(
+        (x) => x.type === 'lead_assigned' && x.lead_id === lead.id,
+      );
+      expect(n?.content).toContain('Hệ thống tự động chia cho bạn data');
+    }
+    // Người không được chia lead1 thì không nhận thông báo của lead1.
+    expect(
+      await prisma.notification.count({
+        where: { accountId: saleBId, leadId: lead1.id, type: 'lead_assigned' },
+      }),
+    ).toBe(0);
   });
 
   it('Tạm dừng giữa chừng → lead mới tiếp theo KHÔNG tự gán, quay về luồng thủ công (Phase 2)', async () => {

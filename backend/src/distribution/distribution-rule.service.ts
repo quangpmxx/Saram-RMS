@@ -8,6 +8,7 @@ import {
 import { Lead } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { UpdateDistributionRuleDto } from './dto/update-distribution-rule.dto';
 import {
@@ -30,6 +31,7 @@ export class DistributionRuleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly leadNotice: LeadAssignmentNoticeService,
   ) {}
 
   async getRule(
@@ -193,9 +195,16 @@ export class DistributionRuleService {
    * là không tự gán được lần này — vẫn còn "Chờ phân chia" để Leader chia
    * tay thủ công như cũ.
    */
-  async tryAutoAssign(lead: Lead): Promise<Lead> {
+  /**
+   * `options.notify=false`: không gửi thông báo cho từng data — dùng khi nhập
+   * Excel (nơi gọi tự gộp 1 thông báo cho mỗi người nhận, tránh dồn hàng chục toast).
+   */
+  async tryAutoAssign(
+    lead: Lead,
+    options: { notify?: boolean } = {},
+  ): Promise<Lead> {
     try {
-      return await this.performAutoAssign(lead);
+      return await this.performAutoAssign(lead, options);
     } catch (error) {
       this.logger.error(
         `Tự động phân chia thất bại cho lead ${lead.id}, giữ nguyên "Chờ phân chia"`,
@@ -205,7 +214,10 @@ export class DistributionRuleService {
     }
   }
 
-  private async performAutoAssign(lead: Lead): Promise<Lead> {
+  private async performAutoAssign(
+    lead: Lead,
+    options: { notify?: boolean },
+  ): Promise<Lead> {
     if (lead.assignedToId) {
       return lead;
     }
@@ -284,6 +296,19 @@ export class DistributionRuleService {
         entityId: lead.id,
         newValue: picked.accountId,
       });
+
+      // Thông báo cho người vừa được tự động chia (yêu cầu người dùng 2026-11-01).
+      // Lỗi gửi thông báo không được làm mất kết quả chia (DB đã ghi xong ở trên).
+      if (options.notify !== false) {
+        await this.leadNotice
+          .notifyAutoAssigned(updated, picked.accountId)
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Gửi thông báo tự động chia thất bại cho lead ${lead.id}`,
+              error as Error,
+            );
+          });
+      }
 
       return updated;
     }

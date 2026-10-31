@@ -38,7 +38,10 @@ export class NotificationService {
         ? {
             OR: [
               { accountId: currentUser.id },
-              { account: { role: 'sale' as const } },
+              {
+                account: { role: 'sale' as const },
+                type: { not: 'lead_assigned' as const },
+              },
             ],
             ...(query.status ? { status: query.status } : {}),
           }
