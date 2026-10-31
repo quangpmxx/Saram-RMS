@@ -280,10 +280,10 @@ describe('Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú (e2e)', () =>
     expect(detail.body.call_result.id).toBe(potentialResultId);
   });
 
-  it('Sale B không được cập nhật lead của Sale A khi lead chưa được xử lý lần nào', async () => {
-    // Sale cùng nhóm ĐƯỢC xử lý tiếp lead đã có người xử lý ít nhất 1 lần
-    // (lastActivityAt khác null — xem loadLeadForUpdate). leadId dùng chung
-    // đã được Sale A xử lý nên dùng 1 lead mới, chưa xử lý lần nào.
+  it('Sale B (cùng nhóm) cập nhật được lead của Sale A kể cả khi lead chưa được xử lý lần nào — miễn là lead có người phụ trách', async () => {
+    // Quyết định rà soát phân quyền 2026-10-30: Sale được ghi chú/xử lý hộ mọi
+    // data trong nhóm mình miễn là data đó đã có người phụ trách. Dùng 1 lead
+    // mới, chưa xử lý lần nào, để chứng minh không còn điều kiện "đã xử lý ≥1 lần".
     const shared = await prisma.lead.findUniqueOrThrow({
       where: { id: leadId },
     });
@@ -305,7 +305,7 @@ describe('Phase 3 — Pipeline cuộc gọi & Lịch sử ghi chú (e2e)', () =>
     await saleBAgent
       .put(`/candidate/${freshId}/call-status`)
       .send({ call_status_id: notAnsweredStatusId })
-      .expect(403);
+      .expect(200);
   });
 
   it('MKT không có quyền cập nhật tình trạng/kết quả cuộc gọi hay thêm ghi chú', async () => {

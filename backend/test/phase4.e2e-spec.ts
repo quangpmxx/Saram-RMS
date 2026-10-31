@@ -266,10 +266,10 @@ describe('Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar (e2e)'
     expect(event.candidate.full_name).toBe('Ứng viên Phase4');
   });
 
-  it('Sale B không được đặt lịch PV cho lead của Sale A khi lead chưa được xử lý lần nào', async () => {
-    // Sale cùng nhóm ĐƯỢC xử lý tiếp lead đã có người xử lý ít nhất 1 lần
-    // (lastActivityAt khác null — xem loadLeadForUpdate). leadId dùng chung
-    // đã được Sale A xử lý nên dùng 1 lead mới, chưa xử lý lần nào.
+  it('Sale B (cùng nhóm) đặt được lịch PV cho lead của Sale A kể cả khi lead chưa được xử lý lần nào — miễn là lead có người phụ trách', async () => {
+    // Quyết định rà soát phân quyền 2026-10-30: Sale được xử lý hộ mọi data trong
+    // nhóm mình miễn là data đã có người phụ trách (không còn điều kiện "đã xử
+    // lý ≥1 lần"). Dùng 1 lead mới, chưa xử lý lần nào.
     const freshRes = await mktAgent
       .post('/candidate')
       .send({
@@ -291,7 +291,7 @@ describe('Phase 4 — Lịch phỏng vấn, lịch gọi lại & Calendar (e2e)'
         partner_company_name: 'Công ty X',
         scheduled_at: '2026-08-01T09:00:00.000Z',
       })
-      .expect(403);
+      .expect(201);
   });
 
   it('Bùng PV (NO_SHOW) → hẹn lại lần 2 → cả 2 lần hẹn đều được giữ lại', async () => {

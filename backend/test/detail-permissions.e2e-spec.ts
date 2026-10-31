@@ -319,7 +319,7 @@ describe('Fix inline notes and role permissions (e2e)', () => {
       expect(resAdmin.body.phone_number).toBe('0980000056');
     });
 
-    it('MKT giữ đúng quyền đã chốt — chỉ sửa được SĐT của ứng viên do chính mình upload', async () => {
+    it('MKT sửa được SĐT của mọi ứng viên, kể cả do MKT khác upload (rà soát phân quyền 2026-10-30)', async () => {
       const leadId = await createAssignedLead(
         'SĐT Test F',
         '0980000006',
@@ -330,7 +330,7 @@ describe('Fix inline notes and role permissions (e2e)', () => {
       await mkt2Agent
         .put(`/candidate/${leadId}`)
         .send({ phone_number: '0980000066' })
-        .expect(403);
+        .expect(200);
       const res = await mkt1Agent
         .put(`/candidate/${leadId}`)
         .send({ phone_number: '0980000067' })
@@ -525,7 +525,7 @@ describe('Fix inline notes and role permissions (e2e)', () => {
         .expect(200);
     });
 
-    it('Sale khác/Leader/MKT vẫn không xóa được ghi chú không phải của mình (không đổi)', async () => {
+    it('Sale khác, Leader nhóm khác và MKT không xóa được ghi chú của người khác; Leader đúng nhóm xóa được (rà soát phân quyền 2026-10-30)', async () => {
       const leadId = await createAssignedLead(
         'Note Test C',
         '0980000203',
@@ -542,10 +542,14 @@ describe('Fix inline notes and role permissions (e2e)', () => {
       await sale2Agent
         .delete(`/candidate/${leadId}/note/${noteId}`)
         .expect(403);
-      await leader1Agent
+      await leader2Agent
         .delete(`/candidate/${leadId}/note/${noteId}`)
         .expect(403);
       await mkt1Agent.delete(`/candidate/${leadId}/note/${noteId}`).expect(403);
+      // Leader của đúng nhóm đang phụ trách data xóa được ghi chú của mọi Sale trong nhóm.
+      await leader1Agent
+        .delete(`/candidate/${leadId}/note/${noteId}`)
+        .expect(200);
     });
   });
 

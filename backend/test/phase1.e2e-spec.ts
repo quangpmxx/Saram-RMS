@@ -164,6 +164,20 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     await app.close();
   });
 
+  /**
+   * Quy tắc 2026-10-29: data chưa có Sale phụ trách thì không ai ghi chú được —
+   * gán sẵn người phụ trách để test tìm kiếm theo nội dung ghi chú.
+   */
+  async function assignLeadForNotes(leadId: string): Promise<void> {
+    const manager = await prisma.account.findUniqueOrThrow({
+      where: { username: 'phase1_manager' },
+    });
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: { assignedToId: manager.id },
+    });
+  }
+
   it('MKT nhập tay 1 lead → xuất hiện ngay trong danh sách, ở trạng thái "Chờ phân chia"', async () => {
     const createRes = await mktAAgent
       .post('/candidate')
@@ -193,6 +207,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
       .query({ keyword: '0900000001' })
       .expect(200);
     const leadId = listRes.body.items[0].id as string;
+    await assignLeadForNotes(leadId);
 
     await managerAgent
       .post(`/candidate/${leadId}/note`)
@@ -228,6 +243,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
       .query({ keyword: '0900000001' })
       .expect(200);
     const leadId = listRes.body.items[0].id as string;
+    await assignLeadForNotes(leadId);
 
     const noteRes = await managerAgent
       .post(`/candidate/${leadId}/note`)
@@ -260,7 +276,8 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     ).toBe(false);
   });
 
-  it('chỉ MKT mới tạo được ứng viên mới — Quản lý bị chặn dù có toàn quyền xem', async () => {
+  it('MKT, Quản lý (và Admin) tạo được ứng viên mới; chưa đăng nhập thì bị chặn', async () => {
+    // Quyết định rà soát phân quyền 2026-10-30: Quản lý cũng được thêm data thủ công.
     await managerAgent
       .post('/candidate')
       .send({
@@ -269,7 +286,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
         source_id: facebookSourceId,
         team_id: teamId,
       })
-      .expect(403);
+      .expect(201);
 
     await request(server())
       .post('/candidate')
@@ -310,7 +327,7 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
     expect(phones.filter((p: string) => p === '0900000001')).toHaveLength(2);
   });
 
-  it('MKT A không sửa/xóa được data do MKT B upload; MKT B tự sửa/xóa được', async () => {
+  it('MKT sửa/xóa được mọi data, kể cả data do MKT khác upload (rà soát phân quyền 2026-10-30)', async () => {
     const created = await mktBAgent
       .post('/candidate')
       .send({
@@ -324,15 +341,13 @@ describe('Phase 1 — Thu thập dữ liệu ứng viên (e2e)', () => {
 
     await mktAAgent
       .put(`/candidate/${leadId}`)
-      .send({ full_name: 'Sửa trộm' })
-      .expect(403);
-    await mktAAgent.delete(`/candidate/${leadId}`).expect(403);
-
+      .send({ full_name: 'MKT A sửa data của MKT B' })
+      .expect(200);
     await mktBAgent
       .put(`/candidate/${leadId}`)
       .send({ full_name: 'MKT B tự sửa' })
       .expect(200);
-    await mktBAgent.delete(`/candidate/${leadId}`).expect(200);
+    await mktAAgent.delete(`/candidate/${leadId}`).expect(200);
 
     // Đã xóa mềm — không còn xuất hiện trong danh sách/API xem chi tiết.
     await mktBAgent.get(`/candidate/${leadId}`).expect(404);
