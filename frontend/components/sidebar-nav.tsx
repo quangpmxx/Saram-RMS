@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { isNavActive } from "@/lib/nav-active";
 
 const ICONS = {
   home: LayoutDashboard,
@@ -65,7 +66,7 @@ export function SidebarNav({
     return (
       <nav className="flex items-center gap-1 overflow-x-auto">
         {items.map((item) => {
-          const active = pathname === item.href;
+          const active = isNavActive(pathname, item.href);
           const Icon = ICONS[item.icon];
           return (
             <Link
@@ -88,7 +89,7 @@ export function SidebarNav({
   return (
     <nav className={cn("flex flex-col px-3", collapsed ? "gap-2" : "gap-0.5")}>
       {items.map((item) => {
-        const active = pathname === item.href;
+        const active = isNavActive(pathname, item.href);
         const Icon = ICONS[item.icon];
         return (
           <Link
