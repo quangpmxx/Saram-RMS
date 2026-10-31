@@ -4,6 +4,7 @@ import { NotificationService } from './notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { DATA_NOTIFICATION_TYPES } from './notification-groups';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -57,11 +58,11 @@ describe('NotificationService', () => {
     await service.list({ page: 1, page_size: 20 }, currentUser);
 
     expect(prisma.notification.count).toHaveBeenCalledWith({
-      where: { accountId: 'account-1' },
+      where: expect.objectContaining({ accountId: 'account-1' }),
     });
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { accountId: 'account-1' },
+        where: expect.objectContaining({ accountId: 'account-1' }),
       }),
     );
   });
@@ -71,7 +72,10 @@ describe('NotificationService', () => {
 
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { accountId: 'account-1', status: 'sent' },
+        where: expect.objectContaining({
+          accountId: 'account-1',
+          status: 'sent',
+        }),
       }),
     );
   });
@@ -81,12 +85,12 @@ describe('NotificationService', () => {
 
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           OR: [
             { accountId: 'admin-1' },
             { account: { role: 'sale' }, type: { not: 'lead_assigned' } },
           ],
-        },
+        }),
       }),
     );
   });
@@ -115,15 +119,73 @@ describe('NotificationService', () => {
 
     expect(prisma.notification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           OR: [
             { accountId: 'admin-1' },
             { account: { role: 'sale' }, type: { not: 'lead_assigned' } },
           ],
           status: 'pending',
-        },
+        }),
       }),
     );
+  });
+
+  describe('chuông 2 phần Data / Khác + Data hết hạn khi sang ngày mới (2026-11-01)', () => {
+    const andClauses = () =>
+      (
+        prisma.notification.findMany.mock.calls[0] as [
+          { where: { AND: Array<Record<string, unknown>> } },
+        ]
+      )[0].where.AND;
+
+    it('group=data → chỉ các loại liên quan data', async () => {
+      await service.list(
+        { page: 1, page_size: 20, group: 'data' },
+        currentUser,
+      );
+      expect(andClauses()[1]).toEqual({
+        type: { in: [...DATA_NOTIFICATION_TYPES] },
+      });
+    });
+
+    it('group=other → toàn bộ loại còn lại', async () => {
+      await service.list(
+        { page: 1, page_size: 20, group: 'other' },
+        currentUser,
+      );
+      expect(andClauses()[1]).toEqual({
+        type: { notIn: [...DATA_NOTIFICATION_TYPES] },
+      });
+    });
+
+    it('không truyền group → không lọc theo nhóm (trả cả hai)', async () => {
+      await service.list({ page: 1, page_size: 20 }, currentUser);
+      expect(andClauses()[1]).toEqual({});
+    });
+
+    it('thông báo Data của ngày trước bị ẩn: mốc là 00:00 hôm nay giờ Việt Nam, thông báo Khác không bị ẩn', async () => {
+      // 03:30 sáng 02/11/2026 giờ VN (= 20:30 UTC ngày 01/11) → mốc 00:00 02/11 VN = 17:00 UTC 01/11.
+      jest.useFakeTimers().setSystemTime(new Date('2026-11-01T20:30:00.000Z'));
+      try {
+        await service.list({ page: 1, page_size: 20 }, currentUser);
+      } finally {
+        jest.useRealTimers();
+      }
+      expect(andClauses()[0]).toEqual({
+        NOT: {
+          type: { in: [...DATA_NOTIFICATION_TYPES] },
+          createdAt: { lt: new Date('2026-11-01T17:00:00.000Z') },
+        },
+      });
+    });
+
+    it('áp dụng cả cho Admin (cùng điều kiện hết hạn + nhóm)', async () => {
+      await service.list({ page: 1, page_size: 20, group: 'data' }, adminUser);
+      expect(andClauses()).toHaveLength(2);
+      expect(andClauses()[1]).toEqual({
+        type: { in: [...DATA_NOTIFICATION_TYPES] },
+      });
+    });
   });
 
   it('phân trang đúng theo page/page_size', async () => {

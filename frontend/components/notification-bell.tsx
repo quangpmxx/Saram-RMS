@@ -28,6 +28,7 @@ import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { roleAccentTextStyle } from "@/lib/role-accent";
 import { cn } from "@/lib/cn";
+import { notificationGroup, type NotificationGroup } from "@/lib/notification-groups";
 import { Avatar } from "@/components/ui/avatar";
 
 const TYPE_LABEL: Record<AppNotification["type"], string> = {
@@ -296,6 +297,18 @@ function playChimeSound() {
  * số). Bấm X đóng toast → đánh dấu đã xem ngay (chuông không sáng cho thông
  * báo đó), vẫn còn trong danh sách chuông.
  */
+/**
+ * Tải thông báo cho cả 2 phần của chuông (2026-11-01). "Data" lấy nhiều hơn (mỗi
+ * ngày có vài trăm thông báo data) và đã được backend tự ẩn khi sang ngày mới.
+ */
+async function loadNotifications(): Promise<AppNotification[]> {
+  const [data, other] = await Promise.all([
+    clientApi<PaginatedResult<AppNotification>>("/notification?page_size=50&group=data"),
+    clientApi<PaginatedResult<AppNotification>>("/notification?page_size=20&group=other"),
+  ]);
+  return [...data.items, ...other.items].sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
+}
+
 export function NotificationBell({ userId }: { userId: string }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -303,6 +316,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [seenIds, setSeenIds] = useState<Set<string>>(() => loadIdSet(seenStorageKey(userId)));
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadIdSet(dismissedStorageKey(userId)));
   const [toasts, setToasts] = useState<AppNotification[]>([]);
+  const [activeTab, setActiveTab] = useState<NotificationGroup>("data");
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
@@ -332,7 +346,9 @@ export function NotificationBell({ userId }: { userId: string }) {
   function handleClearAll() {
     setDismissedIds((prev) => {
       const next = new Set(prev);
-      for (const n of notifications) next.add(n.id);
+      for (const n of notifications) {
+        if (notificationGroup(n.type) === activeTab) next.add(n.id);
+      }
       saveIdSet(dismissedStorageKey(userId), next);
       return next;
     });
@@ -378,17 +394,17 @@ export function NotificationBell({ userId }: { userId: string }) {
   }
 
   async function fetchNotifications() {
-    const result = await clientApi<PaginatedResult<AppNotification>>("/notification?page_size=20");
-    setNotifications(result.items);
+    const items = await loadNotifications();
+    setNotifications(items);
 
     if (isFirstFetchRef.current) {
       // Lần tải đầu tiên = mốc gốc — không toast cho thông báo đã có sẵn từ trước.
       isFirstFetchRef.current = false;
-      markKnown(result.items.map((n) => n.id));
+      markKnown(items.map((n) => n.id));
       return;
     }
 
-    const freshOnes = result.items.filter((n) => !knownIdsRef.current.has(n.id));
+    const freshOnes = items.filter((n) => !knownIdsRef.current.has(n.id));
     if (freshOnes.length === 0) return;
 
     markKnown(freshOnes.map((n) => n.id));
@@ -492,6 +508,11 @@ export function NotificationBell({ userId }: { userId: string }) {
 
   const visibleNotifications = notifications.filter((n) => !dismissedIds.has(n.id));
   const unseenCount = visibleNotifications.filter((n) => !seenIds.has(n.id)).length;
+  const tabNotifications = visibleNotifications.filter((n) => notificationGroup(n.type) === activeTab);
+  const unseenByTab: Record<NotificationGroup, number> = { data: 0, other: 0 };
+  for (const n of visibleNotifications) {
+    if (!seenIds.has(n.id)) unseenByTab[notificationGroup(n.type)] += 1;
+  }
 
   async function handleToggleOpen() {
     const next = !isOpen;
@@ -507,8 +528,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       // loạt chỉ vì mở quả chuông ra xem (trước đây làm vậy) — phải giữ
       // nguyên trạng thái nền đậm cho tới khi người dùng bấm vào ĐÚNG dòng
       // đó (xem handleNotificationClick).
-      const result = await clientApi<PaginatedResult<AppNotification>>("/notification?page_size=20");
-      setNotifications(result.items);
+      setNotifications(await loadNotifications());
     } finally {
       setHasLoadedOnce(true);
     }
@@ -556,7 +576,7 @@ export function NotificationBell({ userId }: { userId: string }) {
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2">
               <p className="text-sm font-semibold text-slate-800">Thông báo</p>
-              {visibleNotifications.length > 0 && (
+              {tabNotifications.length > 0 && (
                 <button
                   type="button"
                   onClick={handleClearAll}
@@ -566,13 +586,40 @@ export function NotificationBell({ userId }: { userId: string }) {
                 </button>
               )}
             </div>
+            <div className="flex border-b border-slate-100">
+              {(
+                [
+                  { key: "data", label: "Data" },
+                  { key: "other", label: "Khác" },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2 text-xs font-semibold transition-colors",
+                    activeTab === tab.key
+                      ? "border-brand-500 text-brand-700"
+                      : "border-transparent text-slate-400 hover:text-slate-600",
+                  )}
+                >
+                  {tab.label}
+                  {unseenByTab[tab.key] > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                      {unseenByTab[tab.key] > 99 ? "99+" : unseenByTab[tab.key]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
             <div className="max-h-80 overflow-y-auto">
               {isLoading && !hasLoadedOnce ? (
                 <p className="px-3.5 py-4 text-center text-xs text-slate-400">Đang tải...</p>
-              ) : visibleNotifications.length === 0 ? (
+              ) : tabNotifications.length === 0 ? (
                 <p className="px-3.5 py-4 text-center text-xs text-slate-400">Chưa có thông báo nào</p>
               ) : (
-                visibleNotifications.map((n) => (
+                tabNotifications.map((n) => (
                   <div
                     key={n.id}
                     onClick={() => handleNotificationClick(n)}

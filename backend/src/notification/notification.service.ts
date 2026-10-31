@@ -7,6 +7,10 @@ import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ListNotificationQueryDto } from './dto/list-notification-query.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import {
+  DATA_NOTIFICATION_TYPES,
+  dataNotificationCutoff,
+} from './notification-groups';
+import {
   NotificationResponseDto,
   toNotificationResponse,
 } from './dto/notification-response.dto';
@@ -33,7 +37,7 @@ export class NotificationService {
     query: ListNotificationQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<NotificationResponseDto>> {
-    const where =
+    const scopeWhere =
       currentUser.role === 'admin'
         ? {
             OR: [
@@ -49,6 +53,28 @@ export class NotificationService {
             accountId: currentUser.id,
             ...(query.status ? { status: query.status } : {}),
           };
+
+    // Nhóm "Data" tự hết hạn khi sang ngày mới (2026-11-01): ẩn ngay cả khi tác
+    // vụ dọn chưa chạy. Lọc theo nhóm (data/other) nếu client yêu cầu.
+    const dataTypes = [...DATA_NOTIFICATION_TYPES];
+    const groupWhere =
+      query.group === 'data'
+        ? { type: { in: dataTypes } }
+        : query.group === 'other'
+          ? { type: { notIn: dataTypes } }
+          : {};
+    const where = {
+      ...scopeWhere,
+      AND: [
+        {
+          NOT: {
+            type: { in: dataTypes },
+            createdAt: { lt: dataNotificationCutoff() },
+          },
+        },
+        groupWhere,
+      ],
+    };
 
     const [total, notifications] = await this.prisma.$transaction([
       this.prisma.notification.count({ where }),

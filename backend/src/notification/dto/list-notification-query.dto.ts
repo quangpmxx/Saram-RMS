@@ -18,4 +18,9 @@ export class ListNotificationQueryDto {
   @IsOptional()
   @IsIn(['pending', 'sent', 'failed'])
   status?: 'pending' | 'sent' | 'failed';
+
+  /** Nhóm chuông (2026-11-01): 'data' = thông báo liên quan data; 'other' = còn lại; bỏ trống = tất cả. */
+  @IsOptional()
+  @IsIn(['data', 'other'])
+  group?: 'data' | 'other';
 }

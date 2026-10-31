@@ -5,6 +5,7 @@ import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { NotificationScannerService } from './notification-scanner.service';
 import { LeadAssignmentNoticeService } from './lead-assignment-notice.service';
+import { NotificationCleanupService } from './notification-cleanup.service';
 
 @Module({
   imports: [AuditLogModule, RealtimeModule],
@@ -13,6 +14,7 @@ import { LeadAssignmentNoticeService } from './lead-assignment-notice.service';
     NotificationService,
     NotificationScannerService,
     LeadAssignmentNoticeService,
+    NotificationCleanupService,
   ],
   exports: [NotificationScannerService, LeadAssignmentNoticeService],
 })
