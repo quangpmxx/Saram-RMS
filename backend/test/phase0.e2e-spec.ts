@@ -23,6 +23,21 @@ describe('Phase 0 — Nền tảng hệ thống & Tài khoản (e2e)', () => {
 
   const server = () => app.getHttpServer();
 
+  /**
+   * Tài khoản tạo qua API nhận DEFAULT_PASSWORD và bị bắt đổi mật khẩu ở lần
+   * đăng nhập đầu (rà soát 2026-10-30, B8) — các test bên dưới đăng nhập bằng
+   * mật khẩu cố định nên đặt sẵn mật khẩu đó và bỏ cờ bắt đổi.
+   */
+  async function useKnownPassword(username: string): Promise<void> {
+    await prisma.account.update({
+      where: { username },
+      data: {
+        passwordHash: await hashPassword('123456'),
+        mustChangePassword: false,
+      },
+    });
+  }
+
   beforeAll(async () => {
     app = await bootstrapTestApp();
     prisma = app.get(PrismaService);
@@ -97,6 +112,7 @@ describe('Phase 0 — Nền tảng hệ thống & Tài khoản (e2e)', () => {
 
       expect(res.body.role).toBe(role);
       expect(res.body.team_id).toBeNull();
+      await useKnownPassword(username);
       createdAccounts[role] = { username, password: '123456' };
     },
   );
@@ -124,6 +140,7 @@ describe('Phase 0 — Nền tảng hệ thống & Tài khoản (e2e)', () => {
       .expect(201);
 
     expect(res.body.team_id).toBe(teamId);
+    await useKnownPassword('e2e_leader');
     createdAccounts.leader = { username: 'e2e_leader', password: '123456' };
   });
 
@@ -139,6 +156,7 @@ describe('Phase 0 — Nền tảng hệ thống & Tài khoản (e2e)', () => {
       .expect(201);
 
     expect(res.body.team_id).toBe(teamId);
+    await useKnownPassword('e2e_sale');
     createdAccounts.sale = { username: 'e2e_sale', password: '123456' };
   });
 

@@ -236,8 +236,8 @@ describe('UI Polish — Sửa nhanh Năm sinh/Địa chỉ (e2e)', () => {
     expect(res.body.address).toBe('Hà Nội'); // tự trim khoảng trắng đầu/cuối
   });
 
-  it('Sale2 (không phụ trách) vẫn sửa được', async () => {
-    const res = await sale2Agent
+  it('Sale1 (người phụ trách) sửa được, trường không gửi lên giữ nguyên', async () => {
+    const res = await sale1Agent
       .put(`/candidate/${leadId}/quick-edit`)
       .send({ address: 'Đà Nẵng' })
       .expect(200);
@@ -245,12 +245,25 @@ describe('UI Polish — Sửa nhanh Năm sinh/Địa chỉ (e2e)', () => {
     expect(res.body.birth_year).toBe(1999); // trường không gửi lên giữ nguyên
   });
 
-  it('Leader2 (khác nhóm) vẫn sửa được', async () => {
-    const res = await leader2Agent
+  it('Leader1 (đúng nhóm đang phụ trách) sửa được', async () => {
+    const res = await leader1Agent
       .put(`/candidate/${leadId}/quick-edit`)
       .send({ birth_year: 2001 })
       .expect(200);
     expect(res.body.birth_year).toBe(2001);
+  });
+
+  // Rà soát phân quyền 2026-10-30 (V01): sửa nhanh dùng cùng quy tắc với form Sửa —
+  // Sale/Leader nhóm khác không sửa được data này (trước đây API không kiểm phạm vi).
+  it('Sale2 và Leader2 (khác nhóm) KHÔNG sửa được', async () => {
+    await sale2Agent
+      .put(`/candidate/${leadId}/quick-edit`)
+      .send({ address: 'Sửa trái phép' })
+      .expect(403);
+    await leader2Agent
+      .put(`/candidate/${leadId}/quick-edit`)
+      .send({ birth_year: 2002 })
+      .expect(403);
   });
 
   it('Quản lý và Admin cũng sửa được', async () => {
@@ -280,7 +293,7 @@ describe('UI Polish — Sửa nhanh Năm sinh/Địa chỉ (e2e)', () => {
   });
 
   it('Có thể để trống (gửi null) cả 2 trường', async () => {
-    const res = await sale2Agent
+    const res = await sale1Agent
       .put(`/candidate/${leadId}/quick-edit`)
       .send({ birth_year: null, address: null })
       .expect(200);

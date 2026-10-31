@@ -426,15 +426,26 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
       expect(res.body.care_pool_count).toBe(1); // lead8
     });
 
-    it('Leader A tự động bị ép về đúng nhóm mình dù không truyền team_id — số liệu khớp Admin lọc theo Team A', async () => {
+    // Rà soát phân quyền 2026-10-30: Dashboard là số liệu CHUNG TOÀN CÔNG TY cho mọi
+    // vai trò (Sale/Leader/Quản lý đều thấy như nhau, không còn bị ép về nhóm/cá nhân).
+    it('Leader A thấy số liệu chung toàn công ty (bằng Admin không lọc), bộ lọc team_id của Leader bị bỏ qua', async () => {
+      const all = await adminAgent.get('/dashboard/summary').expect(200);
       const res = await leaderAAgent.get('/dashboard/summary').expect(200);
-      expect(res.body.new_leads_total).toBe(8);
-      expect(res.body.care_pool_count).toBe(1);
+      expect(res.body.new_leads_total).toBe(all.body.new_leads_total);
+      expect(res.body.new_leads_total).toBeGreaterThan(8); // gồm cả Team B, không chỉ nhóm mình
+
+      const withOtherTeam = await leaderAAgent
+        .get('/dashboard/summary')
+        .query({ team_id: teamBId })
+        .expect(200);
+      expect(withOtherTeam.body.new_leads_total).toBe(all.body.new_leads_total);
     });
 
-    it('Sale A1 chỉ thấy đúng lead của mình (1,2,3,6,8 — 5 lead)', async () => {
+    it('Sale A1 cũng thấy số liệu chung toàn công ty, không bị thu hẹp về lead của mình', async () => {
+      const all = await adminAgent.get('/dashboard/summary').expect(200);
       const res = await saleA1Agent.get('/dashboard/summary').expect(200);
-      expect(res.body.new_leads_total).toBe(5);
+      expect(res.body.new_leads_total).toBe(all.body.new_leads_total);
+      expect(res.body.new_leads_total).toBeGreaterThan(5);
     });
 
     it('MKT chỉ thấy đúng data mình upload (toàn bộ 8 lead Team A + Pending do p7_mkt tạo, không gồm Team B)', async () => {
@@ -482,9 +493,18 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
   });
 
   describe('GET /dashboard/performance', () => {
-    it('Sale/MKT bị từ chối (403)', async () => {
-      await saleA1Agent.get('/dashboard/performance').expect(403);
-      await mktAgent.get('/dashboard/performance').expect(403);
+    // Rà soát phân quyền 2026-10-30: chi tiết từng cá nhân — Sale chỉ dòng của mình,
+    // Leader nhóm mình, Quản lý/Admin/MKT toàn bộ (không còn 403).
+    it('Sale chỉ thấy đúng dòng của mình; MKT thấy toàn bộ Sale', async () => {
+      const saleRes = await saleA1Agent
+        .get('/dashboard/performance')
+        .expect(200);
+      expect(saleRes.body).toHaveLength(1);
+      expect(saleRes.body[0].account_id).toBe(saleA1Id);
+
+      const mktRes = await mktAgent.get('/dashboard/performance').expect(200);
+      const ids = mktRes.body.map((r: { account_id: string }) => r.account_id);
+      expect(ids).toEqual(expect.arrayContaining([saleA1Id, saleA2Id]));
     });
 
     it('Leader A xem đúng hiệu suất 2 Sale trong nhóm mình', async () => {
@@ -513,10 +533,15 @@ describe('Phase 7 — Dashboard & Báo cáo (e2e)', () => {
   });
 
   describe('GET /dashboard/by-team', () => {
-    it('Leader/Sale/MKT bị từ chối (403)', async () => {
-      await leaderAAgent.get('/dashboard/by-team').expect(403);
-      await saleA1Agent.get('/dashboard/by-team').expect(403);
-      await mktAgent.get('/dashboard/by-team').expect(403);
+    // Rà soát phân quyền 2026-10-30: hiệu suất theo nhóm là toàn công ty cho mọi vai trò.
+    it('Leader/Sale/MKT xem được, số liệu từng nhóm giống hệt Admin', async () => {
+      const toRows = (body: Array<{ team_id: string; lead_count: number }>) =>
+        Object.fromEntries(body.map((r) => [r.team_id, r.lead_count]));
+      const admin = await adminAgent.get('/dashboard/by-team').expect(200);
+      for (const agent of [leaderAAgent, saleA1Agent, mktAgent]) {
+        const res = await agent.get('/dashboard/by-team').expect(200);
+        expect(toRows(res.body)).toEqual(toRows(admin.body));
+      }
     });
 
     it('Admin xem đúng số liệu từng nhóm', async () => {

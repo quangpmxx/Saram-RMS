@@ -259,16 +259,20 @@ describe('Phase 6 — Tự động phân chia lead (Round-robin) (e2e)', () => {
     await leader2Agent.get(`/distribution-rule/${team1Id}`).expect(403);
   });
 
-  it('Quản lý/Admin xem được, nhưng KHÔNG được cấu hình/kích hoạt (chỉ Leader nhóm mình)', async () => {
+  it('Quản lý chỉ xem được, KHÔNG cấu hình/kích hoạt; Admin cấu hình được cho mọi nhóm (rà soát phân quyền 2026-10-30)', async () => {
     await adminAgent.get(`/distribution-rule/${team1Id}`).expect(200);
     await managerAgent.get(`/distribution-rule/${team1Id}`).expect(200);
-    await adminAgent
+    await managerAgent
       .put(`/distribution-rule/${team1Id}`)
       .send({ account_ids: [saleAId] })
       .expect(403);
     await managerAgent
       .post(`/distribution-rule/${team1Id}/activate`)
       .expect(403);
+    await adminAgent
+      .put(`/distribution-rule/${team1Id}`)
+      .send({ account_ids: [saleAId] })
+      .expect(200);
   });
 
   it('từ chối cấu hình với tài khoản không phải Sale của đúng nhóm', async () => {
