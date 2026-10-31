@@ -140,7 +140,6 @@ export function DistributionRuleModal({
   return (
     <Modal
       title="Cấu hình tự động phân chia (Round-robin)"
-      description="Sắp xếp thứ tự Sale tham gia vòng quay — lead mới sẽ tự động gán lần lượt theo thứ tự này khi đang bật. Có thể tạm dừng bất kỳ lúc nào để quay lại phân chia thủ công."
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>

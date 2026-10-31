@@ -564,7 +564,6 @@ export function DashboardClient({
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">
         <h2 className="text-sm font-semibold text-slate-900">Hiệu suất toàn công ty</h2>
-        <p className="text-xs text-slate-500">Tỷ lệ chuyển đổi qua từng bước phễu — % tính trên Data mới.</p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="rounded-xl bg-brand-50 p-2 text-center">
             <p className="text-base font-bold text-brand-700">{summary.kpi.schedule_rate}%</p>
@@ -595,7 +594,6 @@ export function DashboardClient({
               <Trophy className="h-4 w-4 text-amber-500" strokeWidth={2} />
               <h2 className="text-sm font-semibold text-slate-900">Top 3 nhân viên hẹn PV nhiều nhất</h2>
             </div>
-            <p className="text-xs text-slate-500">Số lượng Hẹn PV cao nhất trong khoảng thời gian và bộ lọc hiện tại.</p>
             <div className="mt-3 flex flex-col gap-1">
               {topScheduled.map(({ row, ratio }, index) => (
                 <RankingRow
@@ -618,7 +616,6 @@ export function DashboardClient({
               <Award className="h-4 w-4 text-emerald-600" strokeWidth={2} />
               <h2 className="text-sm font-semibold text-slate-900">Top 3 nhân viên đỗ PV cao nhất</h2>
             </div>
-            <p className="text-xs text-slate-500">Số lượng Đỗ PV cao nhất trong khoảng thời gian và bộ lọc hiện tại.</p>
             <div className="mt-3 flex flex-col gap-1">
               {topPassed.map(({ row, ratio }, index) => (
                 <RankingRow
