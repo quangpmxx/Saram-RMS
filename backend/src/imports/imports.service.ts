@@ -63,15 +63,45 @@ export class ImportsService {
 
     // Cố ý không await — xử lý bất đồng bộ trong nền, không chặn response.
     void this.processImport(job.id, file.buffer, currentUser.id).catch(
-      (error: unknown) => {
+      async (error: unknown) => {
         this.logger.error(
           `Import job ${job.id} thất bại`,
           error instanceof Error ? error.stack : String(error),
         );
+        await this.markJobFailed(job.id);
       },
     );
 
     return { job_id: job.id };
+  }
+
+  /**
+   * Rà soát 2026-11-01: trước đây lỗi giữa chừng (file hỏng, mất kết nối DB...)
+   * chỉ được ghi log, job kẹt ở "đang xử lý" mãi mãi và người dùng không biết
+   * đã import được bao nhiêu dòng. Không có transaction nên các dòng đã tạo
+   * trước khi lỗi vẫn còn — báo rõ để người dùng kiểm tra trước khi import lại.
+   */
+  private async markJobFailed(jobId: string): Promise<void> {
+    try {
+      await this.prisma.importJob.update({
+        where: { id: jobId },
+        data: {
+          status: 'failed',
+          errors: JSON.stringify([
+            {
+              row: 0,
+              message:
+                'Lỗi hệ thống khi xử lý file. Một số dòng có thể đã được nhập trước khi lỗi — hãy kiểm tra danh sách trước khi import lại.',
+            },
+          ]),
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Không đánh dấu được import job ${jobId} là thất bại`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   async getJobStatus(

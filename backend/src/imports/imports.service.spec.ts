@@ -99,6 +99,78 @@ describe('ImportsService', () => {
     });
   });
 
+  describe('submitImport — lỗi xử lý nền không được để job kẹt "đang xử lý"', () => {
+    /** submitImport cố ý không await xử lý nền → chờ tới khi điều kiện đúng. */
+    async function waitUntil(condition: () => boolean): Promise<void> {
+      for (let i = 0; i < 200 && !condition(); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+    const failedUpdate = () =>
+      prisma.importJob.update.mock.calls.find(
+        (call: [{ data: { status?: string } }]) =>
+          call[0].data.status === 'failed',
+      ) as [{ where: { id: string }; data: { errors: string } }] | undefined;
+
+    it('file không phải Excel hợp lệ → job chuyển "failed" kèm thông báo', async () => {
+      prisma.importJob.create.mockResolvedValue({ id: 'job-bad' });
+      prisma.importJob.update.mockResolvedValue({});
+
+      await service.submitImport(
+        {
+          originalname: 'hong.xlsx',
+          buffer: Buffer.from('đây không phải file xlsx'),
+        } as Express.Multer.File,
+        mktUser,
+      );
+      await waitUntil(() => failedUpdate() !== undefined);
+
+      const call = failedUpdate();
+      expect(call?.[0].where).toEqual({ id: 'job-bad' });
+      expect(call?.[0].data.errors).toContain('Lỗi hệ thống');
+      expect(call?.[0].data.errors).toContain('kiểm tra danh sách');
+    });
+
+    it('lỗi DB giữa chừng khi đang tạo lead → job chuyển "failed", không kẹt processing', async () => {
+      prisma.importJob.create.mockResolvedValue({ id: 'job-mid' });
+      prisma.importJob.update.mockResolvedValue({});
+      prisma.lead.create.mockRejectedValue(new Error('db down'));
+      const buffer = await buildSampleWorkbookBuffer([
+        ['Nguyễn Văn A', '0900000001', 'Facebook'],
+      ]);
+
+      await service.submitImport(
+        { originalname: 'data.xlsx', buffer } as Express.Multer.File,
+        mktUser,
+      );
+      await waitUntil(() => failedUpdate() !== undefined);
+
+      expect(failedUpdate()?.[0].where).toEqual({ id: 'job-mid' });
+      expect(
+        prisma.importJob.update.mock.calls.some(
+          (call: [{ data: { status?: string } }]) =>
+            call[0].data.status === 'completed',
+        ),
+      ).toBe(false);
+    });
+
+    it('đánh dấu "failed" cũng lỗi → không làm sập tiến trình (không unhandled rejection)', async () => {
+      prisma.importJob.create.mockResolvedValue({ id: 'job-x' });
+      prisma.importJob.update.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.submitImport(
+          {
+            originalname: 'hong.xlsx',
+            buffer: Buffer.from('rác'),
+          } as Express.Multer.File,
+          mktUser,
+        ),
+      ).resolves.toEqual({ job_id: 'job-x' });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+  });
+
   describe('getJobStatus', () => {
     it('ném NotFoundException nếu job không tồn tại', async () => {
       prisma.importJob.findUnique.mockResolvedValue(null);

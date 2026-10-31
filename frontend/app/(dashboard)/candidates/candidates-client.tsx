@@ -1761,15 +1761,21 @@ function ImportModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function pollJob(jobId: string) {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    // File lớn có thể chạy vài phút ở nền: chờ ~9 phút (1 giây/lần trong phút đầu,
+    // sau đó 3 giây/lần). Trước đây bỏ cuộc im lặng sau 60 giây, người dùng tưởng
+    // chưa xong rồi import lại → trùng data.
+    for (let attempt = 0; attempt < 220; attempt += 1) {
       const status = await clientApi<ImportJobStatus>(`/candidate/import/${jobId}`);
       setJob(status);
       if (status.status === "completed" || status.status === "failed") {
         await onFinished(status);
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, attempt < 60 ? 1000 : 3000));
     }
+    setError(
+      "Import đang chạy lâu hơn dự kiến. Hệ thống vẫn tiếp tục nhập ở nền — vui lòng KHÔNG import lại file này, đợi ít phút rồi tải lại trang để xem kết quả.",
+    );
   }
 
   async function handleSubmit() {
@@ -1851,14 +1857,22 @@ function ImportModal({
                 <ul className="mt-3 max-h-40 list-disc overflow-y-auto pl-5 text-xs text-slate-500">
                   {job.errors.map((rowError) => (
                     <li key={rowError.row}>
-                      Dòng {rowError.row}: {rowError.message}
+                      {rowError.row > 0 ? `Dòng ${rowError.row}: ` : ""}
+                      {rowError.message}
                     </li>
                   ))}
                 </ul>
               )}
             </>
           )}
-          {!isDone && <p className="mt-2 text-slate-500">Đang xử lý trong nền, vui lòng đợi...</p>}
+          {!isDone &&
+            (error ? (
+              <p role="alert" className="mt-2 text-red-600">
+                {error}
+              </p>
+            ) : (
+              <p className="mt-2 text-slate-500">Đang xử lý trong nền, vui lòng đợi...</p>
+            ))}
         </div>
       )}
     </Modal>
