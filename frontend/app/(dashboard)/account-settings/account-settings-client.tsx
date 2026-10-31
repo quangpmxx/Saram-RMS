@@ -49,6 +49,7 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
   const wantsPasswordChange = Boolean(currentPassword || newPassword || confirmPassword);
   const hasChanges = Boolean(selectedFile) || wantsPasswordChange;
 
@@ -72,6 +73,27 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
 
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  /** Nút "Lưu" ngay cạnh "Đổi ảnh": chỉ lưu ảnh đại diện (không đụng phần mật khẩu bên dưới). */
+  async function handleSaveAvatar() {
+    if (!selectedFile) return;
+    setAvatarError(null);
+    setIsSavingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      await clientApiUpload("/me/avatar", formData);
+      toast.success("Đã cập nhật ảnh đại diện");
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      router.refresh();
+    } catch (error) {
+      setAvatarError(error instanceof ApiError ? error.message : "Có lỗi xảy ra, vui lòng thử lại");
+    } finally {
+      setIsSavingAvatar(false);
+    }
   }
 
   async function handleSaveChanges() {
@@ -154,10 +176,17 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
                   className="hidden"
                   id="avatar-upload-input"
                 />
-                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-3.5 w-3.5" strokeWidth={2} />
-                  Đổi ảnh
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+                    Đổi ảnh
+                  </Button>
+                  {selectedFile && (
+                    <Button type="button" size="sm" disabled={isSavingAvatar || isSaving} onClick={() => void handleSaveAvatar()}>
+                      {isSavingAvatar ? "Đang lưu..." : "Lưu"}
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400">JPEG/PNG/WebP, tối đa 2MB.</p>
               </div>
             </div>
