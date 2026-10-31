@@ -92,6 +92,15 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     ],
   },
   {
+    // Marketing Hub — CHỈ khung sườn, chưa có nghiệp vụ/API (yêu cầu người dùng
+    // 2026-11-01, sẽ phát triển sau). Mặc định Admin/Quản lý/MKT xem được; Admin
+    // chỉnh riêng từng người ở trang Phân quyền.
+    code: 'marketing-hub',
+    label: 'Marketing Hub',
+    defaultRoles: ['admin', 'manager', 'mkt'],
+    controllers: [],
+  },
+  {
     code: 'shuttle',
     label: 'Danh sách đưa đón',
     // Rà soát phân quyền 2026-10-30: chỉ Admin/Quản lý thêm/sửa/xoá (cả danh

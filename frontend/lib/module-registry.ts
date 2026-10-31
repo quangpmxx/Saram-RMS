@@ -28,6 +28,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "candidates",
     defaultRoles: ["admin", "manager", "mkt", "leader", "sale"],
   },
+  // Marketing Hub — khung sườn, chưa có nghiệp vụ (2026-11-01). Khớp backend/src/module-permission/module-registry.ts.
+  {
+    code: "marketing-hub",
+    href: "/marketing-hub",
+    label: "Marketing Hub",
+    icon: "marketingHub",
+    defaultRoles: ["admin", "manager", "mkt"],
+  },
   {
     code: "shuttle",
     href: "/shuttle",

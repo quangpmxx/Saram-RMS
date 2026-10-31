@@ -13,6 +13,7 @@ import {
   Handshake,
   History,
   LayoutDashboard,
+  Megaphone,
   Settings2,
   ShieldCheck,
   TrendingUp,
@@ -37,6 +38,7 @@ const ICONS = {
   attendance: CalendarCheck,
   salesEntry: TrendingUp,
   orderManagement: Handshake,
+  marketingHub: Megaphone,
   permissions: ShieldCheck,
 } satisfies Record<string, LucideIcon>;
 
