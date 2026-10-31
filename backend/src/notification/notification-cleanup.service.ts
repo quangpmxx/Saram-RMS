@@ -2,15 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  DATA_NOTIFICATION_TYPES,
+  DAILY_EXPIRING_NOTIFICATION_TYPES,
   dataNotificationCutoff,
 } from './notification-groups';
 
 /**
- * Dọn thông báo nhóm "Data" của các ngày trước (yêu cầu người dùng 2026-11-01:
+ * Dọn thông báo nhóm "Data" và Đưa đón của các ngày trước (yêu cầu người dùng 2026-11-01:
  * sang ngày mới là tự hết hạn, để dùng càng lâu càng không đầy rác). Danh sách
  * thông báo (GET /notification) đã tự ẩn các thông báo hết hạn này; tác vụ này
- * chỉ để xoá hẳn khỏi DB. Thông báo nhóm "Khác" không bị dọn.
+ * chỉ để xoá hẳn khỏi DB. Các thông báo "Khác" còn lại (tin Admin, đơn nghỉ, phản ánh...) không bị dọn.
  */
 @Injectable()
 export class NotificationCleanupService {
@@ -38,7 +38,7 @@ export class NotificationCleanupService {
   async purgeExpiredDataNotifications(now: Date = new Date()): Promise<number> {
     const result = await this.prisma.notification.deleteMany({
       where: {
-        type: { in: [...DATA_NOTIFICATION_TYPES] },
+        type: { in: [...DAILY_EXPIRING_NOTIFICATION_TYPES] },
         createdAt: { lt: dataNotificationCutoff(now) },
       },
     });

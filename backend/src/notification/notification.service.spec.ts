@@ -4,7 +4,10 @@ import { NotificationService } from './notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
-import { DATA_NOTIFICATION_TYPES } from './notification-groups';
+import {
+  DAILY_EXPIRING_NOTIFICATION_TYPES,
+  DATA_NOTIFICATION_TYPES,
+} from './notification-groups';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -173,7 +176,7 @@ describe('NotificationService', () => {
       }
       expect(andClauses()[0]).toEqual({
         NOT: {
-          type: { in: [...DATA_NOTIFICATION_TYPES] },
+          type: { in: [...DAILY_EXPIRING_NOTIFICATION_TYPES] },
           createdAt: { lt: new Date('2026-11-01T17:00:00.000Z') },
         },
       });

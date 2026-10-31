@@ -7,6 +7,7 @@ import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ListNotificationQueryDto } from './dto/list-notification-query.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import {
+  DAILY_EXPIRING_NOTIFICATION_TYPES,
   DATA_NOTIFICATION_TYPES,
   dataNotificationCutoff,
 } from './notification-groups';
@@ -68,7 +69,7 @@ export class NotificationService {
       AND: [
         {
           NOT: {
-            type: { in: dataTypes },
+            type: { in: [...DAILY_EXPIRING_NOTIFICATION_TYPES] },
             createdAt: { lt: dataNotificationCutoff() },
           },
         },

@@ -17,12 +17,23 @@ export const DATA_NOTIFICATION_TYPES: readonly NotificationType[] = [
   'interview_reminder',
 ];
 
+/**
+ * Các loại thông báo TỰ HẾT HẠN khi sang ngày mới (yêu cầu người dùng 2026-11-01):
+ * nhóm Data + thông báo Đưa đón (mỗi thay đổi ở Đưa đón tạo 1 thông báo cho từng
+ * tài khoản nên rất nhiều). Đưa đón vẫn nằm ở phần "Khác" của chuông — chỉ chung
+ * cách hết hạn, KHÔNG đổi nhóm hiển thị.
+ */
+export const DAILY_EXPIRING_NOTIFICATION_TYPES: readonly NotificationType[] = [
+  ...DATA_NOTIFICATION_TYPES,
+  'shuttle_update',
+];
+
 /** Giờ Việt Nam là UTC+7 cố định (không có giờ mùa hè). */
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Mốc hết hạn của thông báo nhóm "Data": 00:00 hôm nay theo giờ Việt Nam. Thông
+ * Mốc hết hạn của các thông báo tự hết hạn (nhóm "Data" + Đưa đón): 00:00 hôm nay theo giờ Việt Nam. Thông
  * báo Data tạo TRƯỚC mốc này (tức từ hôm qua trở về trước) là đã hết hạn — sang
  * ngày mới là tự hết hạn (yêu cầu người dùng 2026-11-01), không phải đúng 24 giờ.
  */

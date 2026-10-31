@@ -1,4 +1,5 @@
 import {
+  DAILY_EXPIRING_NOTIFICATION_TYPES,
   DATA_NOTIFICATION_TYPES,
   dataNotificationCutoff,
 } from './notification-groups';
@@ -31,6 +32,26 @@ describe('notification-groups', () => {
     ];
     for (const type of other) {
       expect(DATA_NOTIFICATION_TYPES).not.toContain(type);
+    }
+  });
+
+  it('loại tự hết hạn = nhóm Data + Đưa đón; Đưa đón vẫn thuộc phần "Khác" của chuông (không nằm trong nhóm Data)', () => {
+    expect([...DAILY_EXPIRING_NOTIFICATION_TYPES].sort()).toEqual(
+      [...DATA_NOTIFICATION_TYPES, 'shuttle_update'].sort(),
+    );
+    expect(DATA_NOTIFICATION_TYPES).not.toContain('shuttle_update');
+  });
+
+  it('các thông báo Khác còn lại KHÔNG tự hết hạn', () => {
+    for (const type of [
+      'admin_message',
+      'leave_request_pending_leader',
+      'leave_request_pending_admin',
+      'leave_request_decided',
+      'anonymous_feedback_created',
+      'sale_no_shuttle_reminder',
+    ]) {
+      expect(DAILY_EXPIRING_NOTIFICATION_TYPES).not.toContain(type);
     }
   });
 

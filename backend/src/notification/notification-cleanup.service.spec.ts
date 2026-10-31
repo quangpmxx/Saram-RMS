@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { NotificationCleanupService } from './notification-cleanup.service';
-import { DATA_NOTIFICATION_TYPES } from './notification-groups';
+import { DAILY_EXPIRING_NOTIFICATION_TYPES } from './notification-groups';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('NotificationCleanupService', () => {
@@ -29,19 +29,22 @@ describe('NotificationCleanupService', () => {
     expect(removed).toBe(3);
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
       where: {
-        type: { in: [...DATA_NOTIFICATION_TYPES] },
+        type: { in: [...DAILY_EXPIRING_NOTIFICATION_TYPES] },
         createdAt: { lt: new Date('2026-11-01T17:00:00.000Z') },
       },
     });
   });
 
-  it('KHÔNG đụng thông báo nhóm Khác (điều kiện xoá luôn giới hạn theo loại Data)', async () => {
+  it('KHÔNG đụng các thông báo Khác còn lại (tin Admin, đơn nghỉ, phản ánh...): điều kiện xoá chỉ gồm Data + Đưa đón', async () => {
     await service.purgeExpiredDataNotifications();
     const args = prisma.notification.deleteMany.mock.calls[0] as [
       { where: { type: { in: string[] } } },
     ];
-    expect(args[0].where.type.in).not.toContain('shuttle_update');
+    expect(args[0].where.type.in).toContain('shuttle_update');
+    expect(args[0].where.type.in).toContain('lead_assigned');
     expect(args[0].where.type.in).not.toContain('admin_message');
+    expect(args[0].where.type.in).not.toContain('leave_request_decided');
+    expect(args[0].where.type.in).not.toContain('anonymous_feedback_created');
   });
 
   it('tick: lỗi DB chỉ ghi log, không ném ra ngoài (không làm sập tiến trình)', async () => {
