@@ -1,0 +1,47 @@
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { MarketingHubService } from './marketing-hub.service';
+import { ChangeOwnerDto, ConnectAdAccountDto, OverviewQueryDto } from './dto/marketing-hub.dto';
+import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
+
+/**
+ * Marketing Hub. Xem: Admin/Quản lý/MKT. Liên kết/đồng bộ/gỡ: Admin hoặc MKT
+ * (MKT chỉ với tài khoản của mình — kiểm trong service). Đổi người phụ trách: Admin.
+ */
+@Controller('marketing-hub')
+@Roles('admin', 'manager', 'mkt')
+export class MarketingHubController {
+  constructor(private readonly service: MarketingHubService) {}
+
+  @Get('overview')
+  overview(@Query() query: OverviewQueryDto) {
+    return this.service.overview(query);
+  }
+
+  @Post('ad-accounts/connect')
+  @HttpCode(200)
+  @Roles('admin', 'mkt')
+  connect(@Body() dto: ConnectAdAccountDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.connect(dto.access_token, user);
+  }
+
+  @Post('ad-accounts/:id/sync')
+  @HttpCode(200)
+  @Roles('admin', 'mkt')
+  sync(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.syncNow(id, user);
+  }
+
+  @Patch('ad-accounts/:id/owner')
+  @Roles('admin')
+  changeOwner(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeOwnerDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.changeOwner(id, dto.owner_id, user);
+  }
+
+  @Delete('ad-accounts/:id')
+  @Roles('admin', 'mkt')
+  disconnect(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.disconnect(id, user);
+  }
+}

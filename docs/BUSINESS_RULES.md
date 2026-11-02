@@ -40,3 +40,8 @@ Bảo toàn lịch sử (ghi chú, lịch hẹn, phân công, Nhật ký) · gá
 
 ## Điểm đặc tả còn mở (doc 09 mục 11)
 Danh sách quyền chi tiết cho Quản lý/Leader (khung đã có, chưa có danh mục) · ranh giới Admin–Quản lý · quy trình bộ phận đưa đón · danh mục công ty đối tác (hiện nhập tự do) · báo cáo so sánh theo kỳ.
+
+## Marketing Hub (đã duyệt 2026-11-02)
+- Chỉ VNĐ. Mỗi tài khoản quảng cáo đúng 1 nhân viên phụ trách (unique nền tảng + mã ngoài). Admin gán/đổi cho ai cũng được; MKT chỉ liên kết/đồng bộ/gỡ tài khoản của mình, không giành tài khoản đã có người phụ trách; Quản lý chỉ xem.
+- Chi phí/data, chi phí/người PV, chi phí/người đi làm: chỉ ở Dashboard chung, tính theo NGÀY UP của lead, mẫu số 0 hoặc chưa đồng bộ thì hiện —. Không hiển thị chi phí theo nhân viên. Cảnh báo mặc định: chi tiêu tăng >50% so với kỳ trước.
+- Token Facebook lưu mã hoá (AES-256-GCM, khoá `MARKETING_TOKEN_KEY` ≥ 32 ký tự), không bao giờ trả về API/frontend.

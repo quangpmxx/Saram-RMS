@@ -20,6 +20,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
 import { ShuttleModule } from './shuttle/shuttle.module';
 import { SaleReminderModule } from './sale-reminder/sale-reminder.module';
+import { MarketingHubModule } from './marketing-hub/marketing-hub.module';
 import { DailyReportsModule } from './daily-reports/daily-reports.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveAccrualModule } from './leave-accrual/leave-accrual.module';
@@ -59,6 +60,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     NotificationModule,
     ShuttleModule,
     SaleReminderModule,
+    MarketingHubModule,
     DailyReportsModule,
     AttendanceModule,
     LeaveAccrualModule,

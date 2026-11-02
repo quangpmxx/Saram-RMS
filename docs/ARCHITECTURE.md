@@ -19,6 +19,7 @@ Trình duyệt ─► frontend (Next.js, :3000) ─► /api proxy ─► backend
 - **Kho chăm sóc:** `care-warehouse` (service, `care-metrics.ts`, `care-time.util.ts` — mốc ngày/tháng giờ VN), báo cáo tiến độ `care-progress`.
 - **Số liệu:** `dashboard`, `daily-reports`, `report-penalty`, `sales-entry`, `order-management`.
 - **Nhân sự:** `accounts`, `teams`, `attendance`, `checkin`, `leave-requests`, `leave-accrual`, `birthday`, `anonymous-feedback`.
+- **Marketing:** `marketing-hub` (client Graph API `facebook-ads.client.ts`, mã hoá token `token-crypto.ts`, bảng `ad_accounts`, `ad_spend_daily`).
 - **Khác:** `shuttle` (Đưa đón), `notification`, `audit-log`, `module-permission`, `realtime`, `auth`, `common`, `prisma`.
 
 ## Cơ chế dùng chung

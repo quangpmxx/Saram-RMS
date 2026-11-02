@@ -15,5 +15,5 @@ export default async function MarketingHubPage() {
   }
   await requirePageAccess("marketing-hub");
 
-  return <MarketingHubClient />;
+  return <MarketingHubClient role={user.role} userId={user.id} />;
 }

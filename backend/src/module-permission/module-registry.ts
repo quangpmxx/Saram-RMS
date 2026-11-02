@@ -1,5 +1,6 @@
 import type { Type } from '@nestjs/common';
 import { AccountRole } from '../../generated/prisma/enums';
+import { MarketingHubController } from '../marketing-hub/marketing-hub.controller';
 import { DashboardController } from '../dashboard/dashboard.controller';
 import { CandidatesController } from '../candidates/candidates.controller';
 import { ImportsController } from '../imports/imports.controller';
@@ -97,8 +98,9 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     // chỉnh riêng từng người ở trang Phân quyền.
     code: 'marketing-hub',
     label: 'Marketing Hub',
-    defaultRoles: ['admin', 'manager', 'mkt'],
-    controllers: [],
+    defaultRoles: ['admin', 'mkt'],
+    viewRoles: ['manager'],
+    controllers: [MarketingHubController],
   },
   {
     code: 'shuttle',

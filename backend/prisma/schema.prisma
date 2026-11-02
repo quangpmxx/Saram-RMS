@@ -231,6 +231,7 @@ model Account {
 
   // Phase 1 — quan hệ ngược từ Lead/ImportJob
   uploadedLeads            Lead[]      @relation("LeadUploadedBy")
+  adAccounts               AdAccount[]  @relation("AdAccountOwner")
   assignedLeads            Lead[]      @relation("LeadAssignedTo")
   heldLeads                Lead[]      @relation("LeadHeldBy")
   carePoolLockedLeads      Lead[]      @relation("LeadCarePoolLockedBy")
@@ -1434,4 +1435,64 @@ model OrderRecord {
   salesEntryRecords SalesEntryRecord[]
 
   @@map("order_records")
+}
+
+/// Marketing Hub — nền tảng quảng cáo (hiện chỉ dùng facebook; tiktok để mở rộng).
+enum AdPlatform {
+  facebook
+  tiktok
+
+  @@map("ad_platform")
+}
+
+/// Marketing Hub — trạng thái liên kết: connected / error (đồng bộ lỗi, vd token hết hạn) / disconnected (đã gỡ, token bị xoá).
+enum AdAccountStatus {
+  connected
+  error
+  disconnected
+
+  @@map("ad_account_status")
+}
+
+/// Marketing Hub — tài khoản quảng cáo đã liên kết bằng access token. Token
+/// lưu MÃ HOÁ (AES-256-GCM), không bao giờ trả về qua API. Mỗi tài khoản chỉ
+/// có đúng 1 nhân viên phụ trách (unique theo nền tảng + mã ngoài).
+model AdAccount {
+  id             String          @id @default(uuid()) @db.Uuid
+  platform       AdPlatform
+  externalId     String          @map("external_id") @db.VarChar(64)
+  name           String          @db.VarChar(255)
+  currency       String          @db.VarChar(8)
+  ownerId        String          @map("owner_id") @db.Uuid
+  encryptedToken String?         @map("encrypted_token")
+  status         AdAccountStatus @default(connected)
+  lastSyncAt     DateTime?       @map("last_sync_at")
+  lastError      String?         @map("last_error") @db.VarChar(500)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  owner  Account        @relation("AdAccountOwner", fields: [ownerId], references: [id])
+  spends AdSpendDaily[]
+
+  @@unique([platform, externalId])
+  @@index([ownerId])
+  @@map("ad_accounts")
+}
+
+/// Marketing Hub — chi tiêu theo ngày (đơn vị VNĐ). Unique (tài khoản, ngày)
+/// nên đồng bộ lặp chỉ ghi đè, không tạo trùng.
+model AdSpendDaily {
+  id          String   @id @default(uuid()) @db.Uuid
+  adAccountId String   @map("ad_account_id") @db.Uuid
+  date        DateTime @db.Date
+  spend       Decimal  @db.Decimal(18, 2)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  syncedAt    DateTime @default(now()) @map("synced_at")
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([adAccountId, date])
+  @@index([date])
+  @@map("ad_spend_daily")
 }
