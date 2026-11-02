@@ -25,7 +25,11 @@ import { UpdateThemeDto } from './dto/update-theme.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
-import { ACCESS_TOKEN_COOKIE, buildCookieOptions } from './auth-cookie.util';
+import {
+  ACCESS_TOKEN_COOKIE,
+  buildCookieOptions,
+  buildLoginCookieOptions,
+} from './auth-cookie.util';
 import { AllowPasswordChange } from '../common/decorators/allow-password-change.decorator';
 
 /** Dự án phụ — nâng cấp toàn diện: ảnh đại diện tự upload (POST /me/avatar). */
@@ -61,7 +65,7 @@ export class AuthController {
     res.cookie(
       ACCESS_TOKEN_COOKIE,
       token,
-      buildCookieOptions(this.configService),
+      buildLoginCookieOptions(this.configService),
     );
     return { account };
   }

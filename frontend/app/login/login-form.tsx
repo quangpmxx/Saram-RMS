@@ -4,7 +4,6 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, LogIn, User } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import { markBrowserSessionAlive } from "@/lib/browser-session";
 import type { Account } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
@@ -27,7 +26,6 @@ export function LoginForm() {
         method: "POST",
         body: JSON.stringify({ username, password }),
       });
-      markBrowserSessionAlive();
       router.replace("/");
       router.refresh();
     } catch (err) {
