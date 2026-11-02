@@ -14,6 +14,7 @@ import {
   type LegacyRowError,
   detectColumns,
   readLegacyRows,
+  resolveUploadedAt,
   resultCode,
   suggestAccount,
   zaloFriendCode,
@@ -152,7 +153,7 @@ export class LegacyImportService {
           sourceId: sourceByName.get(r.channel.toLowerCase()) ?? defaultSource,
           mktNote: r.mktNote || null,
           uploadedById: user.id,
-          uploadedAt: now,
+          uploadedAt: resolveUploadedAt(r.uploadDate, now),
           assignedTeamId: team.id,
           assignedToId,
           assignedAt: assignedToId ? now : null,
@@ -308,6 +309,7 @@ export function mergeByPhone(rows: LegacyRow[]): {
     first.address ||= r.address;
     first.zaloFriend ||= r.zaloFriend;
     first.result ||= r.result;
+    first.uploadDate ||= r.uploadDate;
   }
   return { unique: [...byPhone.values()], mergedCount };
 }

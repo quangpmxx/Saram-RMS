@@ -7,6 +7,7 @@ import {
   resultCode,
   suggestAccount,
   zaloFriendCode,
+  resolveUploadedAt,
 } from './legacy-import.util';
 import { mergeByPhone } from './legacy-import.service';
 
@@ -110,6 +111,7 @@ describe('legacy-import.util', () => {
       channel: '',
       zaloFriend: '',
       result: '',
+      uploadDate: '',
     };
     const { unique, mergedCount } = mergeByPhone([
       { ...base, row: 2, callNotes: '1/9 gọi' },
@@ -123,5 +125,19 @@ describe('legacy-import.util', () => {
       callNotes: '1/9 gọi\n5/9 gọi lại',
       result: 'Đã gửi CC',
     });
+  });
+});
+
+describe('resolveUploadedAt', () => {
+  const now = new Date('2026-11-02T03:30:45.000Z'); // 10:30:45 giờ VN
+  it('lấy ngày trên sheet + giờ hiện tại', () => {
+    expect(resolveUploadedAt('29/10/2026', now).toISOString()).toBe('2026-10-29T03:30:45.000Z');
+    expect(resolveUploadedAt('2026-10-29T00:00:00.000Z', now).toISOString()).toBe('2026-10-29T03:30:45.000Z');
+  });
+  it('thiếu / sai / tương lai → ngày up', () => {
+    expect(resolveUploadedAt('', now)).toBe(now);
+    expect(resolveUploadedAt('abc', now)).toBe(now);
+    expect(resolveUploadedAt('31/02/2026', now)).toBe(now);
+    expect(resolveUploadedAt('01/01/2027', now)).toBe(now);
   });
 });

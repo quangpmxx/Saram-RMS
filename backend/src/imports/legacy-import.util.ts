@@ -17,6 +17,7 @@ export const LEGACY_COLUMNS = {
   zaloFriend: ['trạng thái'],
   callNotes: ['tình trạng cuộc gọi'],
   result: ['kết quả'],
+  uploadDate: ['ngày', 'ngày up', 'ngày lên số', 'thời gian up', 'ngày tháng'],
 } as const;
 
 export type LegacyColumnKey = keyof typeof LEGACY_COLUMNS;
@@ -34,6 +35,8 @@ export interface LegacyRow {
   zaloFriend: string;
   callNotes: string;
   result: string;
+  /** Chữ trong cột ngày (rỗng nếu sheet không có/ô trống). */
+  uploadDate: string;
 }
 
 export interface LegacyRowError {
@@ -148,6 +151,7 @@ export function readLegacyRows(
       zaloFriend: cell(r, 'zaloFriend'),
       callNotes: cell(r, 'callNotes'),
       result: cell(r, 'result'),
+      uploadDate: cell(r, 'uploadDate'),
     });
   }
   return { rows, errors };
@@ -203,4 +207,38 @@ export function suggestAccount(
       .some((w) => strip(w)[0] === strip(initial));
   });
   return hits.length === 1 ? hits[0].id : null;
+}
+
+/**
+ * Ngày up = NGÀY trong sheet (giờ VN) + GIỜ hiện tại lúc up. Ô ngày trống /
+ * không đọc được / ở tương lai → dùng luôn thời điểm up (`now`).
+ * Hỗ trợ: ô ngày của Excel (ISO), "29/10/2026", "29-10-2026", "29.10.2026".
+ */
+export function resolveUploadedAt(raw: string, now: Date): Date {
+  const s = raw.trim();
+  let y: number, m: number, d: number;
+  let match = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (match) {
+    [y, m, d] = [+match[1], +match[2], +match[3]];
+  } else if ((match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/.exec(s))) {
+    [d, m, y] = [+match[1], +match[2], +match[3]];
+  } else {
+    return now;
+  }
+  const vnNow = new Date(now.getTime() + 7 * 3600_000);
+  const result = new Date(
+    Date.UTC(
+      y,
+      m - 1,
+      d,
+      vnNow.getUTCHours(),
+      vnNow.getUTCMinutes(),
+      vnNow.getUTCSeconds(),
+    ) -
+      7 * 3600_000,
+  );
+  const valid =
+    !Number.isNaN(result.getTime()) &&
+    new Date(Date.UTC(y, m - 1, d)).getUTCDate() === d;
+  return valid && result <= now ? result : now;
 }
