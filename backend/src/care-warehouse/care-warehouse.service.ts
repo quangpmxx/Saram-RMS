@@ -746,9 +746,13 @@ export class CareWarehouseService {
       now,
     );
 
+    const countFilter = dto.care_counts?.length ? new Set(dto.care_counts) : null;
     const candidates = leads.flatMap((l) => {
-      const priority = summaries.get(l.id)?.random_priority ?? null;
-      return priority === null
+      const s = summaries.get(l.id);
+      const priority = s?.random_priority ?? null;
+      // Lọc theo số lần CS trong 30 ngày (4 = từ 4 lần trở lên).
+      const bucket = Math.min(s?.month_care_count ?? 0, 4);
+      return priority === null || (countFilter && !countFilter.has(bucket))
         ? []
         : [{ leadId: l.id, teamId: l.assignedTeamId!, priority }];
     });

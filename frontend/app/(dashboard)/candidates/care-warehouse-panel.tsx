@@ -1221,6 +1221,8 @@ function RandomAssignModal({
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<"per_assignee" | "total">("per_assignee");
   const [amount, setAmount] = useState("10");
+  // Loại data muốn giao theo số lần CS trong 30 ngày; rỗng = tất cả.
+  const [careCounts, setCareCounts] = useState<Set<number>>(new Set());
   const [preview, setPreview] = useState<CareRandomPreview | null>(null);
   const [result, setResult] = useState<CareAssignResult | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -1239,6 +1241,7 @@ function RandomAssignModal({
           body: JSON.stringify({
             assignee_ids: [...chosen],
             [mode]: amountNumber,
+            ...(careCounts.size ? { care_counts: [...careCounts] } : {}),
           }),
         }),
       );
@@ -1417,6 +1420,33 @@ function RandomAssignModal({
                 onChange={(e) => setAmount(e.target.value)}
               />
             </Field>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-slate-600">
+              Loại data muốn giao (không chọn = tất cả)
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {[
+                [0, "Chưa CS trong 30 ngày"],
+                [1, "CS 1 lần"],
+                [2, "CS 2 lần"],
+                [3, "CS 3 lần"],
+                [4, "CS 4 lần trở lên"],
+              ].map(([v, label]) => (
+                <label key={v} className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={careCounts.has(v as number)}
+                    onChange={() => {
+                      const next = new Set(careCounts);
+                      if (!next.delete(v as number)) next.add(v as number);
+                      setCareCounts(next);
+                    }}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
           {error && <p className="text-red-600">{error}</p>}
         </div>

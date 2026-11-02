@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsIn,
   IsInt,
   IsOptional,
   IsUUID,
@@ -36,6 +37,16 @@ export class RandomPreviewDto {
   @Min(1)
   @Max(5000)
   total?: number;
+
+  /**
+   * Lọc loại data muốn giao theo số lần chăm sóc trong 30 ngày: 0, 1, 2, 3,
+   * 4 (= 4 lần trở lên). Bỏ trống = không lọc. Chọn nhiều = hợp của các nhóm.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsIn([0, 1, 2, 3, 4], { each: true })
+  care_counts?: number[];
 }
 
 export class RandomPairDto {
