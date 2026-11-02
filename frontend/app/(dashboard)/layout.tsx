@@ -109,6 +109,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   <div className="hidden md:block">
                     <PageTitleSlot />
                   </div>
+                  <BirthdayBanner />
                   <div className="ml-auto flex items-center gap-3">
                     {(user.role === "admin" || user.role === "manager") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
@@ -149,7 +150,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   />
                 </div>
                 <div className="relative z-10">
-                  <BirthdayBanner />
                   {children}
                 </div>
               </main>
