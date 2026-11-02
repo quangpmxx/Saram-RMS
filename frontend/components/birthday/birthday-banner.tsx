@@ -18,7 +18,7 @@ export function BirthdayBanner() {
     employees.length >= 2
       ? `Chúc mừng sinh nhật ${employees.length} thành viên: ${names}!`
       : `Chúc mừng sinh nhật ${names}!`;
-  const wish = "Chúc một tuổi mới nhiều sức khỏe, niềm vui và thành công cùng Saram Vina.";
+  const wish = "Chúc bạn một tuổi mới nhiều sức khỏe, niềm vui và thành công cùng Saram Vina.";
 
   return (
     <div
