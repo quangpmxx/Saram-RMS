@@ -270,6 +270,9 @@ export function CandidatesClient({
   const canClaim = currentUserRole === "sale";
   const canViewCare = CARE_VIEW_ROLES.includes(currentUserRole);
   const [careTotal, setCareTotal] = useState<number | null>(null);
+  // Số data đang chờ phân chia — hiện trên thẻ "Chờ phân chia (N)" (2026-11-02).
+  const [pendingTotal, setPendingTotal] = useState<number | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Leader: Sale nhóm mình (initialTeamMembers); Quản lý/Admin: mọi Sale.
   const careSaleOptions: CareSaleOption[] = (currentUserRole === "leader" ? teamMembers : allSaleMembers)
     .filter((m) => m.role === "sale" && m.status === "active")
@@ -301,6 +304,35 @@ export function CandidatesClient({
       controller.abort();
     };
   }, [candidates, viewMode]);
+
+  /** Lấy số data chờ phân chia từ ĐÚNG nguồn của tab (GET /candidate/pending) — chỉ cần `total` nên xin 1 dòng cho nhẹ. */
+  async function refreshPendingTotal() {
+    if (!canViewPending) return;
+    try {
+      const result = await clientApi<PaginatedResult<Candidate>>("/candidate/pending?page=1&page_size=1");
+      setPendingTotal(result.total);
+    } catch {
+      // Lỗi tải nền — giữ nguyên số cũ, lần cập nhật kế tiếp sẽ tự sửa.
+    }
+  }
+
+  /** Gộp nhiều thay đổi dồn dập (vd chia hàng loạt) thành đúng 1 lần tải lại số lượng. */
+  function schedulePendingTotalRefresh() {
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    pendingTimerRef.current = setTimeout(() => {
+      pendingTimerRef.current = null;
+      void refreshPendingTotal();
+    }, 800);
+  }
+
+  // Tải lần đầu và mỗi khi danh sách đang xem đổi (sau khi chia/nhận/thêm/xoá data thì danh sách được tải lại).
+  useEffect(() => {
+    schedulePendingTotalRefresh();
+    return () => {
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates]);
 
   /** Khớp decideStopRequest() ở backend: Leader (nhóm của data)/Quản lý/Admin. */
   function canApproveStop(candidate: Candidate): boolean {
@@ -492,6 +524,10 @@ export function CandidatesClient({
    * hổng phân quyền).
    */
   function handleRealtimeEvent(event: LeadRealtimeEvent) {
+    // Thêm/xoá/chia/chuyển/sửa data đều có thể làm đổi số data chờ phân chia.
+    if (["created", "deleted", "assigned", "transferred", "updated"].includes(event.change_type)) {
+      schedulePendingTotalRefresh();
+    }
     // Tab Kho chăm sóc tự lắng nghe realtime riêng (CareWarehousePanel).
     if (viewMode === "care") return;
     if (event.note) {
@@ -548,7 +584,10 @@ export function CandidatesClient({
   }
 
   useLeadRealtime(handleRealtimeEvent);
-  useRealtimeReconnect(() => void silentRefetchCurrentPage());
+  useRealtimeReconnect(() => {
+    void silentRefetchCurrentPage();
+    schedulePendingTotalRefresh();
+  });
 
   async function handlePageSizeChange(nextSize: (typeof PAGE_SIZE_OPTIONS)[number]) {
     await refresh(1, viewMode, nextSize);
@@ -801,7 +840,7 @@ export function CandidatesClient({
                     viewMode === "pending" ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  Chờ phân chia
+                  {pendingTotal === null ? "Chờ phân chia" : `Chờ phân chia (${pendingTotal})`}
                 </button>
               )}
               {canViewMine && (
