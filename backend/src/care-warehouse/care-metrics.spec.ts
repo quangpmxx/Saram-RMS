@@ -478,3 +478,46 @@ describe('pickRandomAssignments', () => {
     expect(picks.map((p) => p.leadId)).toEqual(['X1']);
   });
 });
+
+describe('summarizeLeadMonth — chu kỳ chăm sóc 30 ngày theo ngày up', () => {
+  const monthStart = vnMonthRange('2026-10').start;
+  const now = vn('2026-10-15 12:00');
+  const empty = new NoteIndex([]);
+
+  it('up <30 ngày: tự tính 1 lượt, đã chăm sóc; ưu tiên random vẫn như chưa chăm sóc', () => {
+    const s = summarizeLeadMonth('L1', [], empty, monthStart, now, vn('2026-10-01 08:00'));
+    expect(s).toMatchObject({ month_status: 'cared', month_care_count: 1, random_priority: 1 });
+  });
+
+  it('qua 30 ngày: reset về chưa chăm sóc', () => {
+    const s = summarizeLeadMonth('L1', [], empty, monthStart, now, vn('2026-09-10 08:00'));
+    expect(s).toMatchObject({ month_status: 'not_cared', month_care_count: 0 });
+  });
+
+  it('qua 30 ngày: ghi chú của chu kỳ cũ không được tính', () => {
+    const old = new NoteIndex([{ leadId: 'L1', createdById: 'u', createdAt: vn('2026-09-12 09:00') }]);
+    const s = summarizeLeadMonth('L1', [], old, monthStart, now, vn('2026-09-10 08:00'));
+    expect(s.month_status).toBe('not_cared');
+  });
+});
+
+describe('summarizeLeadMonth — cửa sổ 30 ngày trượt', () => {
+  const monthStart = vnMonthRange('2026-11').start;
+  const up = vn('2026-10-29 08:00');
+
+  it('up 29/10: chưa tới 30 ngày vẫn tính đã chăm sóc', () => {
+    const s = summarizeLeadMonth('L1', [], new NoteIndex([]), monthStart, vn('2026-11-27 12:00'), up);
+    expect(s.month_status).toBe('cared');
+  });
+
+  it('up 29/10, không ghi chú: sau 30 ngày thành chưa chăm sóc', () => {
+    const s = summarizeLeadMonth('L1', [], new NoteIndex([]), monthStart, vn('2026-11-28 12:00'), up);
+    expect(s.month_status).toBe('not_cared');
+  });
+
+  it('có ghi chú trong 30 ngày qua thì vẫn đã chăm sóc dù up đã lâu', () => {
+    const n = new NoteIndex([{ leadId: 'L1', createdById: 'u', createdAt: vn('2026-11-20 09:00') }]);
+    const s = summarizeLeadMonth('L1', [], n, monthStart, vn('2026-12-10 12:00'), up);
+    expect(s).toMatchObject({ month_status: 'cared', month_care_count: 1 });
+  });
+});

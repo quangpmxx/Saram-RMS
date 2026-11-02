@@ -542,7 +542,7 @@ export function CareWarehousePanel({
             placeholder="Tên, SĐT, ghi chú, năm sinh, địa chỉ"
           />
         </Field>
-        <Field uiSize="xs" label="Trạng thái chăm sóc (tháng)">
+        <Field uiSize="xs" label="Trạng thái chăm sóc (30 ngày)">
           <Select
             uiSize="xs"
             value={filters.status}
@@ -705,7 +705,7 @@ export function CareWarehousePanel({
                 <th className="w-px border-r border-slate-100 px-1.5 py-2 text-center leading-tight">
                   <span className="whitespace-nowrap">CS trong</span>
                   <br />
-                  <span className="whitespace-nowrap">tháng</span>
+                  <span className="whitespace-nowrap">30 ngày</span>
                 </th>
                 <th className="w-px border-r border-slate-100 px-1.5 py-2 text-center leading-tight">
                   <span className="whitespace-nowrap">Tổng</span>

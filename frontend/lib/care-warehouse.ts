@@ -172,7 +172,7 @@ export const CARE_END_REASON_LABEL: Record<CareEndReason, string> = {
 export const CARE_PRIORITY_LABEL: Record<1 | 2 | 3, string> = {
   1: "Chưa chăm sóc, chưa giao",
   2: "Đã giao, chưa chăm sóc",
-  3: "Đã chăm sóc trong tháng",
+  3: "Đã chăm sóc trong 30 ngày",
 };
 
 export function formatCareDateTime(value: string | null): string {

@@ -30,6 +30,7 @@ import {
   pickRandomAssignments,
   rate,
   summarizeLeadMonth,
+  CARE_CYCLE_MS,
   wasCareStoppedAt,
 } from './care-metrics';
 import {
@@ -508,16 +509,27 @@ export class CareWarehouseService {
     monthStart: Date,
     now: Date,
   ) {
+    // Chu kỳ theo data là 30 ngày → tải từ mốc sớm hơn giữa đầu tháng và now-30 ngày.
+    const loadFrom = new Date(
+      Math.min(monthStart.getTime(), now.getTime() - CARE_CYCLE_MS),
+    );
+    const uploadedRows = await this.prisma.lead.findMany({
+      where: leadWhere,
+      select: { id: true, uploadedAt: true },
+    });
+    const uploadedAtById = new Map(
+      uploadedRows.map((l) => [l.id, l.uploadedAt]),
+    );
     const monthNotes = await this.prisma.leadNote.findMany({
       where: {
         ...CARE_NOTE_WHERE,
-        createdAt: { gte: monthStart },
+        createdAt: { gte: loadFrom },
         lead: leadWhere,
       },
       select: { leadId: true, createdById: true, createdAt: true },
     });
     const monthAssignments = await this.prisma.careAssignment.findMany({
-      where: { assignedAt: { gte: monthStart }, lead: leadWhere },
+      where: { assignedAt: { gte: loadFrom }, lead: leadWhere },
       select: {
         id: true,
         leadId: true,
@@ -567,6 +579,7 @@ export class CareWarehouseService {
           noteIndex,
           monthStart,
           now,
+          uploadedAtById.get(id),
         ),
       );
     }

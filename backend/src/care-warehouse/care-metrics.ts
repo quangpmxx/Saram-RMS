@@ -286,6 +286,9 @@ export function computeAssignmentRange(
   };
 }
 
+/** Chu kỳ chăm sóc của 1 data: 30 ngày. */
+export const CARE_CYCLE_MS = 30 * 24 * 60 * 60 * 1000;
+
 export type MonthCareStatus = 'cared' | 'not_cared';
 
 export interface LeadMonthSummary {
@@ -320,18 +323,31 @@ export function summarizeLeadMonth(
   notes: NoteIndex,
   monthStart: Date,
   now: Date,
+  uploadedAt?: Date,
 ): LeadMonthSummary {
+  // Chu kỳ chăm sóc = 30 ngày gần nhất tính đến hiện tại (không
+  // theo tháng lịch). Data up <30 ngày mà đã nằm
+  // trong Kho thì tự tính 1 lượt chăm sóc; từ 30 ngày trở đi mà không có ghi chú → chưa chăm sóc.
+  let cycleStart = monthStart;
+  let firstCycle = false;
+  if (uploadedAt) {
+    // Cửa sổ trượt 30 ngày gần nhất: "chưa chăm sóc" chỉ khi đã up ≥30 ngày
+    // VÀ không có ghi chú nào trong 30 ngày tính đến hiện tại.
+    cycleStart = new Date(now.getTime() - CARE_CYCLE_MS);
+    firstCycle = now.getTime() - uploadedAt.getTime() < CARE_CYCLE_MS;
+  }
   const monthNotes = notes.anyAuthor(
     leadId,
-    monthStart,
+    cycleStart,
     new Date(now.getTime() + ONE_MS),
   );
-  const cared = monthNotes.length > 0;
+  const realCared = monthNotes.length > 0;
+  const cared = realCared || firstCycle;
 
   let open: AssignmentRow | null = null;
   let hadAssignment = false;
   for (const a of leadAssignments) {
-    if (a.assignedAt >= monthStart && a.assignedAt <= now) hadAssignment = true;
+    if (a.assignedAt >= cycleStart && a.assignedAt <= now) hadAssignment = true;
     if (
       isAssignmentAliveAt(a, now) &&
       (!open || a.assignedAt > open.assignedAt)
@@ -346,12 +362,12 @@ export function summarizeLeadMonth(
 
   let priority: LeadMonthSummary['random_priority'];
   if (assignedPending) priority = null;
-  else if (cared) priority = 3;
+  else if (realCared) priority = 3;
   else priority = hadAssignment ? 2 : 1;
 
   return {
     month_status: cared ? 'cared' : 'not_cared',
-    month_care_count: countCareDays(monthNotes),
+    month_care_count: Math.max(countCareDays(monthNotes), firstCycle ? 1 : 0),
     open_assignment: open
       ? {
           id: open.id,
