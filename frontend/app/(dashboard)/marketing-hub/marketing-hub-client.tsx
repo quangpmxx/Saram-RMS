@@ -206,7 +206,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
       <h2 className="pt-2 text-sm font-semibold text-slate-700">Tài khoản quảng cáo</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs text-slate-500">
+          <thead className="bg-slate-700 text-left text-xs font-semibold text-white">
             <tr>
               <th className="px-3 py-2">Nhân viên phụ trách</th>
               <th className="px-3 py-2">Tài khoản quảng cáo</th>
@@ -402,7 +402,7 @@ function EfficiencyTable({ data }: { data: Overview }) {
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full border-collapse text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500">
+          <thead className="bg-slate-700 text-xs font-semibold text-white">
             <tr>
               <th className={td}>Nhân viên</th>
               <th className={td}>TKQC</th>
