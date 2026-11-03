@@ -52,22 +52,37 @@ interface ConnectResult {
 }
 
 const PLATFORM_LABEL = { facebook: "Facebook", tiktok: "TikTok" } as const;
-const STATUS_LABEL = { connected: "Đã kết nối", error: "Lỗi kết nối", disconnected: "Đã gỡ" } as const;
+const STATUS_LABEL = {
+  connected: "Đã kết nối",
+  error: "Lỗi kết nối",
+  disconnected: "Đã gỡ",
+} as const;
 const vnd = (n: number) => `${Math.round(n).toLocaleString("vi-VN")} ₫`;
-const errorText = (e: unknown) => (e instanceof ApiError ? e.message : "Có lỗi xảy ra");
-const today = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+const errorText = (e: unknown) =>
+  e instanceof ApiError ? e.message : "Có lỗi xảy ra";
+const today = () =>
+  new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 
 /**
  * Marketing Hub — bảng tổng quan tài khoản quảng cáo. Chỉ hiển thị chi tiêu thật đã
  * đồng bộ từ Facebook (tài khoản chưa đồng bộ hiện "—"); không có chi phí/data theo nhân viên.
  */
-export function MarketingHubClient({ role, userId }: { role: string; userId: string }) {
+export function MarketingHubClient({
+  role,
+  userId,
+}: {
+  role: string;
+  userId: string;
+}) {
   useSetPageTitle("Marketing Hub");
   const toast = useToast();
   const isAdmin = role === "admin";
   const canConnect = isAdmin || role === "mkt";
 
-  const [date, setDate] = useState<DateRangeValue>(() => ({ preset: "30d", ...computeDateRange("30d") }));
+  const [date, setDate] = useState<DateRangeValue>(() => ({
+    preset: "30d",
+    ...computeDateRange("30d"),
+  }));
   // "Tối đa" (from/to rỗng) → lấy từ mốc rất sớm đến hôm nay.
   const from = date.from || "2000-01-01";
   const to = date.to || today();
@@ -81,7 +96,9 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
   const [showConnect, setShowConnect] = useState(false);
   const [showMktSources, setShowMktSources] = useState(false);
   const [showThresholds, setShowThresholds] = useState(false);
-  const [mktSources, setMktSources] = useState<{ id: string; name: string }[]>([]);
+  const [mktSources, setMktSources] = useState<{ id: string; name: string }[]>(
+    [],
+  );
 
   const load = useCallback(async () => {
     const q = new URLSearchParams({ from, to });
@@ -109,7 +126,13 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
     if (isAdmin) {
       clientApi<{ items: StaffOption[] }>("/account?page=1&page_size=100")
         .then((r) =>
-          setStaff(r.items.filter((a) => a.status === "active" && ["admin", "manager", "mkt"].includes(a.role))),
+          setStaff(
+            r.items.filter(
+              (a) =>
+                a.status === "active" &&
+                ["admin", "manager", "mkt"].includes(a.role),
+            ),
+          ),
         )
         .catch(() => {});
     }
@@ -136,7 +159,9 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
     }
   }
 
-  const owners = [...new Map(allItems.map((i) => [i.owner.id, i.owner.full_name])).entries()];
+  const owners = [
+    ...new Map(allItems.map((i) => [i.owner.id, i.owner.full_name])).entries(),
+  ];
 
   return (
     <div className="space-y-4">
@@ -145,14 +170,22 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
           <DateRangePicker value={date} onChange={setDate} />
         </Field>
         <Field uiSize="xs" label="Nền tảng" className="w-28">
-          <Select uiSize="xs" value={platform} onChange={(e) => setPlatform(e.target.value)}>
+          <Select
+            uiSize="xs"
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+          >
             <option value="">Tất cả</option>
             <option value="facebook">Facebook</option>
             <option value="tiktok">TikTok</option>
           </Select>
         </Field>
         <Field uiSize="xs" label="Tài khoản" className="w-40">
-          <Select uiSize="xs" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          <Select
+            uiSize="xs"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
             <option value="">Tất cả</option>
             {allItems.map((i) => (
               <option key={i.id} value={i.id}>
@@ -162,7 +195,11 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
           </Select>
         </Field>
         <Field uiSize="xs" label="Nhân viên" className="w-40">
-          <Select uiSize="xs" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+          <Select
+            uiSize="xs"
+            value={ownerId}
+            onChange={(e) => setOwnerId(e.target.value)}
+          >
             <option value="">Tất cả</option>
             {owners.map(([id, name]) => (
               <option key={id} value={id}>
@@ -173,16 +210,32 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
         </Field>
         {isAdmin && (
           <>
-            <Button type="button" size="xs" variant="outline" className="ml-auto" onClick={() => setShowThresholds(true)}>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              className="ml-auto"
+              onClick={() => setShowThresholds(true)}
+            >
               Ngưỡng giá số
             </Button>
-            <Button type="button" size="xs" variant="outline" onClick={() => setShowMktSources(true)}>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => setShowMktSources(true)}
+            >
               Nguồn MKT
             </Button>
           </>
         )}
         {canConnect && (
-          <Button type="button" size="xs" className={isAdmin ? "" : "ml-auto"} onClick={() => setShowConnect(true)}>
+          <Button
+            type="button"
+            size="xs"
+            className={isAdmin ? "" : "ml-auto"}
+            onClick={() => setShowConnect(true)}
+          >
             Liên kết Facebook
           </Button>
         )}
@@ -191,20 +244,30 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white/80 p-4">
           <p className="text-xs text-slate-500">Tổng chi tiêu quảng cáo</p>
-          <p className="text-xl font-semibold text-slate-800">{data?.has_synced_data ? vnd(data.total_spend) : "—"}</p>
+          <p className="text-xl font-semibold text-slate-800">
+            {data?.has_synced_data ? vnd(data.total_spend) : "—"}
+          </p>
           {data && !data.has_synced_data && (
-            <p className="text-xs text-amber-600">Chưa có tài khoản nào đồng bộ dữ liệu</p>
+            <p className="text-xs text-amber-600">
+              Chưa có tài khoản nào đồng bộ dữ liệu
+            </p>
           )}
         </div>
         <div className="rounded-xl border border-slate-200 bg-white/80 p-4">
-          <p className="text-xs text-slate-500">Data thu được (toàn công ty, theo ngày up)</p>
-          <p className="text-xl font-semibold text-slate-800">{data ? data.lead_total.toLocaleString("vi-VN") : "—"}</p>
+          <p className="text-xs text-slate-500">
+            Data thu được (toàn công ty, theo ngày up)
+          </p>
+          <p className="text-xl font-semibold text-slate-800">
+            {data ? data.lead_total.toLocaleString("vi-VN") : "—"}
+          </p>
         </div>
       </div>
 
       {data && <EfficiencyTable data={data} />}
 
-      <h2 className="pt-2 text-sm font-semibold text-slate-700">Tài khoản quảng cáo</h2>
+      <h2 className="pt-2 text-sm font-semibold text-slate-700">
+        Tài khoản quảng cáo
+      </h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full text-sm [&_td]:text-center [&_th]:text-center">
           <thead className="bg-slate-700 text-left text-xs font-semibold text-white">
@@ -222,7 +285,10 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
             {data?.items.map((i) => {
               const mine = isAdmin || i.owner.id === userId;
               const ownerOptions = [
-                ...new Map<string, string>([[i.owner.id, i.owner.full_name], ...staff.map((s) => [s.id, s.full_name] as [string, string])]),
+                ...new Map<string, string>([
+                  [i.owner.id, i.owner.full_name],
+                  ...staff.map((s) => [s.id, s.full_name] as [string, string]),
+                ]),
               ];
               return (
                 <tr key={i.id} className="border-t border-slate-100">
@@ -235,10 +301,15 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                           void act(
                             i.id,
                             () =>
-                              clientApi(`/marketing-hub/ad-accounts/${i.id}/owner`, {
-                                method: "PATCH",
-                                body: JSON.stringify({ owner_id: e.target.value }),
-                              }),
+                              clientApi(
+                                `/marketing-hub/ad-accounts/${i.id}/owner`,
+                                {
+                                  method: "PATCH",
+                                  body: JSON.stringify({
+                                    owner_id: e.target.value,
+                                  }),
+                                },
+                              ),
                             "Đã đổi nhân viên phụ trách",
                           )
                         }
@@ -264,34 +335,53 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                           void act(
                             i.id,
                             () =>
-                              clientApi(`/marketing-hub/ad-accounts/${i.id}/mkt-source`, {
-                                method: "PATCH",
-                                body: JSON.stringify({ mkt_source_id: e.target.value || null }),
-                              }),
+                              clientApi(
+                                `/marketing-hub/ad-accounts/${i.id}/mkt-source`,
+                                {
+                                  method: "PATCH",
+                                  body: JSON.stringify({
+                                    mkt_source_id: e.target.value || null,
+                                  }),
+                                },
+                              ),
                             "Đã gắn nguồn MKT",
                           )
                         }
                       >
                         <option value="">— Chưa gắn —</option>
                         {mktSources.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
                       </Select>
                     ) : (
-                      (i.mkt_source?.name ?? <span className="text-slate-400">Chưa gắn</span>)
+                      (i.mkt_source?.name ?? (
+                        <span className="text-slate-400">Chưa gắn</span>
+                      ))
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">{i.synced ? vnd(i.total_spend) : "—"}</td>
+                  <td className="px-3 py-2 text-right">
+                    {i.synced ? vnd(i.total_spend) : "—"}
+                  </td>
                   <td className="px-3 py-2">
-                    <span className={i.status === "connected" ? "text-emerald-600" : "text-red-600"}>
+                    <span
+                      className={
+                        i.status === "connected"
+                          ? "text-emerald-600"
+                          : "text-red-600"
+                      }
+                    >
                       {STATUS_LABEL[i.status]}
                     </span>
                     <div className="text-xs text-slate-400">
-                      {i.synced ? `Đồng bộ: ${new Date(i.last_sync_at!).toLocaleString("vi-VN")}` : "Chưa đồng bộ"}
+                      {i.synced
+                        ? `Đồng bộ: ${new Date(i.last_sync_at!).toLocaleString("vi-VN")}`
+                        : "Chưa đồng bộ"}
                     </div>
-                    {i.last_error && <div className="text-xs text-red-500">{i.last_error}</div>}
+                    {i.last_error && (
+                      <div className="text-xs text-red-500">{i.last_error}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     {mine && canConnect && i.status !== "disconnected" && (
@@ -302,7 +392,15 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                           variant="outline"
                           disabled={busyId === i.id}
                           onClick={() =>
-                            void act(i.id, () => clientApi(`/marketing-hub/ad-accounts/${i.id}/sync`, { method: "POST" }), "Đã đồng bộ")
+                            void act(
+                              i.id,
+                              () =>
+                                clientApi(
+                                  `/marketing-hub/ad-accounts/${i.id}/sync`,
+                                  { method: "POST" },
+                                ),
+                              "Đã đồng bộ",
+                            )
                           }
                         >
                           Đồng bộ
@@ -313,8 +411,20 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                           variant="outline"
                           disabled={busyId === i.id}
                           onClick={() => {
-                            if (confirm(`Gỡ liên kết "${i.name}"? Token sẽ bị xoá.`))
-                              void act(i.id, () => clientApi(`/marketing-hub/ad-accounts/${i.id}`, { method: "DELETE" }), "Đã gỡ liên kết");
+                            if (
+                              confirm(
+                                `Gỡ liên kết "${i.name}"? Token sẽ bị xoá.`,
+                              )
+                            )
+                              void act(
+                                i.id,
+                                () =>
+                                  clientApi(
+                                    `/marketing-hub/ad-accounts/${i.id}`,
+                                    { method: "DELETE" },
+                                  ),
+                                "Đã gỡ liên kết",
+                              );
                           }}
                         >
                           Gỡ
@@ -327,7 +437,10 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
             })}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
+                <td
+                  colSpan={7}
+                  className="px-3 py-8 text-center text-slate-400"
+                >
                   Chưa có tài khoản quảng cáo nào được liên kết
                 </td>
               </tr>
@@ -336,10 +449,18 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
         </table>
       </div>
 
-      {showConnect && <ConnectModal onClose={() => setShowConnect(false)} onDone={load} />}
-      {showMktSources && <MktSourcesModal onClose={() => setShowMktSources(false)} />}
+      {showConnect && (
+        <ConnectModal onClose={() => setShowConnect(false)} onDone={load} />
+      )}
+      {showMktSources && (
+        <MktSourcesModal onClose={() => setShowMktSources(false)} />
+      )}
       {showThresholds && (
-        <ThresholdsModal initial={data?.cost_thresholds ?? null} onClose={() => setShowThresholds(false)} onDone={load} />
+        <ThresholdsModal
+          initial={data?.cost_thresholds ?? null}
+          onClose={() => setShowThresholds(false)}
+          onDone={load}
+        />
       )}
     </div>
   );
@@ -371,8 +492,10 @@ function summarize(rows: AdItem[], count: number) {
  */
 function EfficiencyTable({ data }: { data: Overview }) {
   const { items, cost_thresholds: thresholds } = data;
+  const [hideDie, setHideDie] = useState(false);
   const byOwner = new Map<string, AdItem[]>();
-  for (const i of items) byOwner.set(i.owner.id, [...(byOwner.get(i.owner.id) ?? []), i]);
+  for (const i of items)
+    byOwner.set(i.owner.id, [...(byOwner.get(i.owner.id) ?? []), i]);
   const groups = [...byOwner.values()];
   const company = summarize(items, data.data_total);
   const td = "border border-slate-200 px-3 py-2";
@@ -381,7 +504,9 @@ function EfficiencyTable({ data }: { data: Overview }) {
     <>
       <td className={`${td} text-right`}>{s.count.toLocaleString("vi-VN")}</td>
       <td className={`${td} text-right`}>{vnd(s.spend)}</td>
-      <td className={`${td} text-right ${costClass(s.cost, thresholds)}`}>{s.cost === null ? "—" : vnd(s.cost)}</td>
+      <td className={`${td} text-right ${costClass(s.cost, thresholds)}`}>
+        {s.cost === null ? "—" : vnd(s.cost)}
+      </td>
       <td className={td} />
       <td className={td} />
     </>
@@ -389,7 +514,19 @@ function EfficiencyTable({ data }: { data: Overview }) {
 
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-semibold text-slate-700">Hiệu quả Marketing</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-700">
+          Hiệu quả Marketing
+        </h2>
+        <Button
+          type="button"
+          size="xs"
+          variant={hideDie ? "secondary" : "outline"}
+          onClick={() => setHideDie((v) => !v)}
+        >
+          {hideDie ? "Hiện tài khoản die ads" : "Ẩn tài khoản die ads"}
+        </Button>
+      </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
           <thead className="bg-slate-700 text-xs font-semibold text-white">
@@ -405,51 +542,84 @@ function EfficiencyTable({ data }: { data: Overview }) {
             </tr>
           </thead>
           <tbody>
-            {groups.map((rows) => (
-              <Fragment key={rows[0].owner.id}>
-                {rows.map((i, idx) => {
-                  const off = i.status === "disconnected";
-                  return (
-                    <tr key={i.id}>
-                      {idx === 0 && (
-                        <td rowSpan={rows.length + 1} className={`${td} text-center align-middle font-medium`}>
-                          {i.owner.full_name}
+            {groups.map((rows) => {
+              // Ẩn die ads chỉ ẩn dòng TKQC; dòng Tổng vẫn tính đủ (chi tiêu đã tiêu là thật).
+              const visible = hideDie
+                ? rows.filter((r) => r.account_health !== "die")
+                : rows;
+              return (
+                <Fragment key={rows[0].owner.id}>
+                  {visible.map((i, idx) => {
+                    const off = i.status === "disconnected";
+                    return (
+                      <tr key={i.id}>
+                        {idx === 0 && (
+                          <td
+                            rowSpan={visible.length + 1}
+                            className={`${td} text-center align-middle font-medium`}
+                          >
+                            {i.owner.full_name}
+                          </td>
+                        )}
+                        <td className={td}>{i.name}</td>
+                        <td className={td}>{PLATFORM_LABEL[i.platform]}</td>
+                        <td className={`${td} text-right`}>
+                          {!i.mkt_source && (
+                            <span className="text-xs text-amber-600">
+                              Chưa gắn nguồn MKT
+                            </span>
+                          )}
                         </td>
-                      )}
-                      <td className={td}>{i.name}</td>
-                      <td className={td}>{PLATFORM_LABEL[i.platform]}</td>
-                      <td className={`${td} text-right`}>
-                        {!i.mkt_source && <span className="text-xs text-amber-600">Chưa gắn nguồn MKT</span>}
+                        <td className={`${td} text-right`}>
+                          {i.synced ? vnd(i.total_spend) : "—"}
+                        </td>
+                        <td className={td} />
+                        <td className={td}>
+                          {off || i.has_active_campaign === null ? (
+                            "—"
+                          ) : i.has_active_campaign ? (
+                            <span className="text-emerald-600">
+                              Đang hoạt động
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">
+                              Dừng hoạt động
+                            </span>
+                          )}
+                        </td>
+                        <td className={td}>
+                          {off || !i.account_health ? (
+                            "—"
+                          ) : (
+                            <span
+                              className={`font-medium ${HEALTH[i.account_health].cls}`}
+                            >
+                              {HEALTH[i.account_health].label}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-amber-50/70 font-medium">
+                    {visible.length === 0 && (
+                      <td className={`${td} font-medium`}>
+                        {rows[0].owner.full_name}
                       </td>
-                      <td className={`${td} text-right`}>{i.synced ? vnd(i.total_spend) : "—"}</td>
-                      <td className={td} />
-                      <td className={td}>
-                        {off || i.has_active_campaign === null ? (
-                          "—"
-                        ) : i.has_active_campaign ? (
-                          <span className="text-emerald-600">Đang hoạt động</span>
-                        ) : (
-                          <span className="text-slate-500">Dừng hoạt động</span>
-                        )}
-                      </td>
-                      <td className={td}>
-                        {off || !i.account_health ? (
-                          "—"
-                        ) : (
-                          <span className={`font-medium ${HEALTH[i.account_health].cls}`}>{HEALTH[i.account_health].label}</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr className="bg-amber-50/70 font-medium">
-                  <td className={`${td} text-center`} colSpan={2}>
-                    Tổng
-                  </td>
-                  {totalCells(summarize(rows, data.data_by_owner[rows[0].owner.id] ?? 0))}
-                </tr>
-              </Fragment>
-            ))}
+                    )}
+                    <td className={`${td} text-center`} colSpan={2}>
+                      Tổng
+                    </td>
+                    {totalCells(
+                      summarize(
+                        rows,
+                        data.data_by_owner[rows[0].owner.id] ?? 0,
+                      ),
+                    )}
+                  </tr>
+                </Fragment>
+              );
+            })}
             {items.length > 0 && (
               <tr className="bg-slate-100 font-semibold">
                 <td className={`${td} text-center`} colSpan={3}>
@@ -460,7 +630,10 @@ function EfficiencyTable({ data }: { data: Overview }) {
             )}
             {items.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                <td
+                  colSpan={8}
+                  className="px-3 py-8 text-center text-slate-400"
+                >
                   Chưa có tài khoản quảng cáo nào
                 </td>
               </tr>
@@ -489,7 +662,13 @@ function ThresholdsModal({
   const [error, setError] = useState<string | null>(null);
   const g = Number(green);
   const r = Number(red);
-  const valid = green !== "" && red !== "" && Number.isInteger(g) && Number.isInteger(r) && g >= 0 && g < r;
+  const valid =
+    green !== "" &&
+    red !== "" &&
+    Number.isInteger(g) &&
+    Number.isInteger(r) &&
+    g >= 0 &&
+    g < r;
 
   async function save() {
     setBusy(true);
@@ -518,7 +697,11 @@ function ThresholdsModal({
           <Button type="button" variant="outline" onClick={onClose}>
             Hủy
           </Button>
-          <Button type="button" disabled={busy || !valid} onClick={() => void save()}>
+          <Button
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => void save()}
+          >
             {busy ? "Đang lưu..." : "Lưu"}
           </Button>
         </>
@@ -526,13 +709,27 @@ function ThresholdsModal({
     >
       <div className="space-y-3">
         <Field label="Mốc xanh (giá số thấp, ≤)">
-          <Input type="number" min={0} step={1000} value={green} onChange={(e) => setGreen(e.target.value)} />
+          <Input
+            type="number"
+            min={0}
+            step={1000}
+            value={green}
+            onChange={(e) => setGreen(e.target.value)}
+          />
         </Field>
         <Field label="Mốc đỏ (vượt ngưỡng, >)">
-          <Input type="number" min={0} step={1000} value={red} onChange={(e) => setRed(e.target.value)} />
+          <Input
+            type="number"
+            min={0}
+            step={1000}
+            value={red}
+            onChange={(e) => setRed(e.target.value)}
+          />
         </Field>
         {green !== "" && red !== "" && !valid && (
-          <p className="text-sm text-amber-600">Mốc xanh phải nhỏ hơn mốc đỏ (số nguyên ≥ 0)</p>
+          <p className="text-sm text-amber-600">
+            Mốc xanh phải nhỏ hơn mốc đỏ (số nguyên ≥ 0)
+          </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
@@ -559,7 +756,9 @@ function MktSourcesModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const update = (index: number, name: string) =>
-    setRows((prev) => prev?.map((r, i) => (i === index ? { ...r, name } : r)) ?? prev);
+    setRows(
+      (prev) => prev?.map((r, i) => (i === index ? { ...r, name } : r)) ?? prev,
+    );
 
   async function save() {
     if (!rows) return;
@@ -587,14 +786,20 @@ function MktSourcesModal({ onClose }: { onClose: () => void }) {
           <Button type="button" variant="outline" onClick={onClose}>
             Hủy
           </Button>
-          <Button type="button" disabled={busy || !rows} onClick={() => void save()}>
+          <Button
+            type="button"
+            disabled={busy || !rows}
+            onClick={() => void save()}
+          >
             {busy ? "Đang lưu..." : "Lưu"}
           </Button>
         </>
       }
     >
       <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto pr-1">
-        {rows === null && !error && <p className="text-sm text-slate-500">Đang tải...</p>}
+        {rows === null && !error && (
+          <p className="text-sm text-slate-500">Đang tải...</p>
+        )}
         {rows?.map((row, index) => (
           <div key={row.id ?? `new-${index}`} className="flex gap-2">
             <Input
@@ -606,14 +811,20 @@ function MktSourcesModal({ onClose }: { onClose: () => void }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setRows((prev) => prev?.filter((_, i) => i !== index) ?? prev)}
+              onClick={() =>
+                setRows((prev) => prev?.filter((_, i) => i !== index) ?? prev)
+              }
             >
               Xoá
             </Button>
           </div>
         ))}
         {rows && (
-          <Button type="button" variant="outline" onClick={() => setRows([...rows, { name: "" }])}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setRows([...rows, { name: "" }])}
+          >
             + Thêm nguồn
           </Button>
         )}
@@ -627,7 +838,13 @@ function MktSourcesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ConnectModal({ onClose, onDone }: { onClose: () => void; onDone: () => Promise<void> }) {
+function ConnectModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -637,10 +854,16 @@ function ConnectModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
     setBusy(true);
     setError(null);
     try {
-      const res = await clientApi<ConnectResult>("/marketing-hub/ad-accounts/connect", {
-        method: "POST",
-        body: JSON.stringify({ platform: "facebook", access_token: token.trim() }),
-      });
+      const res = await clientApi<ConnectResult>(
+        "/marketing-hub/ad-accounts/connect",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            platform: "facebook",
+            access_token: token.trim(),
+          }),
+        },
+      );
       setToken(""); // không giữ token trên giao diện sau khi gửi
       setResult(res);
       await onDone();
@@ -665,7 +888,11 @@ function ConnectModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
             <Button type="button" variant="outline" onClick={onClose}>
               Hủy
             </Button>
-            <Button type="button" disabled={busy || token.trim().length < 20} onClick={() => void submit()}>
+            <Button
+              type="button"
+              disabled={busy || token.trim().length < 20}
+              onClick={() => void submit()}
+            >
               {busy ? "Đang kết nối…" : "Liên kết"}
             </Button>
           </>
@@ -690,7 +917,12 @@ function ConnectModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
       ) : (
         <div className="space-y-2">
           <Field label="Access token">
-            <Input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+            <Input
+              type="password"
+              autoComplete="off"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
           </Field>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
