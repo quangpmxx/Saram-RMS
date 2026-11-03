@@ -62,7 +62,7 @@ const today = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 1
  * đồng bộ từ Facebook (tài khoản chưa đồng bộ hiện "—"); không có chi phí/data theo nhân viên.
  */
 export function MarketingHubClient({ role, userId }: { role: string; userId: string }) {
-  useSetPageTitle("Marketing Hub", "Tài khoản quảng cáo và chi tiêu");
+  useSetPageTitle("Marketing Hub");
   const toast = useToast();
   const isAdmin = role === "admin";
   const canConnect = isAdmin || role === "mkt";
@@ -389,18 +389,7 @@ function EfficiencyTable({ data }: { data: Overview }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h2 className="text-sm font-semibold text-slate-700">Hiệu quả Marketing</h2>
-        {thresholds ? (
-          <p className="text-xs text-slate-500">
-            Giá số: <span className="text-emerald-600">xanh ≤ {vnd(thresholds.green_max)}</span> ·{" "}
-            <span className="text-amber-600">cam đến {vnd(thresholds.red_min)}</span> ·{" "}
-            <span className="text-red-600">đỏ &gt; {vnd(thresholds.red_min)}</span>
-          </p>
-        ) : (
-          <p className="text-xs text-slate-400">Chưa đặt ngưỡng giá số</p>
-        )}
-      </div>
+      <h2 className="text-sm font-semibold text-slate-700">Hiệu quả Marketing</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
           <thead className="bg-slate-700 text-xs font-semibold text-white">
@@ -665,7 +654,6 @@ function ConnectModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   return (
     <Modal
       title="Liên kết tài khoản Facebook Ads"
-      description="Dán access token Facebook có quyền ads_read. Token được mã hoá trên máy chủ và không hiển thị lại."
       maxWidth="max-w-lg"
       footer={
         result ? (
