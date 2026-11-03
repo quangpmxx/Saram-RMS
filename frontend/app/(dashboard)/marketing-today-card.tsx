@@ -51,7 +51,7 @@ export function MarketingTodayCard() {
 
   return (
     <Card className="p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Marketing hôm nay</h2>
+      <h2 className="text-sm font-semibold text-slate-900">Chi phí Marketing</h2>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {tiles.map((t) => (
           <div key={t.label} title={t.title} className={`rounded-xl p-2 text-center ${t.cls}`}>
