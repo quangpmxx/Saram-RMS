@@ -1,4 +1,35 @@
-import { IsIn, IsOptional, IsString, IsUUID, Matches, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+
+export class MktSourceItemDto {
+  @IsOptional() @IsUUID('4') id?: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Tên nguồn MKT không được để trống' })
+  @MaxLength(100)
+  name: string;
+}
+
+/** Lưu cả danh sách: mục có id → đổi tên, không id → thêm, thiếu → xoá. */
+export class SaveMktSourcesDto {
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => MktSourceItemDto)
+  items: MktSourceItemDto[];
+}
 
 export class ConnectAdAccountDto {
   @IsIn(['facebook'])

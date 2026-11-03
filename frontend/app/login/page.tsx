@@ -44,6 +44,8 @@ export default async function LoginPage() {
 
           <p className="mt-6 text-center text-xs text-slate-400">
             © {new Date().getFullYear()} Saram Vina . Nội bộ
+            <br />
+            -PMQ-
           </p>
         </div>
       </div>

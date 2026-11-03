@@ -222,6 +222,13 @@ export function CandidatesClient({
   const searchParams = useSearchParams();
   const [candidates, setCandidates] = useState(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
+  // Nguồn MKT cho bộ lọc "Nguồn" (tab Tất cả) — giá trị lọc dạng "mkt:<id>".
+  const [mktSourceOptions, setMktSourceOptions] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    clientApi<{ id: string; name: string }[]>("/marketing-hub/mkt-sources")
+      .then(setMktSourceOptions)
+      .catch(() => {});
+  }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? "all");
@@ -356,13 +363,15 @@ export function CandidatesClient({
     activeFilters: Filters = filters,
   ): Promise<PaginatedResult<Candidate>> {
     const query = new URLSearchParams({ page: String(targetPage), page_size: String(targetPageSize) });
-    if (activeFilters.source_id) query.set("source_id", activeFilters.source_id);
+    const mktSourceFilter = activeFilters.source_id.startsWith("mkt:") ? activeFilters.source_id.slice(4) : "";
+    if (activeFilters.source_id && !mktSourceFilter) query.set("source_id", activeFilters.source_id);
     applySortParams(query, sortRef.current);
 
     if (mode === "pending") {
       return clientApi<PaginatedResult<Candidate>>(`/candidate/pending?${query.toString()}`);
     }
 
+    if (mktSourceFilter && mode === "all") query.set("mkt_source_id", mktSourceFilter);
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
     if (activeFilters.lead_state) query.set("lead_state", activeFilters.lead_state);
     if (activeFilters.team_sale?.type === "team") query.set("team_id", activeFilters.team_sale.id);
@@ -987,6 +996,15 @@ export function CandidatesClient({
                 {source.name}
               </option>
             ))}
+            {viewMode === "all" && mktSourceOptions.length > 0 && (
+              <optgroup label="Nguồn MKT">
+                {mktSourceOptions.map((item) => (
+                  <option key={item.id} value={`mkt:${item.id}`}>
+                    {item.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Select>
         </Field>
         {(viewMode === "all" || viewMode === "mine") && (
@@ -1258,6 +1276,17 @@ export function CandidatesClient({
 
                     <td className="border-r border-slate-100 px-1 py-2 text-center">
                       <SourceBadge name={candidate.source.name} className="text-[10px] px-1.5 py-0" />
+                      {candidate.mkt_source && (
+                        <div className="leading-none">
+                        <span
+                          className="mt-0.5 inline-flex max-w-full items-center truncate rounded-full px-1.5 py-0 text-[10px] font-medium whitespace-nowrap text-white"
+                          style={{ backgroundColor: mktSourceColor(candidate.mkt_source.id) }}
+                          title={`Nguồn MKT: ${candidate.mkt_source.name}`}
+                        >
+                          {candidate.mkt_source.name}
+                        </span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="border-r border-slate-100 px-1 py-2">
@@ -1643,7 +1672,11 @@ function buildCreateBanner(result: CreateCandidateResult): { type: "warning" | "
     .join("\n");
   return {
     type: "warning",
-    text: `Đã thêm lao động mới, nhưng SĐT ${warning.phone_number} đã trùng với:\n${details}`,
+    text:
+      `Đã thêm lao động mới, nhưng SĐT ${warning.phone_number} đã trùng (trong 30 ngày) với:\n${details}` +
+      (warning.moved_to_team
+        ? `\nData đã tự chuyển sang ${warning.moved_to_team.name} (nhóm đang giữ số gốc).`
+        : ""),
   };
 }
 
@@ -1653,6 +1686,7 @@ interface CandidateFormPayload {
   source_id: string;
   mkt_note?: string;
   team_id?: string;
+  mkt_source_id?: string;
   birth_year?: number;
   address?: string;
 }
@@ -1667,6 +1701,52 @@ interface CandidateFormPayload {
  * Form "Sửa" (edit) giữ nguyên như cũ — không đổi Năm sinh/Địa chỉ, không
  * có Nhóm (đổi nhóm không thuộc phạm vi form này).
  */
+const SOURCE_COLORS: Record<string, string> = {
+  Facebook: "bg-blue-600",
+  TikTok: "bg-black",
+};
+
+/** Facebook bên trái, TikTok bên phải, nguồn khác xếp sau. */
+function sourceRank(name: string): number {
+  return name === "Facebook" ? 0 : name === "TikTok" ? 1 : 2;
+}
+
+/** Màu nền "ngẫu nhiên" nhưng cố định theo từng nguồn MKT (băm từ id), đủ đậm cho chữ trắng. */
+function mktSourceColor(id: string): string {
+  let hash = 0;
+  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return `hsl(${hash % 360}, 65%, 40%)`;
+}
+
+function ChoiceButton({
+  selected,
+  color,
+  onClick,
+  children,
+  background,
+}: {
+  selected: boolean;
+  color: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  /** Màu nền inline (vd nguồn MKT) — ghi đè class màu. */
+  background?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      style={background ? { backgroundColor: background } : undefined}
+      className={`${color} rounded-md px-2 py-1.5 text-xs font-semibold text-white transition ${
+        selected ? "opacity-100 ring-2 ring-offset-1 ring-slate-400" : "opacity-50 hover:opacity-80"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function CandidateFormModal({
   title,
   sources,
@@ -1687,16 +1767,25 @@ function CandidateFormModal({
   const [phoneNumber, setPhoneNumber] = useState(initialCandidate?.phone_number ?? "");
   const [sourceId, setSourceId] = useState(initialCandidate?.source.id ?? sources[0]?.id ?? "");
   const [teamId, setTeamId] = useState("");
+  const [mktSources, setMktSources] = useState<{ id: string; name: string }[]>([]);
+  const [mktSourceId, setMktSourceId] = useState("");
   const [birthYear, setBirthYear] = useState(initialCandidate?.birth_year?.toString() ?? "");
   const [address, setAddress] = useState(initialCandidate?.address ?? "");
   const [mktNote, setMktNote] = useState(initialCandidate?.mkt_note ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Nguồn MKT: danh mục Admin quản lý ở Marketing Hub (chỉ form thêm mới).
+  useEffect(() => {
+    if (isEditing) return;
+    clientApi<{ id: string; name: string }[]>("/marketing-hub/mkt-sources")
+      .then(setMktSources)
+      .catch(() => {});
+  }, [isEditing]);
+
   async function handleSubmit() {
     setError(null);
-    if (!isEditing && !teamId) {
-      setError("Vui lòng chọn nhóm");
+    if (!isEditing && !teamId) {      setError("Vui lòng chọn nhóm");
       return;
     }
     setIsSubmitting(true);
@@ -1708,7 +1797,7 @@ function CandidateFormModal({
         mkt_note: mktNote || undefined,
         ...(isEditing
           ? { birth_year: birthYear ? Number(birthYear) : undefined, address: address || undefined }
-          : { team_id: teamId }),
+          : { team_id: teamId, mkt_source_id: mktSourceId || undefined }),
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");
@@ -1718,7 +1807,7 @@ function CandidateFormModal({
   }
 
   return (
-    <Modal
+    <Modal maxWidth="max-w-sm"
       title={title}
       footer={
         <>
@@ -1731,50 +1820,81 @@ function CandidateFormModal({
         </>
       }
     >
-      <div className="flex max-h-[65vh] flex-col gap-3 overflow-y-auto pr-1">
-        <Field label="Tên lao động">
-          <Input value={fullName} onChange={(event) => setFullName(event.target.value)} />
+      <div className="flex max-h-[65vh] flex-col gap-2 overflow-y-auto pr-1">
+        <Field uiSize="sm" label="Tên lao động">
+          <Input uiSize="sm" value={fullName} onChange={(event) => setFullName(event.target.value)} />
         </Field>
 
-        <Field label="Số điện thoại">
-          <Input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
+        <Field uiSize="sm" label="Số điện thoại">
+          <Input uiSize="sm" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} />
         </Field>
 
-        <Field label="Nguồn">
-          <Select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
-            {sources.map((source) => (
-              <option key={source.id} value={source.id}>
-                {source.name}
-              </option>
-            ))}
-          </Select>
+        <Field uiSize="sm" label="Nguồn">
+          <div className="grid grid-cols-2 gap-1.5">
+            {[...sources]
+              .sort((a, b) => sourceRank(a.name) - sourceRank(b.name))
+              .map((source) => (
+                <ChoiceButton
+                  key={source.id}
+                  selected={sourceId === source.id}
+                  color={SOURCE_COLORS[source.name] ?? "bg-slate-500"}
+                  onClick={() => setSourceId(source.id)}
+                >
+                  {source.name}
+                </ChoiceButton>
+              ))}
+          </div>
         </Field>
 
         {isEditing ? (
           <>
-            <Field label="Năm sinh (không bắt buộc)">
-              <Input value={birthYear} onChange={(event) => setBirthYear(event.target.value)} inputMode="numeric" />
+            <Field uiSize="sm" label="Năm sinh (không bắt buộc)">
+              <Input uiSize="sm" value={birthYear} onChange={(event) => setBirthYear(event.target.value)} inputMode="numeric" />
             </Field>
 
-            <Field label="Địa chỉ (không bắt buộc)">
-              <Input value={address} onChange={(event) => setAddress(event.target.value)} />
+            <Field uiSize="sm" label="Địa chỉ (không bắt buộc)">
+              <Input uiSize="sm" value={address} onChange={(event) => setAddress(event.target.value)} />
             </Field>
           </>
         ) : (
-          <Field label="Nhóm">
-            <Select value={teamId} onChange={(event) => setTeamId(event.target.value)}>
-              <option value="">-- Chọn nhóm --</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </Select>
+          <Field uiSize="sm" label="Nhóm">
+            <div className="grid grid-cols-2 gap-1.5">
+              {[...teams]
+                .sort((a, b) => a.name.localeCompare(b.name, "vi", { numeric: true }))
+                .map((team, index) => (
+                  <ChoiceButton
+                    key={team.id}
+                    selected={teamId === team.id}
+                    color={index % 2 === 0 ? "bg-emerald-600" : "bg-orange-500"}
+                    onClick={() => setTeamId(team.id)}
+                  >
+                    {team.name}
+                  </ChoiceButton>
+                ))}
+            </div>
           </Field>
         )}
 
-        <Field label="Ghi chú MKT (không bắt buộc)">
-          <Textarea value={mktNote} onChange={(event) => setMktNote(event.target.value)} rows={2} />
+        {!isEditing && mktSources.length > 0 && (
+          <Field uiSize="sm" label="Nguồn MKT (không bắt buộc)">
+            <div className="grid grid-cols-2 gap-1.5">
+              {mktSources.map((item) => (
+                <ChoiceButton
+                  key={item.id}
+                  selected={mktSourceId === item.id}
+                  color=""
+                  background={mktSourceColor(item.id)}
+                  onClick={() => setMktSourceId(mktSourceId === item.id ? "" : item.id)}
+                >
+                  {item.name}
+                </ChoiceButton>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        <Field uiSize="sm" label="Ghi chú MKT (không bắt buộc)">
+          <Textarea className="text-xs" value={mktNote} onChange={(event) => setMktNote(event.target.value)} rows={2} />
         </Field>
 
         {error && (

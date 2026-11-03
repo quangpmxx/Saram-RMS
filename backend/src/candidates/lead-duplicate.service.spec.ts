@@ -39,10 +39,11 @@ describe('LeadDuplicateService', () => {
     });
   });
 
-  it('nhiều bản ghi khớp → đặt is_duplicate_flagged = true cho tất cả', async () => {
+  it('nhiều bản ghi khớp trong 30 ngày → đặt is_duplicate_flagged = true; bản ghi cách >30 ngày → false', async () => {
     prisma.lead.findMany.mockResolvedValue([
-      { id: 'lead-1' },
-      { id: 'lead-2' },
+      { id: 'lead-old', uploadedAt: new Date('2026-08-01') },
+      { id: 'lead-1', uploadedAt: new Date('2026-10-01') },
+      { id: 'lead-2', uploadedAt: new Date('2026-10-20') },
     ]);
 
     await service.syncDuplicateFlags('0900000000');
@@ -50,6 +51,10 @@ describe('LeadDuplicateService', () => {
     expect(prisma.lead.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['lead-1', 'lead-2'] } },
       data: { isDuplicateFlagged: true },
+    });
+    expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['lead-old'] } },
+      data: { isDuplicateFlagged: false },
     });
   });
 });

@@ -30,6 +30,7 @@ export interface CandidateResponseDto {
   birth_year: number | null;
   address: string | null;
   source: { id: string; name: string };
+  mkt_source: { id: string; name: string } | null;
   mkt_note: string | null;
   data_quality_score: number | null;
   uploaded_by: NamedRefWithRole;
@@ -65,6 +66,7 @@ export interface CandidateResponseDto {
 
 type LeadWithRelations = Lead & {
   source: Pick<LeadSource, 'id' | 'name'>;
+  mktSource?: { id: string; name: string } | null;
   uploadedBy: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>;
   assignedTo?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
   heldBy?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
@@ -98,6 +100,7 @@ export function toCandidateResponse(
     birth_year: lead.birthYear,
     address: lead.address,
     source: { id: lead.source.id, name: lead.source.name },
+    mkt_source: lead.mktSource ?? null,
     mkt_note: lead.mktNote,
     data_quality_score: lead.dataQualityScore,
     uploaded_by: {
@@ -191,6 +194,7 @@ export function toCandidateResponse(
 /** Cụm quan hệ dùng chung khi truy vấn Lead, khớp đúng shape trên. */
 export const CANDIDATE_INCLUDE = {
   source: { select: { id: true, name: true } },
+  mktSource: { select: { id: true, name: true } },
   uploadedBy: {
     select: { id: true, fullName: true, role: true, avatarUrl: true },
   },

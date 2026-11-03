@@ -65,6 +65,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showConnect, setShowConnect] = useState(false);
+  const [showMktSources, setShowMktSources] = useState(false);
 
   const load = useCallback(async () => {
     const q = new URLSearchParams({ from, to });
@@ -149,8 +150,13 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
             ))}
           </Select>
         </Field>
+        {isAdmin && (
+          <Button type="button" variant="outline" className="ml-auto" onClick={() => setShowMktSources(true)}>
+            Thêm/sửa nguồn MKT
+          </Button>
+        )}
         {canConnect && (
-          <Button type="button" className="ml-auto" onClick={() => setShowConnect(true)}>
+          <Button type="button" className={isAdmin ? "" : "ml-auto"} onClick={() => setShowConnect(true)}>
             Liên kết tài khoản Facebook
           </Button>
         )}
@@ -273,7 +279,95 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
       </div>
 
       {showConnect && <ConnectModal onClose={() => setShowConnect(false)} onDone={load} />}
+      {showMktSources && <MktSourcesModal onClose={() => setShowMktSources(false)} />}
     </div>
+  );
+}
+
+interface MktSourceRow {
+  id?: string;
+  name: string;
+}
+
+/** Danh mục Nguồn MKT — chỉ Admin. Sửa trực tiếp, thêm dòng, xoá dòng rồi bấm Lưu. */
+function MktSourcesModal({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  const [rows, setRows] = useState<MktSourceRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    clientApi<MktSourceRow[]>("/marketing-hub/mkt-sources")
+      .then((r) => setRows(r.length > 0 ? r : [{ name: "" }]))
+      .catch((e) => setError(errorText(e)));
+  }, []);
+
+  const update = (index: number, name: string) =>
+    setRows((prev) => prev?.map((r, i) => (i === index ? { ...r, name } : r)) ?? prev);
+
+  async function save() {
+    if (!rows) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await clientApi("/marketing-hub/mkt-sources", {
+        method: "PUT",
+        body: JSON.stringify({ items: rows.filter((r) => r.name.trim()) }),
+      });
+      toast.success("Đã lưu nguồn MKT");
+      onClose();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Thêm/sửa nguồn MKT"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="button" disabled={busy || !rows} onClick={() => void save()}>
+            {busy ? "Đang lưu..." : "Lưu"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto pr-1">
+        {rows === null && !error && <p className="text-sm text-slate-500">Đang tải...</p>}
+        {rows?.map((row, index) => (
+          <div key={row.id ?? `new-${index}`} className="flex gap-2">
+            <Input
+              value={row.name}
+              maxLength={100}
+              placeholder="Tên nguồn MKT"
+              onChange={(e) => update(index, e.target.value)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRows((prev) => prev?.filter((_, i) => i !== index) ?? prev)}
+            >
+              Xoá
+            </Button>
+          </div>
+        ))}
+        {rows && (
+          <Button type="button" variant="outline" onClick={() => setRows([...rows, { name: "" }])}>
+            + Thêm nguồn
+          </Button>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+      </div>
+    </Modal>
   );
 }
 

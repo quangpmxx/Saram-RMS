@@ -78,6 +78,7 @@ export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
         )}
       >
         <p className="text-xs whitespace-nowrap text-brand-200/50">Saram RMS · Nội bộ</p>
+        <p className="text-xs whitespace-nowrap text-brand-200/50">©PMQ</p>
       </div>
     </aside>
   );

@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { MarketingHubService } from './marketing-hub.service';
-import { ChangeOwnerDto, ConnectAdAccountDto, OverviewQueryDto } from './dto/marketing-hub.dto';
+import { ChangeOwnerDto, ConnectAdAccountDto, OverviewQueryDto, SaveMktSourcesDto } from './dto/marketing-hub.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -37,6 +37,19 @@ export class MarketingHubController {
   @Roles('admin')
   changeOwner(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeOwnerDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.changeOwner(id, dto.owner_id, user);
+  }
+
+  /** Danh mục Nguồn MKT — xem: Admin/Quản lý/MKT (dùng ở form thêm lao động). */
+  @Get('mkt-sources')
+  listMktSources() {
+    return this.service.listMktSources();
+  }
+
+  /** Thêm/sửa/xoá Nguồn MKT: chỉ Admin. */
+  @Put('mkt-sources')
+  @Roles('admin')
+  saveMktSources(@Body() dto: SaveMktSourcesDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.saveMktSources(dto.items, user);
   }
 
   @Delete('ad-accounts/:id')

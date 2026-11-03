@@ -34,7 +34,7 @@ export function PermissionsClient({
   modules: ModulePermissionSummary[];
   currentAdminId: string;
 }) {
-  useSetPageTitle("Phân quyền");
+  useSetPageTitle("Quản lý tài khoản", "Phân quyền");
   const toast = useToast();
   const [keyword, setKeyword] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);

@@ -56,6 +56,11 @@ export class ListCandidatesQueryDto {
   @IsUUID('4')
   source_id?: string;
 
+  /** Lọc theo Nguồn MKT (danh mục Marketing Hub). */
+  @IsOptional()
+  @IsUUID('4')
+  mkt_source_id?: string;
+
   @IsOptional()
   @IsDateString()
   date_from?: string;

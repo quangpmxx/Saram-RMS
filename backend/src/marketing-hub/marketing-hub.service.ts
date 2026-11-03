@@ -195,6 +195,51 @@ export class MarketingHubService {
     return { ok: true };
   }
 
+  listMktSources() {
+    return this.prisma.mktSource.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /** Lưu cả danh sách Nguồn MKT (chỉ Admin — chặn ở controller). */
+  async saveMktSources(items: { id?: string; name: string }[], user: AuthenticatedUser) {
+    const cleaned = items.map((i) => ({ id: i.id, name: i.name.trim() })).filter((i) => i.name);
+    const names = cleaned.map((i) => i.name.toLowerCase());
+    if (new Set(names).size !== names.length) {
+      throw new BadRequestException('Có nguồn MKT bị trùng tên');
+    }
+    const existing = await this.prisma.mktSource.findMany();
+    const existingIds = new Set(existing.map((s) => s.id));
+    const keepIds = new Set(cleaned.filter((i) => i.id && existingIds.has(i.id)).map((i) => i.id!));
+    const removed = existing.filter((s) => !keepIds.has(s.id));
+
+    await this.prisma.$transaction(async (tx) => {
+      if (removed.length > 0) {
+        await tx.mktSource.deleteMany({ where: { id: { in: removed.map((s) => s.id) } } });
+      }
+      // Đổi tên qua tên tạm trước để tránh vướng unique khi hoán đổi tên.
+      const renames = cleaned.filter((i) => i.id && keepIds.has(i.id));
+      for (const r of renames) {
+        await tx.mktSource.update({ where: { id: r.id }, data: { name: `__tmp_${r.id}` } });
+      }
+      for (const r of renames) {
+        await tx.mktSource.update({ where: { id: r.id }, data: { name: r.name } });
+      }
+      const created = cleaned.filter((i) => !i.id || !keepIds.has(i.id));
+      if (created.length > 0) {
+        await tx.mktSource.createMany({ data: created.map((c) => ({ name: c.name })) });
+      }
+    });
+
+    await this.audit.log({
+      accountId: user.id, actionType: 'update', entityType: 'mkt_source', entityId: user.id,
+      fieldChanged: 'list', oldValue: existing.map((s) => s.name).join(', '),
+      newValue: cleaned.map((c) => c.name).join(', '),
+    });
+    return this.listMktSources();
+  }
+
   async changeOwner(id: string, ownerId: string, user: AuthenticatedUser) {
     if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được đổi nhân viên phụ trách');
     const [account, owner] = await Promise.all([

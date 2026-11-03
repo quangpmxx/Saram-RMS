@@ -39,7 +39,11 @@ import { DuplicateWarning } from './dto/duplicate-warning.dto';
 import { DuplicateDetailDto } from './dto/duplicate-detail.dto';
 import { ListDuplicatesQueryDto } from './dto/list-duplicates-query.dto';
 import { DuplicateGroupDto } from './dto/duplicate-group.dto';
-import { LeadDuplicateService } from './lead-duplicate.service';
+import {
+  DUPLICATE_WINDOW_MS,
+  LeadDuplicateService,
+  isWithinDuplicateWindow,
+} from './lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
 import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 import { toNotificationResponse } from '../notification/dto/notification-response.dto';
@@ -118,6 +122,9 @@ export class CandidatesService {
     }
     if (query.source_id) {
       where.sourceId = query.source_id;
+    }
+    if (query.mkt_source_id) {
+      where.mktSourceId = query.mkt_source_id;
     }
     if (query.is_duplicate_flagged !== undefined) {
       where.isDuplicateFlagged = query.is_duplicate_flagged === 'true';
@@ -218,6 +225,10 @@ export class CandidatesService {
         phoneNumber: lead.phoneNumber,
         deletedAt: null,
         id: { not: lead.id },
+        uploadedAt: {
+          gt: new Date(lead.uploadedAt.getTime() - DUPLICATE_WINDOW_MS),
+          lt: new Date(lead.uploadedAt.getTime() + DUPLICATE_WINDOW_MS),
+        },
       },
       include: {
         assignedTo: {
@@ -282,9 +293,10 @@ export class CandidatesService {
     query: ListDuplicatesQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<DuplicateGroupDto>> {
+    // Chỉ các bản ghi bị đánh dấu trùng (trùng trong vòng 30 ngày).
     const grouped = await this.prisma.lead.groupBy({
       by: ['phoneNumber'],
-      where: { deletedAt: null },
+      where: { deletedAt: null, isDuplicateFlagged: true },
       _count: { _all: true },
     });
     const duplicatePhones = grouped
@@ -301,7 +313,11 @@ export class CandidatesService {
     }
 
     const members = await this.prisma.lead.findMany({
-      where: { phoneNumber: { in: duplicatePhones }, deletedAt: null },
+      where: {
+        phoneNumber: { in: duplicatePhones },
+        deletedAt: null,
+        isDuplicateFlagged: true,
+      },
       include: CANDIDATE_INCLUDE,
       orderBy: { uploadedAt: 'asc' },
     });
@@ -356,6 +372,22 @@ export class CandidatesService {
   ): Promise<CreateCandidateResult> {
     await this.assertSourceExists(dto.source_id);
     await this.assertTeamExists(dto.team_id);
+    if (
+      dto.mkt_source_id &&
+      !(await this.prisma.mktSource.findUnique({
+        where: { id: dto.mkt_source_id },
+      }))
+    ) {
+      throw new BadRequestException('Nguồn MKT không tồn tại');
+    }
+
+    // Số trùng trong 30 ngày → tự vào nhóm đang giữ số gốc.
+    const originTeam = await this.duplicateService.findOriginTeam(
+      dto.phone_number,
+    );
+    const teamId = originTeam?.id ?? dto.team_id;
+    const movedToTeam =
+      originTeam && originTeam.id !== dto.team_id ? originTeam : null;
 
     const created = await this.prisma.lead.create({
       data: {
@@ -367,7 +399,8 @@ export class CandidatesService {
         // Dự án phụ — nâng cấp toàn diện: gán nhóm ngay khi up — CHỈ
         // Leader/Sale nhóm này thấy được (xem buildScopeWhere/getPending),
         // chờ Leader phân số hoặc Sale trong nhóm tự nhận (chưa gán người).
-        assignedTeamId: dto.team_id,
+        assignedTeamId: teamId,
+        mktSourceId: dto.mkt_source_id,
       },
     });
 
@@ -387,7 +420,11 @@ export class CandidatesService {
     const matches = await this.duplicateService.syncDuplicateFlags(
       created.phoneNumber,
     );
-    const otherMatches = matches.filter((match) => match.id !== created.id);
+    const otherMatches = matches.filter(
+      (match) =>
+        match.id !== created.id &&
+        isWithinDuplicateWindow(match.uploadedAt, created.uploadedAt),
+    );
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -409,6 +446,7 @@ export class CandidatesService {
       duplicate_warning: await this.buildDuplicateWarning(
         created.phoneNumber,
         otherMatches,
+        movedToTeam,
       ),
     };
   }
@@ -1225,6 +1263,7 @@ export class CandidatesService {
   private async buildDuplicateWarning(
     phoneNumber: string,
     otherMatches: Lead[],
+    movedToTeam: { id: string; name: string } | null,
   ): Promise<DuplicateWarning | null> {
     if (otherMatches.length === 0) {
       return null;
@@ -1246,6 +1285,7 @@ export class CandidatesService {
         uploaded_by:
           uploaderNameById.get(match.uploadedById) ?? 'Không xác định',
       })),
+      moved_to_team: movedToTeam,
     };
   }
 

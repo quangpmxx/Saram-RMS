@@ -32,4 +32,9 @@ export class CreateCandidateDto {
   @IsOptional()
   @IsString()
   mkt_note?: string;
+
+  /** Nguồn MKT (danh mục Marketing Hub) — không bắt buộc. */
+  @IsOptional()
+  @IsUUID('4', { message: 'mkt_source_id không hợp lệ' })
+  mkt_source_id?: string;
 }

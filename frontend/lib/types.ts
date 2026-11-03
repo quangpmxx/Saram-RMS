@@ -163,6 +163,7 @@ export interface Candidate {
   birth_year: number | null;
   address: string | null;
   source: NamedRef;
+  mkt_source?: NamedRef | null;
   mkt_note: string | null;
   data_quality_score: number | null;
   uploaded_by: NamedRefWithRole;
@@ -205,6 +206,7 @@ export interface DuplicateWarningEntry {
 export interface DuplicateWarning {
   phone_number: string;
   matches: DuplicateWarningEntry[];
+  moved_to_team: NamedRef | null;
 }
 
 export interface CreateCandidateResult {

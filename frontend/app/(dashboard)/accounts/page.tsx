@@ -4,6 +4,7 @@ import { serverApi } from "@/lib/api-server";
 import { requirePageAccess } from "@/lib/module-permission";
 import type { Account, PaginatedResult, Team } from "@/lib/types";
 import { AccountsClient } from "./accounts-client";
+import { AccountTabs } from "./account-tabs";
 
 export default async function AccountsPage() {
   const user = await getCurrentUser();
@@ -21,11 +22,14 @@ export default async function AccountsPage() {
   ]);
 
   return (
-    <AccountsClient
-      currentUserId={user.id}
-      permissionLevel={permissionLevel}
-      initialAccounts={accountsResult.items}
-      teams={teamsResult.items}
-    />
+    <>
+      <AccountTabs active="accounts" isAdmin={user.role === "admin"} />
+      <AccountsClient
+        currentUserId={user.id}
+        permissionLevel={permissionLevel}
+        initialAccounts={accountsResult.items}
+        teams={teamsResult.items}
+      />
+    </>
   );
 }

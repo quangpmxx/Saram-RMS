@@ -16,9 +16,10 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 
 ## Data lao động (Lead)
 - Tối thiểu: tên, SĐT, nguồn (Facebook/TikTok/Zalo/Khác), thời gian up, ghi chú MKT. Nhập tay hoặc import Excel.
+- **Nguồn MKT** (không bắt buộc, chỉ form nhập tay): danh mục text tự do, **chỉ Admin** thêm/sửa/xoá ở Marketing Hub (`/marketing-hub/mkt-sources`); xoá nguồn → lead cũ để trống nguồn MKT.
 - Lead mới → "Chờ phân chia" → Leader chia thủ công hoặc round-robin (bỏ qua Sale đã nghỉ/rời nhóm).
 - Trạng thái (cập nhật lại được, **không có "đóng lead"**): cuộc gọi (đã gọi/chưa gọi/không nghe/thuê bao) → kết quả (tiềm năng/không tiềm năng/đang cân nhắc/hẹn gọi lại) → PV (đã hẹn/đến/bùng/đỗ/trượt; bùng vẫn hẹn lại, giữ lịch sử các lần hẹn) → đi làm (đã đi/không đi, kèm lý do bắt buộc).
-- Trùng SĐT: **vẫn cho up**, chỉ cảnh báo. Cùng nhóm: đánh dấu màu; khác nhóm: Sale không thấy, MKT/Quản lý/Admin thấy hết.
+- Trùng SĐT: **vẫn cho up**, chỉ cảnh báo. **Chu kỳ lọc trùng 30 ngày**: chỉ tính trùng khi 2 lần up cách nhau <30 ngày (`LeadDuplicateService`). Số up lại trong 30 ngày kể từ lần up gốc (sớm nhất trong 30 ngày qua) **tự chuyển về nhóm đang giữ số gốc** (nhập tay + import Excel; không áp dụng "Up data cũ"), cảnh báo báo rõ đã chuyển nhóm. Cùng nhóm: đánh dấu màu; khác nhóm: Sale không thấy, MKT/Quản lý/Admin thấy hết.
 - Ghi chú chỉ **thêm**, không ghi đè; xoá là xoá mềm (giữ lịch sử).
 - Gán lead (đơn/hàng loạt) phải an toàn khi nhiều người bấm cùng lúc: người đến sau nhận lỗi 409.
 - "Giữ số": Sale giữ riêng lead, không giới hạn số lượng.

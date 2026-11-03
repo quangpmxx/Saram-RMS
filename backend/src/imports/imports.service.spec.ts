@@ -32,7 +32,10 @@ describe('ImportsService', () => {
     leadSource: { findMany: jest.Mock };
     lead: { create: jest.Mock };
   };
-  let duplicateService: { syncDuplicateFlags: jest.Mock };
+  let duplicateService: {
+    syncDuplicateFlags: jest.Mock;
+    findOriginTeam: jest.Mock;
+  };
   let auditLog: { log: jest.Mock };
   let distributionRuleService: { tryAutoAssign: jest.Mock };
   let leadNotice: { notifyAutoAssignedBulk: jest.Mock };
@@ -54,7 +57,8 @@ describe('ImportsService', () => {
       lead: { create: jest.fn() },
     };
     duplicateService = {
-      syncDuplicateFlags: jest.fn().mockResolvedValue([{ id: 'lead-x' }]),
+      syncDuplicateFlags: jest.fn().mockResolvedValue([]),
+      findOriginTeam: jest.fn().mockResolvedValue(null),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     distributionRuleService = {
@@ -306,11 +310,17 @@ describe('ImportsService', () => {
           Promise.resolve({
             id: `lead-${data.phoneNumber}`,
             phoneNumber: data.phoneNumber,
+            uploadedAt: new Date(),
           }),
       );
+      const now = new Date();
+      const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
       duplicateService.syncDuplicateFlags.mockImplementation((phone: string) =>
         Promise.resolve(
-          phone === '0900000003' ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'a' }],
+          phone === '0900000003'
+            ? [{ id: 'a', uploadedAt: now }, { id: `lead-${phone}`, uploadedAt: now }]
+            : // 0900000001: trùng nhưng cách >30 ngày → không tính trùng
+              [{ id: 'a', uploadedAt: old }, { id: `lead-${phone}`, uploadedAt: now }],
         ),
       );
 

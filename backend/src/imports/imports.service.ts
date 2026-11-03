@@ -7,7 +7,10 @@ import {
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
-import { LeadDuplicateService } from '../candidates/lead-duplicate.service';
+import {
+  LeadDuplicateService,
+  isWithinDuplicateWindow,
+} from '../candidates/lead-duplicate.service';
 import { DistributionRuleService } from '../distribution/distribution-rule.service';
 import { LeadAssignmentNoticeService } from '../notification/lead-assignment-notice.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -211,6 +214,10 @@ export class ImportsService {
         continue;
       }
 
+      // Số trùng trong 30 ngày → tự vào nhóm đang giữ số gốc.
+      const originTeam =
+        await this.duplicateService.findOriginTeam(phoneNumber);
+
       const created = await this.prisma.lead.create({
         data: {
           fullName,
@@ -220,6 +227,7 @@ export class ImportsService {
           address: address || undefined,
           mktNote: mktNote || undefined,
           uploadedById,
+          assignedTeamId: originTeam?.id,
         },
       });
 
@@ -239,7 +247,13 @@ export class ImportsService {
       const matches = await this.duplicateService.syncDuplicateFlags(
         created.phoneNumber,
       );
-      if (matches.length > 1) {
+      if (
+        matches.some(
+          (m) =>
+            m.id !== created.id &&
+            isWithinDuplicateWindow(m.uploadedAt, created.uploadedAt),
+        )
+      ) {
         duplicateCount += 1;
       }
 

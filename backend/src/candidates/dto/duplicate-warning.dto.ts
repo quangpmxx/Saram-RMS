@@ -11,4 +11,6 @@ export interface DuplicateWarningEntry {
 export interface DuplicateWarning {
   phone_number: string;
   matches: DuplicateWarningEntry[];
+  /** Số trùng trong 30 ngày được tự chuyển về nhóm giữ số gốc (nếu khác nhóm đã chọn). */
+  moved_to_team: { id: string; name: string } | null;
 }

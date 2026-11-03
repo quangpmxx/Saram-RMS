@@ -512,6 +512,8 @@ model Lead {
   /// 2 cột này; từ chối → chỉ xóa 2 cột này. Lịch sử nằm trong audit_logs.
   careStopRequestedAt   DateTime? @map("care_stop_requested_at")
   careStopRequestedById String?   @map("care_stop_requested_by") @db.Uuid
+  /// Nguồn MKT (danh mục do Admin quản lý ở Marketing Hub), không bắt buộc.
+  mktSourceId           String?   @map("mkt_source_id") @db.Uuid
 
   source                  LeadSource             @relation(fields: [sourceId], references: [id])
   uploadedBy              Account                @relation("LeadUploadedBy", fields: [uploadedById], references: [id])
@@ -523,6 +525,7 @@ model Lead {
   callStatus              StatusCatalog?         @relation("LeadCallStatus", fields: [callStatusId], references: [id])
   callResult              StatusCatalog?         @relation("LeadCallResult", fields: [callResultId], references: [id])
   zaloStatus              StatusCatalog?         @relation("LeadZaloStatus", fields: [zaloStatusId], references: [id])
+  mktSource               MktSource?             @relation(fields: [mktSourceId], references: [id], onDelete: SetNull)
   zaloFriendStatus        StatusCatalog?         @relation("LeadZaloFriendStatus", fields: [zaloFriendStatusId], references: [id])
   currentInterviewStatus  StatusCatalog?         @relation("LeadCurrentInterviewStatus", fields: [currentInterviewStatusId], references: [id])
   currentEmploymentStatus StatusCatalog?         @relation("LeadCurrentEmploymentStatus", fields: [currentEmploymentStatusId], references: [id])
@@ -1452,6 +1455,18 @@ enum AdAccountStatus {
   disconnected
 
   @@map("ad_account_status")
+}
+
+/// Marketing Hub — danh mục "Nguồn MKT" (text tự do, chỉ Admin thêm/sửa/xoá).
+/// Chọn khi thêm lao động mới; xoá nguồn thì lead cũ để trống nguồn MKT.
+model MktSource {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  leads Lead[]
+
+  @@map("mkt_sources")
 }
 
 /// Marketing Hub — tài khoản quảng cáo đã liên kết bằng access token. Token

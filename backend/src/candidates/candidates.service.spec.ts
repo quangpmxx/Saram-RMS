@@ -21,6 +21,7 @@ describe('CandidatesService', () => {
       findUnique: jest.Mock;
       findUniqueOrThrow: jest.Mock;
       findMany: jest.Mock;
+      findFirst: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
@@ -107,6 +108,7 @@ describe('CandidatesService', () => {
         findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         findMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -370,6 +372,74 @@ describe('CandidatesService', () => {
             uploaded_by: 'MKT B',
           },
         ],
+        moved_to_team: null,
+      });
+    });
+
+    it('trùng trong 30 ngày ở nhóm khác → tự chuyển data về nhóm giữ số gốc + báo moved_to_team', async () => {
+      const existingLead = {
+        ...baseLead,
+        id: 'lead-0',
+        assignedTeamId: 'team-goc',
+      };
+      const newLead = { ...baseLead, id: 'lead-1', assignedTeamId: 'team-goc' };
+      prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.lead.findFirst.mockResolvedValue({ assignedTeamId: 'team-goc' });
+      prisma.team.findUnique.mockImplementation(
+        ({ where }: { where: { id: string } }) =>
+          Promise.resolve({ id: where.id, name: `Nhóm ${where.id}` }),
+      );
+      prisma.lead.create.mockResolvedValue(newLead);
+      prisma.lead.findMany.mockResolvedValue([existingLead, newLead]);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(newLead);
+
+      const result = await service.create(
+        {
+          full_name: 'Nguyễn Văn A',
+          phone_number: '0900000001',
+          source_id: 'source-1',
+          team_id: 'team-2',
+        },
+        mktUser,
+      );
+
+      expect(prisma.lead.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ assignedTeamId: 'team-goc' }),
+        }),
+      );
+      expect(result.duplicate_warning?.moved_to_team).toEqual({
+        id: 'team-goc',
+        name: 'Nhóm team-goc',
+      });
+    });
+
+    it('bản ghi cùng SĐT up cách quá 30 ngày → không báo trùng', async () => {
+      const oldLead = {
+        ...baseLead,
+        id: 'lead-0',
+        uploadedAt: new Date('2025-11-01'),
+      };
+      prisma.leadSource.findUnique.mockResolvedValue(source);
+      prisma.team.findUnique.mockResolvedValue({ id: 'team-1', name: 'N1' });
+      prisma.lead.create.mockResolvedValue(baseLead);
+      prisma.lead.findMany.mockResolvedValue([oldLead, baseLead]);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+
+      const result = await service.create(
+        {
+          full_name: 'Nguyễn Văn A',
+          phone_number: '0900000001',
+          source_id: 'source-1',
+          team_id: 'team-1',
+        },
+        mktUser,
+      );
+
+      expect(result.duplicate_warning).toBeNull();
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['lead-0', 'lead-1'] } },
+        data: { isDuplicateFlagged: false },
       });
     });
   });

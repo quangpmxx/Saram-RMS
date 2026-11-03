@@ -49,12 +49,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect("/doi-mat-khau");
   }
 
-  // Rà soát phân quyền 2026-10-30: menu hiện ĐỦ mọi mục (kể cả "Phân quyền")
+  // Rà soát phân quyền 2026-10-30: menu hiện ĐỦ mọi mục ("Phân quyền" nằm trong Quản lý tài khoản)
   // với mọi tài khoản; bấm vào trang không có quyền → trang tự chuyển sang
   // /access-denied (requirePageAccess / kiểm tra vai trò ở page.tsx) báo
   // "Bạn không có quyền thao tác với trang này".
   const navItems: NavItem[] = MODULE_REGISTRY.map((item) => ({ href: item.href, label: item.label, icon: item.icon }));
-  navItems.push({ href: "/permissions", label: "Phân quyền", icon: "permissions" });
 
   return (
     <PageTitleProvider>
