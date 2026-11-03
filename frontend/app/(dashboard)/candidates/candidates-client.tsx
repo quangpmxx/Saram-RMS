@@ -1127,10 +1127,10 @@ export function CandidatesClient({
               <col className="w-[6%]" />
               <col className="w-[3.3%]" />
             </colgroup>
-            <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
+            <thead className="sticky top-0 z-10 bg-slate-700 text-[10px] font-semibold tracking-wider text-white uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)]">
               <tr>
                 {canSelect && (
-                  <th className="border-r border-slate-100 px-0 py-2 text-center">
+                  <th className="border-r border-slate-600 px-0 py-2 text-center">
                     <Checkbox
                       aria-label="Chọn tất cả trên trang"
                       checked={allOnPageSelected}
@@ -1140,18 +1140,18 @@ export function CandidatesClient({
                     />
                   </th>
                 )}
-                <SortableTh sortKey="stt" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-0 py-2 text-center">
+                <SortableTh sortKey="stt" sort={sort} onSort={handleSort} className="border-r border-slate-600 px-0 py-2 text-center">
                   STT
                 </SortableTh>
-                <SortableTh sortKey="date" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-0.5 py-2 text-center">
+                <SortableTh sortKey="date" sort={sort} onSort={handleSort} className="border-r border-slate-600 px-0.5 py-2 text-center">
                   Ngày
                 </SortableTh>
-                <th className="border-r border-slate-100 px-1.5 py-2 text-center">Thông tin lao động</th>
-                <th className="border-r border-slate-100 px-1 py-2 text-center">Nguồn</th>
-                <th className="border-r border-slate-100 px-1 py-2 text-center">Nhân viên</th>
-                <th className="border-r border-slate-100 px-4 py-2 text-center">Tình trạng cuộc gọi</th>
-                <th className="border-r border-slate-100 px-1 py-2 text-center">Zalo</th>
-                <th className="border-r border-slate-100 px-1 py-2 text-center">Kết quả</th>
+                <th className="border-r border-slate-600 px-1.5 py-2 text-center">Thông tin lao động</th>
+                <th className="border-r border-slate-600 px-1 py-2 text-center">Nguồn</th>
+                <th className="border-r border-slate-600 px-1 py-2 text-center">Nhân viên</th>
+                <th className="border-r border-slate-600 px-4 py-2 text-center">Tình trạng cuộc gọi</th>
+                <th className="border-r border-slate-600 px-1 py-2 text-center">Zalo</th>
+                <th className="border-r border-slate-600 px-1 py-2 text-center">Kết quả</th>
                 <th className="px-1 py-2 text-center">HĐ</th>
               </tr>
             </thead>
