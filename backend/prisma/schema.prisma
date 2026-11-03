@@ -1464,8 +1464,8 @@ model MktSource {
   name      String   @unique @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at")
 
-  leads     Lead[]
-  adAccount AdAccount?
+  leads      Lead[]
+  adAccounts AdAccount[]
 
   @@map("mkt_sources")
 }
@@ -1495,8 +1495,8 @@ model AdAccount {
   status            AdAccountStatus @default(connected)
   lastSyncAt        DateTime?       @map("last_sync_at")
   lastError         String?         @map("last_error") @db.VarChar(500)
-  /// Nguồn MKT gắn với TKQC (1 nguồn ↔ 1 TKQC): số data của TKQC = số lead up có nguồn này.
-  mktSourceId       String?         @unique @map("mkt_source_id") @db.Uuid
+  /// Nguồn MKT gắn với TKQC (nhiều TKQC dùng chung 1 nguồn được): số data tính theo nhân viên phụ trách.
+  mktSourceId       String?         @map("mkt_source_id") @db.Uuid
   /// account_status thô của Facebook (1 = hoạt động, 3/8/9 = chưa thanh toán, còn lại = die).
   fbAccountStatus   Int?            @map("fb_account_status") @db.SmallInt
   /// Có ít nhất 1 chiến dịch đang chạy (lấy lúc đồng bộ).
@@ -1510,6 +1510,7 @@ model AdAccount {
 
   @@unique([platform, externalId])
   @@index([ownerId])
+  @@index([mktSourceId])
   @@map("ad_accounts")
 }
 

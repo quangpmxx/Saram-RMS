@@ -52,7 +52,9 @@ async function getAll<T>(url: string, token: string): Promise<T[]> {
 
 /** Gọi 1 lần (không theo phân trang). */
 async function getOne<T>(url: string, token: string): Promise<T> {
-  const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res: Response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const body = (await res.json().catch(() => ({}))) as T & {
     error?: { message?: string; code?: number };
   };
@@ -87,10 +89,11 @@ export async function fetchAccountHealth(
 
 /** Các tài khoản quảng cáo mà token này truy cập được. */
 export async function listAdAccounts(token: string): Promise<FbAdAccount[]> {
-  const rows = await getAll<{ account_id: string; name?: string; currency: string }>(
-    `${GRAPH}/me/adaccounts?fields=account_id,name,currency&limit=100`,
-    token,
-  );
+  const rows = await getAll<{
+    account_id: string;
+    name?: string;
+    currency: string;
+  }>(`${GRAPH}/me/adaccounts?fields=account_id,name,currency&limit=100`, token);
   return rows.map((r) => ({
     externalId: r.account_id,
     name: r.name || `Tài khoản ${r.account_id}`,

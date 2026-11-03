@@ -9,9 +9,15 @@ const other = { id: 'u2', role: 'mkt', sessionId: 's' } as never;
 const admin = { id: 'a1', role: 'admin', sessionId: 's' } as never;
 
 function build(prisma: Record<string, unknown>) {
-  const config = { get: (k: string) => (k === 'MARKETING_TOKEN_KEY' ? KEY : undefined) };
+  const config = {
+    get: (k: string) => (k === 'MARKETING_TOKEN_KEY' ? KEY : undefined),
+  };
   const audit = { log: jest.fn() };
-  return new MarketingHubService(prisma as never, config as never, audit as never);
+  return new MarketingHubService(
+    prisma as never,
+    config as never,
+    audit as never,
+  );
 }
 
 describe('token-crypto', () => {
@@ -21,7 +27,9 @@ describe('token-crypto', () => {
     expect(decryptToken(enc, KEY)).toBe('EAAB-secret-token-123456');
   });
   it('sai khoá thì không giải mã được', () => {
-    expect(() => decryptToken(encryptToken('x'.repeat(30), KEY), 'z'.repeat(40))).toThrow();
+    expect(() =>
+      decryptToken(encryptToken('x'.repeat(30), KEY), 'z'.repeat(40)),
+    ).toThrow();
   });
 });
 
@@ -37,7 +45,13 @@ describe('MarketingHubService', () => {
     const prisma = {
       adAccount: {
         findUnique: jest.fn(({ where }) =>
-          Promise.resolve(where.platform_externalId.externalId === '2' ? { id: 'x', ownerId: 'u2' } : where.id ? null : null),
+          Promise.resolve(
+            where.platform_externalId.externalId === '2'
+              ? { id: 'x', ownerId: 'u2' }
+              : where.id
+                ? null
+                : null,
+          ),
         ),
         create: jest.fn().mockResolvedValue({ id: 'new' }),
       },
@@ -46,83 +60,185 @@ describe('MarketingHubService', () => {
     jest.spyOn(svc, 'syncById').mockResolvedValue();
     const res = await svc.connect('t'.repeat(30), mkt);
     expect(res.connected).toBe(1);
-    expect(res.skipped.map((s) => s.name)).toEqual(['USD acc', 'Của người khác']);
+    expect(res.skipped.map((s) => s.name)).toEqual([
+      'USD acc',
+      'Của người khác',
+    ]);
     // token lưu mã hoá, không lưu nguyên văn
-    expect(prisma.adAccount.create.mock.calls[0][0].data.encryptedToken).not.toContain('ttttt');
+    expect(
+      prisma.adAccount.create.mock.calls[0][0].data.encryptedToken,
+    ).not.toContain('ttttt');
   });
 
   it('MKT không được đồng bộ/gỡ tài khoản của người khác; Admin được', async () => {
-    const prisma = { adAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'x', ownerId: 'u1', encryptedToken: 'e' }), update: jest.fn() } };
+    const prisma = {
+      adAccount: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'x', ownerId: 'u1', encryptedToken: 'e' }),
+        update: jest.fn(),
+      },
+    };
     const svc = build(prisma);
-    await expect(svc.syncNow('x', other)).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(svc.disconnect('x', other)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.syncNow('x', other)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(svc.disconnect('x', other)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     await expect(svc.disconnect('x', admin)).resolves.toEqual({ ok: true });
   });
 
   it('chỉ Admin đổi người phụ trách', async () => {
-    await expect(build({}).changeOwner('x', 'u2', mkt)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(build({}).changeOwner('x', 'u2', mkt)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('syncNow báo xung đột khi đang đồng bộ', async () => {
-    const prisma = { adAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'x', ownerId: 'u1', encryptedToken: 'e' }) } };
+    const prisma = {
+      adAccount: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'x', ownerId: 'u1', encryptedToken: 'e' }),
+      },
+    };
     const svc = build(prisma);
     (svc as unknown as { syncing: Set<string> }).syncing.add('x');
-    await expect(svc.syncNow('x', mkt)).rejects.toBeInstanceOf(ConflictException);
+    await expect(svc.syncNow('x', mkt)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
 
   it('syncById: lỗi token (190) → status error, ghi last_error, không ném lỗi', async () => {
     const enc = encryptToken('t'.repeat(30), KEY);
     const update = jest.fn();
-    const prisma = { adAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'x', externalId: '9', encryptedToken: enc, lastSyncAt: null, status: 'connected' }), update } };
-    jest.spyOn(fb, 'fetchDailySpend').mockRejectedValue(new fb.FacebookApiError('Token expired', 190));
+    const prisma = {
+      adAccount: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'x',
+          externalId: '9',
+          encryptedToken: enc,
+          lastSyncAt: null,
+          status: 'connected',
+        }),
+        update,
+      },
+    };
+    jest
+      .spyOn(fb, 'fetchDailySpend')
+      .mockRejectedValue(new fb.FacebookApiError('Token expired', 190));
     await build(prisma).syncById('x');
-    expect(update.mock.calls[0][0].data).toMatchObject({ status: 'error', lastError: 'Token expired' });
+    expect(update.mock.calls[0][0].data).toMatchObject({
+      status: 'error',
+      lastError: 'Token expired',
+    });
   });
 
   it('overview: tài khoản chưa đồng bộ → synced=false, chi tiêu 0, không tự điền số', async () => {
     const prisma = {
-      adAccount: { findMany: jest.fn().mockResolvedValue([{ id: 'x', name: 'A', platform: 'facebook', status: 'connected', lastSyncAt: null, lastError: null, owner: { id: 'u1', fullName: 'N' } }]) },
+      adAccount: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'x',
+            name: 'A',
+            platform: 'facebook',
+            status: 'connected',
+            lastSyncAt: null,
+            lastError: null,
+            owner: { id: 'u1', fullName: 'N' },
+          },
+        ]),
+      },
       adSpendDaily: { groupBy: jest.fn().mockResolvedValue([]) },
       lead: { count: jest.fn().mockResolvedValue(7) },
       mktCostThreshold: { findFirst: jest.fn().mockResolvedValue(null) },
     };
-    const r = await build(prisma).overview({ from: '2026-11-01', to: '2026-11-02' });
-    expect(r).toMatchObject({ total_spend: 0, has_synced_data: false, lead_total: 7 });
-    expect(r.items[0]).toMatchObject({ synced: false, total_spend: 0, data_count: null });
+    const r = await build(prisma).overview({
+      from: '2026-11-01',
+      to: '2026-11-02',
+    });
+    expect(r).toMatchObject({
+      total_spend: 0,
+      has_synced_data: false,
+      lead_total: 7,
+    });
+    expect(r.items[0]).toMatchObject({ synced: false, total_spend: 0 });
+    expect(r).toMatchObject({ data_by_owner: {}, data_total: 0 });
     expect(JSON.stringify(r)).not.toContain('encrypted');
   });
 
-  it('overview: số data theo Nguồn MKT gắn với TKQC, trạng thái TK theo account_status', async () => {
-    const base = { platform: 'facebook', status: 'connected', lastSyncAt: new Date(), lastError: null, owner: { id: 'u1', fullName: 'N' }, hasActiveCampaign: true };
-    const groupBy = jest.fn().mockResolvedValue([{ mktSourceId: 's1', _count: { _all: 4 } }]);
+  it('overview: số data theo nhân viên (nguồn dùng chung không đếm 2 lần), trạng thái TK theo account_status', async () => {
+    const base = {
+      platform: 'facebook',
+      status: 'connected',
+      lastSyncAt: new Date(),
+      lastError: null,
+      ownerId: 'u1',
+      owner: { id: 'u1', fullName: 'N' },
+      hasActiveCampaign: true,
+    };
+    const groupBy = jest.fn().mockResolvedValue([
+      { mktSourceId: 's1', _count: { _all: 4 } },
+      { mktSourceId: 's2', _count: { _all: 3 } },
+    ]);
     const prisma = {
       adAccount: {
         findMany: jest.fn().mockResolvedValue([
-          { ...base, id: 'a', name: 'A', mktSourceId: 's1', mktSource: { id: 's1', name: 'P1' }, fbAccountStatus: 1 },
-          { ...base, id: 'b', name: 'B', mktSourceId: 's2', mktSource: { id: 's2', name: 'P2' }, fbAccountStatus: 3 },
-          { ...base, id: 'c', name: 'C', mktSourceId: null, mktSource: null, fbAccountStatus: 2 },
+          {
+            ...base,
+            id: 'a',
+            name: 'A',
+            mktSourceId: 's1',
+            mktSource: { id: 's1', name: 'P1' },
+            fbAccountStatus: 1,
+          },
+          {
+            ...base,
+            id: 'b',
+            name: 'B',
+            mktSourceId: 's1',
+            mktSource: { id: 's1', name: 'P1' },
+            fbAccountStatus: 3,
+          },
+          {
+            ...base,
+            id: 'c',
+            name: 'C',
+            mktSourceId: 's2',
+            ownerId: 'u2',
+            owner: { id: 'u2', fullName: 'M' },
+            mktSource: { id: 's2', name: 'P2' },
+            fbAccountStatus: 2,
+          },
         ]),
       },
       adSpendDaily: { groupBy: jest.fn().mockResolvedValue([]) },
       lead: { count: jest.fn().mockResolvedValue(0), groupBy },
-      mktCostThreshold: { findFirst: jest.fn().mockResolvedValue({ greenMax: 10, redMin: 20 }) },
+      mktCostThreshold: {
+        findFirst: jest.fn().mockResolvedValue({ greenMax: 10, redMin: 20 }),
+      },
     };
-    const r = await build(prisma).overview({ from: '2026-11-01', to: '2026-11-02' });
-    expect(groupBy.mock.calls[0][0].where).toMatchObject({ deletedAt: null, mktSourceId: { in: ['s1', 's2'] } });
-    expect(r.items.map((i) => [i.data_count, i.account_health])).toEqual([[4, 'live'], [0, 'unpaid'], [null, 'die']]);
+    const r = await build(prisma).overview({
+      from: '2026-11-01',
+      to: '2026-11-02',
+    });
+    expect(groupBy.mock.calls[0][0].where).toMatchObject({
+      deletedAt: null,
+      mktSourceId: { in: ['s1', 's2'] },
+    });
+    expect(r.items.map((i) => i.account_health)).toEqual([
+      'live',
+      'unpaid',
+      'die',
+    ]);
+    expect(r).toMatchObject({ data_by_owner: { u1: 4, u2: 3 }, data_total: 7 });
     expect(r.cost_thresholds).toEqual({ green_max: 10, red_min: 20 });
   });
 
-  it('setMktSource: nguồn đã gắn TKQC khác → 409', async () => {
-    const prisma = {
-      adAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'a', mktSourceId: null }), update: jest.fn() },
-      mktSource: { findUnique: jest.fn().mockResolvedValue({ id: 's1', adAccount: { id: 'b', name: 'B' } }) },
-    };
-    await expect(build(prisma).setMktSource('a', 's1', admin)).rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.adAccount.update).not.toHaveBeenCalled();
-  });
-
   it('saveCostThresholds: mốc xanh phải nhỏ hơn mốc đỏ', async () => {
-    await expect(build({}).saveCostThresholds(50, 50, admin)).rejects.toThrow('Mốc xanh');
+    await expect(build({}).saveCostThresholds(50, 50, admin)).rejects.toThrow(
+      'Mốc xanh',
+    );
   });
 });

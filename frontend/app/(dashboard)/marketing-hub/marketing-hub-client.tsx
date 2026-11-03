@@ -19,8 +19,6 @@ interface AdItem {
   last_sync_at: string | null;
   last_error: string | null;
   mkt_source: { id: string; name: string } | null;
-  /** null = TKQC chưa gắn Nguồn MKT. */
-  data_count: number | null;
   account_health: "live" | "unpaid" | "die" | null;
   has_active_campaign: boolean | null;
 }
@@ -32,6 +30,8 @@ interface Overview {
   from: string;
   to: string;
   cost_thresholds: CostThresholds | null;
+  data_by_owner: Record<string, number>;
+  data_total: number;
   total_spend: number;
   has_synced_data: boolean;
   lead_total: number;
@@ -201,7 +201,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
         </div>
       </div>
 
-      {data && <EfficiencyTable items={data.items} thresholds={data.cost_thresholds} />}
+      {data && <EfficiencyTable data={data} />}
 
       <h2 className="pt-2 text-sm font-semibold text-slate-700">Tài khoản quảng cáo</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
@@ -272,9 +272,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                         }
                       >
                         <option value="">— Chưa gắn —</option>
-                        {mktSources
-                          .filter((s) => s.id === i.mkt_source?.id || !data.items.some((x) => x.mkt_source?.id === s.id))
-                          .map((s) => (
+                        {mktSources.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
                             </option>
@@ -360,21 +358,22 @@ function costClass(cost: number | null, t: CostThresholds | null) {
   return "text-amber-600 font-medium";
 }
 
-function summarize(rows: AdItem[]) {
+function summarize(rows: AdItem[], count: number) {
   const spend = rows.reduce((s, r) => s + (r.synced ? r.total_spend : 0), 0);
-  const count = rows.reduce((s, r) => s + (r.data_count ?? 0), 0);
   return { spend, count, cost: count > 0 ? spend / count : null };
 }
 
 /**
  * Bảng Hiệu quả Marketing: nhóm theo nhân viên phụ trách, mỗi nhân viên có dòng Tổng,
- * cuối bảng dòng Toàn công ty. Giá số = chi tiêu ÷ số data (dòng tổng: tổng chi ÷ tổng data).
+ * cuối bảng dòng Toàn công ty. Data không tách theo TKQC nên Số data / Giá số chỉ ở
+ * dòng Tổng: Giá số = tổng chi ÷ số data (data up có Nguồn MKT gắn với các TKQC).
  */
-function EfficiencyTable({ items, thresholds }: { items: AdItem[]; thresholds: CostThresholds | null }) {
+function EfficiencyTable({ data }: { data: Overview }) {
+  const { items, cost_thresholds: thresholds } = data;
   const byOwner = new Map<string, AdItem[]>();
   for (const i of items) byOwner.set(i.owner.id, [...(byOwner.get(i.owner.id) ?? []), i]);
   const groups = [...byOwner.values()];
-  const company = summarize(items);
+  const company = summarize(items, data.data_total);
   const td = "border border-slate-200 px-3 py-2";
 
   const totalCells = (s: ReturnType<typeof summarize>) => (
@@ -419,7 +418,6 @@ function EfficiencyTable({ items, thresholds }: { items: AdItem[]; thresholds: C
             {groups.map((rows) => (
               <Fragment key={rows[0].owner.id}>
                 {rows.map((i, idx) => {
-                  const cost = i.data_count ? (i.synced ? i.total_spend : 0) / i.data_count : null;
                   const off = i.status === "disconnected";
                   return (
                     <tr key={i.id}>
@@ -431,14 +429,10 @@ function EfficiencyTable({ items, thresholds }: { items: AdItem[]; thresholds: C
                       <td className={td}>{i.name}</td>
                       <td className={td}>{PLATFORM_LABEL[i.platform]}</td>
                       <td className={`${td} text-right`}>
-                        {i.data_count === null ? (
-                          <span className="text-xs text-amber-600">Chưa gắn nguồn MKT</span>
-                        ) : (
-                          i.data_count.toLocaleString("vi-VN")
-                        )}
+                        {!i.mkt_source && <span className="text-xs text-amber-600">Chưa gắn nguồn MKT</span>}
                       </td>
                       <td className={`${td} text-right`}>{i.synced ? vnd(i.total_spend) : "—"}</td>
-                      <td className={`${td} text-right ${costClass(cost, thresholds)}`}>{cost === null ? "—" : vnd(cost)}</td>
+                      <td className={td} />
                       <td className={td}>
                         {off || i.has_active_campaign === null ? (
                           "—"
@@ -462,7 +456,7 @@ function EfficiencyTable({ items, thresholds }: { items: AdItem[]; thresholds: C
                   <td className={`${td} text-center`} colSpan={2}>
                     Tổng
                   </td>
-                  {totalCells(summarize(rows))}
+                  {totalCells(summarize(rows, data.data_by_owner[rows[0].owner.id] ?? 0))}
                 </tr>
               </Fragment>
             ))}

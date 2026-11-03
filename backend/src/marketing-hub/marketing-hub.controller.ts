@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { MarketingHubService } from './marketing-hub.service';
 import {
   ChangeOwnerDto,
@@ -29,34 +41,51 @@ export class MarketingHubController {
   @Post('ad-accounts/connect')
   @HttpCode(200)
   @Roles('admin', 'mkt')
-  connect(@Body() dto: ConnectAdAccountDto, @CurrentUser() user: AuthenticatedUser) {
+  connect(
+    @Body() dto: ConnectAdAccountDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.connect(dto.access_token, user);
   }
 
   @Post('ad-accounts/:id/sync')
   @HttpCode(200)
   @Roles('admin', 'mkt')
-  sync(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+  sync(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.syncNow(id, user);
   }
 
   @Patch('ad-accounts/:id/owner')
   @Roles('admin')
-  changeOwner(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeOwnerDto, @CurrentUser() user: AuthenticatedUser) {
+  changeOwner(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangeOwnerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.changeOwner(id, dto.owner_id, user);
   }
 
   /** Gắn Nguồn MKT cho TKQC (để đếm số data / giá số): chỉ Admin. */
   @Patch('ad-accounts/:id/mkt-source')
   @Roles('admin')
-  setMktSource(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetMktSourceDto, @CurrentUser() user: AuthenticatedUser) {
+  setMktSource(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetMktSourceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.setMktSource(id, dto.mkt_source_id ?? null, user);
   }
 
   /** Ngưỡng tô màu giá số: chỉ Admin sửa (xem kèm trong overview). */
   @Put('cost-thresholds')
   @Roles('admin')
-  saveCostThresholds(@Body() dto: SaveCostThresholdsDto, @CurrentUser() user: AuthenticatedUser) {
+  saveCostThresholds(
+    @Body() dto: SaveCostThresholdsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.saveCostThresholds(dto.green_max, dto.red_min, user);
   }
 
@@ -69,13 +98,19 @@ export class MarketingHubController {
   /** Thêm/sửa/xoá Nguồn MKT: chỉ Admin. */
   @Put('mkt-sources')
   @Roles('admin')
-  saveMktSources(@Body() dto: SaveMktSourcesDto, @CurrentUser() user: AuthenticatedUser) {
+  saveMktSources(
+    @Body() dto: SaveMktSourcesDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.saveMktSources(dto.items, user);
   }
 
   @Delete('ad-accounts/:id')
   @Roles('admin', 'mkt')
-  disconnect(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+  disconnect(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.service.disconnect(id, user);
   }
 }
