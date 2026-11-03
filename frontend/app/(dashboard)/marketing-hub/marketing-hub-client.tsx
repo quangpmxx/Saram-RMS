@@ -7,6 +7,9 @@ import { useToast } from "@/lib/toast-context";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
+import { Card } from "@/components/ui/card";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { computeDateRange, type DateRangeValue } from "@/lib/date-range";
 
 interface AdItem {
   id: string;
@@ -53,7 +56,6 @@ const STATUS_LABEL = { connected: "Đã kết nối", error: "Lỗi kết nối"
 const vnd = (n: number) => `${Math.round(n).toLocaleString("vi-VN")} ₫`;
 const errorText = (e: unknown) => (e instanceof ApiError ? e.message : "Có lỗi xảy ra");
 const today = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
-const daysAgo = (n: number) => new Date(Date.now() + 7 * 3600_000 - n * 86_400_000).toISOString().slice(0, 10);
 
 /**
  * Marketing Hub — bảng tổng quan tài khoản quảng cáo. Chỉ hiển thị chi tiêu thật đã
@@ -65,8 +67,10 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
   const isAdmin = role === "admin";
   const canConnect = isAdmin || role === "mkt";
 
-  const [from, setFrom] = useState(daysAgo(29));
-  const [to, setTo] = useState(today());
+  const [date, setDate] = useState<DateRangeValue>(() => ({ preset: "30d", ...computeDateRange("30d") }));
+  // "Tối đa" (from/to rỗng) → lấy từ mốc rất sớm đến hôm nay.
+  const from = date.from || "2000-01-01";
+  const to = date.to || today();
   const [platform, setPlatform] = useState("");
   const [accountId, setAccountId] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -136,22 +140,19 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Từ ngày">
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+      <Card className="flex flex-wrap items-end gap-1.5 p-2">
+        <Field uiSize="xs" label="Ngày" className="w-40">
+          <DateRangePicker value={date} onChange={setDate} />
         </Field>
-        <Field label="Đến ngày">
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </Field>
-        <Field label="Nền tảng">
-          <Select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+        <Field uiSize="xs" label="Nền tảng" className="w-28">
+          <Select uiSize="xs" value={platform} onChange={(e) => setPlatform(e.target.value)}>
             <option value="">Tất cả</option>
             <option value="facebook">Facebook</option>
             <option value="tiktok">TikTok</option>
           </Select>
         </Field>
-        <Field label="Tài khoản">
-          <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+        <Field uiSize="xs" label="Tài khoản" className="w-40">
+          <Select uiSize="xs" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
             <option value="">Tất cả</option>
             {allItems.map((i) => (
               <option key={i.id} value={i.id}>
@@ -160,8 +161,8 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
             ))}
           </Select>
         </Field>
-        <Field label="Nhân viên">
-          <Select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+        <Field uiSize="xs" label="Nhân viên" className="w-40">
+          <Select uiSize="xs" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
             <option value="">Tất cả</option>
             {owners.map(([id, name]) => (
               <option key={id} value={id}>
@@ -172,20 +173,20 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
         </Field>
         {isAdmin && (
           <>
-            <Button type="button" variant="outline" className="ml-auto" onClick={() => setShowThresholds(true)}>
+            <Button type="button" size="xs" variant="outline" className="ml-auto" onClick={() => setShowThresholds(true)}>
               Ngưỡng giá số
             </Button>
-            <Button type="button" variant="outline" onClick={() => setShowMktSources(true)}>
-              Thêm/sửa nguồn MKT
+            <Button type="button" size="xs" variant="outline" onClick={() => setShowMktSources(true)}>
+              Nguồn MKT
             </Button>
           </>
         )}
         {canConnect && (
-          <Button type="button" className={isAdmin ? "" : "ml-auto"} onClick={() => setShowConnect(true)}>
-            Liên kết tài khoản Facebook
+          <Button type="button" size="xs" className={isAdmin ? "" : "ml-auto"} onClick={() => setShowConnect(true)}>
+            Liên kết Facebook
           </Button>
         )}
-      </div>
+      </Card>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white/80 p-4">
@@ -297,7 +298,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                       <>
                         <Button
                           type="button"
-                          size="sm"
+                          size="xs"
                           variant="outline"
                           disabled={busyId === i.id}
                           onClick={() =>
@@ -308,7 +309,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                         </Button>{" "}
                         <Button
                           type="button"
-                          size="sm"
+                          size="xs"
                           variant="outline"
                           disabled={busyId === i.id}
                           onClick={() => {
