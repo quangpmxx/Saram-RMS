@@ -677,11 +677,11 @@ export function CareWarehousePanel({
       <Card className="overflow-hidden p-0">
         <div ref={tableScrollRef} className="max-h-[calc(100vh-260px)] overflow-auto">
           <table className="w-full min-w-[960px] border-collapse text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] font-semibold tracking-wider text-brand-900 uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)] backdrop-blur">
+            <thead className="sticky top-0 z-10 bg-slate-700 text-[10px] font-semibold tracking-wider text-white uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)]">
               <tr>
                 {/* Ô tick đứng trước STT (yêu cầu người dùng 2026-10-30, giống tab Tất cả). */}
                 {canAssign && (
-                  <th className="w-px border-r border-slate-100 px-1 py-2 text-center">
+                  <th className="w-px border-r border-slate-600 px-1 py-2 text-center">
                     <Checkbox
                       aria-label="Chọn tất cả trên trang"
                       checked={allOnPageSelected}
@@ -693,21 +693,21 @@ export function CareWarehousePanel({
                   sortKey="stt"
                   sort={{ key: "stt", order: applied.stt_order }}
                   onSort={(next) => applyFilters({ ...filters, stt_order: next.order })}
-                  className="w-px border-r border-slate-100 px-1 py-2 text-center whitespace-nowrap"
+                  className="w-px border-r border-slate-600 px-1 py-2 text-center whitespace-nowrap"
                 >
                   STT
                 </SortableTh>
-                <th className="border-r border-slate-100 px-2 py-2 text-center">Lao động</th>
-                <th className="w-px border-r border-slate-100 px-2 py-2 text-center whitespace-nowrap">Trạng thái</th>
-                <th className="border-r border-slate-100 px-2 py-2 text-center">Sale được giao</th>
-                <th className="min-w-[300px] border-r border-slate-100 px-2 py-2 text-center">Nội dung ghi chú</th>
+                <th className="border-r border-slate-600 px-2 py-2 text-center">Lao động</th>
+                <th className="w-px border-r border-slate-600 px-2 py-2 text-center whitespace-nowrap">Trạng thái</th>
+                <th className="border-r border-slate-600 px-2 py-2 text-center">Sale được giao</th>
+                <th className="min-w-[300px] border-r border-slate-600 px-2 py-2 text-center">Nội dung ghi chú</th>
                 {/* Tách "Lần CS tháng / tổng" thành 2 cột hẹp vừa dữ liệu (yêu cầu người dùng 2026-10-30). */}
-                <th className="w-px border-r border-slate-100 px-1.5 py-2 text-center leading-tight">
+                <th className="w-px border-r border-slate-600 px-1.5 py-2 text-center leading-tight">
                   <span className="whitespace-nowrap">CS trong</span>
                   <br />
                   <span className="whitespace-nowrap">30 ngày</span>
                 </th>
-                <th className="w-px border-r border-slate-100 px-1.5 py-2 text-center leading-tight">
+                <th className="w-px border-r border-slate-600 px-1.5 py-2 text-center leading-tight">
                   <span className="whitespace-nowrap">Tổng</span>
                   <br />
                   <span className="whitespace-nowrap">lượt CS</span>
