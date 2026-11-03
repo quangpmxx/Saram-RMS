@@ -242,8 +242,8 @@ export class MarketingHubService {
     }
   }
 
-  /** Tự đồng bộ mỗi 6 giờ. */
-  @Cron('0 */6 * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
+  /** Tự đồng bộ mỗi 30 phút. */
+  @Cron('*/30 * * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
   async syncAll(): Promise<void> {
     const ids = await this.prisma.adAccount.findMany({
       where: { status: 'connected', encryptedToken: { not: null } },
