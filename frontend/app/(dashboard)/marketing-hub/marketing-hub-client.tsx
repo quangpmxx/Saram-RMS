@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
@@ -18,10 +18,20 @@ interface AdItem {
   synced: boolean;
   last_sync_at: string | null;
   last_error: string | null;
+  mkt_source: { id: string; name: string } | null;
+  /** null = TKQC chưa gắn Nguồn MKT. */
+  data_count: number | null;
+  account_health: "live" | "unpaid" | "die" | null;
+  has_active_campaign: boolean | null;
+}
+interface CostThresholds {
+  green_max: number;
+  red_min: number;
 }
 interface Overview {
   from: string;
   to: string;
+  cost_thresholds: CostThresholds | null;
   total_spend: number;
   has_synced_data: boolean;
   lead_total: number;
@@ -66,6 +76,8 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showConnect, setShowConnect] = useState(false);
   const [showMktSources, setShowMktSources] = useState(false);
+  const [showThresholds, setShowThresholds] = useState(false);
+  const [mktSources, setMktSources] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     const q = new URLSearchParams({ from, to });
@@ -98,6 +110,14 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
         .catch(() => {});
     }
   }, [isAdmin]);
+
+  // Danh mục Nguồn MKT cho ô gắn nguồn (Admin); tải lại khi đóng hộp sửa nguồn.
+  useEffect(() => {
+    if (!isAdmin || showMktSources) return;
+    clientApi<{ id: string; name: string }[]>("/marketing-hub/mkt-sources")
+      .then(setMktSources)
+      .catch(() => {});
+  }, [isAdmin, showMktSources]);
 
   async function act(id: string, fn: () => Promise<unknown>, okMsg: string) {
     setBusyId(id);
@@ -151,9 +171,14 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
           </Select>
         </Field>
         {isAdmin && (
-          <Button type="button" variant="outline" className="ml-auto" onClick={() => setShowMktSources(true)}>
-            Thêm/sửa nguồn MKT
-          </Button>
+          <>
+            <Button type="button" variant="outline" className="ml-auto" onClick={() => setShowThresholds(true)}>
+              Ngưỡng giá số
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setShowMktSources(true)}>
+              Thêm/sửa nguồn MKT
+            </Button>
+          </>
         )}
         {canConnect && (
           <Button type="button" className={isAdmin ? "" : "ml-auto"} onClick={() => setShowConnect(true)}>
@@ -176,6 +201,9 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
         </div>
       </div>
 
+      {data && <EfficiencyTable items={data.items} thresholds={data.cost_thresholds} />}
+
+      <h2 className="pt-2 text-sm font-semibold text-slate-700">Tài khoản quảng cáo</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
@@ -183,6 +211,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
               <th className="px-3 py-2">Nhân viên phụ trách</th>
               <th className="px-3 py-2">Tài khoản quảng cáo</th>
               <th className="px-3 py-2">Loại</th>
+              <th className="px-3 py-2">Nguồn MKT</th>
               <th className="px-3 py-2 text-right">Tổng chi tiêu</th>
               <th className="px-3 py-2">Trạng thái</th>
               <th className="px-3 py-2" />
@@ -225,6 +254,36 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
                   </td>
                   <td className="px-3 py-2">{i.name}</td>
                   <td className="px-3 py-2">{PLATFORM_LABEL[i.platform]}</td>
+                  <td className="px-3 py-2">
+                    {isAdmin ? (
+                      <Select
+                        value={i.mkt_source?.id ?? ""}
+                        disabled={busyId === i.id}
+                        onChange={(e) =>
+                          void act(
+                            i.id,
+                            () =>
+                              clientApi(`/marketing-hub/ad-accounts/${i.id}/mkt-source`, {
+                                method: "PATCH",
+                                body: JSON.stringify({ mkt_source_id: e.target.value || null }),
+                              }),
+                            "Đã gắn nguồn MKT",
+                          )
+                        }
+                      >
+                        <option value="">— Chưa gắn —</option>
+                        {mktSources
+                          .filter((s) => s.id === i.mkt_source?.id || !data.items.some((x) => x.mkt_source?.id === s.id))
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                      </Select>
+                    ) : (
+                      (i.mkt_source?.name ?? <span className="text-slate-400">Chưa gắn</span>)
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right">{i.synced ? vnd(i.total_spend) : "—"}</td>
                   <td className="px-3 py-2">
                     <span className={i.status === "connected" ? "text-emerald-600" : "text-red-600"}>
@@ -269,7 +328,7 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
             })}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                   Chưa có tài khoản quảng cáo nào được liên kết
                 </td>
               </tr>
@@ -280,7 +339,220 @@ export function MarketingHubClient({ role, userId }: { role: string; userId: str
 
       {showConnect && <ConnectModal onClose={() => setShowConnect(false)} onDone={load} />}
       {showMktSources && <MktSourcesModal onClose={() => setShowMktSources(false)} />}
+      {showThresholds && (
+        <ThresholdsModal initial={data?.cost_thresholds ?? null} onClose={() => setShowThresholds(false)} onDone={load} />
+      )}
     </div>
+  );
+}
+
+const HEALTH = {
+  live: { label: "Live ADS", cls: "text-emerald-600" },
+  unpaid: { label: "Chưa thanh toán", cls: "text-amber-600" },
+  die: { label: "Die ADS", cls: "text-red-600" },
+} as const;
+
+/** Giá số ≤ mốc xanh: xanh; > mốc đỏ: đỏ; ở giữa: cam. Chưa đặt ngưỡng: không tô. */
+function costClass(cost: number | null, t: CostThresholds | null) {
+  if (cost === null || !t) return "";
+  if (cost <= t.green_max) return "text-emerald-600 font-medium";
+  if (cost > t.red_min) return "text-red-600 font-medium";
+  return "text-amber-600 font-medium";
+}
+
+function summarize(rows: AdItem[]) {
+  const spend = rows.reduce((s, r) => s + (r.synced ? r.total_spend : 0), 0);
+  const count = rows.reduce((s, r) => s + (r.data_count ?? 0), 0);
+  return { spend, count, cost: count > 0 ? spend / count : null };
+}
+
+/**
+ * Bảng Hiệu quả Marketing: nhóm theo nhân viên phụ trách, mỗi nhân viên có dòng Tổng,
+ * cuối bảng dòng Toàn công ty. Giá số = chi tiêu ÷ số data (dòng tổng: tổng chi ÷ tổng data).
+ */
+function EfficiencyTable({ items, thresholds }: { items: AdItem[]; thresholds: CostThresholds | null }) {
+  const byOwner = new Map<string, AdItem[]>();
+  for (const i of items) byOwner.set(i.owner.id, [...(byOwner.get(i.owner.id) ?? []), i]);
+  const groups = [...byOwner.values()];
+  const company = summarize(items);
+  const td = "border border-slate-200 px-3 py-2";
+
+  const totalCells = (s: ReturnType<typeof summarize>) => (
+    <>
+      <td className={`${td} text-right`}>{s.count.toLocaleString("vi-VN")}</td>
+      <td className={`${td} text-right`}>{vnd(s.spend)}</td>
+      <td className={`${td} text-right ${costClass(s.cost, thresholds)}`}>{s.cost === null ? "—" : vnd(s.cost)}</td>
+      <td className={td} />
+      <td className={td} />
+    </>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h2 className="text-sm font-semibold text-slate-700">Hiệu quả Marketing</h2>
+        {thresholds ? (
+          <p className="text-xs text-slate-500">
+            Giá số: <span className="text-emerald-600">xanh ≤ {vnd(thresholds.green_max)}</span> ·{" "}
+            <span className="text-amber-600">cam đến {vnd(thresholds.red_min)}</span> ·{" "}
+            <span className="text-red-600">đỏ &gt; {vnd(thresholds.red_min)}</span>
+          </p>
+        ) : (
+          <p className="text-xs text-slate-400">Chưa đặt ngưỡng giá số</p>
+        )}
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th className={td}>Nhân viên</th>
+              <th className={td}>TKQC</th>
+              <th className={td}>Loại TK</th>
+              <th className={`${td} text-right`}>Số data</th>
+              <th className={`${td} text-right`}>Tổng chi tiêu</th>
+              <th className={`${td} text-right`}>Giá số</th>
+              <th className={td}>Trạng thái camp</th>
+              <th className={td}>Trạng thái tài khoản</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((rows) => (
+              <Fragment key={rows[0].owner.id}>
+                {rows.map((i, idx) => {
+                  const cost = i.data_count ? (i.synced ? i.total_spend : 0) / i.data_count : null;
+                  const off = i.status === "disconnected";
+                  return (
+                    <tr key={i.id}>
+                      {idx === 0 && (
+                        <td rowSpan={rows.length + 1} className={`${td} text-center align-middle font-medium`}>
+                          {i.owner.full_name}
+                        </td>
+                      )}
+                      <td className={td}>{i.name}</td>
+                      <td className={td}>{PLATFORM_LABEL[i.platform]}</td>
+                      <td className={`${td} text-right`}>
+                        {i.data_count === null ? (
+                          <span className="text-xs text-amber-600">Chưa gắn nguồn MKT</span>
+                        ) : (
+                          i.data_count.toLocaleString("vi-VN")
+                        )}
+                      </td>
+                      <td className={`${td} text-right`}>{i.synced ? vnd(i.total_spend) : "—"}</td>
+                      <td className={`${td} text-right ${costClass(cost, thresholds)}`}>{cost === null ? "—" : vnd(cost)}</td>
+                      <td className={td}>
+                        {off || i.has_active_campaign === null ? (
+                          "—"
+                        ) : i.has_active_campaign ? (
+                          <span className="text-emerald-600">Đang hoạt động</span>
+                        ) : (
+                          <span className="text-slate-500">Dừng hoạt động</span>
+                        )}
+                      </td>
+                      <td className={td}>
+                        {off || !i.account_health ? (
+                          "—"
+                        ) : (
+                          <span className={`font-medium ${HEALTH[i.account_health].cls}`}>{HEALTH[i.account_health].label}</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-amber-50/70 font-medium">
+                  <td className={`${td} text-center`} colSpan={2}>
+                    Tổng
+                  </td>
+                  {totalCells(summarize(rows))}
+                </tr>
+              </Fragment>
+            ))}
+            {items.length > 0 && (
+              <tr className="bg-slate-100 font-semibold">
+                <td className={`${td} text-center`} colSpan={3}>
+                  Toàn công ty
+                </td>
+                {totalCells(company)}
+              </tr>
+            )}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                  Chưa có tài khoản quảng cáo nào
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Ngưỡng tô màu giá số — chỉ Admin. */
+function ThresholdsModal({
+  initial,
+  onClose,
+  onDone,
+}: {
+  initial: CostThresholds | null;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const toast = useToast();
+  const [green, setGreen] = useState(initial ? String(initial.green_max) : "");
+  const [red, setRed] = useState(initial ? String(initial.red_min) : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const g = Number(green);
+  const r = Number(red);
+  const valid = green !== "" && red !== "" && Number.isInteger(g) && Number.isInteger(r) && g >= 0 && g < r;
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await clientApi("/marketing-hub/cost-thresholds", {
+        method: "PUT",
+        body: JSON.stringify({ green_max: g, red_min: r }),
+      });
+      toast.success("Đã lưu ngưỡng giá số");
+      await onDone();
+      onClose();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Ngưỡng giá số"
+      description="Giá số ≤ mốc xanh tô xanh; trên mốc đỏ tô đỏ; ở giữa tô cam. Đơn vị: VNĐ/data."
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="button" disabled={busy || !valid} onClick={() => void save()}>
+            {busy ? "Đang lưu..." : "Lưu"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Mốc xanh (giá số thấp, ≤)">
+          <Input type="number" min={0} step={1000} value={green} onChange={(e) => setGreen(e.target.value)} />
+        </Field>
+        <Field label="Mốc đỏ (vượt ngưỡng, >)">
+          <Input type="number" min={0} step={1000} value={red} onChange={(e) => setRed(e.target.value)} />
+        </Field>
+        {green !== "" && red !== "" && !valid && (
+          <p className="text-sm text-amber-600">Mốc xanh phải nhỏ hơn mốc đỏ (số nguyên ≥ 0)</p>
+        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+    </Modal>
   );
 }
 

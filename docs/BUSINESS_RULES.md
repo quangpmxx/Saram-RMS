@@ -44,5 +44,9 @@ Danh sách quyền chi tiết cho Quản lý/Leader (khung đã có, chưa có d
 
 ## Marketing Hub (đã duyệt 2026-11-02)
 - Chỉ VNĐ. Mỗi tài khoản quảng cáo đúng 1 nhân viên phụ trách (unique nền tảng + mã ngoài). Admin gán/đổi cho ai cũng được; MKT chỉ liên kết/đồng bộ/gỡ tài khoản của mình, không giành tài khoản đã có người phụ trách; Quản lý chỉ xem.
-- Chi phí/data, chi phí/người PV, chi phí/người đi làm: chỉ ở Dashboard chung, tính theo NGÀY UP của lead, mẫu số 0 hoặc chưa đồng bộ thì hiện —. Không hiển thị chi phí theo nhân viên. Cảnh báo mặc định: chi tiêu tăng >50% so với kỳ trước.
+- **Bảng Hiệu quả Marketing** (duyệt 2026-11-03): nhóm theo nhân viên phụ trách → từng TKQC (Loại TK, Số data, Tổng chi tiêu, Giá số, Trạng thái camp, Trạng thái TK) + dòng Tổng mỗi nhân viên + dòng Toàn công ty.
+  - **Số data** của TKQC = số lead (chưa xoá) up trong kỳ có chọn **Nguồn MKT gắn với TKQC đó** (Admin gắn; 1 nguồn ↔ 1 TKQC). Không dùng số kết quả Facebook. TKQC chưa gắn nguồn → "Chưa gắn nguồn MKT".
+  - **Giá số** = chi tiêu ÷ số data; dòng Tổng = tổng chi ÷ tổng data (không lấy trung bình cộng). Admin đặt 2 mốc: ≤ mốc xanh tô xanh, > mốc đỏ tô đỏ, ở giữa tô cam.
+  - **Trạng thái camp**: có ≥1 chiến dịch ACTIVE → Đang hoạt động, ngược lại Dừng. **Trạng thái TK** theo `account_status` Facebook: 1 → Live ADS (xanh); 3/8/9 → Chưa thanh toán (cam); còn lại → Die ADS (đỏ). Lấy lúc đồng bộ.
+- Chi phí/người đi làm: kết quả chung toàn công ty ở Dashboard (người đi làm lấy từ danh sách đưa đón, không có Nguồn MKT) — chưa làm. Chỉ số chiến dịch (CTR, click…) làm sau. Không xuất Excel.
 - Token Facebook lưu mã hoá (AES-256-GCM, khoá `MARKETING_TOKEN_KEY` ≥ 32 ký tự), không bao giờ trả về API/frontend.

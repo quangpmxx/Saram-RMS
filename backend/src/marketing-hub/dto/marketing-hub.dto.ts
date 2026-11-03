@@ -3,7 +3,10 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsInt,
   IsNotEmpty,
+  Max,
+  Min,
   IsOptional,
   IsString,
   IsUUID,
@@ -43,6 +46,16 @@ export class ConnectAdAccountDto {
 export class ChangeOwnerDto {
   @IsUUID('4')
   owner_id: string;
+}
+
+export class SetMktSourceDto {
+  /** null = bỏ gắn. */
+  @IsOptional() @IsUUID('4') mkt_source_id: string | null;
+}
+
+export class SaveCostThresholdsDto {
+  @IsInt() @Min(0) @Max(100_000_000) green_max: number;
+  @IsInt() @Min(0) @Max(100_000_000) red_min: number;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;

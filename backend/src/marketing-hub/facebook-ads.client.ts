@@ -50,6 +50,41 @@ async function getAll<T>(url: string, token: string): Promise<T[]> {
   return out;
 }
 
+/** Gọi 1 lần (không theo phân trang). */
+async function getOne<T>(url: string, token: string): Promise<T> {
+  const res: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const body = (await res.json().catch(() => ({}))) as T & {
+    error?: { message?: string; code?: number };
+  };
+  if (!res.ok || body.error) {
+    throw new FacebookApiError(
+      body.error?.message ?? `Facebook trả lỗi HTTP ${res.status}`,
+      body.error?.code,
+    );
+  }
+  return body;
+}
+
+/** Trạng thái tài khoản (account_status) + có chiến dịch nào đang chạy không. */
+export async function fetchAccountHealth(
+  token: string,
+  externalId: string,
+): Promise<{ accountStatus: number; hasActiveCampaign: boolean }> {
+  const account = await getOne<{ account_status?: number }>(
+    `${GRAPH}/act_${externalId}?fields=account_status`,
+    token,
+  );
+  const status = encodeURIComponent(JSON.stringify(['ACTIVE']));
+  const campaigns = await getOne<{ data?: unknown[] }>(
+    `${GRAPH}/act_${externalId}/campaigns?fields=id&effective_status=${status}&limit=1`,
+    token,
+  );
+  return {
+    accountStatus: Number(account.account_status ?? 0),
+    hasActiveCampaign: (campaigns.data?.length ?? 0) > 0,
+  };
+}
+
 /** Các tài khoản quảng cáo mà token này truy cập được. */
 export async function listAdAccounts(token: string): Promise<FbAdAccount[]> {
   const rows = await getAll<{ account_id: string; name?: string; currency: string }>(

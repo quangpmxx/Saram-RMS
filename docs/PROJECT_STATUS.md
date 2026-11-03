@@ -7,7 +7,7 @@ dashboard · candidates (Data lao động) · marketing-hub · shuttle (Đưa đ
 
 ## Tình trạng
 - **Hoàn thành & đang dùng:** 10 Phase gốc (tài khoản/nhóm, nhập Data + Excel, chia thủ công/tự động round-robin, ghi chú & trạng thái cuộc gọi, lịch PV/gọi lại, Kho chăm sóc, Dashboard/Báo cáo, Nhật ký, Trùng lặp, phân quyền module), cùng các module mở rộng: Đưa đón, Chấm công/Check-in, Báo cáo ngày + phạt, Nghỉ phép, Nhập doanh số, Quản lý đơn, Sinh nhật, Phản ánh ẩn danh, Thông báo (chuông tách Data / Khác).
-- **Marketing Hub (giai đoạn 1, 2026-11-02):** liên kết Facebook Ads bằng access token dán tay (không OAuth), đồng bộ chi tiêu theo ngày (cron 6 giờ + nút Đồng bộ), bảng tài khoản quảng cáo + bộ lọc, gán nhân viên phụ trách. **Chưa làm:** khối Hiệu quả Marketing trên Dashboard (chi phí/data, /người PV, /người đi làm), biểu đồ xu hướng/so sánh kỳ, cảnh báo bất thường, Fanpage, TikTok, OAuth. Chưa kiểm với token Facebook thật.
+- **Marketing Hub (giai đoạn 1, 2026-11-02):** liên kết Facebook Ads bằng access token dán tay (không OAuth), đồng bộ chi tiêu theo ngày (cron 6 giờ + nút Đồng bộ), bảng tài khoản quảng cáo + bộ lọc, gán nhân viên phụ trách. **2026-11-03:** Nguồn MKT (Admin) + bảng Hiệu quả Marketing (số data theo Nguồn MKT gắn TKQC, giá số tô màu theo ngưỡng, trạng thái camp/TK từ Facebook). **Chưa làm:** chi phí/người đi làm toàn công ty trên Dashboard, biểu đồ xu hướng/so sánh kỳ, cảnh báo bất thường, Fanpage, TikTok, OAuth. Chưa kiểm với token Facebook thật.
 - **Đã gỡ:** worker Care-pool tự động + màn "Cấu hình vận hành", thông báo Zalo (2026-07-24), một số endpoint chết (xem doc 15).
 - **Tổng rà soát 30-10-2026** (nhánh `refactor/tong-ra-soat`, chi tiết trong `docs/15-…`): B1–B3, B5–B8 xong; 577 test backend + 135 e2e đạt (01-11).
 

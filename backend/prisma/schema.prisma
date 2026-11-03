@@ -231,7 +231,7 @@ model Account {
 
   // Phase 1 — quan hệ ngược từ Lead/ImportJob
   uploadedLeads            Lead[]      @relation("LeadUploadedBy")
-  adAccounts               AdAccount[]  @relation("AdAccountOwner")
+  adAccounts               AdAccount[] @relation("AdAccountOwner")
   assignedLeads            Lead[]      @relation("LeadAssignedTo")
   heldLeads                Lead[]      @relation("LeadHeldBy")
   carePoolLockedLeads      Lead[]      @relation("LeadCarePoolLockedBy")
@@ -1464,30 +1464,49 @@ model MktSource {
   name      String   @unique @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at")
 
-  leads Lead[]
+  leads     Lead[]
+  adAccount AdAccount?
 
   @@map("mkt_sources")
+}
+
+/// Marketing Hub — ngưỡng tô màu "Giá số" (VNĐ/data), 1 dòng duy nhất, chỉ Admin sửa.
+/// Giá số ≤ green_max: xanh; > red_min: đỏ; ở giữa: cam.
+model MktCostThreshold {
+  id        String   @id @default(uuid()) @db.Uuid
+  greenMax  Int      @map("green_max")
+  redMin    Int      @map("red_min")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("mkt_cost_thresholds")
 }
 
 /// Marketing Hub — tài khoản quảng cáo đã liên kết bằng access token. Token
 /// lưu MÃ HOÁ (AES-256-GCM), không bao giờ trả về qua API. Mỗi tài khoản chỉ
 /// có đúng 1 nhân viên phụ trách (unique theo nền tảng + mã ngoài).
 model AdAccount {
-  id             String          @id @default(uuid()) @db.Uuid
-  platform       AdPlatform
-  externalId     String          @map("external_id") @db.VarChar(64)
-  name           String          @db.VarChar(255)
-  currency       String          @db.VarChar(8)
-  ownerId        String          @map("owner_id") @db.Uuid
-  encryptedToken String?         @map("encrypted_token")
-  status         AdAccountStatus @default(connected)
-  lastSyncAt     DateTime?       @map("last_sync_at")
-  lastError      String?         @map("last_error") @db.VarChar(500)
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id                String          @id @default(uuid()) @db.Uuid
+  platform          AdPlatform
+  externalId        String          @map("external_id") @db.VarChar(64)
+  name              String          @db.VarChar(255)
+  currency          String          @db.VarChar(8)
+  ownerId           String          @map("owner_id") @db.Uuid
+  encryptedToken    String?         @map("encrypted_token")
+  status            AdAccountStatus @default(connected)
+  lastSyncAt        DateTime?       @map("last_sync_at")
+  lastError         String?         @map("last_error") @db.VarChar(500)
+  /// Nguồn MKT gắn với TKQC (1 nguồn ↔ 1 TKQC): số data của TKQC = số lead up có nguồn này.
+  mktSourceId       String?         @unique @map("mkt_source_id") @db.Uuid
+  /// account_status thô của Facebook (1 = hoạt động, 3/8/9 = chưa thanh toán, còn lại = die).
+  fbAccountStatus   Int?            @map("fb_account_status") @db.SmallInt
+  /// Có ít nhất 1 chiến dịch đang chạy (lấy lúc đồng bộ).
+  hasActiveCampaign Boolean?        @map("has_active_campaign")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
 
-  owner  Account        @relation("AdAccountOwner", fields: [ownerId], references: [id])
-  spends AdSpendDaily[]
+  owner     Account        @relation("AdAccountOwner", fields: [ownerId], references: [id])
+  mktSource MktSource?     @relation(fields: [mktSourceId], references: [id], onDelete: SetNull)
+  spends    AdSpendDaily[]
 
   @@unique([platform, externalId])
   @@index([ownerId])

@@ -1,6 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { MarketingHubService } from './marketing-hub.service';
-import { ChangeOwnerDto, ConnectAdAccountDto, OverviewQueryDto, SaveMktSourcesDto } from './dto/marketing-hub.dto';
+import {
+  ChangeOwnerDto,
+  ConnectAdAccountDto,
+  OverviewQueryDto,
+  SaveCostThresholdsDto,
+  SaveMktSourcesDto,
+  SetMktSourceDto,
+} from './dto/marketing-hub.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -37,6 +44,20 @@ export class MarketingHubController {
   @Roles('admin')
   changeOwner(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeOwnerDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.changeOwner(id, dto.owner_id, user);
+  }
+
+  /** Gắn Nguồn MKT cho TKQC (để đếm số data / giá số): chỉ Admin. */
+  @Patch('ad-accounts/:id/mkt-source')
+  @Roles('admin')
+  setMktSource(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetMktSourceDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.setMktSource(id, dto.mkt_source_id ?? null, user);
+  }
+
+  /** Ngưỡng tô màu giá số: chỉ Admin sửa (xem kèm trong overview). */
+  @Put('cost-thresholds')
+  @Roles('admin')
+  saveCostThresholds(@Body() dto: SaveCostThresholdsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.saveCostThresholds(dto.green_max, dto.red_min, user);
   }
 
   /** Danh mục Nguồn MKT — xem: Admin/Quản lý/MKT (dùng ở form thêm lao động). */

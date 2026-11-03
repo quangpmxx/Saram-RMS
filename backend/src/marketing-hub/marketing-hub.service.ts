@@ -16,6 +16,7 @@ import { vnDayRange } from '../care-warehouse/care-time.util';
 import { decryptToken, encryptToken } from './token-crypto';
 import {
   FacebookApiError,
+  fetchAccountHealth,
   fetchDailySpend,
   listAdAccounts,
 } from './facebook-ads.client';
@@ -27,6 +28,14 @@ const RESYNC_DAYS = 3; // Meta có thể điều chỉnh số liệu những ng�
 const vnToday = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 const vnDaysAgo = (n: number) =>
   new Date(Date.now() + 7 * 3600_000 - n * DAY_MS).toISOString().slice(0, 10);
+
+/** account_status Facebook → Live ADS / Chưa thanh toán / Die ADS. */
+export function accountHealth(code: number | null): 'live' | 'unpaid' | 'die' | null {
+  if (code === null) return null;
+  if (code === 1 || code === 201) return 'live'; // ACTIVE, ANY_ACTIVE
+  if ([3, 8, 9].includes(code)) return 'unpaid'; // UNSETTLED, PENDING_SETTLEMENT, IN_GRACE_PERIOD
+  return 'die'; // DISABLED, PENDING_RISK_REVIEW, CLOSED…
+}
 
 @Injectable()
 export class MarketingHubService {
@@ -142,6 +151,7 @@ export class MarketingHubService {
         const token = decryptToken(account.encryptedToken, this.tokenKey());
         const since = vnDaysAgo(account.lastSyncAt ? RESYNC_DAYS : FIRST_SYNC_DAYS);
         const rows = await fetchDailySpend(token, account.externalId, since, vnToday());
+        const health = await fetchAccountHealth(token, account.externalId);
         await this.prisma.$transaction(
           rows.map((r) =>
             this.prisma.adSpendDaily.upsert({
@@ -153,7 +163,13 @@ export class MarketingHubService {
         );
         await this.prisma.adAccount.update({
           where: { id },
-          data: { status: 'connected', lastSyncAt: new Date(), lastError: null },
+          data: {
+            status: 'connected',
+            lastSyncAt: new Date(),
+            lastError: null,
+            fbAccountStatus: health.accountStatus,
+            hasActiveCampaign: health.hasActiveCampaign,
+          },
         });
       } catch (e) {
         const invalid = e instanceof FacebookApiError && e.isTokenInvalid;
@@ -258,6 +274,64 @@ export class MarketingHubService {
     return { ok: true };
   }
 
+  /** Gắn/bỏ Nguồn MKT cho TKQC (chỉ Admin — chặn ở controller). 1 nguồn chỉ gắn 1 TKQC. */
+  async setMktSource(id: string, mktSourceId: string | null, user: AuthenticatedUser) {
+    const account = await this.prisma.adAccount.findUnique({ where: { id } });
+    if (!account) throw new NotFoundException('Không tìm thấy tài khoản quảng cáo');
+    if (mktSourceId) {
+      const source = await this.prisma.mktSource.findUnique({
+        where: { id: mktSourceId },
+        include: { adAccount: { select: { id: true, name: true } } },
+      });
+      if (!source) throw new BadRequestException('Nguồn MKT không tồn tại');
+      if (source.adAccount && source.adAccount.id !== id) {
+        throw new ConflictException(`Nguồn MKT này đã gắn với TKQC "${source.adAccount.name}"`);
+      }
+    }
+    try {
+      await this.prisma.adAccount.update({ where: { id }, data: { mktSourceId } });
+    } catch (e) {
+      if ((e as { code?: string }).code === 'P2002') {
+        throw new ConflictException('Nguồn MKT này đã gắn với TKQC khác');
+      }
+      throw e;
+    }
+    await this.audit.log({
+      accountId: user.id, actionType: 'update', entityType: 'ad_account', entityId: id,
+      fieldChanged: 'mkt_source_id', oldValue: account.mktSourceId ?? undefined,
+      newValue: mktSourceId ?? undefined,
+    });
+    return { ok: true };
+  }
+
+  async getCostThresholds() {
+    const row = await this.prisma.mktCostThreshold.findFirst();
+    return row ? { green_max: row.greenMax, red_min: row.redMin } : null;
+  }
+
+  /** Lưu ngưỡng giá số (chỉ Admin — chặn ở controller). */
+  async saveCostThresholds(greenMax: number, redMin: number, user: AuthenticatedUser) {
+    if (greenMax >= redMin) {
+      throw new BadRequestException('Mốc xanh phải nhỏ hơn mốc đỏ');
+    }
+    const existing = await this.prisma.mktCostThreshold.findFirst();
+    if (existing) {
+      await this.prisma.mktCostThreshold.update({
+        where: { id: existing.id },
+        data: { greenMax, redMin },
+      });
+    } else {
+      await this.prisma.mktCostThreshold.create({ data: { greenMax, redMin } });
+    }
+    await this.audit.log({
+      accountId: user.id, actionType: 'update', entityType: 'mkt_cost_threshold', entityId: user.id,
+      fieldChanged: 'thresholds',
+      oldValue: existing ? `${existing.greenMax}/${existing.redMin}` : undefined,
+      newValue: `${greenMax}/${redMin}`,
+    });
+    return this.getCostThresholds();
+  }
+
   /** Tổng quan: bảng tài khoản (không có token) + tổng chi tiêu + số data chung toàn công ty trong kỳ. */
   async overview(q: OverviewQueryDto) {
     const to = q.to ?? vnToday();
@@ -270,9 +344,23 @@ export class MarketingHubService {
     };
     const accounts = await this.prisma.adAccount.findMany({
       where: accountWhere,
-      include: { owner: { select: { id: true, fullName: true } } },
+      include: {
+        owner: { select: { id: true, fullName: true } },
+        mktSource: { select: { id: true, name: true } },
+      },
       orderBy: [{ owner: { fullName: 'asc' } }, { name: 'asc' }],
     });
+    const uploadedInRange = { gte: vnDayRange(from).start, lt: vnDayRange(to).end };
+    // Số data của TKQC = số lead (chưa xoá) up trong kỳ có chọn Nguồn MKT gắn với TKQC đó.
+    const sourceIds = accounts.map((a) => a.mktSourceId).filter((id): id is string => !!id);
+    const dataCounts = sourceIds.length
+      ? await this.prisma.lead.groupBy({
+          by: ['mktSourceId'],
+          where: { deletedAt: null, mktSourceId: { in: sourceIds }, uploadedAt: uploadedInRange },
+          _count: { _all: true },
+        })
+      : [];
+    const dataBySource = new Map(dataCounts.map((d) => [d.mktSourceId, d._count._all]));
     const spends = await this.prisma.adSpendDaily.groupBy({
       by: ['adAccountId'],
       where: {
@@ -285,7 +373,7 @@ export class MarketingHubService {
     const leadTotal = await this.prisma.lead.count({
       where: {
         deletedAt: null,
-        uploadedAt: { gte: vnDayRange(from).start, lt: vnDayRange(to).end },
+        uploadedAt: uploadedInRange,
       },
     });
     const items = accounts.map((a) => ({
@@ -299,10 +387,16 @@ export class MarketingHubService {
       synced: a.lastSyncAt !== null,
       last_sync_at: a.lastSyncAt?.toISOString() ?? null,
       last_error: a.lastError,
+      mkt_source: a.mktSource,
+      // null = TKQC chưa gắn Nguồn MKT.
+      data_count: a.mktSourceId ? (dataBySource.get(a.mktSourceId) ?? 0) : null,
+      account_health: accountHealth(a.fbAccountStatus),
+      has_active_campaign: a.hasActiveCampaign,
     }));
     return {
       from,
       to,
+      cost_thresholds: await this.getCostThresholds(),
       total_spend: items.reduce((s, i) => s + i.total_spend, 0),
       has_synced_data: items.some((i) => i.synced),
       lead_total: leadTotal,
