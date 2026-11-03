@@ -401,6 +401,60 @@ export class MarketingHubService {
     return { ok: true };
   }
 
+  /**
+   * Khối Marketing trên Dashboard (hôm nay, giờ VN, không theo bộ lọc Dashboard):
+   * chi phí + data hôm nay (data = lead có Nguồn MKT đã gắn TKQC, như dòng Toàn công ty);
+   * CP/phỏng vấn = chi tiêu HÔM QUA ÷ số người trong danh sách đưa đón HÔM NAY.
+   */
+  async today() {
+    const today = vnToday();
+    const yesterday = vnDaysAgo(1);
+    const spendOn = async (d: string) =>
+      Number(
+        (
+          await this.prisma.adSpendDaily.aggregate({
+            where: { date: new Date(d) },
+            _sum: { spend: true },
+          })
+        )._sum.spend ?? 0,
+      );
+    const linked = await this.prisma.adAccount.findMany({
+      where: { mktSourceId: { not: null } },
+      select: { mktSourceId: true },
+      distinct: ['mktSourceId'],
+    });
+    const [spend, yesterdaySpend, dataCount, interviewCount] =
+      await Promise.all([
+        spendOn(today),
+        spendOn(yesterday),
+        linked.length
+          ? this.prisma.lead.count({
+              where: {
+                deletedAt: null,
+                mktSourceId: { in: linked.map((l) => l.mktSourceId!) },
+                uploadedAt: {
+                  gte: vnDayRange(today).start,
+                  lt: vnDayRange(today).end,
+                },
+              },
+            })
+          : 0,
+        this.prisma.shuttleRecord.count({
+          where: { date: new Date(today), deletedAt: null },
+        }),
+      ]);
+    return {
+      date: today,
+      spend,
+      data_count: dataCount,
+      cost_per_data: dataCount > 0 ? spend / dataCount : null,
+      yesterday_spend: yesterdaySpend,
+      interview_count: interviewCount,
+      cost_per_interview:
+        interviewCount > 0 ? yesterdaySpend / interviewCount : null,
+    };
+  }
+
   async getCostThresholds() {
     const row = await this.prisma.mktCostThreshold.findFirst();
     return row ? { green_max: row.greenMax, red_min: row.redMin } : null;

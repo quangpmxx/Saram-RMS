@@ -42,6 +42,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { computeDateRange, type DatePreset, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
+import { MARKETING_TODAY_ROLES, MarketingTodayCard } from "./marketing-today-card";
 import { CARE_PROGRESS_ROLES, CareProgressBlock } from "@/components/care-progress/care-progress-block";
 
 /**
@@ -442,9 +443,9 @@ export function DashboardClient({
   return (
     <div className="-mt-3 mx-auto max-w-7xl space-y-5">
       {/* Bộ lọc — Mục 5, yêu cầu trực tiếp người dùng: Khoảng thời gian/Nhóm/Nhân viên/Nguồn, cập nhật realtime. Thu hẹp cả cụm lọc (2026-07-14, yêu cầu trực tiếp người dùng). */}
-      <Card className="p-3">
-        <div className="flex flex-wrap items-end gap-2.5">
-          <Field label="Khoảng thời gian" uiSize="sm" className="w-36">
+      <Card className="p-2">
+        <div className="flex flex-wrap items-end gap-1.5">
+          <Field label="Khoảng thời gian" uiSize="xs" className="w-32">
             <DateRangePicker
               value={dateRange}
               onChange={(next) => {
@@ -454,9 +455,9 @@ export function DashboardClient({
             />
           </Field>
           {canFilterByTeam && (
-            <Field label="Nhóm" uiSize="sm" className="w-36">
+            <Field label="Nhóm" uiSize="xs" className="w-32">
               <Select
-                uiSize="sm"
+                uiSize="xs"
                 value={teamId}
                 onChange={(event) => {
                   const next = event.target.value;
@@ -474,9 +475,9 @@ export function DashboardClient({
             </Field>
           )}
           {canFilterBySale && (
-            <Field label="Nhân viên" uiSize="sm" className="w-36">
+            <Field label="Nhân viên" uiSize="xs" className="w-32">
               <Select
-                uiSize="sm"
+                uiSize="xs"
                 value={accountId}
                 onChange={(event) => {
                   const next = event.target.value;
@@ -493,9 +494,9 @@ export function DashboardClient({
               </Select>
             </Field>
           )}
-          <Field label="Nguồn" uiSize="sm" className="w-32">
+          <Field label="Nguồn" uiSize="xs" className="w-28">
             <Select
-              uiSize="sm"
+              uiSize="xs"
               value={sourceId}
               onChange={(event) => {
                 const next = event.target.value;
@@ -516,15 +517,15 @@ export function DashboardClient({
             {canViewPending && (
               <Link
                 href="/candidates?view=pending"
-                className="flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
+                className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
               >
                 <Users className="h-3.5 w-3.5" strokeWidth={2} />
                 Chờ phân chia: {summary.pending_count.toLocaleString("vi-VN")}
                 <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
               </Link>
             )}
-            <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void refresh()}>
-              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} strokeWidth={2} />
+            <Button type="button" variant="outline" size="xs" disabled={loading} onClick={() => void refresh()}>
+              <RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} strokeWidth={2} />
               Làm mới
             </Button>
           </div>
@@ -560,6 +561,8 @@ export function DashboardClient({
           );
         })}
       </div>
+
+      {MARKETING_TODAY_ROLES.includes(currentUserRole) && <MarketingTodayCard />}
 
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">

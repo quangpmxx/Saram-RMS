@@ -38,6 +38,12 @@ export class MarketingHubController {
     return this.service.overview(query);
   }
 
+  /** Khối Marketing hôm nay trên Dashboard (Admin/Quản lý/MKT). */
+  @Get('today')
+  today() {
+    return this.service.today();
+  }
+
   @Post('ad-accounts/connect')
   @HttpCode(200)
   @Roles('admin', 'mkt')

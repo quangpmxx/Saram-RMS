@@ -242,3 +242,29 @@ describe('MarketingHubService', () => {
     );
   });
 });
+
+describe('MarketingHubService.today', () => {
+  it('CP/phỏng vấn = chi tiêu hôm qua ÷ số đưa đón hôm nay; chi phí/data theo hôm nay', async () => {
+    const aggregate = jest
+      .fn()
+      .mockResolvedValueOnce({ _sum: { spend: 600000 } })
+      .mockResolvedValueOnce({ _sum: { spend: 900000 } });
+    const prisma = {
+      adSpendDaily: { aggregate },
+      adAccount: {
+        findMany: jest.fn().mockResolvedValue([{ mktSourceId: 's1' }]),
+      },
+      lead: { count: jest.fn().mockResolvedValue(20) },
+      shuttleRecord: { count: jest.fn().mockResolvedValue(3) },
+    };
+    const r = await build(prisma).today();
+    expect(r).toMatchObject({
+      spend: 600000,
+      data_count: 20,
+      cost_per_data: 30000,
+      yesterday_spend: 900000,
+      interview_count: 3,
+      cost_per_interview: 300000,
+    });
+  });
+});
