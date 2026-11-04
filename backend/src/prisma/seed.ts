@@ -1191,6 +1191,15 @@ async function main() {
   await seedAdmin(prisma);
   await seedLeadSources(prisma);
   await seedStatusCatalog(prisma);
+
+  // Máy chủ thật (NODE_ENV=production trong .env): chỉ tạo admin + danh mục
+  // chuẩn, KHÔNG chèn dữ liệu mẫu giả (ứng viên, đội, lịch xe...).
+  if (process.env.NODE_ENV === 'production') {
+    console.log('NODE_ENV=production — bỏ qua dữ liệu mẫu.');
+    await prisma.$disconnect();
+    return;
+  }
+
   await seedSampleCandidates(prisma);
   await seedPhase2Sample(prisma);
   await seedCrossTeamDuplicateSample(prisma);
