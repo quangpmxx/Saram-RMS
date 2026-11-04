@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { computeDateRange, type DateRangeValue } from "@/lib/date-range";
+import { PancakeSection } from "./pancake-section";
 
 interface AdItem {
   id: string;
@@ -264,6 +265,16 @@ export function MarketingHubClient({
       </div>
 
       {data && <EfficiencyTable data={data} />}
+
+      <PancakeSection
+        from={from}
+        to={to}
+        isAdmin={isAdmin}
+        canConnect={canConnect}
+        userId={userId}
+        staff={staff}
+        mktSources={mktSources}
+      />
 
       <h2 className="pt-2 text-sm font-semibold text-slate-700">
         Tài khoản quảng cáo

@@ -17,6 +17,10 @@ import { CalendarController } from '../calendar/calendar.controller';
 import { AuditLogController } from '../audit-log/audit-log.controller';
 import { AccountsController } from '../accounts/accounts.controller';
 import { OrderManagementController } from '../order-management/order-management.controller';
+import {
+  PancakeAutoUpController,
+  PancakeController,
+} from '../pancake/pancake.controller';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, ngoài phạm vi Design Freeze
@@ -90,6 +94,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
       InterviewCallbackController,
       CareWarehouseController,
       DistributionRuleController,
+      PancakeAutoUpController,
     ],
   },
   {
@@ -100,7 +105,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     label: 'Marketing Hub',
     defaultRoles: ['admin', 'mkt'],
     viewRoles: ['manager'],
-    controllers: [MarketingHubController],
+    controllers: [MarketingHubController, PancakeController],
   },
   {
     code: 'shuttle',

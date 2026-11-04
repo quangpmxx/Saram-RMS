@@ -157,6 +157,8 @@ model Team {
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ DailyReport (Báo cáo hằng ngày)
   dailyReports DailyReport[]
 
+  pancakeAutoUp PancakeAutoUpTeam?
+
   @@map("teams")
 }
 
@@ -232,6 +234,7 @@ model Account {
   // Phase 1 — quan hệ ngược từ Lead/ImportJob
   uploadedLeads            Lead[]      @relation("LeadUploadedBy")
   adAccounts               AdAccount[] @relation("AdAccountOwner")
+  pancakePages             PancakePage[] @relation("PancakePageOwner")
   assignedLeads            Lead[]      @relation("LeadAssignedTo")
   heldLeads                Lead[]      @relation("LeadHeldBy")
   carePoolLockedLeads      Lead[]      @relation("LeadCarePoolLockedBy")
@@ -536,6 +539,7 @@ model Lead {
   careStoppedBy           Account?               @relation("LeadCareStoppedBy", fields: [careStoppedById], references: [id])
   careStopRequestedBy     Account?               @relation("LeadCareStopRequestedBy", fields: [careStopRequestedById], references: [id])
   careAssignments         CareAssignment[]
+  pancakeConversations    PancakeConversation[]
 
   @@index([phoneNumber])
   @@index([uploadedAt])
@@ -1008,6 +1012,8 @@ model ShuttleRecord {
   /// Dự án phụ — nâng cấp toàn diện: "Kết quả PV" (Đỗ phỏng vấn/Trượt phỏng
   /// vấn) — tách riêng khỏi "Tình trạng đón" ở trên.
   interviewResult String?  @map("interview_result") @db.VarChar(50)
+  /// "Nguồn" (Data / GT) — giá trị chọn từ shuttle_options field 'lead_source' (2026-11-04).
+  leadSource      String?  @map("lead_source") @db.VarChar(50)
   note            String?
   createdById     String   @map("created_by") @db.Uuid
   updatedById     String   @map("updated_by") @db.Uuid
@@ -1464,8 +1470,9 @@ model MktSource {
   name      String   @unique @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at")
 
-  leads      Lead[]
-  adAccounts AdAccount[]
+  leads        Lead[]
+  adAccounts   AdAccount[]
+  pancakePages PancakePage[]
 
   @@map("mkt_sources")
 }
@@ -1530,4 +1537,76 @@ model AdSpendDaily {
   @@unique([adAccountId, date])
   @@index([date])
   @@map("ad_spend_daily")
+}
+
+/// Marketing Hub — page Pancake liên kết bằng token page (lưu MÃ HOÁ, không trả về API).
+/// Data tự động từ page: Nguồn MKT = mktSourceId, người up = ownerId.
+model PancakePage {
+  id             String          @id @default(uuid()) @db.Uuid
+  pageId         String          @unique @map("page_id") @db.VarChar(64)
+  name           String          @db.VarChar(255)
+  ownerId        String          @map("owner_id") @db.Uuid
+  mktSourceId    String?         @map("mkt_source_id") @db.Uuid
+  encryptedToken String?         @map("encrypted_token")
+  status         AdAccountStatus @default(connected)
+  /// Mốc updated_at (giờ Pancake) mới nhất đã xử lý — lần đọc sau chỉ cần tới mốc này.
+  cursorAt       DateTime?       @map("cursor_at")
+  lastSyncAt     DateTime?       @map("last_sync_at")
+  lastError      String?         @map("last_error") @db.VarChar(500)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  owner         Account               @relation("PancakePageOwner", fields: [ownerId], references: [id])
+  mktSource     MktSource?            @relation(fields: [mktSourceId], references: [id], onDelete: SetNull)
+  conversations PancakeConversation[]
+
+  @@map("pancake_pages")
+}
+
+/// Hội thoại Pancake đã thấy (để thống kê + chống up lặp). Mỗi hội thoại up tối đa 1 data.
+model PancakeConversation {
+  id             String    @id @default(uuid()) @db.Uuid
+  pancakePageId  String    @map("pancake_page_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.VarChar(128)
+  /// INBOX / COMMENT
+  type           String    @db.VarChar(16)
+  /// Thời điểm khách bắt đầu hội thoại (inserted_at của Pancake).
+  startedAt      DateTime  @map("started_at")
+  phoneNumber    String?   @map("phone_number") @db.VarChar(20)
+  phoneSeenAt    DateTime? @map("phone_seen_at")
+  leadId         String?   @map("lead_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  page PancakePage @relation(fields: [pancakePageId], references: [id], onDelete: Cascade)
+  lead Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@unique([pancakePageId, conversationId])
+  @@index([pancakePageId, startedAt])
+  @@map("pancake_conversations")
+}
+
+/// Cài đặt Up tự động (1 dòng duy nhất, dùng chung mọi page).
+model PancakeAutoUpConfig {
+  id          String    @id @default(uuid()) @db.Uuid
+  isActive    Boolean   @default(false) @map("is_active")
+  /// Bật lúc nào: chỉ up số khách để lại sau mốc này.
+  activatedAt DateTime? @map("activated_at")
+  /// Đã chia bao nhiêu số mới (không tính số trùng) — vị trí trong vòng tỉ lệ.
+  position    Int       @default(0)
+  updatedById String?   @map("updated_by") @db.Uuid
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("pancake_auto_up_config")
+}
+
+/// Tỉ lệ chia nhóm của Up tự động: nhóm có weight > 0 mới nhận số.
+model PancakeAutoUpTeam {
+  id         String @id @default(uuid()) @db.Uuid
+  teamId     String @unique @map("team_id") @db.Uuid
+  weight     Int    @db.SmallInt
+  orderIndex Int    @map("order_index") @db.SmallInt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("pancake_auto_up_teams")
 }
