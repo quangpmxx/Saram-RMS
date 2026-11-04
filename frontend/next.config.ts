@@ -61,6 +61,15 @@ const nextConfig: NextConfig = {
    * hành vi tự động này để giữ nguyên dấu "/" cuối cho riêng path Socket.IO.
    */
   skipTrailingSlashRedirect: true,
+  /**
+   * Next mặc định chỉ giữ 10MB thân request khi chuyển qua rewrite /api —
+   * file "Tải data cũ" >10MB bị cắt, backend chờ phần còn lại tới hết giờ →
+   * lỗi 500 (lỗi thật 2026-11-04, file 16MB). Đặt bằng giới hạn backend
+   * (LEGACY_MAX_FILE_SIZE_BYTES = 60MB, imports.controller.ts).
+   */
+  experimental: {
+    proxyClientMaxBodySize: "60mb",
+  },
 };
 
 export default nextConfig;
