@@ -7,7 +7,8 @@ import { type BirthdayToday } from "@/lib/types";
 import { MODULE_REGISTRY } from "@/lib/module-registry";
 import { Logo } from "@/components/logo";
 import { CollapsibleSidebar } from "@/components/collapsible-sidebar";
-import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
+import { type NavItem } from "@/components/sidebar-nav";
+import { MobileMenuButton } from "@/components/mobile-nav";
 import { UserMenu } from "@/components/user-menu";
 import { NotificationBell } from "@/components/notification-bell";
 import { SendNotificationButton } from "@/components/send-notification-button";
@@ -101,15 +102,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <BirthdayHeaderStrip />
                 {/* UI Polish — tinh chỉnh mật độ hiển thị: py-2.5 → py-1.5 (giảm ~28% chiều
                     cao header khi cộng với avatar/font thu nhỏ trong UserMenu). */}
-                <div className="flex items-center justify-between gap-3 px-4 py-1.5 md:px-6">
-                  <div className="md:hidden">
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 md:gap-3 md:px-6">
+                  <div className="flex shrink-0 items-center gap-1 md:hidden">
+                    <MobileMenuButton navItems={navItems} />
                     <Logo size="sm" showWordmark={false} href="/" />
                   </div>
                   <div className="hidden md:block">
                     <PageTitleSlot />
                   </div>
                   <BirthdayBanner />
-                  <div className="ml-auto flex items-center gap-3">
+                  <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
                     {(user.role === "admin" || user.role === "manager") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
@@ -117,11 +119,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
                     <UserMenu user={user} />
                   </div>
                 </div>
-                <div className="border-t border-slate-100 px-2 py-2 md:hidden">
-                  <SidebarNav items={navItems} variant="horizontal" />
-                </div>
               </BirthdayHeaderBackground>
-              <main className="relative flex-1 p-4 md:p-6">
+              <main className="relative flex-1 p-3 sm:p-4 md:p-6">
+                {/* Điện thoại: header không còn chỗ cho tiêu đề trang → hiện ngay đầu nội dung. */}
+                <div className="relative z-10 mb-2 empty:hidden md:hidden">
+                  <PageTitleSlot />
+                </div>
                 {/* Nền mờ logo công ty — yêu cầu trực tiếp người dùng (2026-07-14):
                     đã áp dụng riêng cho Dashboard trước, nay chuyển lên layout dùng
                     chung để áp dụng cho MỌI trang module ("áp dụng nền logo này cho
@@ -153,6 +156,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 </div>
               </main>
             </div>
+
           </BirthdayLayoutBackground>
           </UiThemeProvider>
         </BirthdayThemeProvider>

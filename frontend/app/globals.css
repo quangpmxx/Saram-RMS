@@ -40,6 +40,40 @@ body {
   font-family: var(--font-be-vietnam-pro), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Điện thoại (2026-11-04): menu trượt từ trái, popup trượt từ đáy lên. */
+@keyframes mobile-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes mobile-sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.mobile-drawer-in {
+  animation: mobile-drawer-in 200ms ease-out;
+}
+@media (max-width: 639px) {
+  .mobile-sheet-up {
+    animation: mobile-sheet-up 180ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-drawer-in,
+  .mobile-sheet-up {
+    animation: none;
+  }
+}
+
 /* Thanh cuộn mảnh, đồng bộ tông trung tính — dùng cho bảng cuộn ngang/modal cuộn dọc. */
 * {
   scrollbar-width: thin;

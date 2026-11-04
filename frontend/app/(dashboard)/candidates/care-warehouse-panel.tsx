@@ -2,7 +2,7 @@
 
 import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMYHM } from "@/lib/date-format";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -47,6 +47,7 @@ import { SortableTh, applySortParams, type SortOrder } from "@/components/ui/sor
 import { SourceBadge } from "./source-badge";
 import { shouldOpenRowDetail } from "./row-click";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
+import { LEAD_CARD_CLASS, LEAD_CARD_GRID_CLASS, LeadLayoutToggle, useLeadLayout } from "./lead-layout";
 
 /** Sale có thể nhận việc — Leader: Sale nhóm mình; Quản lý/Admin: mọi Sale. */
 export interface CareSaleOption {
@@ -239,6 +240,8 @@ export function CareWarehousePanel({
   /** Query đã tải xong gần nhất — đang tải = query hiện tại chưa tải xong. */
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Kiểu xem bảng ngang / ô thẻ — dùng chung với tab Tất cả (điện thoại luôn ô thẻ). */
+  const { layout, chosen: chosenLayout, setLayout } = useLeadLayout();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [modal, setModal] = useState<
     | { mode: "none" }
@@ -501,6 +504,151 @@ export function CareWarehousePanel({
   const allOnPageSelected = items.length > 0 && items.every((i) => selected.has(i.id));
   const teamNameById = new Map(teams.map((t) => [t.id, t.name]));
 
+  /** Bấm chỗ trống trên hàng/ô thẻ → mở Chi tiết (yêu cầu người dùng 2026-10-29). */
+  function openDetailOnClick(event: ReactMouseEvent<HTMLElement>, item: CareWarehouseItem) {
+    if (!shouldOpenRowDetail(event)) return;
+    saveStateForReturn();
+    router.push(`/candidates/${item.id}`);
+  }
+
+  /**
+   * Nội dung từng ô của 1 data trong Kho — dùng chung cho dạng bảng ngang và dạng
+   * ô thẻ (2026-11-04) để 2 kiểu xem luôn hiện đủ, giống hệt dữ liệu.
+   */
+  function careParts(item: CareWarehouseItem, index: number, asCard: boolean) {
+    const care = item.care;
+    const open = care.open_assignment;
+    const isMine = open?.assignee?.id === currentUserId;
+    const isPending = pendingId === item.id;
+    const teamName = item.assigned_team_id ? teamNameById.get(item.assigned_team_id) : undefined;
+    // Đang giữ số: không giao/nhận cho người khác người giữ số (backend cũng chặn).
+    const heldById = item.is_held ? (item.held_by?.id ?? null) : undefined;
+    const canGiveHeld = heldById === undefined || saleOptions.some((s) => s.id === heldById);
+    const stt =
+      applied.stt_order === "desc"
+        ? (data?.total ?? 0) - (((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index)
+        : ((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1;
+
+    const checkbox = canAssign ? (
+      <Checkbox
+        aria-label={`Chọn ${item.full_name}`}
+        checked={selected.has(item.id)}
+        onChange={(e) =>
+          setSelected((prev) => {
+            const next = new Set(prev);
+            if (e.target.checked) next.add(item.id);
+            else next.delete(item.id);
+            return next;
+          })
+        }
+      />
+    ) : null;
+
+    const info = (
+      <>
+        <Link
+          href={`/candidates/${item.id}`}
+          onClick={saveStateForReturn}
+          // Tên căn giữa ô — giống tab Tất cả (yêu cầu người dùng 2026-10-29); dạng thẻ căn trái.
+          className={cn(
+            "block font-medium text-slate-800 hover:text-brand-700 hover:underline",
+            asCard ? "text-left text-sm" : "text-center",
+          )}
+        >
+          {item.full_name}
+        </Link>
+        <div className="mt-0.5 flex items-center gap-1 text-slate-500">
+          <span>{item.phone_number}</span>
+          <SourceBadge name={item.source.name} className="px-1.5 py-0 text-[10px]" />
+        </div>
+        {item.assigned_to && (
+          <p className="mt-0.5 text-[10px] text-slate-400">
+            Phụ trách: {item.assigned_to.name}
+            {teamName ? ` · ${teamName}` : ""}
+          </p>
+        )}
+      </>
+    );
+
+    const status = (
+      <div className={cn("flex gap-1", asCard ? "flex-row flex-wrap items-center" : "flex-col items-start")}>
+        {care.month_status === "cared" ? (
+          <Badge variant="success">Đã chăm sóc</Badge>
+        ) : (
+          <Badge variant="warning">Chưa chăm sóc</Badge>
+        )}
+        {care.assigned_pending && <Badge variant="danger">Đã giao, chưa xử lý</Badge>}
+        {item.is_held && (
+          <span className="flex flex-col rounded-lg bg-accent-50 px-2.5 py-0.5 text-xs leading-tight font-medium whitespace-nowrap text-accent-700 ring-1 ring-accent-600/20 ring-inset">
+            <span>Số đang được giữ bởi</span>
+            <span className="font-semibold">{item.held_by?.name ?? "—"}</span>
+          </span>
+        )}
+        {item.care_stop_requested_at && (
+          <Badge variant="info" title="Sale đề nghị dừng chăm sóc — mở Chi tiết để duyệt">
+            Chờ duyệt đóng
+          </Badge>
+        )}
+      </div>
+    );
+
+    const assignee = open?.assignee ? (
+      <div className="flex items-center gap-1.5">
+        <Avatar fullName={open.assignee.name} avatarUrl={open.assignee.avatar_url} className="h-6 w-6 shrink-0 text-[10px]" />
+        <div className="leading-tight">
+          <p className="font-medium text-slate-800">{isMine ? "Bạn" : <NameWithRoleHint account={open.assignee} />}</p>
+          <p className="text-[10px] text-slate-400">{open.processed ? "Đã xử lý" : "Chưa xử lý"}</p>
+        </div>
+      </div>
+    ) : (
+      <span className="text-slate-400">Chưa giao</span>
+    );
+
+    const notes = <CallStatusCellContent notes={notesByLeadId.get(item.id)} collapsedMaxHeight={CARE_NOTE_COLLAPSED_HEIGHT} />;
+
+    const actions = hasActions ? (
+      <div className={cn("flex items-center gap-1", asCard ? "flex-row flex-wrap justify-end" : "flex-col")}>
+        {canClaim && !care.assigned_pending && !isMine && (heldById === undefined || heldById === currentUserId) && (
+          <Button type="button" size="xs" variant="outline" disabled={isPending} onClick={() => void handleClaim(item)}>
+            <UserCheck className="h-3.5 w-3.5" strokeWidth={2} />
+            Nhận
+          </Button>
+        )}
+        {canAssign && item.care_stop_requested_at && (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="border-brand-300 text-brand-700 hover:bg-brand-50"
+            disabled={isPending}
+            onClick={() => void handleApproveStop(item)}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Duyệt đóng
+          </Button>
+        )}
+        {canAssign && canGiveHeld && (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => setModal({ mode: "reassign", item })}
+          >
+            {open ? "Giao lại" : "Giao"}
+          </Button>
+        )}
+        {canAssign && open && (
+          <Button type="button" size="xs" variant="danger" disabled={isPending} onClick={() => void handleRevoke(item)}>
+            Thu hồi
+          </Button>
+        )}
+      </div>
+    ) : null;
+
+    return { stt, checkbox, info, status, assignee, notes, actions, monthCount: care.month_care_count, totalCount: care.total_care_count };
+  }
+
   return (
     <div>
       {stats && (
@@ -516,6 +664,10 @@ export function CareWarehousePanel({
       )}
 
       <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
+        <div className="hidden flex-col gap-0.5 text-xs md:flex">
+          <span className="font-medium text-slate-700">Kiểu xem</span>
+          <LeadLayoutToggle value={chosenLayout} onChange={setLayout} />
+        </div>
         {currentUserRole === "sale" && (
           <div className="inline-flex self-end rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
             {(["all", "assigned"] as const).map((scope) => (
@@ -675,7 +827,41 @@ export function CareWarehousePanel({
       )}
 
       <Card className="overflow-hidden p-0">
-        <div ref={tableScrollRef} className="max-h-[calc(100vh-260px)] overflow-auto">
+        {/* Điện thoại: không cuộn lồng trong khung — cả trang cuộn. */}
+        <div ref={tableScrollRef} className="md:max-h-[calc(100vh-260px)] md:overflow-auto">
+          {layout === "cards" ? (
+            // Dạng ô thẻ (2026-11-04): đủ dữ liệu như bảng; điện thoại 1 cột xếp dọc.
+            <div className={LEAD_CARD_GRID_CLASS}>
+              {items.map((item, index) => {
+                const p = careParts(item, index, true);
+                return (
+                  <div key={item.id} className={LEAD_CARD_CLASS} onClick={(event) => openDetailOnClick(event, item)}>
+                    {/* Header ô thẻ nền đậm như đầu bảng (yêu cầu người dùng 2026-11-04). */}
+                    <div className="flex items-center gap-2 bg-slate-700 px-3 py-1.5">
+                      {p.checkbox && <span onClick={(e) => e.stopPropagation()}>{p.checkbox}</span>}
+                      <span className="text-[10px] text-slate-300 tabular-nums">#{p.stt}</span>
+                      <span className="ml-auto text-[11px] text-slate-300">
+                        CS 30 ngày <b className="text-white tabular-nums">{p.monthCount}</b> · Tổng{" "}
+                        <b className="text-white tabular-nums">{p.totalCount}</b>
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,40%)] gap-x-3 px-3 py-2">
+                      <div className="min-w-0">{p.info}</div>
+                      <div className="min-w-0">
+                        <p className="mb-0.5 text-[10px] font-semibold tracking-wide whitespace-nowrap text-slate-400 uppercase">Sale được giao</p>
+                        {p.assignee}
+                      </div>
+                    </div>
+                    <div className="px-3 pb-2">{p.status}</div>
+                    <div className="mx-3 mb-2 rounded-lg px-2 py-1 ring-1 ring-slate-100" style={callStatusCellStyle(item)}>
+                      {p.notes}
+                    </div>
+                    {p.actions && <div className="mt-auto border-t border-slate-100 px-3 py-2">{p.actions}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
           <table className="w-full min-w-[960px] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 bg-slate-700 text-[10px] font-semibold tracking-wider text-white uppercase shadow-[0_1px_0_0_rgba(15,23,42,0.06)]">
               <tr>
@@ -717,14 +903,7 @@ export function CareWarehousePanel({
             </thead>
             <tbody className="divide-y divide-brand-400">
               {items.map((item, index) => {
-                const care = item.care;
-                const open = care.open_assignment;
-                const isMine = open?.assignee?.id === currentUserId;
-                const isPending = pendingId === item.id;
-                const teamName = item.assigned_team_id ? teamNameById.get(item.assigned_team_id) : undefined;
-                // Đang giữ số: không giao/nhận cho người khác người giữ số (backend cũng chặn).
-                const heldById = item.is_held ? (item.held_by?.id ?? null) : undefined;
-                const canGiveHeld = heldById === undefined || saleOptions.some((s) => s.id === heldById);
+                const p = careParts(item, index, false);
                 return (
                   <tr
                     key={item.id}
@@ -734,165 +913,34 @@ export function CareWarehousePanel({
                       "h-[84px] cursor-pointer align-top hover:bg-brand-50/50",
                       index % 2 === 1 ? "bg-slate-50/60" : "bg-white",
                     )}
-                    onClick={(event) => {
-                      // Bấm chỗ nào trên hàng cũng mở Chi tiết (yêu cầu người dùng 2026-10-29).
-                      if (!shouldOpenRowDetail(event)) return;
-                      saveStateForReturn();
-                      router.push(`/candidates/${item.id}`);
-                    }}
+                    onClick={(event) => openDetailOnClick(event, item)}
                   >
                     {canAssign && (
                       // Bấm vào ô (kể cả khoảng trống quanh ô tick) không mở trang Chi tiết.
                       <td className="border-r border-slate-100 px-1 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          aria-label={`Chọn ${item.full_name}`}
-                          checked={selected.has(item.id)}
-                          onChange={(e) =>
-                            setSelected((prev) => {
-                              const next = new Set(prev);
-                              if (e.target.checked) next.add(item.id);
-                              else next.delete(item.id);
-                              return next;
-                            })
-                          }
-                        />
+                        {p.checkbox}
                       </td>
                     )}
-                    <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">
-                      {applied.stt_order === "desc"
-                        ? (data?.total ?? 0) - (((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index)
-                        : ((data?.page ?? 1) - 1) * (data?.page_size ?? pageSize) + index + 1}
-                    </td>
-                    <td className="border-r border-slate-100 px-2 py-2">
-                      <Link
-                        href={`/candidates/${item.id}`}
-                        onClick={saveStateForReturn}
-                        // Tên căn giữa ô — giống tab Tất cả (yêu cầu người dùng 2026-10-29).
-                        className="block text-center font-medium text-slate-800 hover:text-brand-700 hover:underline"
-                      >
-                        {item.full_name}
-                      </Link>
-                      <div className="mt-0.5 flex items-center gap-1 text-slate-500">
-                        <span>{item.phone_number}</span>
-                        <SourceBadge name={item.source.name} className="px-1.5 py-0 text-[10px]" />
-                      </div>
-                      {item.assigned_to && (
-                        <p className="mt-0.5 text-[10px] text-slate-400">
-                          Phụ trách: {item.assigned_to.name}
-                          {teamName ? ` · ${teamName}` : ""}
-                        </p>
-                      )}
-                    </td>
-                    <td className="w-px border-r border-slate-100 px-2 py-2 whitespace-nowrap">
-                      <div className="flex flex-col items-start gap-1">
-                        {care.month_status === "cared" ? (
-                          <Badge variant="success">Đã chăm sóc</Badge>
-                        ) : (
-                          <Badge variant="warning">Chưa chăm sóc</Badge>
-                        )}
-                        {care.assigned_pending && <Badge variant="danger">Đã giao, chưa xử lý</Badge>}
-                        {item.is_held && (
-                          <span className="flex flex-col rounded-lg bg-accent-50 px-2.5 py-0.5 text-xs leading-tight font-medium whitespace-nowrap text-accent-700 ring-1 ring-accent-600/20 ring-inset">
-                            <span>Số đang được giữ bởi</span>
-                            <span className="font-semibold">{item.held_by?.name ?? "—"}</span>
-                          </span>
-                        )}
-                        {item.care_stop_requested_at && (
-                          <Badge variant="info" title="Sale đề nghị dừng chăm sóc — mở Chi tiết để duyệt">
-                            Chờ duyệt đóng
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="border-r border-slate-100 px-2 py-2">
-                      {open?.assignee ? (
-                        <div className="flex items-center gap-1.5">
-                          <Avatar
-                            fullName={open.assignee.name}
-                            avatarUrl={open.assignee.avatar_url}
-                            className="h-6 w-6 shrink-0 text-[10px]"
-                          />
-                          <div className="leading-tight">
-                            <p className="font-medium text-slate-800">
-                              {isMine ? "Bạn" : <NameWithRoleHint account={open.assignee} />}
-                            </p>
-                            <p className="text-[10px] text-slate-400">{open.processed ? "Đã xử lý" : "Chưa xử lý"}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">Chưa giao</span>
-                      )}
-                    </td>
+                    <td className="border-r border-slate-100 px-1 py-2 text-center text-[10px] text-slate-500 tabular-nums">{p.stt}</td>
+                    <td className="border-r border-slate-100 px-2 py-2">{p.info}</td>
+                    <td className="w-px border-r border-slate-100 px-2 py-2 whitespace-nowrap">{p.status}</td>
+                    <td className="border-r border-slate-100 px-2 py-2">{p.assignee}</td>
                     <td className="min-w-[300px] border-r border-slate-100 px-2 py-1" style={callStatusCellStyle(item)}>
-                      <CallStatusCellContent
-                        notes={notesByLeadId.get(item.id)}
-                        collapsedMaxHeight={CARE_NOTE_COLLAPSED_HEIGHT}
-                      />
+                      {p.notes}
                     </td>
                     <td className="w-px border-r border-slate-100 px-1.5 py-2 text-center font-medium text-slate-700 tabular-nums">
-                      {care.month_care_count}
+                      {p.monthCount}
                     </td>
                     <td className="w-px border-r border-slate-100 px-1.5 py-2 text-center font-medium text-slate-700 tabular-nums">
-                      {care.total_care_count}
+                      {p.totalCount}
                     </td>
-                    {hasActions && (
-                      <td className="px-2 py-2">
-                        <div className="flex flex-col items-center gap-1">
-                          {canClaim && !care.assigned_pending && !isMine && (heldById === undefined || heldById === currentUserId) && (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="outline"
-                              disabled={isPending}
-                              onClick={() => void handleClaim(item)}
-                            >
-                              <UserCheck className="h-3.5 w-3.5" strokeWidth={2} />
-                              Nhận
-                            </Button>
-                          )}
-                          {canAssign && item.care_stop_requested_at && (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="outline"
-                              className="border-brand-300 text-brand-700 hover:bg-brand-50"
-                              disabled={isPending}
-                              onClick={() => void handleApproveStop(item)}
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
-                              Duyệt đóng
-                            </Button>
-                          )}
-                          {canAssign && canGiveHeld && (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="outline"
-                              disabled={isPending}
-                              onClick={() => setModal({ mode: "reassign", item })}
-                            >
-                              {open ? "Giao lại" : "Giao"}
-                            </Button>
-                          )}
-                          {canAssign && open && (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="danger"
-                              disabled={isPending}
-                              onClick={() => void handleRevoke(item)}
-                            >
-                              Thu hồi
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    )}
+                    {hasActions && <td className="px-2 py-2">{p.actions}</td>}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          )}
         </div>
         {!isLoading && items.length === 0 && loadError && (
           <div className="flex flex-col items-center gap-2 p-6 text-center text-sm">

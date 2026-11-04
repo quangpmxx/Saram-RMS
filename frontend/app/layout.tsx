@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 // Giao diện Tối (html.dark) — tự sinh, xem scripts/generate-dark-theme.mjs. Nạp
@@ -14,6 +14,14 @@ const beVietnamPro = Be_Vietnam_Pro({
 export const metadata: Metadata = {
   title: "CRM Tuyển dụng — Saram RMS",
   description: "Hệ thống quản lý tuyển dụng nội bộ",
+};
+
+/** Điện thoại: dùng được vùng tai thỏ/thanh điều hướng (env(safe-area-inset-*)), màu thanh trạng thái theo header. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 /**

@@ -5,7 +5,7 @@ import { formatDMY } from "@/lib/date-format";
 import { LEAD_STATE_OPTIONS, type LeadStateFilter } from "@/lib/lead-state";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -31,6 +31,7 @@ import {
   UploadCloud,
   UserPlus,
   Users,
+  Zap,
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
@@ -82,6 +83,8 @@ import { SourceBadge } from "./source-badge";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
 import { TeamSaleFilter, type TeamSaleValue } from "./team-sale-filter";
 import { DistributionRuleModal } from "./distribution-rule-modal";
+import { PancakeAutoUpModal } from "./pancake-auto-up-modal";
+import { LEAD_CARD_CLASS, LEAD_CARD_GRID_CLASS, LeadLayoutToggle, useLeadLayout } from "./lead-layout";
 import { CareWarehousePanel, clearSavedCareState, type CareSaleOption } from "./care-warehouse-panel";
 
 const PAGE_SIZE = 50;
@@ -242,12 +245,15 @@ export function CandidatesClient({
   );
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
   const [zoomLevel, setZoomLevel] = useState<(typeof ZOOM_LEVELS)[number]>(100);
+  /** Kiểu xem: bảng ngang / ô thẻ (điện thoại luôn ô thẻ) — dùng chung với tab Chăm sóc. */
+  const { layout, chosen: chosenLayout, setLayout } = useLeadLayout();
   const toast = useToast();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
   const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const [isAutoUpOpen, setIsAutoUpOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   /** Người dùng đã tự bấm chọn tab — khôi phục trạng thái cũ (sessionStorage) không được đè lên. */
   const userPickedViewRef = useRef(false);
@@ -781,6 +787,294 @@ export function CandidatesClient({
     }
   }
 
+  /** Bấm vào hàng/ô thẻ (chỗ trống) → mở Chi tiết (yêu cầu người dùng 2026-10-29). */
+  function openDetailOnClick(event: ReactMouseEvent<HTMLElement>, candidate: Candidate) {
+    if (!shouldOpenRowDetail(event)) return;
+    saveListStateForReturn();
+    router.push(`/candidates/${candidate.id}`);
+  }
+
+  /**
+   * Nội dung từng ô của 1 data — dùng chung cho dạng bảng ngang và dạng ô thẻ
+   * (2026-11-04) để 2 kiểu xem luôn hiện đủ và giống hệt dữ liệu.
+   */
+  function leadParts(candidate: Candidate, index: number, asCard: boolean) {
+    const uploadedAt = formatUploadedAt(candidate.uploaded_at);
+    const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
+    // Sang ngày mới (theo cột Ngày) → dải xanh đậm ngăn cách.
+    const isNewDay = index > 0 && formatUploadedAt(candidates[index - 1].uploaded_at).date !== uploadedAt.date;
+    const stt =
+      sort.key === "stt" && sort.order === "desc" ? total - ((page - 1) * pageSize + index) : (page - 1) * pageSize + index + 1;
+
+    const checkbox = canSelect ? (
+      <Checkbox
+        aria-label={`Chọn ${candidate.full_name}`}
+        checked={selectedIds.has(candidate.id)}
+        onChange={() => toggleSelected(candidate.id)}
+      />
+    ) : null;
+
+    // Data đã đóng (dừng chăm sóc) → dấu X đỏ gạch chéo cả ô, nền giữ trắng
+    // (yêu cầu người dùng 2026-10-29). Không chặn click. Ô chứa phải "relative".
+    const stoppedCross = candidate.care_stopped_at ? (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-0 z-[1] h-full w-full text-red-500/70"
+      >
+        <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+    ) : null;
+
+    // Tên tối đa 2 dòng rồi "…"; các trường khác 1 dòng. Trùng SĐT: nền cam trên số.
+    const info = (
+      <>
+        <div>
+          <div>
+            <Link
+              href={`/candidates/${candidate.id}`}
+              title={candidate.full_name}
+              onClick={saveListStateForReturn}
+              className={cn(
+                "line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline",
+                asCard ? "text-left text-sm" : "text-center",
+                candidate.is_held && "bg-orange-200",
+              )}
+            >
+              {candidate.full_name}
+            </Link>
+          </div>
+          <div className="mt-0.5 flex items-center gap-1 text-slate-500">
+            <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+            {candidate.is_duplicate_flagged ? (
+              <DuplicatePhone candidateId={candidate.id} phoneNumber={candidate.phone_number} />
+            ) : (
+              <span className="truncate">{candidate.phone_number}</span>
+            )}
+          </div>
+        </div>
+        <div className="mt-0.5 flex items-center gap-1 text-slate-500">
+          <Cake className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+          {candidate.birth_year ?? "--"}
+        </div>
+        <div className="mt-0.5 flex items-center gap-1 text-slate-500">
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
+          <span className="truncate" title={candidate.address ?? undefined}>
+            {candidate.address ?? "--"}
+          </span>
+        </div>
+        {candidate.mkt_note && (
+          <div className="mt-0.5 flex items-center gap-1 text-red-600">
+            <StickyNote className="h-3.5 w-3.5 shrink-0 text-red-400" strokeWidth={2} />
+            <span className="truncate" title={candidate.mkt_note}>
+              {candidate.mkt_note}
+            </span>
+          </div>
+        )}
+      </>
+    );
+
+    const source = (
+      <>
+        <SourceBadge name={candidate.source.name} className="text-[10px] px-1.5 py-0" />
+        {candidate.mkt_source && (
+          <div className={cn("leading-none", asCard && "inline-block")}>
+            <span
+              className="mt-0.5 inline-flex max-w-full items-center truncate rounded-full px-1.5 py-0 text-[10px] font-medium whitespace-nowrap text-white"
+              style={{ backgroundColor: mktSourceColor(candidate.mkt_source.id) }}
+              title={`Nguồn MKT: ${candidate.mkt_source.name}`}
+            >
+              {candidate.mkt_source.name}
+            </span>
+          </div>
+        )}
+      </>
+    );
+
+    const staff = candidate.assigned_to ? (
+      // Avatar trên, tên/nhóm dưới (dạng thẻ: avatar bên trái).
+      <div className={cn("flex items-center gap-0.5", asCard ? "flex-row gap-1.5 text-left" : "flex-col text-center")}>
+        <Avatar
+          fullName={candidate.assigned_to.name}
+          avatarUrl={candidate.assigned_to.avatar_url}
+          className="h-6 w-6 shrink-0 text-[10px]"
+        />
+        <div className={cn("min-w-0 leading-tight", !asCard && "w-full")}>
+          <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
+            <NameWithRoleHint account={candidate.assigned_to} />
+          </p>
+          {teamName && (
+            <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
+              {teamName}
+            </p>
+          )}
+        </div>
+      </div>
+    ) : (
+      <div className={cn("flex gap-1.5", asCard ? "flex-row flex-wrap items-center" : "flex-col items-start")}>
+        <Badge variant="neutral" className="text-[10px] px-2 py-0">
+          Chờ phân chia
+        </Badge>
+        {/* MKT bắt buộc chọn nhóm khi up — hiện tên nhóm ngay dưới badge (2026-07-16). */}
+        {teamName && (
+          <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
+            {teamName}
+          </p>
+        )}
+        {canClaim && (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={pendingId === candidate.id}
+            onClick={() => void handleClaim(candidate)}
+          >
+            <UserPlus className="h-3 w-3" strokeWidth={2} />
+            {pendingId === candidate.id ? "Đang nhận..." : "Nhận data"}
+          </Button>
+        )}
+      </div>
+    );
+
+    const call = <CallStatusCellContent notes={notesByLeadId.get(candidate.id)} />;
+
+    // Cột "Zalo" (2026-10-29): <select> trong suốt phủ lên khối chữ — mở danh sách chọn thật mà chữ dài vẫn xuống dòng.
+    const zalo = (() => {
+      const status = candidate.zalo_friend_status;
+      const pillStyle = status ? zaloFriendStatusStyle(status.name) : undefined;
+      const pillClass = cn(
+        "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
+        status ? "ring-1 ring-inset ring-black/10" : "border border-slate-200 text-slate-600",
+      );
+      if (!canProcessLead(candidate, viewer)) {
+        return (
+          <span style={pillStyle} className={pillClass}>
+            {status ? shortZaloFriendName(status.name) : "--"}
+          </span>
+        );
+      }
+      return (
+        <div className="relative">
+          <div style={pillStyle} className={pillClass}>
+            <span>{status ? shortZaloFriendName(status.name) : "--"}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
+          </div>
+          <select
+            aria-label={`Trạng thái Zalo của ${candidate.full_name}`}
+            value={status?.id ?? ""}
+            onChange={(event) => void handleZaloFriendStatusChange(candidate, event.target.value || null)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          >
+            <option value="">Chưa cập nhật</option>
+            {zaloFriendStatuses.map((s) => (
+              <option key={s.id} value={s.id}>
+                {shortZaloFriendName(s.name)}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    })();
+
+    // Cột "Kết quả": nhãn vàng "Chờ duyệt đóng" khi Sale đề nghị dừng chăm sóc; 1 lựa chọn thật
+    // ("Đã gửi CCCD") nên bấm = đảo trạng thái.
+    const result = (
+      <>
+        {!candidate.care_stopped_at && candidate.care_stop_requested_at ? (
+          <span
+            title={`Chờ duyệt dừng chăm sóc${candidate.care_stop_requested_by ? ` — đề nghị bởi ${candidate.care_stop_requested_by.name}` : ""}`}
+            className="mx-auto mb-1 block w-full rounded-md bg-amber-100 px-0.5 py-0.5 text-center text-[9px] leading-tight font-semibold text-amber-800 ring-1 ring-amber-300"
+          >
+            Chờ duyệt đóng
+          </span>
+        ) : null}
+        {canProcessLead(candidate, viewer) ? (
+          <button
+            type="button"
+            onClick={() =>
+              void handleZaloStatusChange(candidate, candidate.zalo_status ? null : (zaloStatuses[0]?.id ?? null))
+            }
+            style={zaloStatusStyle(candidate.zalo_status?.name)}
+            className={cn(
+              "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
+              candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
+            )}
+          >
+            <span>{candidate.zalo_status?.name ?? "--"}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
+          </button>
+        ) : (
+          <span
+            style={zaloStatusStyle(candidate.zalo_status?.name)}
+            className={cn(
+              "mx-auto block w-fit max-w-full rounded-lg px-1.5 py-1 text-center text-[10px] font-semibold break-words whitespace-normal",
+              candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
+            )}
+          >
+            {candidate.zalo_status?.name ?? "--"}
+          </span>
+        )}
+      </>
+    );
+
+    const actions = (
+      <div className={cn("flex flex-wrap items-center gap-0.5", asCard && "justify-end gap-1")}>
+        {canEditLead(candidate, viewer) && (
+          <ActionLink
+            icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />}
+            title="Sửa"
+            onClick={() => setModal({ mode: "edit", candidate })}
+          />
+        )}
+        {canAssign && !candidate.assigned_to && (
+          <ActionLink
+            icon={<UserPlus className="h-3.5 w-3.5" strokeWidth={2} />}
+            title="Phân chia"
+            onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
+          />
+        )}
+        {canAssign && candidate.assigned_to && !candidate.is_held && (
+          <ActionLink
+            icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
+            title="Chuyển"
+            onClick={() => setModal({ mode: "transfer", candidate })}
+          />
+        )}
+        {canAssign && candidate.assigned_team_id && (
+          <ActionLink
+            icon={<PhoneCall className="h-3.5 w-3.5" strokeWidth={2} />}
+            title="Nhắc gọi lại"
+            onClick={() => setModal({ mode: "remind", candidate })}
+          />
+        )}
+        {canApproveStop(candidate) && (
+          <ActionLink
+            icon={<CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />}
+            title="Duyệt đóng (Sale đề nghị dừng chăm sóc)"
+            className="bg-brand-50 text-brand-700 ring-1 ring-brand-600/20"
+            disabled={pendingId === candidate.id}
+            onClick={() => void handleApproveStop(candidate)}
+          >
+            Duyệt đóng
+          </ActionLink>
+        )}
+        {canDeleteAny && (
+          <ActionLink
+            icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
+            title="Xóa"
+            tone="danger"
+            disabled={pendingId === candidate.id}
+            onClick={() => void handleDelete(candidate)}
+          />
+        )}
+      </div>
+    );
+
+    return { uploadedAt, isNewDay, stt, checkbox, stoppedCross, info, source, staff, call, zalo, result, actions };
+  }
+
   return (
     <div className="w-full">
       {isReadOnly && (
@@ -788,12 +1082,6 @@ export function CandidatesClient({
           <ViewOnlyBadge />
         </div>
       )}
-      {/* UI Polish — tinh chỉnh mật độ hiển thị: thu nhỏ tiêu đề ~11% (text-lg → text-base), giảm mb-2 → mb-1 để sát bộ lọc hơn. */}
-      <div className="mb-1 flex items-start justify-between gap-3 md:hidden">
-        <div>
-          <h1 className="text-base font-bold text-slate-900">Data lao động</h1>
-        </div>
-      </div>
 
       {currentUserRole === "leader" && teamMembers.length > 0 && (
         <Card className="mb-2 p-2.5">
@@ -831,7 +1119,8 @@ export function CandidatesClient({
       {(canViewPending || canViewMine || currentUserRole === "mkt" || currentUserRole === "admin") && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           {(canViewPending || canViewMine) && (
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+            // Điện thoại: hàng tab cuộn ngang, chữ không xuống dòng.
+            <div className="inline-flex max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-0.5 text-xs whitespace-nowrap">
               <button
                 type="button"
                 onClick={() => void handleViewModeChange("all")}
@@ -877,7 +1166,7 @@ export function CandidatesClient({
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {/* Yêu cầu trực tiếp người dùng (2026-07-15): bỏ "Trùng lặp"
                 khỏi menu sidebar, thay bằng 1 nút ngay trong trang Data lao
                 động — vẫn cùng route /duplicates, cùng phạm vi vai trò như
@@ -897,6 +1186,16 @@ export function CandidatesClient({
                 >
                   <Upload className="h-4 w-4" strokeWidth={2} />
                   Nhập từ Excel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isReadOnly}
+                  onClick={() => setIsAutoUpOpen(true)}
+                >
+                  <Zap className="h-4 w-4" strokeWidth={2} />
+                  Up tự động
                 </Button>
                 {currentUserRole === "admin" && (
                   <Button
@@ -984,6 +1283,10 @@ export function CandidatesClient({
             ))}
           </Select>
         </Field>
+        <div className="hidden flex-col gap-0.5 text-xs md:flex">
+          <span className="font-medium text-slate-700">Kiểu xem</span>
+          <LeadLayoutToggle value={chosenLayout} onChange={setLayout} />
+        </div>
         <Field uiSize="xs" label="Nguồn">
           <Select
             uiSize="xs"
@@ -1093,27 +1396,63 @@ export function CandidatesClient({
       )}
 
       <Card className="overflow-hidden p-0">
-        <div ref={scrollContainerRef} className="max-h-[calc(100vh-180px)] overflow-auto">
-          {/* Dự án phụ — nâng cấp toàn diện: bọc riêng <table> trong 1 div có
+        {/* Điện thoại: không cuộn lồng trong khung — cả trang cuộn, dễ vuốt hơn. */}
+        <div ref={scrollContainerRef} className="md:max-h-[calc(100vh-180px)] md:overflow-auto">
+          {/* Dự án phụ — nâng cấp toàn diện: bọc riêng nội dung trong 1 div có
               "zoom" (không phải transform: scale) — zoom tính lại layout thật
               theo tỉ lệ mới nên thu nhỏ hiện được nhiều dòng hơn, không để lại
               khoảng trắng thừa; không zoom khối cuộn ngoài để max-height tính
               bằng viewport (100vh-180px) không bị lệch theo tỉ lệ zoom. */}
           <div style={{ zoom: zoomLevel / 100 }}>
-          {/* UI Polish — giảm cỡ chữ toàn bảng (text-sm → text-xs) theo yêu cầu. */}
-          {/* UI Polish — nhường tối đa diện tích cho cột "Tình trạng cuộc gọi"
-              (280px → 370px). Nguyên tắc cố định từ đây: mỗi khi thu hẹp các
-              cột khác, phần dôi ra mặc định cộng vào cột này (trừ khi có yêu
-              cầu khác). Các cột còn lại thu hẹp hết mức trong khi vẫn đảm bảo
-              hiển thị đủ dữ liệu — width/min-width/max-width cố định bằng px
-              trên từng <col> (table-fixed dùng đúng giá trị này, không phụ
-              thuộc nội dung/data dài ngắn). */}
+          {layout === "cards" ? (
+            // Dạng ô thẻ (2026-11-04): đủ dữ liệu như bảng; điện thoại 1 cột xếp dọc.
+            <div className={cn(LEAD_CARD_GRID_CLASS, isReadOnly && "pointer-events-none opacity-60 [&_a]:pointer-events-auto")}>
+              {candidates.map((candidate, index) => {
+                const p = leadParts(candidate, index, true);
+                return (
+                  <Fragment key={candidate.id}>
+                    {p.isNewDay && <div aria-hidden="true" className="col-span-full h-1.5 rounded-full bg-blue-700" />}
+                    <div className={LEAD_CARD_CLASS} onClick={(event) => openDetailOnClick(event, candidate)}>
+                      {/* Header ô thẻ nền đậm như đầu bảng (yêu cầu người dùng 2026-11-04). */}
+                      <div className="flex items-center gap-2 bg-slate-700 px-3 py-1.5">
+                        {p.checkbox && <span onClick={(event) => event.stopPropagation()}>{p.checkbox}</span>}
+                        <span className="text-[10px] text-slate-300 tabular-nums">#{p.stt}</span>
+                        <span className="font-semibold text-white">{p.uploadedAt.date}</span>
+                        <span className="text-[10px] text-slate-300">{p.uploadedAt.time}</span>
+                        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">{p.source}</div>
+                      </div>
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,40%)] gap-x-3 px-3 py-2">
+                        <div className={cn("min-w-0", candidate.care_stopped_at && "relative")}>
+                          {p.stoppedCross}
+                          {p.info}
+                        </div>
+                        <div className="min-w-0">{p.staff}</div>
+                      </div>
+                      <div className="mx-3 mb-2 rounded-lg px-2 py-1 ring-1 ring-slate-100" style={callStatusCellStyle(candidate)}>
+                        {p.call}
+                      </div>
+                      <div className="mt-auto flex items-end gap-2 border-t border-slate-100 px-3 py-2">
+                        <div className="w-24">
+                          <p className="mb-0.5 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Zalo</p>
+                          {p.zalo}
+                        </div>
+                        <div className="w-24">
+                          <p className="mb-0.5 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Kết quả</p>
+                          {p.result}
+                        </div>
+                        <div className="ml-auto">{p.actions}</div>
+                      </div>
+                    </div>
+                  </Fragment>
+                );
+              })}
+            </div>
+          ) : (
+          /* UI Polish — cột "Tình trạng cuộc gọi" tự động nhận phần còn lại; các cột khác
+             cố định tỉ lệ (table-fixed + <col>), không phụ thuộc độ dài dữ liệu. */
           <table className="w-full table-fixed border-collapse text-left text-xs">
             <colgroup>
-              {/* Ô tick + STT: rộng CỐ ĐỊNH vừa nội dung (yêu cầu người dùng 2026-10-30).
-                  Các cột còn lại giữ đúng tỉ lệ cũ bằng %; cột "Tình trạng cuộc gọi" để
-                  tự động nên nhận toàn bộ phần còn lại (trước đây mọi cột đều px nên
-                  bảng phóng to đều tất cả, kể cả ô tick/STT). */}
+              {/* Ô tick + STT: rộng CỐ ĐỊNH vừa nội dung (yêu cầu người dùng 2026-10-30). */}
               {canSelect && <col className="w-6" />}
               <col className="w-9" />
               <col className="w-[6%]" />
@@ -1158,341 +1497,51 @@ export function CandidatesClient({
             <tbody
               className={cn(
                 "divide-y divide-brand-400",
-                // "Chỉ xem" vẫn phải xem được Chi tiết ứng viên (Mục 2: "Được
-                // xem") — khóa pointer-events toàn <tbody> (input/nút/checkbox
-                // inline rất nhiều, không disable riêng lẻ nổi) nhưng MỞ LẠI
-                // riêng thẻ <a> (link "Xem chi tiết") bằng arbitrary variant.
+                // "Chỉ xem" vẫn phải xem được Chi tiết: khóa pointer-events toàn <tbody>
+                // nhưng MỞ LẠI riêng thẻ <a> (link "Xem chi tiết").
                 isReadOnly && "pointer-events-none opacity-60 [&_a]:pointer-events-auto",
               )}
             >
               {candidates.map((candidate, index) => {
-                const uploadedAt = formatUploadedAt(candidate.uploaded_at);
-                const teamName = candidate.assigned_team_id ? teamNameById.get(candidate.assigned_team_id) : undefined;
-                const candidateNotes = notesByLeadId.get(candidate.id);
-                // Sang ngày mới (theo cột Ngày) → dải xanh đậm ngăn cách.
-                const isNewDay = index > 0 && formatUploadedAt(candidates[index - 1].uploaded_at).date !== uploadedAt.date;
-
+                const p = leadParts(candidate, index, false);
                 return (
                   <Fragment key={candidate.id}>
-                  {isNewDay && <DaySeparatorRow colSpan={canSelect ? 10 : 9} />}
+                  {p.isNewDay && <DaySeparatorRow colSpan={canSelect ? 10 : 9} />}
                   <tr
-                    // UI Polish — h-28 (thay vì h-24): với tên/địa chỉ đã cố định 1 dòng ở
-                    // trên, 96px hơi thiếu 1 chút khiến vài hàng vẫn bị đẩy cao hơn — 112px
-                    // đủ chỗ cho đúng 4 dòng cố định (tên + SĐT + năm sinh + địa chỉ), mọi
-                    // hàng cao bằng nhau tuyệt đối.
+                    // h-28: đủ chỗ cho 4 dòng cố định (tên + SĐT + năm sinh + địa chỉ), mọi hàng cao bằng nhau.
                     className={`h-28 cursor-pointer align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
-                    onClick={(event) => {
-                      // Bấm chỗ nào trên hàng cũng mở Chi tiết (yêu cầu người dùng 2026-10-29).
-                      if (!shouldOpenRowDetail(event)) return;
-                      saveListStateForReturn();
-                      router.push(`/candidates/${candidate.id}`);
-                    }}
+                    onClick={(event) => openDetailOnClick(event, candidate)}
                   >
                     {canSelect && (
                       // Bấm vào ô (kể cả khoảng trống quanh ô tick) không mở trang Chi tiết.
                       <td className="border-r border-slate-100 px-0 py-2 text-center" onClick={(event) => event.stopPropagation()}>
-                        <Checkbox
-                          aria-label={`Chọn ${candidate.full_name}`}
-                          checked={selectedIds.has(candidate.id)}
-                          onChange={() => toggleSelected(candidate.id)}
-                        />
+                        {p.checkbox}
                       </td>
                     )}
-                    <td className="border-r border-slate-100 px-0 py-2 text-center text-[10px] text-slate-500 tabular-nums">
-                      {sort.key === "stt" && sort.order === "desc"
-                        ? total - ((page - 1) * pageSize + index)
-                        : (page - 1) * pageSize + index + 1}
-                    </td>
-
+                    <td className="border-r border-slate-100 px-0 py-2 text-center text-[10px] text-slate-500 tabular-nums">{p.stt}</td>
                     <td className="border-r border-slate-100 px-0.5 py-2 text-center whitespace-nowrap">
-                      <p className="font-medium text-slate-800">{uploadedAt.date}</p>
-                      <p className="text-[10px] text-slate-400">{uploadedAt.time}</p>
+                      <p className="font-medium text-slate-800">{p.uploadedAt.date}</p>
+                      <p className="text-[10px] text-slate-400">{p.uploadedAt.time}</p>
                     </td>
-
-                    <td
-                      className={cn("border-r border-slate-100 px-1.5 py-2", candidate.care_stopped_at && "relative")}
-                    >
-                      {/* Data đã đóng (dừng chăm sóc) → dấu X đỏ gạch chéo cả ô, nền giữ
-                          trắng (yêu cầu người dùng 2026-10-29). Không chặn click vào ô. */}
-                      {candidate.care_stopped_at && (
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 100 100"
-                          preserveAspectRatio="none"
-                          className="pointer-events-none absolute inset-0 z-[1] h-full w-full text-red-500/70"
-                        >
-                          <line x1="0" y1="0" x2="100" y2="100" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                          <line x1="100" y1="0" x2="0" y2="100" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                        </svg>
-                      )}
-                      {/* UI Polish — tên cho phép xuống dòng tối đa 2 dòng rồi ellipsis
-                          (line-clamp-2) thay vì cố định 1 dòng, theo yêu cầu tinh chỉnh độ
-                          rộng cột — cột đã hẹp lại nên 1 dòng dễ cắt cụt tên quá sớm. Các
-                          trường còn lại vẫn 1 dòng + ellipsis để không giãn cột. */}
-                      {/* Trùng SĐT: bôi nền cam ngay trên số điện thoại (yêu cầu người dùng 2026-10-29, thay nhãn chéo "Trùng"). */}
-                      <div>
-                        {/* Tên căn giữa ô (yêu cầu người dùng 2026-10-29, giữ cỡ chữ 12px). */}
-                        <div>
-                          <Link
-                            href={`/candidates/${candidate.id}`}
-                            title={candidate.full_name}
-                            onClick={saveListStateForReturn}
-                            className={cn(
-                              "line-clamp-2 text-center font-medium text-slate-800 hover:text-brand-700 hover:underline",
-                              candidate.is_held && "bg-orange-200",
-                            )}
-                          >
-                            {candidate.full_name}
-                          </Link>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1 text-slate-500">
-                          <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
-                          {candidate.is_duplicate_flagged ? (
-                            <DuplicatePhone candidateId={candidate.id} phoneNumber={candidate.phone_number} />
-                          ) : (
-                            <span className="truncate">{candidate.phone_number}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1 text-slate-500">
-                        <Cake className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
-                        {candidate.birth_year ?? "--"}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1 text-slate-500">
-                        <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-300" strokeWidth={2} />
-                        <span className="truncate" title={candidate.address ?? undefined}>
-                          {candidate.address ?? "--"}
-                        </span>
-                      </div>
-                      {candidate.mkt_note && (
-                        <div className="mt-0.5 flex items-center gap-1 text-red-600">
-                          <StickyNote className="h-3.5 w-3.5 shrink-0 text-red-400" strokeWidth={2} />
-                          <span className="truncate" title={candidate.mkt_note}>
-                            {candidate.mkt_note}
-                          </span>
-                        </div>
-                      )}
+                    <td className={cn("border-r border-slate-100 px-1.5 py-2", candidate.care_stopped_at && "relative")}>
+                      {p.stoppedCross}
+                      {p.info}
                     </td>
-
-                    <td className="border-r border-slate-100 px-1 py-2 text-center">
-                      <SourceBadge name={candidate.source.name} className="text-[10px] px-1.5 py-0" />
-                      {candidate.mkt_source && (
-                        <div className="leading-none">
-                        <span
-                          className="mt-0.5 inline-flex max-w-full items-center truncate rounded-full px-1.5 py-0 text-[10px] font-medium whitespace-nowrap text-white"
-                          style={{ backgroundColor: mktSourceColor(candidate.mkt_source.id) }}
-                          title={`Nguồn MKT: ${candidate.mkt_source.name}`}
-                        >
-                          {candidate.mkt_source.name}
-                        </span>
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="border-r border-slate-100 px-1 py-2">
-                      {candidate.assigned_to ? (
-                        // UI Polish — Avatar chuyển lên trên, tên/nhóm bên dưới. Cột đã hẹp
-                        // thêm ~30% nên tên/nhóm đổi từ truncate (1 dòng) sang line-clamp-2
-                        // (xuống dòng tối đa 2 dòng rồi ellipsis) để không cắt cụt quá sớm.
-                        <div className="flex flex-col items-center gap-0.5 text-center">
-                          <Avatar
-                            fullName={candidate.assigned_to.name}
-                            avatarUrl={candidate.assigned_to.avatar_url}
-                            className="h-6 w-6 shrink-0 text-[10px]"
-                          />
-                          <div className="min-w-0 w-full leading-tight">
-                            <p className="line-clamp-2 font-medium text-slate-800" title={candidate.assigned_to.name}>
-                              <NameWithRoleHint account={candidate.assigned_to} />
-                            </p>
-                            {teamName && (
-                              <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
-                                {teamName}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-start gap-1.5">
-                          <Badge variant="neutral" className="text-[10px] px-2 py-0">
-                            Chờ phân chia
-                          </Badge>
-                          {/* Yêu cầu trực tiếp người dùng (2026-07-16): MKT bắt buộc chọn nhóm
-                              khi up data, nhưng Admin chưa thấy data "Chờ phân chia" thuộc
-                              nhóm nào — bổ sung tên nhóm ngay dưới badge, khớp đúng cách hiện
-                              teamName ở nhánh assigned_to bên trên. */}
-                          {teamName && (
-                            <p className="line-clamp-2 text-[10px] text-slate-400" title={teamName}>
-                              {teamName}
-                            </p>
-                          )}
-                          {canClaim && (
-                            <Button
-                              type="button"
-                              size="xs"
-                              variant="outline"
-                              disabled={pendingId === candidate.id}
-                              onClick={() => void handleClaim(candidate)}
-                            >
-                              <UserPlus className="h-3 w-3" strokeWidth={2} />
-                              {pendingId === candidate.id ? "Đang nhận..." : "Nhận data"}
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-
+                    <td className="border-r border-slate-100 px-1 py-2 text-center">{p.source}</td>
+                    <td className="border-r border-slate-100 px-1 py-2">{p.staff}</td>
                     <td className="border-r border-slate-100 px-3 py-1" style={callStatusCellStyle(candidate)}>
-                      <CallStatusCellContent notes={candidateNotes} />
+                      {p.call}
                     </td>
-
-                    {/* Cột "Zalo" (yêu cầu người dùng 2026-10-29) — trạng thái kết bạn
-                        Zalo, cùng kiểu khối như cột "Kết quả". Nhiều lựa chọn nên đặt
-                        <select> trong suốt phủ lên khối chữ: vẫn mở danh sách chọn thật
-                        mà chữ dài vẫn xuống dòng được. */}
-                    <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">
-                      {(() => {
-                        const status = candidate.zalo_friend_status;
-                        const pillStyle = status ? zaloFriendStatusStyle(status.name) : undefined;
-                        const pillClass = cn(
-                          "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
-                          status ? "ring-1 ring-inset ring-black/10" : "border border-slate-200 text-slate-600",
-                        );
-                        if (!canProcessLead(candidate, viewer)) {
-                          return (
-                            <span style={pillStyle} className={pillClass}>
-                              {status ? shortZaloFriendName(status.name) : "--"}
-                            </span>
-                          );
-                        }
-                        return (
-                          <div className="relative">
-                            <div style={pillStyle} className={pillClass}>
-                              <span>{status ? shortZaloFriendName(status.name) : "--"}</span>
-                              <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
-                            </div>
-                            <select
-                              aria-label={`Trạng thái Zalo của ${candidate.full_name}`}
-                              value={status?.id ?? ""}
-                              onChange={(event) => void handleZaloFriendStatusChange(candidate, event.target.value || null)}
-                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                            >
-                              <option value="">Chưa cập nhật</option>
-                              {zaloFriendStatuses.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {shortZaloFriendName(s.name)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        );
-                      })()}
-                    </td>
-
-                    <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">
-                      {/* Kho chăm sóc: Sale đã đề nghị dừng chăm sóc, đang chờ duyệt → nhãn
-                          vàng nhỏ. Data đã đóng chỉ còn dấu X đỏ ở ô Thông tin lao động
-                          (bỏ nút đỏ "ĐÃ ĐÓNG" ở cột này — yêu cầu người dùng 2026-10-29). */}
-                      {!candidate.care_stopped_at && candidate.care_stop_requested_at ? (
-                        <span
-                          title={`Chờ duyệt dừng chăm sóc${candidate.care_stop_requested_by ? ` — đề nghị bởi ${candidate.care_stop_requested_by.name}` : ""}`}
-                          className="mx-auto mb-1 block w-full rounded-md bg-amber-100 px-0.5 py-0.5 text-center text-[9px] leading-tight font-semibold text-amber-800 ring-1 ring-amber-300"
-                        >
-                          Chờ duyệt đóng
-                        </span>
-                      ) : null}
-                      {canProcessLead(candidate, viewer) ? (
-                        // Chỉ 1 lựa chọn thật ("Đã gửi CCCD") nên bấm = đảo trạng thái
-                        // (có/không) thay vì mở danh sách chọn — mũi tên chỉ là gợi ý
-                        // hình ảnh giống ô chọn, không phải dropdown thật (select gốc
-                        // của trình duyệt không xuống dòng được khi chữ dài).
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleZaloStatusChange(
-                              candidate,
-                              candidate.zalo_status ? null : (zaloStatuses[0]?.id ?? null),
-                            )
-                          }
-                          style={zaloStatusStyle(candidate.zalo_status?.name)}
-                          className={cn(
-                            "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
-                            candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
-                          )}
-                        >
-                          <span>{candidate.zalo_status?.name ?? "--"}</span>
-                          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
-                        </button>
-                      ) : (
-                        <span
-                          style={zaloStatusStyle(candidate.zalo_status?.name)}
-                          className={cn(
-                            "mx-auto block w-fit max-w-full rounded-lg px-1.5 py-1 text-center text-[10px] font-semibold break-words whitespace-normal",
-                            candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
-                          )}
-                        >
-                          {candidate.zalo_status?.name ?? "--"}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="px-1 py-2">
-                      <div className="flex flex-wrap items-center gap-0.5">
-                        {canEditLead(candidate, viewer) && (
-                          <ActionLink
-                            icon={<Pencil className="h-3.5 w-3.5" strokeWidth={2} />}
-                            title="Sửa"
-                            onClick={() => setModal({ mode: "edit", candidate })}
-                          />
-                        )}
-                        {canAssign && !candidate.assigned_to && (
-                          <ActionLink
-                            icon={<UserPlus className="h-3.5 w-3.5" strokeWidth={2} />}
-                            title="Phân chia"
-                            onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
-                          />
-                        )}
-                        {canAssign && candidate.assigned_to && !candidate.is_held && (
-                          <ActionLink
-                            icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
-                            title="Chuyển"
-                            onClick={() => setModal({ mode: "transfer", candidate })}
-                          />
-                        )}
-                        {canAssign && candidate.assigned_team_id && (
-                          <ActionLink
-                            icon={<PhoneCall className="h-3.5 w-3.5" strokeWidth={2} />}
-                            title="Nhắc gọi lại"
-                            onClick={() => setModal({ mode: "remind", candidate })}
-                          />
-                        )}
-                        {canApproveStop(candidate) && (
-                          <ActionLink
-                            icon={<CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />}
-                            title="Duyệt đóng (Sale đề nghị dừng chăm sóc)"
-                            className="bg-brand-50 text-brand-700 ring-1 ring-brand-600/20"
-                            disabled={pendingId === candidate.id}
-                            onClick={() => void handleApproveStop(candidate)}
-                          >
-                            Duyệt đóng
-                          </ActionLink>
-                        )}
-                        {canDeleteAny && (
-                          <ActionLink
-                            icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
-                            title="Xóa"
-                            tone="danger"
-                            disabled={pendingId === candidate.id}
-                            onClick={() => void handleDelete(candidate)}
-                          />
-                        )}
-                      </div>
-                    </td>
+                    <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">{p.zalo}</td>
+                    <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">{p.result}</td>
+                    <td className="px-1 py-2">{p.actions}</td>
                   </tr>
                   </Fragment>
                 );
               })}
             </tbody>
           </table>
+          )}
           </div>
         </div>
         {candidates.length === 0 && (
@@ -1639,6 +1688,13 @@ export function CandidatesClient({
             setModal({ mode: "none" });
             toast.success(`Đã nhắc "${fullName}" xử lý cuộc gọi cho lao động này`);
           }}
+        />
+      )}
+
+      {isAutoUpOpen && (
+        <PancakeAutoUpModal
+          onClose={() => setIsAutoUpOpen(false)}
+          onSaved={(c) => toast.success(c.is_active ? "Up tự động đang bật" : "Đã lưu, Up tự động đang tắt")}
         />
       )}
 

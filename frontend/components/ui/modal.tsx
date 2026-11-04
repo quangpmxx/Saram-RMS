@@ -28,8 +28,10 @@ export function Modal({
     // trực tiếp người dùng: header là lớp cao nhất, NGOẠI TRỪ khi có popup
     // đang mở thì popup phải nổi trên cả header (đúng UX popup thông
     // thường: nền mờ che hết trang, kể cả header).
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="flex min-h-full items-center justify-center">
+    // Điện thoại (<sm, 2026-11-04): popup thành "tấm trượt" dính đáy màn hình, rộng hết
+    // màn, nút bấm ở chân tự xuống dòng. Từ sm trở lên giữ nguyên như cũ.
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/50 backdrop-blur-sm sm:p-4">
+      <div className="flex min-h-full items-end justify-center sm:items-center">
         {/* max-h-[85vh] + overflow-y-auto: modal có nội dung dài hơn màn hình
             (vd Cài đặt tài khoản: ảnh đại diện + họ tên + đổi mật khẩu) vẫn
             cuộn được bên trong thay vì bị đẩy tràn lên trên, mất cả tiêu đề
@@ -37,16 +39,20 @@ export function Modal({
             hưởng vì chưa bao giờ chạm ngưỡng 85vh. */}
         <div
           className={cn(
-            "my-8 flex max-h-[85vh] w-full flex-col rounded-2xl bg-white shadow-2xl shadow-slate-900/20",
+            "mobile-sheet-up flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-2xl shadow-slate-900/20 sm:my-8 sm:max-h-[85vh] sm:rounded-2xl",
             maxWidth,
           )}
         >
-          <div className="shrink-0 p-6 pb-0">
+          <div className="shrink-0 p-4 pb-0 sm:p-6 sm:pb-0">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
           </div>
-          <div className="min-h-0 overflow-y-auto p-6">{children}</div>
-          {footer && <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 p-6 pt-4">{footer}</div>}
+          <div className="min-h-0 overflow-y-auto p-4 sm:p-6">{children}</div>
+          {footer && (
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 sm:pt-4">
+              {footer}
+            </div>
+          )}
         </div>
       </div>
     </div>,
