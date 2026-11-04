@@ -2,7 +2,7 @@
 
 import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMYHM } from "@/lib/date-format";
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -47,7 +47,14 @@ import { SortableTh, applySortParams, type SortOrder } from "@/components/ui/sor
 import { SourceBadge } from "./source-badge";
 import { shouldOpenRowDetail } from "./row-click";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
-import { LEAD_CARD_CLASS, LEAD_CARD_GRID_CLASS, LeadLayoutToggle, useLeadLayout } from "./lead-layout";
+import {
+  LEAD_CARD_CLASS,
+  LEAD_CARD_GRID_CLASS,
+  LEAD_ZOOM_LEVELS,
+  LeadLayoutToggle,
+  useLeadLayout,
+  type LeadZoomLevel,
+} from "./lead-layout";
 
 /** Sale có thể nhận việc — Leader: Sale nhóm mình; Quản lý/Admin: mọi Sale. */
 export interface CareSaleOption {
@@ -242,6 +249,8 @@ export function CareWarehousePanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** Kiểu xem bảng ngang / ô thẻ — dùng chung với tab Tất cả (điện thoại luôn ô thẻ). */
   const { layout, chosen: chosenLayout, setLayout } = useLeadLayout();
+  /** Thu phóng danh sách (giống tab Tất cả). */
+  const [zoomLevel, setZoomLevel] = useState<LeadZoomLevel>(100);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [modal, setModal] = useState<
     | { mode: "none" }
@@ -649,6 +658,35 @@ export function CareWarehousePanel({
     return { stt, checkbox, info, status, assignee, notes, actions, monthCount: care.month_care_count, totalCount: care.total_care_count };
   }
 
+  /** Nút Lịch sử phân công / Giao ngẫu nhiên / Giao data đã chọn — nằm trên thanh Tiến độ (2026-11-04). */
+  const assignActions =
+    canAssign || ASSIGNER_ROLES.includes(currentUserRole) ? (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button type="button" size="xs" variant="outline" onClick={() => setModal({ mode: "history" })}>
+          <History className="h-3.5 w-3.5" strokeWidth={2} />
+          Lịch sử phân công
+        </Button>
+        {canAssign && (
+          <>
+            <Button type="button" size="xs" variant="outline" onClick={() => setModal({ mode: "random" })}>
+              <Shuffle className="h-3.5 w-3.5" strokeWidth={2} />
+              Giao ngẫu nhiên
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              disabled={selected.size === 0}
+              title={selected.size === 0 ? "Tick chọn data trong danh sách để giao thủ công" : undefined}
+              onClick={() => setModal({ mode: "manual", leadIds: [...selected] })}
+            >
+              <UserPlus className="h-3.5 w-3.5" strokeWidth={2} />
+              Giao data đã chọn{selected.size > 0 ? ` (${selected.size})` : ""}
+            </Button>
+          </>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div>
       {stats && (
@@ -660,6 +698,7 @@ export function CareWarehousePanel({
           saleOptions={saleOptions}
           statsFilters={applied}
           onStatsFiltersChange={(patch) => applyFilters({ ...filters, ...patch })}
+          actions={assignActions}
         />
       )}
 
@@ -668,6 +707,20 @@ export function CareWarehousePanel({
           <span className="font-medium text-slate-700">Kiểu xem</span>
           <LeadLayoutToggle value={chosenLayout} onChange={setLayout} />
         </div>
+        <Field uiSize="xs" label="Thu phóng">
+          <Select
+            uiSize="xs"
+            className="w-16!"
+            value={String(zoomLevel)}
+            onChange={(e) => setZoomLevel(Number(e.target.value) as LeadZoomLevel)}
+          >
+            {LEAD_ZOOM_LEVELS.map((zoom) => (
+              <option key={zoom} value={zoom}>
+                {zoom}%
+              </option>
+            ))}
+          </Select>
+        </Field>
         {currentUserRole === "sale" && (
           <div className="inline-flex self-end rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
             {(["all", "assigned"] as const).map((scope) => (
@@ -685,7 +738,8 @@ export function CareWarehousePanel({
             ))}
           </div>
         )}
-        <Field uiSize="xs" label="Tìm kiếm" className="min-w-[180px] flex-1">
+        {/* Thu gọn nhãn/độ rộng để cả thanh lọc nằm 1 dòng trên laptop (yêu cầu người dùng 2026-11-04). */}
+        <Field uiSize="xs" label="Tìm kiếm" className="min-w-[110px] flex-1">
           <Input
             uiSize="xs"
             value={filters.search}
@@ -694,7 +748,7 @@ export function CareWarehousePanel({
             placeholder="Tên, SĐT, ghi chú, năm sinh, địa chỉ"
           />
         </Field>
-        <Field uiSize="xs" label="Trạng thái chăm sóc (30 ngày)">
+        <Field uiSize="xs" label="Trạng thái (30 ngày)" title="Trạng thái chăm sóc trong 30 ngày">
           <Select
             uiSize="xs"
             value={filters.status}
@@ -726,7 +780,7 @@ export function CareWarehousePanel({
           <Field uiSize="xs" label="Sale được giao">
             <Select
               uiSize="xs"
-              className="max-w-44"
+              className="max-w-32!"
               value={filters.assignee_id}
               onChange={(e) => applyFilters({ ...filters, assignee_id: e.target.value })}
             >
@@ -741,13 +795,14 @@ export function CareWarehousePanel({
             </Select>
           </Field>
         )}
-        <Field uiSize="xs" label="Số lần chăm sóc (tổng)">
-          <div className="flex items-center gap-1">
+        <Field uiSize="xs" label="Lần CS" title="Số lần chăm sóc (tổng)">
+          {/* Ô số gọn, ẩn nút tăng/giảm để đủ chỗ cho 2–3 chữ số. */}
+          <div className="flex items-center gap-0.5 [&_input]:[appearance:textfield] [&_input::-webkit-inner-spin-button]:appearance-none [&_input::-webkit-outer-spin-button]:appearance-none">
             <Input
               uiSize="xs"
               type="number"
               min={0}
-              className="w-14"
+              className="w-10! px-1! text-center"
               placeholder="Từ"
               value={filters.care_min}
               onChange={(e) => applyTypedFilter({ care_min: e.target.value })}
@@ -757,14 +812,14 @@ export function CareWarehousePanel({
               uiSize="xs"
               type="number"
               min={0}
-              className="w-14"
+              className="w-10! px-1! text-center"
               placeholder="Đến"
               value={filters.care_max}
               onChange={(e) => applyTypedFilter({ care_max: e.target.value })}
             />
           </div>
         </Field>
-        <Field uiSize="xs" label="Chăm sóc gần nhất" className="w-36">
+        <Field uiSize="xs" label="CS gần nhất" title="Chăm sóc gần nhất" className="w-32">
           <DateRangePicker
             value={filters.last_care}
             onChange={(next) => applyFilters({ ...filters, last_care: next })}
@@ -772,7 +827,7 @@ export function CareWarehousePanel({
             allowClear
           />
         </Field>
-        <Field uiSize="xs" label="Ngày phân công" className="w-36">
+        <Field uiSize="xs" label="Ngày phân công" className="w-32">
           <DateRangePicker
             value={filters.assigned}
             onChange={(next) => applyFilters({ ...filters, assigned: next })}
@@ -788,6 +843,7 @@ export function CareWarehousePanel({
           type="button"
           size="xs"
           variant="ghost"
+          className="whitespace-nowrap"
           onClick={() => applyFilters({ ...EMPTY_FILTERS, scope: filters.scope })}
         >
           <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
@@ -795,40 +851,14 @@ export function CareWarehousePanel({
         </Button>
       </Card>
 
-      {(canAssign || ASSIGNER_ROLES.includes(currentUserRole)) && (
-        <Card className="mb-2 flex flex-wrap items-center justify-between gap-2 p-2">
-          <span className="text-xs text-slate-600">
-            {selected.size > 0 ? `Đã chọn ${selected.size} data` : "Chọn data trong bảng để giao thủ công"}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "history" })}>
-              <History className="h-3.5 w-3.5" strokeWidth={2} />
-              Lịch sử phân công
-            </Button>
-            {canAssign && (
-              <>
-                <Button type="button" size="sm" variant="outline" onClick={() => setModal({ mode: "random" })}>
-                  <Shuffle className="h-3.5 w-3.5" strokeWidth={2} />
-                  Giao ngẫu nhiên
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={selected.size === 0}
-                  onClick={() => setModal({ mode: "manual", leadIds: [...selected] })}
-                >
-                  <UserPlus className="h-3.5 w-3.5" strokeWidth={2} />
-                  Giao data đã chọn
-                </Button>
-              </>
-            )}
-          </div>
-        </Card>
-      )}
+      {/* Chưa có thanh Tiến độ (đang tải) → nút giao tạm hiện ở khung riêng. */}
+      {!stats && assignActions && <Card className="mb-2 flex justify-end p-2">{assignActions}</Card>}
 
       <Card className="overflow-hidden p-0">
         {/* Điện thoại: không cuộn lồng trong khung — cả trang cuộn. */}
         <div ref={tableScrollRef} className="md:max-h-[calc(100vh-260px)] md:overflow-auto">
+          {/* "zoom" bọc nội dung, không bọc khối cuộn (giống tab Tất cả) để max-height không lệch. */}
+          <div style={{ zoom: zoomLevel / 100 }}>
           {layout === "cards" ? (
             // Dạng ô thẻ (2026-11-04): đủ dữ liệu như bảng; điện thoại 1 cột xếp dọc.
             <div className={LEAD_CARD_GRID_CLASS}>
@@ -941,6 +971,7 @@ export function CareWarehousePanel({
             </tbody>
           </table>
           )}
+          </div>
         </div>
         {!isLoading && items.length === 0 && loadError && (
           <div className="flex flex-col items-center gap-2 p-6 text-center text-sm">
@@ -1074,7 +1105,10 @@ function CareStatsBar({
   saleOptions,
   statsFilters,
   onStatsFiltersChange,
+  actions,
 }: {
+  /** Nút giao data (Lịch sử phân công / Giao ngẫu nhiên / Giao đã chọn) — đặt cạnh chữ "Tiến độ". */
+  actions?: ReactNode;
   stats: CareWarehouseListResult["stats"];
   isSale: boolean;
   /** Quản lý/Admin/MKT: chọn Nhóm hoặc Tất cả. */
@@ -1164,13 +1198,17 @@ function CareStatsBar({
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {tiles.map((t) => (
-          <div key={t.key} className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-center">
-            <p className="text-[11px] text-slate-500">{t.label}</p>
-            <p className={cn("text-lg font-bold tabular-nums", t.tone)}>{t.value}</p>
-          </div>
-        ))}
+      {/* Ô số liệu bên trái; nút giao data bên phải, ngay dưới bộ lọc Nhóm/NV/ngày (yêu cầu người dùng 2026-11-04). */}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {tiles.map((t) => (
+            <div key={t.key} className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-center">
+              <p className="text-[11px] text-slate-500">{t.label}</p>
+              <p className={cn("text-lg font-bold tabular-nums", t.tone)}>{t.value}</p>
+            </div>
+          ))}
+        </div>
+        {actions && <div className="ml-auto">{actions}</div>}
       </div>
     </Card>
   );

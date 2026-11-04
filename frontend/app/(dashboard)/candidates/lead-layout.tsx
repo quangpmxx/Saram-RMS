@@ -89,6 +89,10 @@ export function LeadLayoutToggle({ value, onChange }: { value: LeadLayout; onCha
   );
 }
 
+/** Mức thu phóng danh sách (giống tab Tất cả) — dùng cho tab Chăm sóc. */
+export const LEAD_ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
+export type LeadZoomLevel = (typeof LEAD_ZOOM_LEVELS)[number];
+
 /** Lưới chứa các ô thẻ: điện thoại 1 cột xếp dọc, máy tính tự chia cột theo độ rộng. */
 export const LEAD_CARD_GRID_CLASS = "grid grid-cols-1 gap-2 p-2 md:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]";
 
