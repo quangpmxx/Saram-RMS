@@ -832,17 +832,6 @@ export class DashboardService {
     return { ...query, team_id: undefined, account_id: undefined };
   }
 
-  /** Leader luôn bị ép về đúng nhóm mình bất kể có truyền team_id hay không; Quản lý/Admin dùng nguyên team_id đã truyền (có thể rỗng = toàn bộ). */
-  private async resolveTeamIdForRestrictedRole(
-    currentUser: AuthenticatedUser,
-    teamId?: string,
-  ): Promise<string | undefined> {
-    if (currentUser.role === 'leader') {
-      return (await findOwnTeamId(this.prisma, currentUser.id)) ?? '__none__';
-    }
-    return teamId;
-  }
-
   private buildDateWhere(
     dateFrom?: string,
     dateTo?: string,

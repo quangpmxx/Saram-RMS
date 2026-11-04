@@ -755,7 +755,7 @@ export class CandidatesService {
       throw new NotFoundException('Không tìm thấy ứng viên');
     }
 
-    this.assertCanDelete(existing, currentUser);
+    this.assertCanDelete(currentUser);
 
     await this.prisma.lead.update({
       where: { id },
@@ -1474,7 +1474,7 @@ export class CandidatesService {
    * Xoá (mềm) data: Admin, Quản lý, MKT — mọi data (rà soát phân quyền
    * 2026-10-30; trước đây MKT chỉ xoá data mình up, Quản lý không xoá được).
    */
-  private assertCanDelete(lead: Lead, currentUser: AuthenticatedUser): void {
+  private assertCanDelete(currentUser: AuthenticatedUser): void {
     if (['admin', 'manager', 'mkt'].includes(currentUser.role)) {
       return;
     }

@@ -522,20 +522,36 @@ export class MarketingHubService {
         accounts.map((a) => a.mktSourceId).filter((id): id is string => !!id),
       ),
     ];
-    const dataCounts = sourceIds.length
-      ? await this.prisma.lead.groupBy({
-          by: ['mktSourceId'],
-          where: {
-            deletedAt: null,
-            mktSourceId: { in: sourceIds },
-            uploadedAt: uploadedInRange,
-          },
-          _count: { _all: true },
-        })
-      : [];
-    const dataBySource = new Map(
-      dataCounts.map((d) => [d.mktSourceId, d._count._all]),
-    );
+    // Các truy vấn độc lập chạy song song (trước đây chạy lần lượt).
+    const countDataBySource = async (): Promise<[string | null, number][]> => {
+      if (!sourceIds.length) return [];
+      const rows = await this.prisma.lead.groupBy({
+        by: ['mktSourceId'],
+        where: {
+          deletedAt: null,
+          mktSourceId: { in: sourceIds },
+          uploadedAt: uploadedInRange,
+        },
+        _count: { _all: true },
+      });
+      return rows.map((d) => [d.mktSourceId, d._count._all]);
+    };
+    const [dataPairs, spends, leadTotal, costThresholds] = await Promise.all([
+      countDataBySource(),
+      this.prisma.adSpendDaily.groupBy({
+        by: ['adAccountId'],
+        where: {
+          adAccountId: { in: accounts.map((a) => a.id) },
+          date: { gte: new Date(from), lte: new Date(to) },
+        },
+        _sum: { spend: true },
+      }),
+      this.prisma.lead.count({
+        where: { deletedAt: null, uploadedAt: uploadedInRange },
+      }),
+      this.getCostThresholds(),
+    ]);
+    const dataBySource = new Map(dataPairs);
     const sumSources = (ids: Set<string>) =>
       [...ids].reduce((s, id) => s + (dataBySource.get(id) ?? 0), 0);
     const sourcesByOwner = new Map<string, Set<string>>();
@@ -548,23 +564,9 @@ export class MarketingHubService {
     const dataByOwner = Object.fromEntries(
       [...sourcesByOwner].map(([ownerId, ids]) => [ownerId, sumSources(ids)]),
     );
-    const spends = await this.prisma.adSpendDaily.groupBy({
-      by: ['adAccountId'],
-      where: {
-        adAccountId: { in: accounts.map((a) => a.id) },
-        date: { gte: new Date(from), lte: new Date(to) },
-      },
-      _sum: { spend: true },
-    });
     const spendById = new Map(
       spends.map((s) => [s.adAccountId, Number(s._sum.spend ?? 0)]),
     );
-    const leadTotal = await this.prisma.lead.count({
-      where: {
-        deletedAt: null,
-        uploadedAt: uploadedInRange,
-      },
-    });
     const items = accounts.map((a) => ({
       id: a.id,
       owner: { id: a.owner.id, full_name: a.owner.fullName },
@@ -583,7 +585,7 @@ export class MarketingHubService {
     return {
       from,
       to,
-      cost_thresholds: await this.getCostThresholds(),
+      cost_thresholds: costThresholds,
       /** Số data theo nhân viên phụ trách (chỉ người có TKQC đã gắn nguồn) và toàn công ty. */
       data_by_owner: dataByOwner,
       data_total: sumSources(new Set(sourceIds)),

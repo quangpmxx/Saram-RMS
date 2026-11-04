@@ -746,7 +746,9 @@ export class CareWarehouseService {
       now,
     );
 
-    const countFilter = dto.care_counts?.length ? new Set(dto.care_counts) : null;
+    const countFilter = dto.care_counts?.length
+      ? new Set(dto.care_counts)
+      : null;
     const candidates = leads.flatMap((l) => {
       const s = summaries.get(l.id);
       const priority = s?.random_priority ?? null;

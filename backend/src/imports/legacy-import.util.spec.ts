@@ -131,8 +131,12 @@ describe('legacy-import.util', () => {
 describe('resolveUploadedAt', () => {
   const now = new Date('2026-11-02T03:30:45.000Z'); // 10:30:45 giờ VN
   it('lấy ngày trên sheet + giờ hiện tại', () => {
-    expect(resolveUploadedAt('29/10/2026', now).toISOString()).toBe('2026-10-29T03:30:45.000Z');
-    expect(resolveUploadedAt('2026-10-29T00:00:00.000Z', now).toISOString()).toBe('2026-10-29T03:30:45.000Z');
+    expect(resolveUploadedAt('29/10/2026', now).toISOString()).toBe(
+      '2026-10-29T03:30:45.000Z',
+    );
+    expect(
+      resolveUploadedAt('2026-10-29T00:00:00.000Z', now).toISOString(),
+    ).toBe('2026-10-29T03:30:45.000Z');
   });
   it('thiếu / sai / tương lai → ngày up', () => {
     expect(resolveUploadedAt('', now)).toBe(now);
