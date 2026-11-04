@@ -51,7 +51,7 @@ function MobileDrawer({ navItems, onClose }: { navItems: NavItem[]; onClose: () 
         <div className="flex-1 pb-4" onClick={(event) => (event.target as HTMLElement).closest("a") && onClose()}>
           <SidebarNav items={navItems} />
         </div>
-        <p className="px-5 pb-4 text-xs text-brand-200/50">Saram RMS · Nội bộ · ©PMQ</p>
+        <p className="px-5 pb-4 text-xs text-brand-200/50">Saram CRM · Nội bộ · ©PMQ</p>
       </aside>
     </div>,
     document.body,

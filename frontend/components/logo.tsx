@@ -33,8 +33,8 @@ export function Logo({
     // Kích thước gốc 112px/128px, tăng ~25-29% (yêu cầu tinh chỉnh trang đăng
     // nhập) — "lg" chỉ dùng riêng ở đó, không ảnh hưởng logo sidebar/header.
     const mark = (
-      <div className={cn("relative h-36 w-36 sm:h-40 sm:w-40", className)}>
-        <Image src="/saram-logo.jpg" alt="Saram Group" fill sizes="160px" className="object-contain" priority />
+      <div className={cn("relative h-24 w-24 sm:h-28 sm:w-28", className)}>
+        <Image src="/dai-viet-logo-transparent.png" alt="Đại Việt" fill sizes="112px" className="object-contain" priority />
       </div>
     );
     return href ? <Link href={href}>{mark}</Link> : mark;
@@ -47,7 +47,7 @@ export function Logo({
         className="relative shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-black/5"
         style={{ width: px, height: px }}
       >
-        <Image src="/saram-logo.jpg" alt="Saram Group" fill sizes={`${px}px`} className="object-contain p-0.5" />
+        <Image src="/dai-viet-mark.png" alt="Đại Việt" fill sizes={`${px}px`} className="object-contain p-0.5" />
       </div>
       {showWordmark && (
         <div className="flex flex-col leading-tight">

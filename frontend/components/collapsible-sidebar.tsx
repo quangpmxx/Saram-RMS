@@ -77,7 +77,7 @@ export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
           isExpanded ? "max-w-[200px] py-4 opacity-100 delay-150 duration-200" : "max-w-0 py-4 opacity-0 duration-100",
         )}
       >
-        <p className="text-xs whitespace-nowrap text-brand-200/50">Saram RMS · Nội bộ</p>
+        <p className="text-xs whitespace-nowrap text-brand-200/50">Saram CRM · Nội bộ</p>
         <p className="text-xs whitespace-nowrap text-brand-200/50">©PMQ</p>
       </div>
     </aside>

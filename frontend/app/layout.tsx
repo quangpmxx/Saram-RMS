@@ -12,7 +12,7 @@ const beVietnamPro = Be_Vietnam_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "CRM Tuyển dụng — Saram RMS",
+  title: "CRM Tuyển dụng — Saram CRM",
   description: "Hệ thống quản lý tuyển dụng nội bộ",
 };
 

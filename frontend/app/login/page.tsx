@@ -25,12 +25,10 @@ export default async function LoginPage() {
           <div className="rounded-3xl bg-white/90 p-8 shadow-2xl shadow-brand-900/20 backdrop-blur-sm sm:p-10">
             <div className="flex flex-col items-center text-center">
               <Logo size="lg" showWordmark={false} className="z-0" />
-              {/* Ảnh logo có khoảng trắng sẵn dưới tagline "KẾT SỨC MẠNH..." nên
-                  cần margin âm để tên công ty nhích sát lên gần logo hơn. Logo
-                  dùng position:relative (cho Image fill) nên tự nằm trên các
-                  phần tử tĩnh cùng cấp bất kể thứ tự DOM — phải đặt z-10 cho
-                  chữ để không bị nền logo (ảnh không tách nền) che mất. */}
-              <p className="relative z-10 -mt-4 text-base font-semibold text-brand-900 sm:text-lg">
+              {/* Logo Đại Việt (2026-11-04) đã cắt sát viền nên không cần margin
+                  âm như logo Saram cũ. Logo dùng position:relative (cho Image
+                  fill) nên tự nằm trên các phần tử tĩnh cùng cấp — giữ z-10 cho chữ. */}
+              <p className="relative z-10 mt-3 text-base font-semibold text-brand-900 sm:text-lg">
                 Công Ty TNHH Thương Mại Dịch Vụ Saram Vina
               </p>
             </div>
