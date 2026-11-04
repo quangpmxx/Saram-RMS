@@ -100,6 +100,18 @@ describe('legacy-import.util', () => {
     expect(errors).toEqual([{ row: 4, message: 'SĐT không hợp lệ: "abc"' }]);
   });
 
+  it('ô Ngày kiểu ngày tháng của Excel → đọc được ngày trên sheet', () => {
+    const wb = new Workbook();
+    const ws = wb.addWorksheet('T9');
+    ws.addRow(['Ngày', 'SĐT']);
+    ws.addRow([new Date('2026-09-03T00:00:00Z'), '0912345678']);
+    const { rows } = readLegacyRows(ws, detectColumns(ws), 10);
+    const now = new Date('2026-11-05T03:30:45.000Z');
+    expect(resolveUploadedAt(rows[0].uploadDate, now).toISOString()).toBe(
+      '2026-09-03T03:30:45.000Z',
+    );
+  });
+
   it('SĐT lặp trong file: giữ dòng đầu, nối ghi chú', () => {
     const base = {
       staff: 'Vương',
@@ -137,6 +149,15 @@ describe('resolveUploadedAt', () => {
     expect(
       resolveUploadedAt('2026-10-29T00:00:00.000Z', now).toISOString(),
     ).toBe('2026-10-29T03:30:45.000Z');
+  });
+  it('"9/10" không có năm → năm nay; ra tương lai thì năm ngoái', () => {
+    expect(resolveUploadedAt('9/10', now).toISOString()).toBe(
+      '2026-10-09T03:30:45.000Z',
+    );
+    expect(resolveUploadedAt('25/12', now).toISOString()).toBe(
+      '2025-12-25T03:30:45.000Z',
+    );
+    expect(resolveUploadedAt('31/2', now)).toBe(now);
   });
   it('thiếu / sai / tương lai → ngày up', () => {
     expect(resolveUploadedAt('', now)).toBe(now);

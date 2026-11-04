@@ -21,6 +21,12 @@ export function getCellText(row: Row, column: number): string {
     return '';
   }
 
+  // Ô ngày tháng (vd cột "Ngày" của Tải data cũ) — Date cũng là object nên
+  // phải xét trước, nếu không bị đọc thành rỗng (lỗi thật 2026-11-05).
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
   if (typeof value === 'object') {
     const richValue = value as { text?: unknown; result?: unknown };
     if ('text' in richValue) {

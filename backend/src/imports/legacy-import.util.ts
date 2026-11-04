@@ -212,7 +212,8 @@ export function suggestAccount(
 /**
  * Ngày up = NGÀY trong sheet (giờ VN) + GIỜ hiện tại lúc up. Ô ngày trống /
  * không đọc được / ở tương lai → dùng luôn thời điểm up (`now`).
- * Hỗ trợ: ô ngày của Excel (ISO), "29/10/2026", "29-10-2026", "29.10.2026".
+ * Hỗ trợ: ô ngày của Excel (ISO), "29/10/2026", "29-10-2026", "29.10.2026",
+ * "9/10" (không năm).
  */
 export function resolveUploadedAt(raw: string, now: Date): Date {
   const s = raw.trim();
@@ -222,6 +223,15 @@ export function resolveUploadedAt(raw: string, now: Date): Date {
     [y, m, d] = [+match[1], +match[2], +match[3]];
   } else if ((match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/.exec(s))) {
     [d, m, y] = [+match[1], +match[2], +match[3]];
+  } else if ((match = /^(\d{1,2})[/.-](\d{1,2})$/.exec(s))) {
+    // "9/10" không có năm (ô chữ trên sheet) → năm nay; nếu ra ngày tương
+    // lai thì là năm ngoái (vd up tháng 1 file có "25/12").
+    [d, m] = [+match[1], +match[2]];
+    const vnYear = new Date(now.getTime() + 7 * 3600_000).getUTCFullYear();
+    const thisYear = resolveUploadedAt(`${d}/${m}/${vnYear}`, now);
+    return thisYear !== now
+      ? thisYear
+      : resolveUploadedAt(`${d}/${m}/${vnYear - 1}`, now);
   } else {
     return now;
   }
