@@ -920,7 +920,7 @@ function ShuttleRowFormCells({
           onManageOptions={() => onManageOptions("interview_result", "Kết quả")}
         />
       </td>
-      <td className="border-r border-slate-100 px-2 py-1 align-middle">
+      <td className="border-r border-slate-100 px-1 py-1 align-middle">
         <ComboCell
           value={value.lead_source}
           options={options.leadSources}
@@ -1573,6 +1573,8 @@ export function ShuttleClient({
               <col className="w-[98px]" />
               <col className="w-[110px]" />
               <col className="w-[110px]" />
+              {/* Nguồn (Data/GT) — vừa đủ dữ liệu (yêu cầu người dùng 2026-11-04). */}
+              <col className="w-[76px]" />
               <col className="w-[220px]" />
               <col className="w-[100px]" />
             </colgroup>
@@ -1601,7 +1603,7 @@ export function ShuttleClient({
                 <th className="border-r border-slate-100 px-3 py-2.5">Nhà thầu</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Tình trạng</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Kết quả</th>
-                <th className="border-r border-slate-100 px-3 py-2.5">Nguồn</th>
+                <th className="border-r border-slate-100 px-1 py-2.5">Nguồn</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Ghi chú</th>
                 <th className="px-3 py-2.5">HĐ</th>
               </tr>
