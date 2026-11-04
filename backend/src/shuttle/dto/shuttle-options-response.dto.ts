@@ -25,6 +25,7 @@ export interface ShuttleOptionsResponseDto {
   statuses: ShuttleOptionItemDto[];
   interviewResults: ShuttleOptionItemDto[];
   interviewTimes: ShuttleOptionItemDto[];
+  leadSources: ShuttleOptionItemDto[];
 }
 
 export function toShuttleOptionItem(

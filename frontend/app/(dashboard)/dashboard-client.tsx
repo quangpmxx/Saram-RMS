@@ -199,6 +199,22 @@ function RankingRow({
   );
 }
 
+/** Dòng tách CT (chính thức) / TV (thời vụ) — theo cột Loại hình của Đưa đón. */
+function TypeSplit({ ct, tv, suffix = "" }: { ct: number | undefined; tv: number | undefined; suffix?: string }) {
+  const fmt = (v: number | undefined) => (v === undefined ? "—" : `${v.toLocaleString("vi-VN")}${suffix}`);
+  return (
+    <div className="mt-1 flex items-center justify-center gap-2 border-t border-slate-200/70 pt-1 text-xs">
+      <span>
+        <span className="font-semibold text-blue-700">CT</span> <b className="text-slate-800">{fmt(ct)}</b>
+      </span>
+      <span className="text-slate-300">|</span>
+      <span>
+        <span className="font-semibold text-orange-600">TV</span> <b className="text-slate-800">{fmt(tv)}</b>
+      </span>
+    </div>
+  );
+}
+
 function RankingEmptyState() {
   return <p className="py-6 text-center text-sm text-slate-400">Chưa có dữ liệu xếp hạng trong khoảng thời gian này.</p>;
 }
@@ -440,6 +456,17 @@ export function DashboardClient({
       .slice(0, 3);
   }, [ranking]);
 
+  /** Các ô đang mở xem tách Chính thức / Thời vụ (bấm lại để ẩn). */
+  const [openTypeDetail, setOpenTypeDetail] = useState<Set<string>>(new Set());
+  function toggleTypeDetail(key: string) {
+    setOpenTypeDetail((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
     <div className="-mt-3 mx-auto max-w-7xl space-y-5">
       {/* Bộ lọc — Mục 5, yêu cầu trực tiếp người dùng: Khoảng thời gian/Nhóm/Nhân viên/Nguồn, cập nhật realtime. Thu hẹp cả cụm lọc (2026-07-14, yêu cầu trực tiếp người dùng). */}
@@ -538,10 +565,33 @@ export function DashboardClient({
           const value = summary.kpi[key];
           const previous = summary.kpi_previous?.[key];
           const change = value === null ? null : percentChange(value, previous ?? undefined);
+          // 5 ô Hẹn/Đến/Bùng/Đỗ/Trượt PV: bấm để xem tách CT/TV (2026-11-04), mặc định ẩn.
+          const typeKey = key === "new_leads" || key === "employed" ? null : key;
+          const byType = typeKey ? summary.kpi.by_type : undefined;
+          const isOpen = typeKey !== null && openTypeDetail.has(key);
           return (
             <Card
               key={key}
-              className="flex min-h-[112px] flex-col justify-between gap-2 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              role={typeKey ? "button" : undefined}
+              tabIndex={typeKey ? 0 : undefined}
+              aria-expanded={typeKey ? isOpen : undefined}
+              title={typeKey ? "Bấm để xem Chính thức / Thời vụ" : undefined}
+              onClick={typeKey ? () => toggleTypeDetail(key) : undefined}
+              onKeyDown={
+                typeKey
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleTypeDetail(key);
+                      }
+                    }
+                  : undefined
+              }
+              className={cn(
+                "flex min-h-[112px] flex-col justify-between gap-2 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+                typeKey && "cursor-pointer select-none",
+                isOpen && "ring-2 ring-brand-300",
+              )}
             >
               <div className="flex items-start gap-3">
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tint}`}>
@@ -554,6 +604,7 @@ export function DashboardClient({
                   <p className="mt-1 truncate text-xs font-medium text-slate-500">{label}</p>
                 </div>
               </div>
+              {isOpen && typeKey && <TypeSplit ct={byType?.ct[typeKey]} tv={byType?.tv[typeKey]} />}
               <div className="flex justify-center">
                 <ChangeBadge value={change} previousLabel={previousPeriodLabel(dateRange.preset)} />
               </div>
@@ -568,18 +619,36 @@ export function DashboardClient({
       <Card className="p-4">
         <h2 className="text-sm font-semibold text-slate-900">Hiệu suất toàn công ty</h2>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="rounded-xl bg-brand-50 p-2 text-center">
-            <p className="text-base font-bold text-brand-700">{summary.kpi.schedule_rate}%</p>
-            <p className="text-xs text-brand-600/70">Tỷ lệ hẹn PV</p>
-          </div>
-          <div className="rounded-xl bg-emerald-50 p-2 text-center">
-            <p className="text-base font-bold text-emerald-600">{summary.kpi.attend_rate}%</p>
-            <p className="text-xs text-emerald-600/70">Tỷ lệ đến PV</p>
-          </div>
-          <div className="rounded-xl bg-emerald-100 p-2 text-center">
-            <p className="text-base font-bold text-emerald-700">{summary.kpi.pass_rate}%</p>
-            <p className="text-xs text-emerald-700/70">Tỷ lệ đỗ PV</p>
-          </div>
+          {/* 3 ô tỉ lệ hẹn/đến/đỗ: bấm để xem tách CT/TV (2026-11-04), mặc định ẩn. */}
+          {(
+            [
+              { key: "schedule_rate", label: "Tỷ lệ hẹn PV", box: "bg-brand-50", value: "text-brand-700", sub: "text-brand-600/70" },
+              { key: "attend_rate", label: "Tỷ lệ đến PV", box: "bg-emerald-50", value: "text-emerald-600", sub: "text-emerald-600/70" },
+              { key: "pass_rate", label: "Tỷ lệ đỗ PV", box: "bg-emerald-100", value: "text-emerald-700", sub: "text-emerald-700/70" },
+            ] as const
+          ).map((tile) => {
+            const isOpen = openTypeDetail.has(tile.key);
+            return (
+              <button
+                key={tile.key}
+                type="button"
+                aria-expanded={isOpen}
+                title="Bấm để xem Chính thức / Thời vụ"
+                onClick={() => toggleTypeDetail(tile.key)}
+                className={cn("rounded-xl p-2 text-center transition-shadow", tile.box, isOpen && "ring-2 ring-brand-300")}
+              >
+                <p className={cn("text-base font-bold", tile.value)}>{summary.kpi[tile.key]}%</p>
+                <p className={cn("text-xs", tile.sub)}>{tile.label}</p>
+                {isOpen && (
+                  <TypeSplit
+                    ct={summary.kpi.by_type?.ct[tile.key]}
+                    tv={summary.kpi.by_type?.tv[tile.key]}
+                    suffix="%"
+                  />
+                )}
+              </button>
+            );
+          })}
           <div className="rounded-xl bg-accent-50 p-2 text-center">
             <p className="text-base font-bold text-accent-600">
               {summary.kpi.employed_rate === null ? "—" : `${summary.kpi.employed_rate}%`}
@@ -650,11 +719,13 @@ export function DashboardClient({
           </div>
           <div className="mt-3 flex flex-col divide-y divide-brand-400">
             {sortedTeams.map((team) => (
-              <div key={team.team_id} className="flex flex-wrap items-center gap-4 py-3">
-                <div className="w-32 shrink-0">
+              // Điện thoại: hàng 1 = tên nhóm + thanh hiệu suất, hàng 2 = các chỉ số chiếm hết chiều ngang
+              // (trước đây 3 khối cùng 1 hàng nên chỉ số bị bóp, chữ chồng lên nhau).
+              <div key={team.team_id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+                <div className="min-w-0 flex-1 sm:w-32 sm:flex-none sm:shrink-0">
                   <p className="text-sm font-semibold text-slate-800">{team.team_name}</p>
                 </div>
-                <div className="grid flex-1 grid-cols-4 divide-x divide-slate-100 sm:grid-cols-7">
+                <div className="order-last grid w-full grid-cols-4 gap-y-2 sm:order-none sm:w-auto sm:flex-1 sm:grid-cols-7 sm:divide-x sm:divide-slate-100">
                   {KPI_CARDS.map(({ key, label }) => (
                     <div key={key} className="px-2 text-center">
                       <p className="text-sm font-semibold text-slate-800">
@@ -694,7 +765,7 @@ export function DashboardClient({
             </Select>
           </div>
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-sm [&_th]:whitespace-nowrap">
               <thead>
                 <tr className="border-b border-brand-400 text-xs text-slate-500">
                   <th className="border-r border-slate-100 py-2 pr-3 font-medium">Nhân viên</th>
@@ -719,7 +790,8 @@ export function DashboardClient({
                       <div className="flex items-center gap-2">
                         <Avatar fullName={row.full_name} avatarUrl={row.avatar_url} className="h-7 w-7 text-xs" />
                         <div>
-                          <p className="font-medium text-slate-800">{row.full_name}</p>
+                          {/* Không xuống dòng: điện thoại thì bảng kéo ngang thay vì bóp tên. */}
+                          <p className="font-medium whitespace-nowrap text-slate-800">{row.full_name}</p>
                           {row.team_id && <p className="text-[11px] text-slate-400">{teamNameById.get(row.team_id) ?? ""}</p>}
                         </div>
                       </div>

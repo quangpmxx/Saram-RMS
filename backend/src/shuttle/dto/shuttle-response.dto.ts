@@ -18,6 +18,7 @@ export interface ShuttleResponseDto {
   contractor: string | null;
   status: string | null;
   interview_result: string | null;
+  lead_source: string | null;
   note: string | null;
   created_by: { id: string; name: string };
   updated_by: { id: string; name: string };
@@ -64,6 +65,7 @@ export function toShuttleResponse(
     contractor: record.contractor,
     status: record.status,
     interview_result: record.interviewResult,
+    lead_source: record.leadSource,
     note: record.note,
     created_by: { id: record.createdBy.id, name: record.createdBy.fullName },
     updated_by: { id: record.updatedBy.id, name: record.updatedBy.fullName },

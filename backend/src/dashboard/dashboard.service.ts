@@ -11,6 +11,14 @@ import {
   TeamSummaryDto,
 } from './dto/dashboard-response.dto';
 import { findOwnTeamId } from '../common/utils/account-team.util';
+import {
+  SHUTTLE_RESULT_FAILED,
+  SHUTTLE_RESULT_PASSED,
+  SHUTTLE_STATUS_ATTENDED,
+  SHUTTLE_STATUS_NO_SHOW,
+  SHUTTLE_TYPE_CT,
+  SHUTTLE_TYPE_TV,
+} from '../shuttle/dto/create-shuttle-option.dto';
 
 /**
  * Rà soát phân quyền 2026-10-30 — Dashboard:
@@ -26,45 +34,43 @@ const FULL_VIEW_ROLES = new Set(['admin', 'manager', 'mkt']);
 /** Bám sát đúng 3 trạng thái phỏng vấn tính là "đã đến PV" — SCHEDULED chưa đến, NO_SHOW là bùng (không đến). */
 const ATTENDED_INTERVIEW_STATUS_CODES = ['ATTENDED', 'PASSED', 'FAILED'];
 
-/**
- * Dự án phụ — nâng cấp toàn diện (riêng giao diện Dashboard, ngoài phạm vi
- * Design Freeze docs/09-13): 4 giá trị chuỗi khớp đúng dữ liệu hiện có trong
- * shuttle_options (Tình trạng/Kết quả của module Đưa đón) — yêu cầu trực
- * tiếp người dùng (2026-07-14): "Hẹn PV/Đến PV/Bùng PV/Đỗ PV/Trượt PV" giờ
- * lấy từ Đưa đón thay vì Candidates/InterviewAppointment. LƯU Ý: đây là 4
- * giá trị TỰ DO trong bảng shuttle_options (đổi được qua "Chỉnh sửa danh
- * sách" ở trang Đưa đón), không phải enum cố định trong schema — nếu người
- * dùng đổi tên/xóa 1 trong 4 giá trị này, việc khớp ở đây sẽ âm thầm sai
- * (đã báo trước, chấp nhận rủi ro theo đúng yêu cầu).
+/*
+ * "Hẹn PV/Đến PV/Bùng PV/Đỗ PV/Trượt PV" lấy từ Đưa đón (2026-07-14). Đến PV =
+ * Tình trạng "Đã đón", Bùng PV = "Chưa đón được", Đỗ/Trượt PV = Kết quả "Đỗ PV"/
+ * "Trượt PV". Các chuỗi này là lựa chọn CỐ ĐỊNH (không xoá/đổi tên được từ
+ * 2026-11-04) — hằng số dùng chung ở shuttle/dto/create-shuttle-option.dto.ts.
  */
-const SHUTTLE_STATUS_ATTENDED = 'Đã đón';
-const SHUTTLE_STATUS_NO_SHOW = 'Chưa đón được';
-const SHUTTLE_RESULT_PASSED = 'Đỗ PV';
-const SHUTTLE_RESULT_FAILED = 'Trượt PV';
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-type ShuttleKpi = Pick<
+type ShuttleCounts = Pick<
   KpiBreakdown,
   'interview_scheduled' | 'attended' | 'no_show' | 'passed' | 'failed'
 >;
+type ShuttleKpi = ShuttleCounts & { ct: ShuttleCounts; tv: ShuttleCounts };
 type ShuttleRow = {
   saleUserId: string | null;
   status: string | null;
   interviewResult: string | null;
+  type: string | null;
 };
 
-const EMPTY_SHUTTLE_KPI: ShuttleKpi = {
+const EMPTY_COUNTS: ShuttleCounts = {
   interview_scheduled: 0,
   attended: 0,
   no_show: 0,
   passed: 0,
   failed: 0,
 };
+const EMPTY_SHUTTLE_KPI: ShuttleKpi = {
+  ...EMPTY_COUNTS,
+  ct: EMPTY_COUNTS,
+  tv: EMPTY_COUNTS,
+};
 
-function tallyShuttle(rows: ShuttleRow[]): ShuttleKpi {
+function countShuttle(rows: ShuttleRow[]): ShuttleCounts {
   return {
     interview_scheduled: rows.length,
     attended: rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED).length,
@@ -73,6 +79,14 @@ function tallyShuttle(rows: ShuttleRow[]): ShuttleKpi {
       .length,
     failed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_FAILED)
       .length,
+  };
+}
+
+function tallyShuttle(rows: ShuttleRow[]): ShuttleKpi {
+  return {
+    ...countShuttle(rows),
+    ct: countShuttle(rows.filter((r) => r.type === SHUTTLE_TYPE_CT)),
+    tv: countShuttle(rows.filter((r) => r.type === SHUTTLE_TYPE_TV)),
   };
 }
 
@@ -563,7 +577,7 @@ export class DashboardService {
    */
   private async computeKpiBreakdown(
     leadWhere: Prisma.LeadWhereInput,
-    saleAccountIds: string[],
+    saleAccountIds: string[] | null,
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
@@ -596,7 +610,17 @@ export class DashboardService {
       pass_rate: pct(shuttle.passed),
       employed_rate: null,
       performance_rate: null,
+      by_type: { ct: withRates(shuttle.ct), tv: withRates(shuttle.tv) },
     };
+
+    function withRates(c: ShuttleCounts) {
+      return {
+        ...c,
+        schedule_rate: pct(c.interview_scheduled),
+        attend_rate: pct(c.attended),
+        pass_rate: pct(c.passed),
+      };
+    }
   }
 
   /**
@@ -604,16 +628,16 @@ export class DashboardService {
    * Account thật từ 2026-07-28, trước đó ghép theo chuỗi tên). `sourceFiltered
    * =true` (đang lọc theo Nguồn) → trả về 0 hết vì Đưa đón không lưu Nguồn
    * (yêu cầu trực tiếp người dùng: "số về 0 khi có lọc Nguồn"). `saleAccountIds`
-   * rỗng (vd MKT — MKT không phải Sale, không có bản ghi Đưa đón nào đứng
-   * tên MKT) → cũng 0.
+   * rỗng (lọc Nhóm/NV không có Sale nào) → cũng 0. `null` (không lọc Nhóm/NV)
+   * → đếm mọi dòng đưa đón, kể cả dòng chưa chọn Sale.
    */
   private async computeShuttleKpi(
-    saleAccountIds: string[],
+    saleAccountIds: string[] | null,
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
   ): Promise<ShuttleKpi> {
-    if (sourceFiltered || saleAccountIds.length === 0) {
+    if (sourceFiltered || (saleAccountIds && saleAccountIds.length === 0)) {
       return EMPTY_SHUTTLE_KPI;
     }
     const rows = await this.findShuttleRows(saleAccountIds, dateFrom, dateTo);
@@ -645,20 +669,25 @@ export class DashboardService {
   }
 
   private findShuttleRows(
-    saleAccountIds: string[],
+    saleAccountIds: string[] | null,
     dateFrom: string | undefined,
     dateTo: string | undefined,
   ): Promise<ShuttleRow[]> {
     return this.prisma.shuttleRecord.findMany({
       where: {
         deletedAt: null,
-        saleUserId: { in: saleAccountIds },
+        ...(saleAccountIds ? { saleUserId: { in: saleAccountIds } } : {}),
         date: {
           gte: dateFrom ? new Date(dateFrom) : undefined,
           lte: dateTo ? new Date(dateTo) : undefined,
         },
       },
-      select: { saleUserId: true, status: true, interviewResult: true },
+      select: {
+        saleUserId: true,
+        status: true,
+        interviewResult: true,
+        type: true,
+      },
     });
   }
 
@@ -668,10 +697,13 @@ export class DashboardService {
    */
   private async resolveSaleAccountIdsInScope(
     query: DashboardQueryDto,
-  ): Promise<string[]> {
-    // query đã qua sanitizeQuery(): số liệu chung tính trên toàn bộ Sale của
-    // công ty, chỉ thu hẹp theo bộ lọc hợp lệ.
+  ): Promise<string[] | null> {
+    // query đã qua sanitizeQuery(): số liệu chung tính trên toàn bộ công ty,
+    // chỉ thu hẹp theo bộ lọc hợp lệ. Không lọc Nhóm/Nhân viên → null = đếm MỌI
+    // dòng đưa đón, kể cả dòng chưa chọn Sale (2026-11-04: trước đây bỏ sót các
+    // dòng này nên Đến PV/Bùng PV… trên Dashboard thiếu so với trang Đưa đón).
     const teamId = query.team_id;
+    if (!teamId && !query.account_id) return null;
     const sales = await this.prisma.account.findMany({
       where: {
         role: 'sale',

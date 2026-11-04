@@ -234,11 +234,24 @@ describe('DashboardService', () => {
    */
   describe('computeKpiBreakdown (qua getSummary) — 7 chỉ số + tỷ lệ trên new_leads', () => {
     /** 12 dòng đưa đón: 9 "Đã đón" (4 Đỗ PV, 2 Trượt PV, 3 chưa có kết quả) + 3 "Chưa đón được". */
+    /** Loại hình: 4 Đỗ = CT, 2 Trượt = TV, còn lại để trống (chỉ tính vào tổng). */
     const SHUTTLE_ROWS = [
-      ...Array(4).fill({ status: 'Đã đón', interviewResult: 'Đỗ PV' }),
-      ...Array(2).fill({ status: 'Đã đón', interviewResult: 'Trượt PV' }),
-      ...Array(3).fill({ status: 'Đã đón', interviewResult: null }),
-      ...Array(3).fill({ status: 'Chưa đón được', interviewResult: null }),
+      ...Array(4).fill({
+        status: 'Đã đón',
+        interviewResult: 'Đỗ PV',
+        type: 'CT',
+      }),
+      ...Array(2).fill({
+        status: 'Đã đón',
+        interviewResult: 'Trượt PV',
+        type: 'TV',
+      }),
+      ...Array(3).fill({ status: 'Đã đón', interviewResult: null, type: null }),
+      ...Array(3).fill({
+        status: 'Chưa đón được',
+        interviewResult: null,
+        type: '',
+      }),
     ];
 
     it('tách riêng no_show (Bùng PV)/failed (Trượt PV), employed=null (chưa có nguồn dữ liệu)', async () => {
@@ -261,7 +274,43 @@ describe('DashboardService', () => {
         pass_rate: 20,
         employed_rate: null,
         performance_rate: null,
+        by_type: {
+          ct: {
+            interview_scheduled: 4,
+            attended: 4,
+            no_show: 0,
+            passed: 4,
+            failed: 0,
+            schedule_rate: 20,
+            attend_rate: 20,
+            pass_rate: 20,
+          },
+          tv: {
+            interview_scheduled: 2,
+            attended: 2,
+            no_show: 0,
+            passed: 0,
+            failed: 2,
+            schedule_rate: 10,
+            attend_rate: 10,
+            pass_rate: 0,
+          },
+        },
       });
+      // Không lọc Nhóm/NV → đếm mọi dòng đưa đón, kể cả dòng chưa chọn Sale.
+      const call = prisma.shuttleRecord.findMany.mock.calls[0][0] as {
+        where: Record<string, unknown>;
+      };
+      expect(call.where).not.toHaveProperty('saleUserId');
+    });
+
+    it('lọc theo Nhóm → chỉ đếm dòng đưa đón của Sale trong nhóm', async () => {
+      prisma.lead.count.mockResolvedValue(20);
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
+      prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
+
+      await service.getSummary({ team_id: 'team-1' }, adminUser);
+
       expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ saleUserId: { in: ['sale-a'] } }),
@@ -284,9 +333,20 @@ describe('DashboardService', () => {
       expect(result.kpi.no_show).toBe(0);
     });
 
-    it('MKT không có tên Sale nào (không phải Sale) → 5 chỉ số Shuttle đều 0, không cần gọi shuttleRecord', async () => {
+    it('MKT xem số liệu chung toàn công ty → vẫn đếm dòng đưa đón (2026-11-04)', async () => {
       prisma.lead.count.mockResolvedValue(5);
+      prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
       const result = await service.getSummary({}, mktUser);
+      expect(result.kpi.interview_scheduled).toBe(12);
+    });
+
+    it('lọc Nhóm không có Sale nào → 5 chỉ số Shuttle đều 0, không gọi shuttleRecord', async () => {
+      prisma.lead.count.mockResolvedValue(5);
+      prisma.account.findMany.mockResolvedValue([]);
+      const result = await service.getSummary(
+        { team_id: 'team-empty' },
+        adminUser,
+      );
       expect(result.kpi.interview_scheduled).toBe(0);
       expect(prisma.shuttleRecord.findMany).not.toHaveBeenCalled();
     });

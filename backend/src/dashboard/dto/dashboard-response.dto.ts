@@ -59,6 +59,23 @@ export interface KpiBreakdown {
   employed_rate: number | null;
   /** Đi làm ÷ Data mới — công thức "Hiệu suất (%)" người dùng đã chốt. null = chưa có dữ liệu Đi làm. */
   performance_rate: number | null;
+  /**
+   * Tách theo cột "Loại hình" của Đưa đón (2026-11-04): ct = "CT" (chính thức),
+   * tv = "TV" (thời vụ). Tỉ lệ cùng mẫu số new_leads như tỉ lệ tổng (CT + TV + loại
+   * khác/để trống = tổng). Dashboard chỉ hiện khi bấm vào ô.
+   */
+  by_type: { ct: ShuttleTypeKpi; tv: ShuttleTypeKpi };
+}
+
+export interface ShuttleTypeKpi {
+  interview_scheduled: number;
+  attended: number;
+  no_show: number;
+  passed: number;
+  failed: number;
+  schedule_rate: number;
+  attend_rate: number;
+  pass_rate: number;
 }
 
 export interface DashboardSummaryDto {

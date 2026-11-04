@@ -61,6 +61,17 @@ const OPTION_FIELD_KEYS: Record<string, keyof ShuttleOptions> = {
   status: "statuses",
   interview_result: "interviewResults",
   interview_time: "interviewTimes",
+  lead_source: "leadSources",
+};
+
+/**
+ * Lựa chọn cố định (2026-11-04): Dashboard đếm Đến/Bùng/Đỗ/Trượt PV và tách CT/TV theo đúng
+ * các chuỗi này → không xoá/đổi tên, chỉ đổi màu. Khớp LOCKED_SHUTTLE_OPTIONS ở backend.
+ */
+const LOCKED_OPTION_VALUES: Record<string, readonly string[]> = {
+  type: ["CT", "TV"],
+  status: ["Đã đón", "Chưa đón được"],
+  interview_result: ["Đỗ PV", "Trượt PV"],
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
@@ -163,6 +174,7 @@ interface ShuttleFormValue {
   contractor: string;
   status: string;
   interview_result: string;
+  lead_source: string;
   note: string;
 }
 
@@ -180,6 +192,7 @@ function emptyFormValue(): ShuttleFormValue {
     contractor: "",
     status: "",
     interview_result: "",
+    lead_source: "",
     note: "",
   };
 }
@@ -198,6 +211,7 @@ function formValueFromRecord(record: ShuttleRecord): ShuttleFormValue {
     contractor: record.contractor ?? "",
     status: record.status ?? "",
     interview_result: record.interview_result ?? "",
+    lead_source: record.lead_source ?? "",
     note: record.note ?? "",
   };
 }
@@ -544,9 +558,12 @@ function ShuttleOptionManagerModal({
   onUpdateOption,
   onDeleteOption,
   onClose,
+  lockedValues = [],
 }: {
   fieldLabel: string;
   options: ShuttleOptionItem[];
+  /** Giá trị cố định (vd Loại hình CT/TV): không xoá, không đổi tên — chỉ đổi màu. */
+  lockedValues?: readonly string[];
   onAddOption: (value: string, colorKey: string | null, textColorKey: string | null) => Promise<void>;
   onUpdateOption: (
     optionId: string,
@@ -629,12 +646,20 @@ function ShuttleOptionManagerModal({
           {options.length === 0 && <p className="text-sm text-slate-400">Chưa có giá trị nào.</p>}
           {options.map((option) => {
             const isEditing = editingId === option.id;
+            const isLocked = lockedValues.includes(option.value);
             const style = shuttleColorStyle(option.color_key, option.text_color_key);
             return (
               <div key={option.id} className="rounded-lg border border-slate-200 p-2.5">
                 {isEditing ? (
                   <div className="flex flex-col gap-2">
-                    <Input uiSize="sm" value={editValue} onChange={(event) => setEditValue(event.target.value)} autoFocus />
+                    <Input
+                      uiSize="sm"
+                      value={editValue}
+                      disabled={isLocked}
+                      title={isLocked ? "Giá trị cố định — chỉ đổi được màu" : undefined}
+                      onChange={(event) => setEditValue(event.target.value)}
+                      autoFocus={!isLocked}
+                    />
                     <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Màu nền</p>
                     <ColorPalette selected={editColorKey} onPick={setEditColorKey} />
                     <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Màu chữ</p>
@@ -660,21 +685,27 @@ function ShuttleOptionManagerModal({
                     >
                       {option.value}
                     </span>
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex shrink-0 items-center gap-1">
                       <Button type="button" variant="ghost" size="xs" onClick={() => startEdit(option)}>
                         <Pencil className="h-3 w-3" strokeWidth={2} />
-                        Sửa
+                        {isLocked ? "Đổi màu" : "Sửa"}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        disabled={pendingDeleteId === option.id}
-                        onClick={() => void handleDelete(option.id)}
-                      >
-                        <Trash2 className="h-3 w-3" strokeWidth={2} />
-                        Xóa
-                      </Button>
+                      {isLocked ? (
+                        <span className="px-1 text-[11px] text-slate-400" title="Dashboard tách số theo giá trị này nên không xoá/đổi tên được">
+                          Cố định
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          disabled={pendingDeleteId === option.id}
+                          onClick={() => void handleDelete(option.id)}
+                        >
+                          <Trash2 className="h-3 w-3" strokeWidth={2} />
+                          Xóa
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -887,6 +918,14 @@ function ShuttleRowFormCells({
           options={options.interviewResults}
           onSelect={(v) => selectCombo("interview_result", v)}
           onManageOptions={() => onManageOptions("interview_result", "Kết quả")}
+        />
+      </td>
+      <td className="border-r border-slate-100 px-2 py-1 align-middle">
+        <ComboCell
+          value={value.lead_source}
+          options={options.leadSources}
+          onSelect={(v) => selectCombo("lead_source", v)}
+          onManageOptions={() => onManageOptions("lead_source", "Nguồn")}
         />
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
@@ -1562,6 +1601,7 @@ export function ShuttleClient({
                 <th className="border-r border-slate-100 px-3 py-2.5">Nhà thầu</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Tình trạng</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Kết quả</th>
+                <th className="border-r border-slate-100 px-3 py-2.5">Nguồn</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Ghi chú</th>
                 <th className="px-3 py-2.5">HĐ</th>
               </tr>
@@ -1596,7 +1636,7 @@ export function ShuttleClient({
                 const isNewDay = index > 0 && records[index - 1].date !== record.date;
                 return (
                   <Fragment key={record.id}>
-                  {isNewDay && <DaySeparatorRow colSpan={14} />}
+                  {isNewDay && <DaySeparatorRow colSpan={15} />}
                   <tr
                     className={cn(
                       "align-top transition-colors hover:bg-slate-50",
@@ -1708,6 +1748,8 @@ export function ShuttleClient({
           onUpdateOption={handleUpdateOption}
           onDeleteOption={handleDeleteOption}
           onClose={() => setManageField(null)}
+          // Giá trị cố định Dashboard đếm theo — khớp LOCKED_SHUTTLE_OPTIONS ở backend.
+          lockedValues={LOCKED_OPTION_VALUES[manageField.field]}
         />
       )}
 

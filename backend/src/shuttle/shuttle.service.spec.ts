@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ShuttleService } from './shuttle.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -534,6 +538,66 @@ describe('ShuttleService', () => {
         where: { id: 'opt-1' },
         data: { value: 'Anh Hùng (mới)', colorKey: undefined },
       });
+    });
+  });
+
+  describe('Loại hình CT/TV cố định', () => {
+    const locked = {
+      id: 'opt-ct',
+      field: 'type',
+      value: 'CT',
+      colorKey: 'blue-base',
+    };
+
+    it.each([
+      ['status', 'Đã đón'],
+      ['status', 'Chưa đón được'],
+      ['interview_result', 'Đỗ PV'],
+      ['interview_result', 'Trượt PV'],
+    ])(
+      'Tình trạng/Kết quả cố định %s "%s" không xoá được',
+      async (field, value) => {
+        prisma.shuttleOption.findUnique.mockResolvedValue({
+          id: 'opt-x',
+          field,
+          value,
+          colorKey: null,
+        });
+        await expect(
+          service.removeOption('opt-x', currentUser),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      },
+    );
+
+    it('không xoá được', async () => {
+      prisma.shuttleOption.findUnique.mockResolvedValue(locked);
+      await expect(
+        service.removeOption('opt-ct', currentUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.shuttleOption.delete).not.toHaveBeenCalled();
+    });
+
+    it('không đổi tên được', async () => {
+      prisma.shuttleOption.findUnique.mockResolvedValue(locked);
+      await expect(
+        service.updateOption('opt-ct', { value: 'Chính thức' }, currentUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.shuttleOption.update).not.toHaveBeenCalled();
+    });
+
+    it('vẫn đổi màu được', async () => {
+      prisma.shuttleOption.findUnique.mockResolvedValue(locked);
+      prisma.shuttleOption.update.mockResolvedValue({
+        ...locked,
+        colorKey: 'red-base',
+        textColorKey: null,
+      });
+      await service.updateOption(
+        'opt-ct',
+        { value: 'CT', color_key: 'red-base' },
+        currentUser,
+      );
+      expect(prisma.shuttleOption.update).toHaveBeenCalled();
     });
   });
 

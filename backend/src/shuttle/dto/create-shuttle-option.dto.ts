@@ -33,7 +33,37 @@ export const SHUTTLE_OPTION_FIELDS = [
   'status',
   'interview_result',
   'interview_time',
+  'lead_source',
 ] as const;
+
+/**
+ * Giá trị cố định (2026-11-04): Dashboard đếm Hẹn/Đến/Bùng/Đỗ/Trượt PV và tách
+ * CT/TV theo ĐÚNG các chuỗi này, nên không cho xoá/đổi tên (chỉ đổi màu) —
+ * shuttle.service.ts chặn, dashboard.service.ts dùng chung hằng số.
+ */
+export const SHUTTLE_TYPE_CT = 'CT';
+export const SHUTTLE_TYPE_TV = 'TV';
+export const SHUTTLE_STATUS_ATTENDED = 'Đã đón';
+export const SHUTTLE_STATUS_NO_SHOW = 'Chưa đón được';
+export const SHUTTLE_RESULT_PASSED = 'Đỗ PV';
+export const SHUTTLE_RESULT_FAILED = 'Trượt PV';
+export const LOCKED_SHUTTLE_OPTIONS: ReadonlyArray<{
+  field: string;
+  value: string;
+}> = [
+  { field: 'type', value: SHUTTLE_TYPE_CT },
+  { field: 'type', value: SHUTTLE_TYPE_TV },
+  { field: 'status', value: SHUTTLE_STATUS_ATTENDED },
+  { field: 'status', value: SHUTTLE_STATUS_NO_SHOW },
+  { field: 'interview_result', value: SHUTTLE_RESULT_PASSED },
+  { field: 'interview_result', value: SHUTTLE_RESULT_FAILED },
+];
+
+export function isLockedShuttleOption(field: string, value: string): boolean {
+  return LOCKED_SHUTTLE_OPTIONS.some(
+    (o) => o.field === field && o.value === value,
+  );
+}
 
 /**
  * Khớp đúng bảng màu SHUTTLE_OPTION_COLORS ở frontend (lib/shuttle-colors.ts)

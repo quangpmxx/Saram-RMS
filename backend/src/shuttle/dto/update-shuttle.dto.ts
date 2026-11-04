@@ -80,5 +80,10 @@ export class UpdateShuttleDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  lead_source?: string;
+
+  @IsOptional()
+  @IsString()
   note?: string;
 }

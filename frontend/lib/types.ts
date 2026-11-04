@@ -472,6 +472,19 @@ export interface KpiBreakdown {
   pass_rate: number;
   employed_rate: number | null;
   performance_rate: number | null;
+  /** Tách theo Loại hình Đưa đón: CT (chính thức) / TV (thời vụ) — tỉ lệ cùng mẫu số Data mới. */
+  by_type?: { ct: ShuttleTypeKpi; tv: ShuttleTypeKpi };
+}
+
+export interface ShuttleTypeKpi {
+  interview_scheduled: number;
+  attended: number;
+  no_show: number;
+  passed: number;
+  failed: number;
+  schedule_rate: number;
+  attend_rate: number;
+  pass_rate: number;
 }
 
 /** GET /dashboard/summary — Mục 8, docs/13-api-design.md. */
@@ -918,6 +931,8 @@ export interface ShuttleRecord {
   status: string | null;
   /** "Kết quả PV" (Đỗ phỏng vấn/Trượt phỏng vấn) — tách riêng khỏi "Tình trạng đón". */
   interview_result: string | null;
+  /** "Nguồn" (Data / GT). */
+  lead_source: string | null;
   note: string | null;
   created_by: NamedRef;
   updated_by: NamedRef;
@@ -945,6 +960,7 @@ export interface ShuttleOptions {
   statuses: ShuttleOptionItem[];
   interviewResults: ShuttleOptionItem[];
   interviewTimes: ShuttleOptionItem[];
+  leadSources: ShuttleOptionItem[];
 }
 
 /** GET /shuttle/sale-accounts (role=sale) và GET /shuttle/driver-accounts (role=shuttle_staff, bổ sung 2026-07-28) — tài khoản thật, đang active — nguồn cột "Sale"/"Đưa đón". */

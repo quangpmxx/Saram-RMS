@@ -87,6 +87,12 @@ export class CreateShuttleDto {
   @MaxLength(50)
   interview_result?: string;
 
+  /** "Nguồn" (Data / GT). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  lead_source?: string;
+
   @IsOptional()
   @IsString()
   note?: string;

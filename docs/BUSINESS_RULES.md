@@ -36,6 +36,9 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 - Phạm vi số liệu theo vai trò; không có xuất Excel.
 - Hiệu suất/xếp hạng gom query cả danh sách Sale (B7) — giữ nguyên kết quả khi tối ưu; có test hồi quy.
 
+- **Chính thức / Thời vụ** (2026-11-04): ô Hẹn/Đến/Bùng/Đỗ/Trượt PV và 3 ô tỷ lệ hẹn/đến/đỗ ở Dashboard bấm vào mới hiện tách **CT / TV**, theo cột "Loại hình" của Đưa đón. Tỷ lệ CT/TV cùng mẫu số Data mới (CT + TV + dòng chưa chọn loại hình = tổng).
+- Nguồn số PV ở Dashboard = Đưa đón: Hẹn PV = mọi dòng; Đến PV = Tình trạng "Đã đón"; Bùng PV = "Chưa đón được"; Đỗ/Trượt PV = Kết quả "Đỗ PV"/"Trượt PV". Không lọc Nhóm/NV → đếm **mọi dòng** (kể cả chưa chọn Sale); có lọc → chỉ dòng của Sale thuộc phạm vi. Các giá trị trên + `CT`/`TV` là **lựa chọn cố định** (không xoá/đổi tên, chỉ đổi màu).
+
 ## Bất biến không được phá
 Bảo toàn lịch sử (ghi chú, lịch hẹn, phân công, Nhật ký) · gán/chuyển lead không race · phạm vi dữ liệu theo vai trò ở mọi API (kể cả tìm kiếm/lọc) · Đưa đón và ghi chú xoá mềm · tài khoản bị khoá/đổi nhóm thì mất realtime · mật khẩu mặc định buộc đổi.
 
@@ -51,3 +54,10 @@ Danh sách quyền chi tiết cho Quản lý/Leader (khung đã có, chưa có d
 - **Dashboard — khối "Chi phí Marketing"** (Admin/Quản lý/MKT, không theo bộ lọc Dashboard, tự làm mới 5 phút): Chi phí MKT, Data thu được (lead có Nguồn MKT đã gắn TKQC), Chi phí/data — đều của HÔM NAY; **Chi phí/phỏng vấn = chi tiêu HÔM QUA ÷ số người trong danh sách đưa đón HÔM NAY**.
 - Chi phí/người đi làm: kết quả chung toàn công ty ở Dashboard (người đi làm lấy từ danh sách đưa đón, không có Nguồn MKT) — chưa làm. Chỉ số chiến dịch (CTR, click…) làm sau. Không xuất Excel.
 - Token Facebook lưu mã hoá (AES-256-GCM, khoá `MARKETING_TOKEN_KEY` ≥ 32 ký tự), không bao giờ trả về API/frontend.
+
+## Pancake — Up tự động (duyệt 2026-11-04)
+- Mỗi page Pancake liên kết bằng token page (mã hoá như token Facebook), đúng 1 người phụ trách. Quyền liên kết/gỡ/đổi phụ trách/gắn Nguồn MKT giống TKQC. Liên kết lần đầu: lấy 30 ngày hội thoại cũ **chỉ để thống kê, không up data**.
+- Đọc Pancake **mỗi 10 giây**. Hội thoại (inbox hoặc bình luận) **lần đầu** có SĐT, trong lúc Up tự động đang bật → tạo data: tên Facebook, SĐT, nguồn **Facebook**, Nguồn MKT = nguồn của page, **người up = người phụ trách page**. Mỗi hội thoại up tối đa 1 data. SĐT xuất hiện lúc đang tắt bị bỏ qua, bật lại không lấy bù.
+- Nút **Up tự động** ở Data lao động (Admin/MKT): bật/tắt + tỉ lệ chia nhóm **dùng chung mọi page**, đan xen (1-2 → N1, N2, N2, lặp lại; tỉ lệ 0 = không nhận; nhóm mới tự hiện với 0). Đổi tỉ lệ → vòng chia bắt đầu lại từ nhóm đầu.
+- Số trùng 30 ngày → về nhóm giữ số gốc như nhập tay và **không tính lượt chia**. Vào nhóm rồi thì theo cách nhóm đang làm (Chờ phân chia / Chia tự động của nhóm), có thông báo như nhập tay.
+- Bảng **Pancake theo page** ở Marketing Hub, theo kỳ đang lọc: Người nhắn tin mới (hội thoại inbox bắt đầu trong kỳ), Để lại SĐT (trong số đó, có SĐT), Tỉ lệ = để lại SĐT ÷ người nhắn mới, Data đã up tự động.

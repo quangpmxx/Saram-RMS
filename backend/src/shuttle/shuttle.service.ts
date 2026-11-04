@@ -22,7 +22,10 @@ import {
   type ShuttleSort,
 } from './dto/list-shuttle-query.dto';
 import type { SortOrder } from '../common/utils/sort-order.util';
-import { CreateShuttleOptionDto } from './dto/create-shuttle-option.dto';
+import {
+  CreateShuttleOptionDto,
+  isLockedShuttleOption,
+} from './dto/create-shuttle-option.dto';
 import { UpdateShuttleOptionDto } from './dto/update-shuttle-option.dto';
 import {
   ShuttleOptionItemDto,
@@ -61,6 +64,7 @@ const OPTION_FIELDS = [
   'status',
   'interview_result',
   'interview_time',
+  'lead_source',
 ] as const;
 type OptionField = (typeof OPTION_FIELDS)[number];
 
@@ -230,6 +234,7 @@ export class ShuttleService {
           contractor: dto.contractor,
           status: dto.status,
           interviewResult: dto.interview_result,
+          leadSource: dto.lead_source,
           note: dto.note,
           createdById: currentUser.id,
           updatedById: currentUser.id,
@@ -285,6 +290,7 @@ export class ShuttleService {
           contractor: dto.contractor,
           status: dto.status,
           interviewResult: dto.interview_result,
+          leadSource: dto.lead_source,
           note: dto.note,
           updatedById: currentUser.id,
         },
@@ -477,6 +483,7 @@ export class ShuttleService {
       statuses: byField.get('status') ?? [],
       interviewResults: byField.get('interview_result') ?? [],
       interviewTimes: byField.get('interview_time') ?? [],
+      leadSources: byField.get('lead_source') ?? [],
     };
   }
 
@@ -538,6 +545,15 @@ export class ShuttleService {
         'Không tìm thấy giá trị này trong danh sách gợi ý',
       );
     }
+    if (
+      isLockedShuttleOption(existing.field, existing.value) &&
+      dto.value !== undefined &&
+      dto.value !== existing.value
+    ) {
+      throw new BadRequestException(
+        `"${existing.value}" là giá trị cố định, chỉ đổi được màu`,
+      );
+    }
 
     try {
       const option = await this.prisma.shuttleOption.update({
@@ -585,6 +601,11 @@ export class ShuttleService {
     if (!existing) {
       throw new NotFoundException(
         'Không tìm thấy giá trị này trong danh sách gợi ý',
+      );
+    }
+    if (isLockedShuttleOption(existing.field, existing.value)) {
+      throw new BadRequestException(
+        `"${existing.value}" là giá trị cố định, không xoá được`,
       );
     }
 
