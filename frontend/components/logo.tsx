@@ -58,7 +58,7 @@ export function Logo({
               variant === "light" ? "text-white" : "text-brand-900",
             )}
           >
-            Saram Vina
+            Saram Vina - Đại Việt
           </span>
           {slogan && (
             <span

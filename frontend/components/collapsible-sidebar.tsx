@@ -60,7 +60,7 @@ export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
         <div
           className={cn(
             "overflow-hidden transition-[max-width]",
-            isExpanded ? "max-w-[200px] duration-300" : "max-w-[34px] duration-200",
+            isExpanded ? "max-w-[218px] duration-300" : "max-w-[34px] duration-200",
           )}
         >
           {/* w-max: giữ nguyên chiều rộng tự nhiên (icon + chữ) để wrapper ngoài
