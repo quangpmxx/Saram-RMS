@@ -28,10 +28,10 @@ export function Modal({
     // trực tiếp người dùng: header là lớp cao nhất, NGOẠI TRỪ khi có popup
     // đang mở thì popup phải nổi trên cả header (đúng UX popup thông
     // thường: nền mờ che hết trang, kể cả header).
-    // Điện thoại (<sm, 2026-11-04): popup thành "tấm trượt" dính đáy màn hình, rộng hết
-    // màn, nút bấm ở chân tự xuống dòng. Từ sm trở lên giữ nguyên như cũ.
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/50 backdrop-blur-sm sm:p-4">
-      <div className="flex min-h-full items-end justify-center sm:items-center">
+    // Điện thoại (<sm): popup nằm GIỮA màn hình (user 2026-11-04, bỏ kiểu dính đáy),
+    // lề 12px, nút bấm ở chân tự xuống dòng. Từ sm trở lên giữ nguyên như cũ.
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-900/50 p-3 backdrop-blur-sm sm:p-4">
+      <div className="flex min-h-full items-center justify-center">
         {/* max-h-[85vh] + overflow-y-auto: modal có nội dung dài hơn màn hình
             (vd Cài đặt tài khoản: ảnh đại diện + họ tên + đổi mật khẩu) vẫn
             cuộn được bên trong thay vì bị đẩy tràn lên trên, mất cả tiêu đề
@@ -39,7 +39,7 @@ export function Modal({
             hưởng vì chưa bao giờ chạm ngưỡng 85vh. */}
         <div
           className={cn(
-            "mobile-sheet-up flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-2xl shadow-slate-900/20 sm:my-8 sm:max-h-[85vh] sm:rounded-2xl",
+            "flex max-h-[90dvh] w-full flex-col rounded-2xl bg-white shadow-2xl shadow-slate-900/20 sm:my-8 sm:max-h-[85vh]",
             maxWidth,
           )}
         >
@@ -49,7 +49,7 @@ export function Modal({
           </div>
           <div className="min-h-0 overflow-y-auto p-4 sm:p-6">{children}</div>
           {footer && (
-            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 sm:pt-4">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 p-4 pt-3 sm:p-6 sm:pt-4">
               {footer}
             </div>
           )}
