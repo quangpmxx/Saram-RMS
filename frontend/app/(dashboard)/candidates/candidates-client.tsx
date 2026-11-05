@@ -838,8 +838,8 @@ export function CandidatesClient({
               title={candidate.full_name}
               onClick={saveListStateForReturn}
               className={cn(
-                "line-clamp-2 font-medium text-slate-800 hover:text-brand-700 hover:underline",
-                asCard ? "text-left text-sm" : "text-center",
+                "line-clamp-2 text-left font-medium text-slate-800 hover:text-brand-700 hover:underline",
+                asCard && "text-sm",
                 candidate.is_held && "bg-orange-200",
               )}
             >

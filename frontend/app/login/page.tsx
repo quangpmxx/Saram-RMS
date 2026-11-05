@@ -28,14 +28,23 @@ export default async function LoginPage() {
               {/* Logo Đại Việt (2026-11-04) đã cắt sát viền nên không cần margin
                   âm như logo Saram cũ. Logo dùng position:relative (cho Image
                   fill) nên tự nằm trên các phần tử tĩnh cùng cấp — giữ z-10 cho chữ. */}
-              <p className="relative z-10 mt-3 text-base font-semibold text-brand-900 sm:text-lg">
+              {/* Luôn 1 dòng (yêu cầu 2026-11-05): cỡ chữ co theo bề rộng màn
+                  hình (khung chữ ≈ 100vw − 96px trên điện thoại), tối đa 15px. */}
+              <p className="relative z-10 mt-3 whitespace-nowrap text-[clamp(10px,calc((100vw-96px)/24),15px)] font-semibold text-brand-900">
                 Công Ty TNHH Thương Mại Dịch Vụ Saram Vina
+              </p>
+              <p className="relative z-10 mt-1 whitespace-nowrap text-[clamp(10px,calc((100vw-96px)/28),13px)] text-slate-500">
+                Hệ thống quản lý tuyển dụng lao động nội bộ
               </p>
             </div>
 
-            <div className="mt-8">
-              <h2 className="text-lg font-semibold text-slate-900">Đăng nhập</h2>
-              <p className="mt-1 text-sm text-slate-500">Hệ thống quản lý tuyển dụng lao động nội bộ</p>
+            <div className="mt-7">
+              {/* Tiêu đề giữa 2 vạch mảnh màu thương hiệu (yêu cầu 2026-11-05). */}
+              <div className="flex items-center gap-3">
+                <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-transparent to-brand-300" />
+                <h2 className="text-[19px] font-semibold tracking-wide text-brand-900">Đăng nhập</h2>
+                <span aria-hidden className="h-px flex-1 bg-gradient-to-l from-transparent to-brand-300" />
+              </div>
               <LoginForm />
             </div>
           </div>

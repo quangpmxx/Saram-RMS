@@ -558,10 +558,10 @@ export function CareWarehousePanel({
         <Link
           href={`/candidates/${item.id}`}
           onClick={saveStateForReturn}
-          // Tên căn giữa ô — giống tab Tất cả (yêu cầu người dùng 2026-10-29); dạng thẻ căn trái.
+          // Tên căn trái thẳng hàng SĐT/năm sinh — giống tab Tất cả (yêu cầu người dùng 2026-11-05).
           className={cn(
-            "block font-medium text-slate-800 hover:text-brand-700 hover:underline",
-            asCard ? "text-left text-sm" : "text-center",
+            "block text-left font-medium text-slate-800 hover:text-brand-700 hover:underline",
+            asCard && "text-sm",
           )}
         >
           {item.full_name}
