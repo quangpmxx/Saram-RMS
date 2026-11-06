@@ -103,6 +103,15 @@ export class ListCareWarehouseQueryDto {
   @Matches(DATE_ONLY)
   assigned_to?: string;
 
+  /** Lọc theo ngày lên số (leads.uploaded_at) — yêu cầu người dùng 2026-11-06. */
+  @IsOptional()
+  @Matches(DATE_ONLY)
+  uploaded_from?: string;
+
+  @IsOptional()
+  @Matches(DATE_ONLY)
+  uploaded_to?: string;
+
   /** Tìm theo họ tên hoặc số điện thoại. */
   @IsOptional()
   @IsString()

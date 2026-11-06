@@ -73,8 +73,9 @@ interface CareFilters {
   assignee_id: string;
   care_min: string;
   care_max: string;
-  last_care: DateRangeValue;
   assigned: DateRangeValue;
+  /** Ngày lên số (yêu cầu người dùng 2026-11-06). */
+  uploaded: DateRangeValue;
   scope: "all" | "assigned";
   /** Khoảng ngày cho thanh thống kê Được giao / Đã xử lý / Chưa xử lý. */
   stats_range: DateRangeValue;
@@ -92,8 +93,8 @@ const EMPTY_FILTERS: CareFilters = {
   assignee_id: "",
   care_min: "",
   care_max: "",
-  last_care: EMPTY_DATE_RANGE,
   assigned: EMPTY_DATE_RANGE,
+  uploaded: EMPTY_DATE_RANGE,
   scope: "all",
   stats_range: { preset: "this_month", ...computeDateRange("this_month") },
   stats_team_id: "",
@@ -163,10 +164,10 @@ function buildQuery(filters: CareFilters, page: number, pageSize: number): strin
   if (filters.assignee_id) q.set("assignee_id", filters.assignee_id);
   if (filters.care_min !== "") q.set("care_count_min", filters.care_min);
   if (filters.care_max !== "") q.set("care_count_max", filters.care_max);
-  if (filters.last_care.from) q.set("last_care_from", filters.last_care.from);
-  if (filters.last_care.to) q.set("last_care_to", filters.last_care.to);
   if (filters.assigned.from) q.set("assigned_from", filters.assigned.from);
   if (filters.assigned.to) q.set("assigned_to", filters.assigned.to);
+  if (filters.uploaded.from) q.set("uploaded_from", filters.uploaded.from);
+  if (filters.uploaded.to) q.set("uploaded_to", filters.uploaded.to);
   // Preset (vd "Tháng này") tính lại mỗi lần tải để không bị cũ khi qua ngày.
   // "Tối đa" = không có from → backend không giới hạn đầu (vẫn gửi to).
   const range =
@@ -819,10 +820,10 @@ export function CareWarehousePanel({
             />
           </div>
         </Field>
-        <Field uiSize="xs" label="CS gần nhất" title="Chăm sóc gần nhất" className="w-32">
+        <Field uiSize="xs" label="Ngày lên số" className="w-32">
           <DateRangePicker
-            value={filters.last_care}
-            onChange={(next) => applyFilters({ ...filters, last_care: next })}
+            value={filters.uploaded}
+            onChange={(next) => applyFilters({ ...filters, uploaded: next })}
             placeholder="Tất cả"
             allowClear
           />

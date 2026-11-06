@@ -289,6 +289,12 @@ export class CareWarehouseService {
     const assignedTo = query.assigned_to
       ? vnDayRange(query.assigned_to).end
       : null;
+    const uploadedFrom = query.uploaded_from
+      ? vnDayRange(query.uploaded_from).start.getTime()
+      : null;
+    const uploadedTo = query.uploaded_to
+      ? vnDayRange(query.uploaded_to).end.getTime()
+      : null;
 
     const filtered = ids.filter((id) => {
       const s = summaries.get(id)!;
@@ -325,6 +331,9 @@ export class CareWarehouseService {
       if (lastCareTo && (!lastCare || lastCare >= lastCareTo)) return false;
       if (assignedFrom && (!lastAt || lastAt < assignedFrom)) return false;
       if (assignedTo && (!lastAt || lastAt >= assignedTo)) return false;
+      const up = uploadedAt.get(id)!;
+      if (uploadedFrom !== null && up < uploadedFrom) return false;
+      if (uploadedTo !== null && up >= uploadedTo) return false;
       return true;
     });
 
