@@ -21,6 +21,8 @@
 - Hiệu năng Kho/Báo cáo tiến độ: tránh tạo `Intl.DateTimeFormat` trong vòng lặp (đã được tạo 1 lần ở `care-time.util.ts`; từng chiếm ~75% CPU).
 - Dashboard hiệu suất/xếp hạng: gom query theo danh sách Sale, không quay lại N+1.
 - Sao lưu cần cả `pg_dump` lẫn thư mục `uploads`, `private-uploads`.
+- Thông báo đẩy ra điện thoại (Web Push, 2026-11-06): mọi thông báo trong chuông đi qua `RealtimeService.emitNotificationCreated` → `PushService.notify` (chạy nền, lỗi chỉ log; máy báo 404/410 tự xoá khỏi `push_subscriptions`). Khoá `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` trong `backend/.env` (thiếu = tắt tính năng); dev và server dùng **cặp khoá riêng**, đổi khoá thì mọi máy phải bật lại. Chữ + trang mở: `backend/src/push/push-message.ts` phải khớp `notification-bell.tsx`. Service worker: `frontend/public/sw.js`. iPhone chỉ nhận khi đã "Thêm vào MH chính" (iOS ≥ 16.4).
+- DB dev (PGlite) chấp nhận dữ liệu sai kiểu mà Postgres thật từ chối (vd chuỗi '__none__' cho cột uuid → dùng `NO_MATCH_UUID`): lỗi chỉ ở server thì xem `pm2 logs saram-frontend|saram-backend --err --lines 40 --nostream`. Không truy vấn thẳng DB dev bằng client `pg` khi server đang chạy (làm kẹt DB).
 
 ## Quy ước Git của user
 Nhánh riêng mỗi tính năng; làm hết các việc đang giao rồi mới gộp `main` và push một lần; không PR; `gh` không cài trên máy. Đợt rà soát tổng thể: hỏi trước khi commit/push.

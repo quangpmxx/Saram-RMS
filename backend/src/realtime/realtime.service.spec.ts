@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { RealtimeService } from './realtime.service';
 import { RealtimeGateway } from './realtime.gateway';
+import { PushService } from '../push/push.service';
 import { CandidateResponseDto } from '../candidates/dto/candidate-response.dto';
 import { NoteResponseDto } from '../candidates/dto/note-response.dto';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -8,6 +9,7 @@ import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 describe('RealtimeService', () => {
   let service: RealtimeService;
   let gateway: { broadcastLeadEvent: jest.Mock; broadcastAppEvent: jest.Mock };
+  let push: { notify: jest.Mock };
 
   const actor: AuthenticatedUser = {
     id: 'admin-1',
@@ -66,11 +68,13 @@ describe('RealtimeService', () => {
 
   beforeEach(async () => {
     gateway = { broadcastLeadEvent: jest.fn(), broadcastAppEvent: jest.fn() };
+    push = { notify: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         RealtimeService,
         { provide: RealtimeGateway, useValue: gateway },
+        { provide: PushService, useValue: push },
       ],
     }).compile();
 
@@ -323,6 +327,11 @@ describe('RealtimeService', () => {
         }),
       );
       expect(gateway.broadcastAppEvent).toHaveBeenCalledTimes(1);
+      // Đồng thời đẩy ra điện thoại của đúng người nhận (2026-11-06).
+      expect(push.notify).toHaveBeenCalledWith('sale-1', {
+        id: 'notif-1',
+        account_id: 'sale-1',
+      });
     });
 
     it('emitDashboardInvalidate -> broadcastAll, entity_id=null, không kèm payload', () => {

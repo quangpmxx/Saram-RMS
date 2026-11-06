@@ -3,6 +3,7 @@ import { CandidateResponseDto } from '../candidates/dto/candidate-response.dto';
 import { NoteResponseDto } from '../candidates/dto/note-response.dto';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { RealtimeGateway } from './realtime.gateway';
+import { PushService } from '../push/push.service';
 import { LeadChangeType, LeadEventTargets } from './realtime-event.interface';
 import { AppRealtimeAction, AppRealtimeEvent } from './app-event.interface';
 
@@ -16,7 +17,10 @@ import { AppRealtimeAction, AppRealtimeEvent } from './app-event.interface';
  */
 @Injectable()
 export class RealtimeService {
-  constructor(private readonly gateway: RealtimeGateway) {}
+  constructor(
+    private readonly gateway: RealtimeGateway,
+    private readonly push: PushService,
+  ) {}
 
   /** Ngắt kết nối realtime của 1 tài khoản — xem RealtimeGateway.disconnectAccount(). */
   disconnectAccount(accountId: string): void {
@@ -256,6 +260,9 @@ export class RealtimeService {
     notification: T,
     actor: AuthenticatedUser | null,
   ): void {
+    // Đồng thời đẩy ra điện thoại/máy tính đã bật thông báo (2026-11-06) —
+    // mọi thông báo trong chuông đều đi qua đây. Chạy nền, lỗi chỉ ghi log.
+    this.push.notify(notification.account_id, notification);
     this.gateway.broadcastAppEvent(
       { accountId: notification.account_id },
       this.buildAppEvent(

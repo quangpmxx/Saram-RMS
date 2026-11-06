@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { RealtimeGateway } from './realtime.gateway';
 import { RealtimeService } from './realtime.service';
+import { PushModule } from '../push/push.module';
 
 /**
  * Đăng ký JwtModule RIÊNG (không import AuthModule) — AuthModule không
@@ -13,6 +14,8 @@ import { RealtimeService } from './realtime.service';
  */
 @Module({
   imports: [
+    // Thông báo trong chuông đồng thời đẩy ra điện thoại (2026-11-06).
+    PushModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

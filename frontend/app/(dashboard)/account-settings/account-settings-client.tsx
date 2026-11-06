@@ -16,6 +16,7 @@ import { useUiTheme } from "@/lib/ui-theme";
 import { cn } from "@/lib/cn";
 import type { UiTheme } from "@/lib/types";
 import { CheckinLocationSettings } from "./checkin-location-settings";
+import { PushNotificationSettings } from "./push-notification-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — khớp đúng giới hạn backend (POST /me/avatar)
@@ -198,6 +199,9 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
           </section>
 
           <ThemeSection />
+
+          {/* Bật thông báo nổi trên điện thoại/máy tính này (2026-11-06). */}
+          <PushNotificationSettings />
 
           {/* Tên người dùng — readonly, chỉ Admin đổi được cho tài khoản khác qua Quản lý tài khoản */}
           <section>

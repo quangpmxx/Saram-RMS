@@ -232,14 +232,14 @@ model Account {
   auditLogs       AuditLog[]
 
   // Phase 1 — quan hệ ngược từ Lead/ImportJob
-  uploadedLeads            Lead[]      @relation("LeadUploadedBy")
-  adAccounts               AdAccount[] @relation("AdAccountOwner")
+  uploadedLeads            Lead[]        @relation("LeadUploadedBy")
+  adAccounts               AdAccount[]   @relation("AdAccountOwner")
   pancakePages             PancakePage[] @relation("PancakePageOwner")
-  assignedLeads            Lead[]      @relation("LeadAssignedTo")
-  heldLeads                Lead[]      @relation("LeadHeldBy")
-  carePoolLockedLeads      Lead[]      @relation("LeadCarePoolLockedBy")
-  removedFromCarePoolLeads Lead[]      @relation("LeadRemovedFromCarePoolBy")
-  deletedLeads             Lead[]      @relation("LeadDeletedBy")
+  assignedLeads            Lead[]        @relation("LeadAssignedTo")
+  heldLeads                Lead[]        @relation("LeadHeldBy")
+  carePoolLockedLeads      Lead[]        @relation("LeadCarePoolLockedBy")
+  removedFromCarePoolLeads Lead[]        @relation("LeadRemovedFromCarePoolBy")
+  deletedLeads             Lead[]        @relation("LeadDeletedBy")
   importJobs               ImportJob[]
 
   // Phase 3 — quan hệ ngược từ LeadNote
@@ -260,7 +260,8 @@ model Account {
   // Phase 8 — quan hệ ngược từ Notification
   notifications     Notification[]
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược người gửi (admin_message)
-  sentNotifications Notification[] @relation("NotificationSender")
+  sentNotifications Notification[]     @relation("NotificationSender")
+  pushSubscriptions PushSubscription[]
 
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ShuttleRecord (Danh sách đưa đón)
   createdShuttleRecords ShuttleRecord[] @relation("ShuttleRecordCreatedBy")
@@ -1609,4 +1610,23 @@ model PancakeAutoUpTeam {
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@map("pancake_auto_up_teams")
+}
+
+/// Thông báo đẩy ra điện thoại/máy tính (Web Push, 2026-11-06): mỗi dòng = 1
+/// trình duyệt/máy của 1 tài khoản đã bấm "Bật thông báo". Máy báo hết hạn
+/// (404/410) thì tự xoá khi gửi.
+model PushSubscription {
+  id         String   @id @default(uuid()) @db.Uuid
+  accountId  String   @map("account_id") @db.Uuid
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?  @map("user_agent") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("push_subscriptions")
 }
