@@ -27,6 +27,12 @@ self.addEventListener("push", (event) => {
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       data: { url: data.url || "/" },
+      // Có tiếng + rung, không im lặng (2026-11-06) — một số máy Android chỉ
+      // hiện nổi trên màn hình khi thông báo có rung; mức nổi/tiếng còn tuỳ
+      // cài đặt thông báo của điện thoại cho trình duyệt/app.
+      silent: false,
+      vibrate: [200, 100, 200],
+      renotify: Boolean(data.tag),
     }),
   );
 });
