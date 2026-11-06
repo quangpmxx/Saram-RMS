@@ -1,12 +1,4 @@
-import {
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 /** Mục 4, docs/13-api-design.md — PUT /candidate/:id ("sửa thông tin cơ bản") */
 export class UpdateCandidateDto {
@@ -20,11 +12,11 @@ export class UpdateCandidateDto {
   @MaxLength(20)
   phone_number?: string;
 
+  /** Năm sinh nhập tự do (2026-11-06). */
   @IsOptional()
-  @IsInt()
-  @Min(1900)
-  @Max(2100)
-  birth_year?: number;
+  @IsString()
+  @MaxLength(50, { message: 'Năm sinh tối đa 50 ký tự' })
+  birth_year?: string;
 
   @IsOptional()
   @IsString()

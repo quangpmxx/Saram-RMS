@@ -224,6 +224,8 @@ type TeamSort = "new_leads" | "performance";
 
 export function DashboardClient({
   currentUserFullName,
+  currentUserId,
+  currentUserTeamId,
   currentUserRole,
   canViewPerformance,
   canViewByTeam,
@@ -237,6 +239,8 @@ export function DashboardClient({
   initialByTeam,
 }: {
   currentUserFullName: string;
+  currentUserId: string;
+  currentUserTeamId: string | null;
   currentUserRole: AccountRole;
   canViewPerformance: boolean;
   canViewByTeam: boolean;
@@ -274,6 +278,18 @@ export function DashboardClient({
 
   const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
 
+  // Tiêu đề khối hiệu suất theo bộ lọc đang chọn (2026-11-06): 1 nhân viên →
+  // "Hiệu suất <tên>"; 1 nhóm → "Hiệu suất theo nhóm"; không lọc → toàn công ty.
+  const performanceTitle = accountId
+    ? `Hiệu suất ${
+        accountId === currentUserId
+          ? currentUserFullName
+          : (employeeOptions.find((e) => e.account_id === accountId)?.full_name ?? "nhân viên")
+      }`
+    : teamId
+      ? "Hiệu suất theo nhóm"
+      : "Hiệu suất toàn công ty";
+
   /**
    * Nhận thẳng giá trị bộ lọc vừa đổi qua `overrides` (không đọc lại state
    * cha) — setState bất đồng bộ, đọc lại state ngay sau khi gọi setter vẫn
@@ -294,7 +310,8 @@ export function DashboardClient({
     const query = new URLSearchParams();
     if (effectiveDateRange.from) query.set("date_from", new Date(effectiveDateRange.from).toISOString());
     if (effectiveDateRange.to) query.set("date_to", new Date(`${effectiveDateRange.to}T23:59:59.999`).toISOString());
-    if (canFilterByTeam && effectiveTeamId) query.set("team_id", effectiveTeamId);
+    // teamId chỉ có giá trị khi Admin/Quản lý/MKT chọn nhóm, hoặc Leader chọn "Nhóm mình".
+    if (effectiveTeamId) query.set("team_id", effectiveTeamId);
     if (effectiveAccountId) query.set("account_id", effectiveAccountId);
     if (effectiveSourceId) query.set("source_id", effectiveSourceId);
     return query;
@@ -501,6 +518,33 @@ export function DashboardClient({
               </Select>
             </Field>
           )}
+          {/* Leader: Toàn công ty / Nhóm mình / nhân viên trong nhóm; Sale: Tất cả / chính mình (2026-11-06). */}
+          {(currentUserRole === "leader" || currentUserRole === "sale") && (
+            <Field label="Phạm vi" uiSize="xs" className="w-36">
+              <Select
+                uiSize="xs"
+                value={accountId ? accountId : teamId ? "team" : ""}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  const nextTeamId = next === "team" ? (currentUserTeamId ?? "") : "";
+                  const nextAccountId = next && next !== "team" ? next : "";
+                  setTeamId(nextTeamId);
+                  setAccountId(nextAccountId);
+                  void refresh({ teamId: nextTeamId, accountId: nextAccountId });
+                }}
+              >
+                <option value="">{currentUserRole === "leader" ? "Toàn công ty" : "Tất cả"}</option>
+                {currentUserRole === "leader" && currentUserTeamId && <option value="team">Nhóm mình</option>}
+                {currentUserRole === "leader" &&
+                  employeeOptions.map((employee) => (
+                    <option key={employee.account_id} value={employee.account_id}>
+                      {employee.full_name}
+                    </option>
+                  ))}
+                {currentUserRole === "sale" && <option value={currentUserId}>{currentUserFullName}</option>}
+              </Select>
+            </Field>
+          )}
           {canFilterBySale && (
             <Field label="Nhân viên" uiSize="xs" className="w-32">
               <Select
@@ -613,18 +657,19 @@ export function DashboardClient({
         })}
       </div>
 
-      {MARKETING_TODAY_ROLES.includes(currentUserRole) && <MarketingTodayCard />}
+      {MARKETING_TODAY_ROLES.includes(currentUserRole) && <MarketingTodayCard from={dateRange.from} to={dateRange.to} />}
 
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Hiệu suất toàn công ty</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{performanceTitle}</h2>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {/* 3 ô tỉ lệ hẹn/đến/đỗ: bấm để xem tách CT/TV (2026-11-04), mặc định ẩn. */}
           {(
             [
-              { key: "schedule_rate", label: "Tỷ lệ hẹn PV", box: "bg-brand-50", value: "text-brand-700", sub: "text-brand-600/70" },
-              { key: "attend_rate", label: "Tỷ lệ đến PV", box: "bg-emerald-50", value: "text-emerald-600", sub: "text-emerald-600/70" },
-              { key: "pass_rate", label: "Tỷ lệ đỗ PV", box: "bg-emerald-100", value: "text-emerald-700", sub: "text-emerald-700/70" },
+              // Tỷ lệ theo phễu (2026-11-06): hẹn/Data, đến/hẹn, đỗ/đến — dòng dưới ghi cách chia + số thật.
+              { key: "schedule_rate", label: "Tỷ lệ hẹn PV", formula: "Tỉ lệ hẹn PV / Data", num: summary.kpi.interview_scheduled, den: summary.kpi.new_leads, box: "bg-brand-50", value: "text-brand-700", sub: "text-brand-600/70" },
+              { key: "attend_rate", label: "Tỷ lệ đến PV", formula: "Tỉ lệ đến PV / Hẹn PV", num: summary.kpi.attended, den: summary.kpi.interview_scheduled, box: "bg-emerald-50", value: "text-emerald-600", sub: "text-emerald-600/70" },
+              { key: "pass_rate", label: "Tỷ lệ đỗ PV", formula: "Tỉ lệ đỗ PV / Đến PV", num: summary.kpi.passed, den: summary.kpi.attended, box: "bg-emerald-100", value: "text-emerald-700", sub: "text-emerald-700/70" },
             ] as const
           ).map((tile) => {
             const isOpen = openTypeDetail.has(tile.key);
@@ -638,7 +683,10 @@ export function DashboardClient({
                 className={cn("rounded-xl p-2 text-center transition-shadow", tile.box, isOpen && "ring-2 ring-brand-300")}
               >
                 <p className={cn("text-base font-bold", tile.value)}>{summary.kpi[tile.key]}%</p>
-                <p className={cn("text-xs", tile.sub)}>{tile.label}</p>
+                {/* Chỉ ghi cách chia + số thật, bỏ dòng tiêu đề (2026-11-06). */}
+                <p className={cn("text-xs", tile.sub)} title={tile.label}>
+                  {tile.formula} ({tile.num}/{tile.den})
+                </p>
                 {isOpen && (
                   <TypeSplit
                     ct={summary.kpi.by_type?.ct[tile.key]}

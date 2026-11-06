@@ -232,7 +232,7 @@ describe('DashboardService', () => {
    * InterviewAppointment — mock qua prisma.shuttleRecord.findMany() thay vì
    * chuỗi lead.count theo interview status như trước.
    */
-  describe('computeKpiBreakdown (qua getSummary) — 7 chỉ số + tỷ lệ trên new_leads', () => {
+  describe('computeKpiBreakdown (qua getSummary) — 7 chỉ số + tỷ lệ theo phễu (hẹn/Data, đến/hẹn, đỗ/đến)', () => {
     /** 12 dòng đưa đón: 9 "Đã đón" (4 Đỗ PV, 2 Trượt PV, 3 chưa có kết quả) + 3 "Chưa đón được". */
     /** Loại hình: 4 Đỗ = CT, 2 Trượt = TV, còn lại để trống (chỉ tính vào tổng). */
     const SHUTTLE_ROWS = [
@@ -270,8 +270,8 @@ describe('DashboardService', () => {
         failed: 2,
         employed: null,
         schedule_rate: 60,
-        attend_rate: 45,
-        pass_rate: 20,
+        attend_rate: 75, // 9 đến / 12 hẹn
+        pass_rate: 44.4, // 4 đỗ / 9 đến
         employed_rate: null,
         performance_rate: null,
         by_type: {
@@ -282,8 +282,8 @@ describe('DashboardService', () => {
             passed: 4,
             failed: 0,
             schedule_rate: 20,
-            attend_rate: 20,
-            pass_rate: 20,
+            attend_rate: 100,
+            pass_rate: 100,
           },
           tv: {
             interview_scheduled: 2,
@@ -292,7 +292,7 @@ describe('DashboardService', () => {
             passed: 0,
             failed: 2,
             schedule_rate: 10,
-            attend_rate: 10,
+            attend_rate: 100,
             pass_rate: 0,
           },
         },
@@ -331,6 +331,22 @@ describe('DashboardService', () => {
       expect(result.kpi.interview_scheduled).toBe(2);
       expect(result.kpi.attended).toBe(0);
       expect(result.kpi.no_show).toBe(0);
+    });
+
+    it('Ví dụ người dùng (2026-11-06): 100 data, hẹn 10, đến 6, đỗ 3 → 10% / 60% / 50%', async () => {
+      prisma.lead.count.mockResolvedValue(100);
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
+      prisma.shuttleRecord.findMany.mockResolvedValue([
+        ...Array(3).fill({ status: 'Đã đón', interviewResult: 'Đỗ PV' }),
+        ...Array(3).fill({ status: 'Đã đón', interviewResult: 'Trượt PV' }),
+        ...Array(4).fill({ status: 'Chưa đón được', interviewResult: null }),
+      ]);
+
+      const { kpi } = await service.getSummary({}, adminUser);
+
+      expect(kpi.schedule_rate).toBe(10);
+      expect(kpi.attend_rate).toBe(60);
+      expect(kpi.pass_rate).toBe(50);
     });
 
     it('MKT xem số liệu chung toàn công ty → vẫn đếm dòng đưa đón (2026-11-04)', async () => {
@@ -394,6 +410,26 @@ describe('DashboardService', () => {
       await service.getSummary({ account_id: 'sale-OTHER' }, saleUser);
       const call = prisma.lead.groupBy.mock.calls[0][0];
       expect(call.where.assignedToId).toBeUndefined();
+    });
+
+    it('Sale lọc "chính mình" (account_id = mình) → thu hẹp đúng mình (2026-11-06)', async () => {
+      await service.getSummary({ account_id: saleUser.id }, saleUser);
+      const call = prisma.lead.groupBy.mock.calls[0][0];
+      expect(call.where.assignedToId).toBe(saleUser.id);
+    });
+
+    it('Leader chọn "Nhóm mình" → lọc đúng nhóm mình; nhóm khác bị bỏ qua (= toàn công ty)', async () => {
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      await service.getSummary({ team_id: 'team-1' }, leaderUser);
+      expect(prisma.lead.groupBy.mock.calls[0][0].where.assignedTeamId).toBe(
+        'team-1',
+      );
+
+      prisma.lead.groupBy.mockClear();
+      await service.getSummary({ team_id: 'team-OTHER' }, leaderUser);
+      expect(
+        prisma.lead.groupBy.mock.calls[0][0].where.assignedTeamId,
+      ).toBeUndefined();
     });
 
     it('Admin dùng account_id để thu hẹp đúng 1 Sale', async () => {

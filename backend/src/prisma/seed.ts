@@ -191,6 +191,14 @@ async function seedStatusCatalog(prisma: PrismaClient): Promise<void> {
       name: 'Đã gửi CCCD',
       sortOrder: 1,
     },
+    // Thêm "Đã phỏng vấn" (nền tím) — yêu cầu người dùng 2026-11-06; máy đã
+    // cài sẵn nhận qua migration 20261106180000_result_interviewed.
+    {
+      category: 'zalo_status',
+      code: 'INTERVIEWED',
+      name: 'Đã phỏng vấn',
+      sortOrder: 2,
+    },
 
     // Dự án phụ — nâng cấp toàn diện: thêm lại "Tình trạng Zalo", tách riêng
     // khỏi "Kết quả" ở trên (category zalo_status) — category/field mới,
@@ -271,7 +279,7 @@ async function seedSampleCandidates(prisma: PrismaClient): Promise<void> {
   const samples: Array<{
     fullName: string;
     phoneNumber: string;
-    birthYear?: number;
+    birthYear?: string;
     address?: string;
     source: string;
     mktNote?: string;
@@ -280,7 +288,7 @@ async function seedSampleCandidates(prisma: PrismaClient): Promise<void> {
     {
       fullName: 'Nguyễn Văn An',
       phoneNumber: '0901000001',
-      birthYear: 1998,
+      birthYear: '1998',
       address: 'Bình Dương',
       source: 'Facebook',
       mktNote: 'Muốn làm công nhân điện tử',
@@ -288,14 +296,14 @@ async function seedSampleCandidates(prisma: PrismaClient): Promise<void> {
     {
       fullName: 'Trần Thị Bình',
       phoneNumber: '0901000002',
-      birthYear: 2000,
+      birthYear: '2000',
       address: 'Đồng Nai',
       source: 'Zalo',
     },
     {
       fullName: 'Lê Văn Cường',
       phoneNumber: '0901000003',
-      birthYear: 1995,
+      birthYear: '1995',
       address: 'TP.HCM',
       source: 'TikTok',
       mktNote: 'Đã từng làm KCN Sóng Thần',
@@ -842,7 +850,7 @@ async function seedPhase5Sample(prisma: PrismaClient): Promise<void> {
     data: {
       fullName: 'Hoàng Văn Đạt',
       phoneNumber: '0901000006',
-      birthYear: 1997,
+      birthYear: '1997',
       address: 'Long An',
       sourceId: facebookSource.id,
       uploadedById: mktDemo.id,
@@ -974,7 +982,7 @@ async function seedPhase8Sample(prisma: PrismaClient): Promise<void> {
     data: {
       fullName: 'Đặng Văn Phúc',
       phoneNumber: '0901000007',
-      birthYear: 1999,
+      birthYear: '1999',
       address: 'Cần Thơ',
       sourceId: zaloSource.id,
       uploadedById: mktDemo.id,

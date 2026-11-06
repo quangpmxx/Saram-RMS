@@ -203,16 +203,8 @@ export class ImportsService {
         continue;
       }
 
-      const birthYear = birthYearRaw
-        ? Number.parseInt(birthYearRaw, 10)
-        : undefined;
-      if (birthYearRaw && !Number.isFinite(birthYear)) {
-        errors.push({
-          row: rowNumber,
-          message: `Năm sinh không hợp lệ: "${birthYearRaw}"`,
-        });
-        continue;
-      }
+      // Năm sinh nhập tự do (2026-11-06): lưu nguyên chữ trong ô, không báo lỗi định dạng.
+      const birthYear = birthYearRaw.trim().slice(0, 50) || undefined;
 
       // Số trùng trong 30 ngày → tự vào nhóm đang giữ số gốc.
       const originTeam =

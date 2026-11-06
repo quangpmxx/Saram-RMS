@@ -24,7 +24,7 @@ import { callStatusVariant } from "@/lib/call-status-variant";
 import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
 import { useToast } from "@/lib/toast-context";
 import { goBackInApp } from "@/lib/navigation-history";
-import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
+import { EMPTY_OPTION_STYLE, resultStatusStyle, zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type { AccountRole, Candidate, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
@@ -167,7 +167,7 @@ export function CandidateDetailClient({
    * InlineEditField#onDraftChange) để nút "Lưu thông tin" gộp lưu cùng lúc
    * với 3 lựa chọn tiến trình cuộc gọi bên dưới.
    */
-  const [birthYearDraft, setBirthYearDraft] = useState(candidate.birth_year?.toString() ?? "");
+  const [birthYearDraft, setBirthYearDraft] = useState(candidate.birth_year ?? "");
   const [addressDraft, setAddressDraft] = useState(candidate.address ?? "");
   // "Điều chỉnh state khi render" (khớp mẫu DateShortInput ở shuttle-client.tsx)
   // — đồng bộ lại 2 ô nháp trên nếu candidate.birth_year/address đổi từ BÊN
@@ -176,7 +176,7 @@ export function CandidateDetailClient({
   const [syncedBirthYear, setSyncedBirthYear] = useState(candidate.birth_year);
   if (candidate.birth_year !== syncedBirthYear) {
     setSyncedBirthYear(candidate.birth_year);
-    setBirthYearDraft(candidate.birth_year?.toString() ?? "");
+    setBirthYearDraft(candidate.birth_year ?? "");
   }
   const [syncedAddress, setSyncedAddress] = useState(candidate.address);
   if (candidate.address !== syncedAddress) {
@@ -425,20 +425,10 @@ export function CandidateDetailClient({
    */
   async function saveAllChanges(): Promise<void> {
     const trimmedBirthYear = birthYearDraft.trim();
-    const currentBirthYear = candidate.birth_year?.toString() ?? "";
-    let birthYearToSave: number | null | undefined;
-    if (trimmedBirthYear !== currentBirthYear) {
-      if (!trimmedBirthYear) {
-        birthYearToSave = null;
-      } else {
-        const parsed = Number(trimmedBirthYear);
-        const currentYear = new Date().getFullYear();
-        if (!Number.isInteger(parsed) || parsed < 1900 || parsed > currentYear) {
-          throw new Error("Năm sinh không hợp lệ (1900 – năm hiện tại)");
-        }
-        birthYearToSave = parsed;
-      }
-    }
+    const currentBirthYear = candidate.birth_year ?? "";
+    // Năm sinh nhập tự do (2026-11-06): không kiểm định dạng; để trống = xoá.
+    const birthYearToSave: string | null | undefined =
+      trimmedBirthYear !== currentBirthYear ? trimmedBirthYear || null : undefined;
 
     const trimmedAddress = addressDraft.trim();
     const currentAddress = candidate.address ?? "";
@@ -822,9 +812,8 @@ export function CandidateDetailClient({
               <InlineEditField
                 key={`birth-year-${candidate.birth_year ?? ""}`}
                 label="Năm sinh"
-                displayValue={candidate.birth_year?.toString() ?? "—"}
-                editValue={candidate.birth_year?.toString() ?? ""}
-                inputType="number"
+                displayValue={candidate.birth_year ?? "—"}
+                editValue={candidate.birth_year ?? ""}
                 alwaysEditable
                 readOnly={!canQuickEdit}
                 onDraftChange={setBirthYearDraft}
@@ -915,10 +904,14 @@ export function CandidateDetailClient({
                     value={zaloStatusId}
                     onChange={(event) => setZaloStatusId(event.target.value)}
                     disabled={!canUpdate}
+                    // Ô + từng dòng lựa chọn tô đúng màu (2026-11-06).
+                    style={resultStatusStyle(zaloStatuses.find((s) => s.id === zaloStatusId)?.name)}
                   >
-                    <option value="">Chưa cập nhật</option>
+                    <option value="" style={EMPTY_OPTION_STYLE}>
+                      Chưa cập nhật
+                    </option>
                     {zaloStatuses.map((status) => (
-                      <option key={status.id} value={status.id}>
+                      <option key={status.id} value={status.id} style={resultStatusStyle(status.name) ?? EMPTY_OPTION_STYLE}>
                         {status.name}
                       </option>
                     ))}
@@ -967,10 +960,17 @@ export function CandidateDetailClient({
                 value={zaloFriendStatusId}
                 onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
                 disabled={!canUpdate || isSavingZaloFriendStatus}
+                // Ô + từng dòng lựa chọn tô đúng màu (2026-11-06).
+                style={(() => {
+                  const selected = zaloFriendStatuses.find((s) => s.id === zaloFriendStatusId);
+                  return selected ? zaloFriendStatusStyle(selected.name) : undefined;
+                })()}
               >
-                <option value="">Chưa cập nhật</option>
+                <option value="" style={EMPTY_OPTION_STYLE}>
+                  Chưa cập nhật
+                </option>
                 {zaloFriendStatuses.map((status) => (
-                  <option key={status.id} value={status.id}>
+                  <option key={status.id} value={status.id} style={zaloFriendStatusStyle(status.name)}>
                     {status.name}
                   </option>
                 ))}

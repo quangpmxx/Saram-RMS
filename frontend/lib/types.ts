@@ -160,7 +160,8 @@ export interface Candidate {
   id: string;
   full_name: string;
   phone_number: string;
-  birth_year: number | null;
+  /** Năm sinh nhập tự do (chữ) — 2026-11-06. */
+  birth_year: string | null;
   address: string | null;
   source: NamedRef;
   mkt_source?: NamedRef | null;

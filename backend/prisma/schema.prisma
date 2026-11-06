@@ -451,7 +451,7 @@ model Lead {
   id               String   @id @default(uuid()) @db.Uuid
   fullName         String   @map("full_name") @db.VarChar(150)
   phoneNumber      String   @map("phone_number") @db.VarChar(20)
-  birthYear        Int?     @map("birth_year") @db.SmallInt
+  birthYear        String?  @map("birth_year") @db.VarChar(50)
   address          String?  @db.VarChar(255)
   sourceId         String   @map("source_id") @db.Uuid
   mktNote          String?  @map("mkt_note")

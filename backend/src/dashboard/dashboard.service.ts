@@ -116,7 +116,7 @@ export class DashboardService {
       ? { assignedTeamId: query.team_id }
       : {};
     const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
-    const extraWhere = this.buildExtraWhere(currentUser, query);
+    const extraWhere = this.buildExtraWhere(query);
     const baseWhere: Prisma.LeadWhereInput = {
       ...scope,
       deletedAt: null,
@@ -392,7 +392,7 @@ export class DashboardService {
       select: { id: true, name: true },
     });
     const dateWhere = this.buildDateWhere(query.date_from, query.date_to);
-    const extraWhere = this.buildExtraWhere(currentUser, query);
+    const extraWhere = this.buildExtraWhere(query);
     const sourceFiltered = Boolean(query.source_id);
     if (teams.length === 0) return [];
 
@@ -599,8 +599,10 @@ export class DashboardService {
     newLeads: number,
     shuttle: ShuttleKpi,
   ): KpiBreakdown {
-    const pct = (count: number) =>
-      newLeads > 0 ? round1((count / newLeads) * 100) : 0;
+    // Tỷ lệ theo phễu (yêu cầu người dùng 2026-11-06): hẹn PV / Data mới;
+    // đến PV / hẹn PV; đỗ PV / đến PV. Mẫu số 0 → 0%.
+    const pct = (count: number, base: number) =>
+      base > 0 ? round1((count / base) * 100) : 0;
 
     return {
       new_leads: newLeads,
@@ -610,20 +612,22 @@ export class DashboardService {
       passed: shuttle.passed,
       failed: shuttle.failed,
       employed: null,
-      schedule_rate: pct(shuttle.interview_scheduled),
-      attend_rate: pct(shuttle.attended),
-      pass_rate: pct(shuttle.passed),
+      schedule_rate: pct(shuttle.interview_scheduled, newLeads),
+      attend_rate: pct(shuttle.attended, shuttle.interview_scheduled),
+      pass_rate: pct(shuttle.passed, shuttle.attended),
       employed_rate: null,
       performance_rate: null,
       by_type: { ct: withRates(shuttle.ct), tv: withRates(shuttle.tv) },
     };
 
+    // CT/TV: hẹn PV vẫn chia cho tổng Data mới (Data không có loại hình);
+    // đến/đỗ chia trong cùng loại hình.
     function withRates(c: ShuttleCounts) {
       return {
         ...c,
-        schedule_rate: pct(c.interview_scheduled),
-        attend_rate: pct(c.attended),
-        pass_rate: pct(c.passed),
+        schedule_rate: pct(c.interview_scheduled, newLeads),
+        attend_rate: pct(c.attended, c.interview_scheduled),
+        pass_rate: pct(c.passed, c.attended),
       };
     }
   }
@@ -749,14 +753,10 @@ export class DashboardService {
    * khác). Vai trò khác không có rủi ro này vì scope của họ dùng field khác
    * (assignedTeamId/uploadedById) hoặc không giới hạn.
    */
-  private buildExtraWhere(
-    currentUser: AuthenticatedUser,
-    query: DashboardQueryDto,
-  ): Prisma.LeadWhereInput {
+  private buildExtraWhere(query: DashboardQueryDto): Prisma.LeadWhereInput {
     const where: Prisma.LeadWhereInput = {};
-    const effectiveAccountId =
-      currentUser.role === 'sale' ? undefined : query.account_id;
-    if (effectiveAccountId) where.assignedToId = effectiveAccountId;
+    // query đã qua sanitizeQuery(): Sale chỉ có thể là chính mình (2026-11-06).
+    if (query.account_id) where.assignedToId = query.account_id;
     if (query.source_id) where.sourceId = query.source_id;
     return where;
   }
@@ -817,22 +817,38 @@ export class DashboardService {
 
   /**
    * Bộ lọc hợp lệ theo vai trò (rà soát phân quyền 2026-10-30): Quản lý/
-   * Admin/MKT lọc tự do theo nhóm/nhân viên. Leader chỉ lọc được nhân viên
-   * trong nhóm mình (không lọc nhóm). Sale không lọc nhóm/nhân viên — số liệu
-   * chung luôn là toàn công ty.
+   * Admin/MKT lọc tự do theo nhóm/nhân viên. Leader: toàn công ty, nhóm mình
+   * (team_id = đúng nhóm mình) hoặc 1 nhân viên trong nhóm. Sale: toàn công ty
+   * hoặc chính mình (2026-11-06). Giá trị ngoài phạm vi bị bỏ qua (= toàn công ty).
    */
   private async sanitizeQuery(
     query: DashboardQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<DashboardQueryDto> {
     if (FULL_VIEW_ROLES.has(currentUser.role)) return query;
-    if (currentUser.role === 'leader' && query.account_id) {
+    if (currentUser.role === 'leader') {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
-      const member = await this.prisma.account.findFirst({
-        where: { id: query.account_id, teamId: ownTeamId ?? NO_MATCH_UUID },
-        select: { id: true },
-      });
-      return { ...query, team_id: undefined, account_id: member?.id };
+      if (query.account_id) {
+        const member = await this.prisma.account.findFirst({
+          where: { id: query.account_id, teamId: ownTeamId ?? NO_MATCH_UUID },
+          select: { id: true },
+        });
+        return { ...query, team_id: undefined, account_id: member?.id };
+      }
+      return {
+        ...query,
+        team_id:
+          ownTeamId && query.team_id === ownTeamId ? ownTeamId : undefined,
+        account_id: undefined,
+      };
+    }
+    if (currentUser.role === 'sale') {
+      return {
+        ...query,
+        team_id: undefined,
+        account_id:
+          query.account_id === currentUser.id ? currentUser.id : undefined,
+      };
     }
     return { ...query, team_id: undefined, account_id: undefined };
   }

@@ -45,7 +45,7 @@ import {
   heldByOther,
   type LeadViewer,
 } from "@/lib/lead-permissions";
-import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
+import { EMPTY_OPTION_STYLE, resultStatusStyle, zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type {
   AccountRole,
   AssignBulkResult,
@@ -179,10 +179,6 @@ function shortZaloFriendName(name: string): string {
   return name.replace(/kết bạn/i, "KB");
 }
 
-function zaloStatusStyle(name: string | undefined): { backgroundColor: string; color: string } | undefined {
-  if (name === "Đã gửi CCCD") return { backgroundColor: "#15803d", color: "#ffffff" };
-  return undefined;
-}
 
 export function CandidatesClient({
   permissionLevel,
@@ -995,11 +991,14 @@ export function CandidatesClient({
             aria-label={`Trạng thái Zalo của ${candidate.full_name}`}
             value={status?.id ?? ""}
             onChange={(event) => void handleZaloFriendStatusChange(candidate, event.target.value || null)}
+            style={EMPTY_OPTION_STYLE}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           >
-            <option value="">Chưa cập nhật</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Chưa cập nhật
+            </option>
             {zaloFriendStatuses.map((s) => (
-              <option key={s.id} value={s.id}>
+              <option key={s.id} value={s.id} style={zaloFriendStatusStyle(s.name)}>
                 {shortZaloFriendName(s.name)}
               </option>
             ))}
@@ -1008,8 +1007,8 @@ export function CandidatesClient({
       );
     })();
 
-    // Cột "Kết quả": nhãn vàng "Chờ duyệt đóng" khi Sale đề nghị dừng chăm sóc; 1 lựa chọn thật
-    // ("Đã gửi CCCD") nên bấm = đảo trạng thái.
+    // Cột "Kết quả": nhãn vàng "Chờ duyệt đóng" khi Sale đề nghị dừng chăm sóc; chọn
+    // "Đã gửi CCCD" / "Đã phỏng vấn" hoặc để trống qua ô chọn ẩn (giống cột Zalo, 2026-11-06).
     const result = (
       <>
         {!candidate.care_stopped_at && candidate.care_stop_requested_at ? (
@@ -1021,23 +1020,35 @@ export function CandidatesClient({
           </span>
         ) : null}
         {canProcessLead(candidate, viewer) ? (
-          <button
-            type="button"
-            onClick={() =>
-              void handleZaloStatusChange(candidate, candidate.zalo_status ? null : (zaloStatuses[0]?.id ?? null))
-            }
-            style={zaloStatusStyle(candidate.zalo_status?.name)}
+          <div
+            style={resultStatusStyle(candidate.zalo_status?.name)}
             className={cn(
-              "mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
+              "relative mx-auto flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1 text-center text-[10px] leading-tight font-semibold break-words whitespace-normal",
               candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
             )}
           >
             <span>{candidate.zalo_status?.name ?? "--"}</span>
             <ChevronDown className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2.5} />
-          </button>
+            <select
+              aria-label={`Kết quả của ${candidate.full_name}`}
+              value={candidate.zalo_status?.id ?? ""}
+              onChange={(event) => void handleZaloStatusChange(candidate, event.target.value || null)}
+              style={EMPTY_OPTION_STYLE}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            >
+              <option value="" style={EMPTY_OPTION_STYLE}>
+                --
+              </option>
+              {zaloStatuses.map((s) => (
+                <option key={s.id} value={s.id} style={resultStatusStyle(s.name) ?? EMPTY_OPTION_STYLE}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
         ) : (
           <span
-            style={zaloStatusStyle(candidate.zalo_status?.name)}
+            style={resultStatusStyle(candidate.zalo_status?.name)}
             className={cn(
               "mx-auto block w-fit max-w-full rounded-lg px-1.5 py-1 text-center text-[10px] font-semibold break-words whitespace-normal",
               candidate.zalo_status ? "text-inherit" : "border border-slate-200 text-slate-600",
@@ -1793,7 +1804,7 @@ interface CandidateFormPayload {
   mkt_note?: string;
   team_id?: string;
   mkt_source_id?: string;
-  birth_year?: number;
+  birth_year?: string;
   address?: string;
 }
 
@@ -1875,7 +1886,7 @@ function CandidateFormModal({
   const [teamId, setTeamId] = useState("");
   const [mktSources, setMktSources] = useState<{ id: string; name: string }[]>([]);
   const [mktSourceId, setMktSourceId] = useState("");
-  const [birthYear, setBirthYear] = useState(initialCandidate?.birth_year?.toString() ?? "");
+  const [birthYear, setBirthYear] = useState(initialCandidate?.birth_year ?? "");
   const [address, setAddress] = useState(initialCandidate?.address ?? "");
   const [mktNote, setMktNote] = useState(initialCandidate?.mkt_note ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -1902,7 +1913,7 @@ function CandidateFormModal({
         source_id: sourceId,
         mkt_note: mktNote || undefined,
         ...(isEditing
-          ? { birth_year: birthYear ? Number(birthYear) : undefined, address: address || undefined }
+          ? { birth_year: birthYear.trim() || undefined, address: address || undefined }
           : { team_id: teamId, mkt_source_id: mktSourceId || undefined }),
       });
     } catch (err) {
@@ -1955,7 +1966,7 @@ function CandidateFormModal({
         {isEditing ? (
           <>
             <Field uiSize="sm" label="Năm sinh (không bắt buộc)">
-              <Input uiSize="sm" value={birthYear} onChange={(event) => setBirthYear(event.target.value)} inputMode="numeric" />
+              <Input uiSize="sm" value={birthYear} onChange={(event) => setBirthYear(event.target.value)} maxLength={50} />
             </Field>
 
             <Field uiSize="sm" label="Địa chỉ (không bắt buộc)">

@@ -28,7 +28,7 @@ export interface LegacyRow {
   staff: string;
   fullName: string;
   phone: string;
-  birthYear: number | null;
+  birthYear: string | null;
   address: string;
   mktNote: string;
   channel: string;
@@ -144,7 +144,11 @@ export function readLegacyRows(
       staff: cell(r, 'staff').replace(/\s+/g, ' '),
       fullName: cell(r, 'fullName').slice(0, 150),
       phone,
-      birthYear: birthRaw ? parseBirthYear(birthRaw) : null,
+      // Đọc được năm (vd "k95", "95") thì lưu dạng 4 số; không đọc được thì giữ
+      // nguyên chữ trên sheet (năm sinh nhập tự do — 2026-11-06).
+      birthYear: birthRaw
+        ? (parseBirthYear(birthRaw)?.toString() ?? birthRaw.slice(0, 50))
+        : null,
       address: address.slice(0, 255),
       mktNote: cell(r, 'mktNote'),
       channel: cell(r, 'channel'),

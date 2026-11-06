@@ -1,11 +1,4 @@
-import {
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * UI Polish — PUT /candidate/:id/quick-edit: sửa nhanh Năm sinh/Địa chỉ
@@ -15,11 +8,11 @@ import {
  * Cho phép gửi `null` để xóa trống trường tương ứng.
  */
 export class QuickEditCandidateDto {
+  /** Năm sinh nhập tự do (2026-11-06), vd "1995", "khoảng 95", "15/3/1998". */
   @IsOptional()
-  @IsInt()
-  @Min(1900)
-  @Max(2100)
-  birth_year?: number | null;
+  @IsString()
+  @MaxLength(50, { message: 'Năm sinh tối đa 50 ký tự' })
+  birth_year?: string | null;
 
   @IsOptional()
   @IsString()

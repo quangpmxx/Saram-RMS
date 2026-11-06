@@ -26,7 +26,7 @@ export default async function HomePage() {
   const canViewPerformance = true;
   const canViewByTeam = true;
   const canFilterByTeam = ["admin", "manager", "mkt"].includes(user.role);
-  const canFilterBySale = ["admin", "manager", "mkt", "leader"].includes(user.role);
+  const canFilterBySale = ["admin", "manager", "mkt"].includes(user.role);
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -55,6 +55,8 @@ export default async function HomePage() {
   return (
     <DashboardClient
       currentUserFullName={user.full_name}
+      currentUserId={user.id}
+      currentUserTeamId={user.team_id}
       currentUserRole={user.role}
       canViewPerformance={canViewPerformance}
       canViewByTeam={canViewByTeam}

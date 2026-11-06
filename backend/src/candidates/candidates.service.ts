@@ -75,6 +75,12 @@ export interface CreateCandidateResult {
 /** Vai trò XEM được toàn bộ data mọi nhóm (sửa/xoá kiểm riêng ở assertCanModify/assertCanDelete) — Mục 2.6 & Mục 8, docs/09. */
 const VIEW_ALL_LEADS_ROLES = new Set(['admin', 'manager', 'mkt']);
 
+/** Năm sinh nhập tự do (2026-11-06): cắt khoảng trắng, chuỗi rỗng = không có. */
+function normalizeBirthYear(value: string | null): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+}
+
 /**
  * Thứ tự tab Tất cả / Chờ phân chia: mặc định ngày giờ lên số giảm dần — mới
  * nhất trước (yêu cầu người dùng 2026-10-30, thay cho 'chưa phân chia lên
@@ -491,7 +497,10 @@ export class CandidatesService {
       data: {
         fullName: dto.full_name,
         phoneNumber: dto.phone_number,
-        birthYear: dto.birth_year,
+        birthYear:
+          dto.birth_year === undefined
+            ? undefined
+            : normalizeBirthYear(dto.birth_year),
         address: dto.address,
         sourceId: dto.source_id,
         mktNote: dto.mkt_note,
@@ -535,14 +544,12 @@ export class CandidatesService {
     }
     await this.assertCanQuickEdit(existing, currentUser);
 
-    if (dto.birth_year !== undefined && dto.birth_year !== null) {
-      const currentYear = new Date().getFullYear();
-      if (dto.birth_year > currentYear) {
-        throw new UnprocessableEntityException(
-          'Năm sinh không được lớn hơn năm hiện tại',
-        );
-      }
-    }
+    // Năm sinh nhập tự do (2026-11-06): không kiểm định dạng, chỉ cắt khoảng
+    // trắng; để trống = xoá.
+    const birthYear =
+      dto.birth_year === undefined
+        ? undefined
+        : normalizeBirthYear(dto.birth_year);
 
     const address =
       dto.address !== undefined && dto.address !== null
@@ -554,11 +561,11 @@ export class CandidatesService {
       oldValue: string | null;
       newValue: string | null;
     }> = [];
-    if (dto.birth_year !== undefined && dto.birth_year !== existing.birthYear) {
+    if (birthYear !== undefined && birthYear !== existing.birthYear) {
       changes.push({
         field: 'birth_year',
-        oldValue: existing.birthYear?.toString() ?? null,
-        newValue: dto.birth_year?.toString() ?? null,
+        oldValue: existing.birthYear,
+        newValue: birthYear,
       });
     }
     if (dto.address !== undefined && address !== existing.address) {
@@ -580,7 +587,7 @@ export class CandidatesService {
     await this.prisma.lead.update({
       where: { id },
       data: {
-        birthYear: dto.birth_year !== undefined ? dto.birth_year : undefined,
+        birthYear,
         address: dto.address !== undefined ? address : undefined,
       },
     });
@@ -1657,11 +1664,14 @@ export class CandidatesService {
         newValue: dto.phone_number,
       });
     }
-    if (dto.birth_year !== undefined && dto.birth_year !== before.birthYear) {
+    if (
+      dto.birth_year !== undefined &&
+      normalizeBirthYear(dto.birth_year) !== before.birthYear
+    ) {
       changes.push({
         field: 'birth_year',
-        oldValue: before.birthYear?.toString() ?? null,
-        newValue: String(dto.birth_year),
+        oldValue: before.birthYear,
+        newValue: normalizeBirthYear(dto.birth_year),
       });
     }
     if (dto.address !== undefined && dto.address !== before.address) {

@@ -267,4 +267,45 @@ describe('MarketingHubService.today', () => {
       cost_per_interview: 300000,
     });
   });
+
+  it('theo khoảng thời gian chung của Dashboard (2026-11-06): chi tiêu [from,to], CP/PV lệch 1 ngày', async () => {
+    const aggregate = jest
+      .fn()
+      .mockResolvedValueOnce({ _sum: { spend: 3000000 } })
+      .mockResolvedValueOnce({ _sum: { spend: 2400000 } });
+    const shuttleCount = jest.fn().mockResolvedValue(8);
+    const prisma = {
+      adSpendDaily: { aggregate },
+      adAccount: {
+        findMany: jest.fn().mockResolvedValue([{ mktSourceId: 's1' }]),
+      },
+      lead: { count: jest.fn().mockResolvedValue(100) },
+      shuttleRecord: { count: shuttleCount },
+    };
+    const r = await build(prisma).today({
+      from: '2026-11-01',
+      to: '2026-11-06',
+    });
+
+    // Chi tiêu trong kỳ: 01→06; chi tiêu dùng cho CP/PV: 31/10→05.
+    expect(aggregate.mock.calls[0][0].where.date).toEqual({
+      gte: new Date('2026-11-01'),
+      lte: new Date('2026-11-06'),
+    });
+    expect(aggregate.mock.calls[1][0].where.date).toEqual({
+      gte: new Date('2026-10-31'),
+      lte: new Date('2026-11-05'),
+    });
+    expect(shuttleCount.mock.calls[0][0].where.date).toEqual({
+      gte: new Date('2026-11-01'),
+      lte: new Date('2026-11-06'),
+    });
+    expect(r).toMatchObject({
+      spend: 3000000,
+      data_count: 100,
+      cost_per_data: 30000,
+      interview_count: 8,
+      cost_per_interview: 300000,
+    });
+  });
 });

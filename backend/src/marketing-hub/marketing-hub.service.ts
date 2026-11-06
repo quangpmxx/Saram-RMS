@@ -21,7 +21,10 @@ import {
   fetchDailySpend,
   listAdAccounts,
 } from './facebook-ads.client';
-import { OverviewQueryDto } from './dto/marketing-hub.dto';
+import {
+  MarketingPeriodQueryDto,
+  OverviewQueryDto,
+} from './dto/marketing-hub.dto';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_SYNC_DAYS = 30;
@@ -406,14 +409,26 @@ export class MarketingHubService {
    * chi phí + data hôm nay (data = lead có Nguồn MKT đã gắn TKQC, như dòng Toàn công ty);
    * CP/phỏng vấn = chi tiêu HÔM QUA ÷ số người trong danh sách đưa đón HÔM NAY.
    */
-  async today() {
-    const today = vnToday();
-    const yesterday = vnDaysAgo(1);
-    const spendOn = async (d: string) =>
+  /**
+   * Khối Chi phí Marketing trên Dashboard theo khoảng [from, to] (ngày VN,
+   * 2026-11-06; trống cả 2 = hôm nay; trống from = từ đầu). Chi phí/phỏng vấn
+   * giữ quy tắc lệch 1 ngày: chi tiêu [from-1, to-1] ÷ người đưa đón [from, to].
+   */
+  async today(query: MarketingPeriodQueryDto = {}) {
+    const hasRange = Boolean(query.from || query.to);
+    const to = query.to ?? vnToday();
+    const from = hasRange ? query.from : to;
+    const shift = (d: string) =>
+      new Date(new Date(`${d}T00:00:00.000Z`).getTime() - DAY_MS)
+        .toISOString()
+        .slice(0, 10);
+    const spendBetween = async (a: string | undefined, b: string) =>
       Number(
         (
           await this.prisma.adSpendDaily.aggregate({
-            where: { date: new Date(d) },
+            where: {
+              date: { ...(a ? { gte: new Date(a) } : {}), lte: new Date(b) },
+            },
             _sum: { spend: true },
           })
         )._sum.spend ?? 0,
@@ -425,26 +440,34 @@ export class MarketingHubService {
     });
     const [spend, yesterdaySpend, dataCount, interviewCount] =
       await Promise.all([
-        spendOn(today),
-        spendOn(yesterday),
+        spendBetween(from, to),
+        spendBetween(from ? shift(from) : undefined, shift(to)),
         linked.length
           ? this.prisma.lead.count({
               where: {
                 deletedAt: null,
                 mktSourceId: { in: linked.map((l) => l.mktSourceId!) },
                 uploadedAt: {
-                  gte: vnDayRange(today).start,
-                  lt: vnDayRange(today).end,
+                  ...(from ? { gte: vnDayRange(from).start } : {}),
+                  lt: vnDayRange(to).end,
                 },
               },
             })
           : 0,
         this.prisma.shuttleRecord.count({
-          where: { date: new Date(today), deletedAt: null },
+          where: {
+            date: {
+              ...(from ? { gte: new Date(from) } : {}),
+              lte: new Date(to),
+            },
+            deletedAt: null,
+          },
         }),
       ]);
     return {
-      date: today,
+      date: to,
+      from: from ?? null,
+      to,
       spend,
       data_count: dataCount,
       cost_per_data: dataCount > 0 ? spend / dataCount : null,

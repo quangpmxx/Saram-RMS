@@ -66,3 +66,9 @@ export class OverviewQueryDto {
   @IsOptional() @IsUUID('4') ad_account_id?: string;
   @IsOptional() @IsUUID('4') owner_id?: string;
 }
+
+/** Khối Chi phí Marketing trên Dashboard — theo khoảng thời gian chung (2026-11-06). Bỏ trống cả 2 = hôm nay. */
+export class MarketingPeriodQueryDto {
+  @IsOptional() @Matches(DATE) from?: string;
+  @IsOptional() @Matches(DATE) to?: string;
+}

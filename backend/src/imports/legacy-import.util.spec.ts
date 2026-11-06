@@ -93,7 +93,7 @@ describe('legacy-import.util', () => {
     const { rows, errors } = readLegacyRows(ws, cols, 3);
     expect(rows.map((r) => r.fullName)).toEqual(['A', 'C']);
     expect(rows[0]).toMatchObject({
-      birthYear: 1984,
+      birthYear: '1984',
       address: 'lạng sơn',
       callNotes: '1/9 gọi\n2/9 gọi lại',
     });

@@ -21,20 +21,13 @@ describe('buildLeadKeywordWhere', () => {
           },
         },
       },
+      { birthYear: { contains: 'Long An', mode: 'insensitive' } },
     ]);
   });
 
-  it('gõ đúng 4 chữ số → khớp thêm năm sinh', () => {
+  it('năm sinh là chữ nhập tự do → tìm kiểu "có chứa" (2026-11-06)', () => {
     expect(buildLeadKeywordWhere('1997')?.OR).toContainEqual({
-      birthYear: 1997,
+      birthYear: { contains: '1997', mode: 'insensitive' },
     });
   });
-
-  it.each(['0901', '12345', '199'])(
-    '"%s" không phải năm 19xx/20xx → không khớp năm sinh',
-    (term) => {
-      const or = buildLeadKeywordWhere(term)?.OR as object[];
-      expect(or.some((c) => 'birthYear' in c)).toBe(false);
-    },
-  );
 });

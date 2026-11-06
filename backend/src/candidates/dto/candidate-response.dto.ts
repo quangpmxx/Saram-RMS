@@ -27,7 +27,8 @@ export interface CandidateResponseDto {
   id: string;
   full_name: string;
   phone_number: string;
-  birth_year: number | null;
+  /** Năm sinh nhập tự do (chữ) — 2026-11-06. */
+  birth_year: string | null;
   address: string | null;
   source: { id: string; name: string };
   mkt_source: { id: string; name: string } | null;

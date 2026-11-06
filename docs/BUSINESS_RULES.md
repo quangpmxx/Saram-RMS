@@ -10,7 +10,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 | Leader | Chỉ nhóm mình | Chia/chuyển lead trong nhóm, sửa mọi lead nhóm, cấu hình vòng quay, xoá ghi chú trong nhóm |
 | MKT | Data mình upload + xem (không sửa) ghi chú của Sale | Sửa/xoá data (đã duyệt: MKT sửa/xoá mọi data) |
 | Sale | Lead được giao + Kho chăm sóc nhóm mình | Cập nhật trạng thái/ghi chú; xử lý hộ data trong nhóm khi data có người phụ trách |
-- Mỗi tài khoản đúng 1 vai trò; nhiều thiết bị đăng nhập cùng lúc. Dashboard chung toàn công ty (đã duyệt).
+- Mỗi tài khoản đúng 1 vai trò; nhiều thiết bị đăng nhập cùng lúc. Dashboard mặc định chung toàn công ty (đã duyệt); ô "Phạm vi" (2026-11-06): Leader chọn Toàn công ty / Nhóm mình / 1 nhân viên trong nhóm, Sale chọn Tất cả / chính mình — máy chủ bỏ qua giá trị ngoài phạm vi.
 - Vai trò accounting, order_staff, shuttle_staff gắn với module riêng (Kế toán, Quản lý đơn, Đưa đón) — **[chưa xác minh chi tiết]**.
 - Quyền module hiển thị trên sidebar do `MODULE_REGISTRY` + trang Admin "Phân quyền" quyết định.
 - Tài khoản bị vô hiệu hóa (duyệt 2026-11-06): không đăng nhập được; không còn trong danh sách chọn Sale/bộ lọc (`GET /team/:id/member`), bảng/Top theo nhân viên ở Dashboard, Tiến độ chăm sóc, Báo cáo hằng ngày. Số **tổng** nhóm/công ty vẫn tính kết quả cũ của họ. Data đang giao cho họ giữ nguyên, vẫn hiện tên phụ trách để Leader chuyển lại.
@@ -37,7 +37,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 - Phạm vi số liệu theo vai trò; không có xuất Excel.
 - Hiệu suất/xếp hạng gom query cả danh sách Sale (B7) — giữ nguyên kết quả khi tối ưu; có test hồi quy.
 
-- **Chính thức / Thời vụ** (2026-11-04): ô Hẹn/Đến/Bùng/Đỗ/Trượt PV và 3 ô tỷ lệ hẹn/đến/đỗ ở Dashboard bấm vào mới hiện tách **CT / TV**, theo cột "Loại hình" của Đưa đón. Tỷ lệ CT/TV cùng mẫu số Data mới (CT + TV + dòng chưa chọn loại hình = tổng).
+- **Chính thức / Thời vụ** (2026-11-04): ô Hẹn/Đến/Bùng/Đỗ/Trượt PV và 3 ô tỷ lệ hẹn/đến/đỗ ở Dashboard bấm vào mới hiện tách **CT / TV**, theo cột "Loại hình" của Đưa đón. **Tỷ lệ theo phễu (2026-11-06):** hẹn PV / Data mới; đến PV / hẹn PV; đỗ PV / đến PV (mẫu số 0 → 0%), áp dụng cho toàn công ty/nhóm/cá nhân. Tách CT/TV: hẹn PV vẫn chia tổng Data mới; đến/đỗ chia trong cùng loại hình.
 - Nguồn số PV ở Dashboard = Đưa đón: Hẹn PV = mọi dòng; Đến PV = Tình trạng "Đã đón"; Bùng PV = "Chưa đón được"; Đỗ/Trượt PV = Kết quả "Đỗ PV"/"Trượt PV". Không lọc Nhóm/NV → đếm **mọi dòng** (kể cả chưa chọn Sale); có lọc → chỉ dòng của Sale thuộc phạm vi. Các giá trị trên + `CT`/`TV` là **lựa chọn cố định** (không xoá/đổi tên, chỉ đổi màu).
 
 ## Bất biến không được phá
@@ -52,7 +52,7 @@ Danh sách quyền chi tiết cho Quản lý/Leader (khung đã có, chưa có d
   - Admin gắn **Nguồn MKT** cho từng TKQC (nhiều TKQC dùng chung 1 nguồn được, vd 5 TKQC cùng nguồn của 1 người). Data up không tách theo TKQC nên **Số data / Giá số chỉ ở dòng Tổng** (nhân viên, toàn công ty), dòng TKQC để trống. Số data = số lead (chưa xoá) up trong kỳ có chọn các Nguồn MKT (khác nhau) gắn với TKQC của người đó. Không dùng số kết quả Facebook.
   - **Giá số** = tổng chi ÷ số data. Admin đặt 2 mốc: ≤ mốc xanh tô xanh, > mốc đỏ tô đỏ, ở giữa tô cam.
   - **Trạng thái camp**: có ≥1 chiến dịch ACTIVE → Đang hoạt động, ngược lại Dừng. **Trạng thái TK** theo `account_status` Facebook: 1 → Live ADS (xanh); 3/8/9 → Chưa thanh toán (cam); còn lại → Die ADS (đỏ). Lấy lúc đồng bộ.
-- **Dashboard — khối "Chi phí Marketing"** (Admin/Quản lý/MKT, không theo bộ lọc Dashboard, tự làm mới 5 phút): Chi phí MKT, Data thu được (lead có Nguồn MKT đã gắn TKQC), Chi phí/data — đều của HÔM NAY; **Chi phí/phỏng vấn = chi tiêu HÔM QUA ÷ số người trong danh sách đưa đón HÔM NAY**.
+- **Dashboard — khối "Chi phí Marketing"** (Admin/Quản lý/MKT, tự làm mới 5 phút): **theo bộ lọc "Khoảng thời gian" chung của Dashboard** (2026-11-06; trước chỉ hôm nay). Chi phí MKT = tổng chi tiêu trong kỳ; Data thu được = lead có Nguồn MKT đã gắn TKQC lên số trong kỳ; Chi phí/data = chi phí ÷ data; **Chi phí/phỏng vấn = chi tiêu lùi 1 ngày [từ-1, đến-1] ÷ số người trong danh sách đưa đón trong kỳ** (1 ngày = chi tiêu hôm qua ÷ đưa đón hôm nay như cũ). Không theo bộ lọc Nhóm/Nhân viên/Nguồn.
 - Chi phí/người đi làm: kết quả chung toàn công ty ở Dashboard (người đi làm lấy từ danh sách đưa đón, không có Nguồn MKT) — chưa làm. Chỉ số chiến dịch (CTR, click…) làm sau. Không xuất Excel.
 - Token Facebook lưu mã hoá (AES-256-GCM, khoá `MARKETING_TOKEN_KEY` ≥ 32 ký tự), không bao giờ trả về API/frontend.
 

@@ -18,13 +18,19 @@ export const MARKETING_TODAY_ROLES = ["admin", "manager", "mkt"];
 
 const vnd = (n: number | null) => (n === null ? "—" : `${Math.round(n).toLocaleString("vi-VN")} ₫`);
 
-/** Khối Marketing hôm nay trên Dashboard — số liệu hiện tại, tự làm mới 5 phút/lần, không theo bộ lọc. */
-export function MarketingTodayCard() {
+/**
+ * Khối Chi phí Marketing trên Dashboard — theo bộ lọc "Khoảng thời gian" chung
+ * (2026-11-06; trước chỉ hôm nay). Trống cả 2 mốc = hôm nay. Tự làm mới 5 phút/lần.
+ */
+export function MarketingTodayCard({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<MarketingToday | null>(null);
 
   useEffect(() => {
+    const query = new URLSearchParams();
+    if (from) query.set("from", from);
+    if (to) query.set("to", to);
     const load = () =>
-      clientApi<MarketingToday>("/marketing-hub/today")
+      clientApi<MarketingToday>(`/marketing-hub/today?${query.toString()}`)
         .then(setData)
         .catch(() => {});
     const first = setTimeout(load, 0);
@@ -33,7 +39,7 @@ export function MarketingTodayCard() {
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, []);
+  }, [from, to]);
 
   const tiles = [
     { label: "Chi phí MKT", value: vnd(data?.spend ?? null), cls: "bg-brand-50 text-brand-700" },
@@ -44,7 +50,7 @@ export function MarketingTodayCard() {
       value: vnd(data?.cost_per_interview ?? null),
       cls: "bg-rose-50 text-rose-700",
       title: data
-        ? `Chi tiêu hôm qua ${vnd(data.yesterday_spend)} ÷ ${data.interview_count} người đưa đón hôm nay`
+        ? `Chi tiêu lùi 1 ngày so với kỳ đang chọn ${vnd(data.yesterday_spend)} ÷ ${data.interview_count} người đưa đón trong kỳ`
         : undefined,
     },
   ];

@@ -7,6 +7,7 @@ import { ApiError, clientApi } from "@/lib/api-client";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { cn } from "@/lib/cn";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
+import { EMPTY_OPTION_STYLE } from "@/lib/zalo-friend-status";
 import type {
   AccountOptionItem,
   AppRealtimeEvent,
@@ -29,6 +30,16 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
+
+/**
+ * Màu 1 tài khoản Sale/NV đưa đón trong bộ lọc (2026-11-06) — màu lưu ở
+ * options.sales/options.drivers với value = account.id; chưa đặt màu = nền
+ * trắng chữ tối.
+ */
+function accountOptionStyle(colors: ShuttleOptionItem[], accountId: string) {
+  const item = colors.find((c) => c.value === accountId);
+  return (item && shuttleColorStyle(item.color_key, item.text_color_key)) ?? EMPTY_OPTION_STYLE;
+}
 
 type ShuttleSortKey = "date" | "stt" | "interview_time";
 
@@ -1455,9 +1466,15 @@ export function ShuttleClient({
             value={filters.company_id}
             onChange={(event) => applyFiltersNow({ ...filters, company_id: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Tất cả
+            </option>
             {companies.map((item) => (
-              <option key={item.id} value={item.id}>
+              <option
+                key={item.id}
+                value={item.id}
+                style={shuttleColorStyle(item.color_key, item.text_color_key) ?? EMPTY_OPTION_STYLE}
+              >
                 {item.value}
               </option>
             ))}
@@ -1469,9 +1486,15 @@ export function ShuttleClient({
             value={filters.type}
             onChange={(event) => applyFiltersNow({ ...filters, type: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Tất cả
+            </option>
             {options.types.map((item) => (
-              <option key={item.id} value={item.value}>
+              <option
+                key={item.id}
+                value={item.value}
+                style={shuttleColorStyle(item.color_key, item.text_color_key) ?? EMPTY_OPTION_STYLE}
+              >
                 {item.value}
               </option>
             ))}
@@ -1483,9 +1506,11 @@ export function ShuttleClient({
             value={filters.sale_user_id}
             onChange={(event) => applyFiltersNow({ ...filters, sale_user_id: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Tất cả
+            </option>
             {initialSaleAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
+              <option key={account.id} value={account.id} style={accountOptionStyle(options.sales, account.id)}>
                 {account.nickname ?? account.full_name}
               </option>
             ))}
@@ -1497,9 +1522,11 @@ export function ShuttleClient({
             value={filters.driver_user_id}
             onChange={(event) => applyFiltersNow({ ...filters, driver_user_id: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Tất cả
+            </option>
             {initialDriverAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
+              <option key={account.id} value={account.id} style={accountOptionStyle(options.drivers, account.id)}>
                 {account.nickname ?? account.full_name}
               </option>
             ))}
@@ -1511,9 +1538,16 @@ export function ShuttleClient({
             value={filters.status}
             onChange={(event) => applyFiltersNow({ ...filters, status: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Tất cả
+            </option>
             {options.statuses.map((item) => (
-              <option key={item.id} value={item.value}>
+              <option
+                key={item.id}
+                value={item.value}
+                // Từng dòng tô đúng màu của lựa chọn (2026-11-06).
+                style={shuttleColorStyle(item.color_key, item.text_color_key) ?? EMPTY_OPTION_STYLE}
+              >
                 {item.value}
               </option>
             ))}
@@ -1525,9 +1559,16 @@ export function ShuttleClient({
             value={filters.interview_result}
             onChange={(event) => applyFiltersNow({ ...filters, interview_result: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="" style={EMPTY_OPTION_STYLE}>
+              Tất cả
+            </option>
             {options.interviewResults.map((item) => (
-              <option key={item.id} value={item.value}>
+              <option
+                key={item.id}
+                value={item.value}
+                // Từng dòng tô đúng màu của lựa chọn (2026-11-06).
+                style={shuttleColorStyle(item.color_key, item.text_color_key) ?? EMPTY_OPTION_STYLE}
+              >
                 {item.value}
               </option>
             ))}
@@ -1609,7 +1650,7 @@ export function ShuttleClient({
                 <th className="px-3 py-2.5">HĐ</th>
               </tr>
             </thead>
-            <tbody className={cn("divide-y divide-brand-400", isReadOnly && "pointer-events-none opacity-60")}>
+            <tbody className={cn("divide-y divide-brand-400", isReadOnly && "pointer-events-none")}>
               {/* Dòng nháp thêm mới — luôn hiện đầu bảng, nhập trực tiếp không cần popup. Yêu cầu trực tiếp người dùng (2026-07-18): nền màu xám để phân biệt rõ với các dòng dữ liệu đã có. */}
               <tr className="bg-slate-200">
                 <ShuttleRowFormCells

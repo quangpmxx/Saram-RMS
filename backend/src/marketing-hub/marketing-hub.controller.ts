@@ -15,6 +15,7 @@ import { MarketingHubService } from './marketing-hub.service';
 import {
   ChangeOwnerDto,
   ConnectAdAccountDto,
+  MarketingPeriodQueryDto,
   OverviewQueryDto,
   SaveCostThresholdsDto,
   SaveMktSourcesDto,
@@ -38,10 +39,10 @@ export class MarketingHubController {
     return this.service.overview(query);
   }
 
-  /** Khối Marketing hôm nay trên Dashboard (Admin/Quản lý/MKT). */
+  /** Khối Chi phí Marketing trên Dashboard (Admin/Quản lý/MKT) — theo khoảng from/to, trống = hôm nay. */
   @Get('today')
-  today() {
-    return this.service.today();
+  today(@Query() query: MarketingPeriodQueryDto) {
+    return this.service.today(query);
   }
 
   @Post('ad-accounts/connect')

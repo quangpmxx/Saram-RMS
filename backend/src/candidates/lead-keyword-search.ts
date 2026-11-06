@@ -28,9 +28,7 @@ export function buildLeadKeywordWhere(
       },
     },
   ];
-  // Chỉ coi là năm sinh khi đúng dạng 19xx/20xx — "0901" (đầu SĐT) không phải năm.
-  if (/^(19|20)\d{2}$/.test(term)) {
-    or.push({ birthYear: Number(term) });
-  }
+  // Năm sinh là chữ nhập tự do (2026-11-06) — tìm kiểu "có chứa".
+  or.push({ birthYear: { contains: term, mode: 'insensitive' } });
   return { OR: or };
 }
