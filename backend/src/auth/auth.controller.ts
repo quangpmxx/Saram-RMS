@@ -33,7 +33,7 @@ import {
 import { AllowPasswordChange } from '../common/decorators/allow-password-change.decorator';
 
 /** Dự án phụ — nâng cấp toàn diện: ảnh đại diện tự upload (POST /me/avatar). */
-const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (yêu cầu 2026-11-05, trước 2MB)
 const AVATAR_ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 /**

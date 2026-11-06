@@ -18,7 +18,7 @@ import type { UiTheme } from "@/lib/types";
 import { CheckinLocationSettings } from "./checkin-location-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB — khớp đúng giới hạn backend (POST /me/avatar)
+const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — khớp đúng giới hạn backend (POST /me/avatar)
 
 /** "YYYY-MM-DD" -> "DD/MM/YYYY" cho dễ đọc — chỉ dùng để hiển thị readonly, không phải input thật. */
 function formatDateOnly(value: string | null): string {
@@ -65,7 +65,7 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
       return;
     }
     if (file.size > AVATAR_MAX_SIZE_BYTES) {
-      setAvatarError("Dung lượng ảnh tối đa 2MB");
+      setAvatarError("Dung lượng ảnh tối đa 10MB");
       setSelectedFile(null);
       setPreviewUrl(null);
       return;
@@ -187,7 +187,7 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">JPEG/PNG/WebP, tối đa 2MB.</p>
+                <p className="text-xs text-slate-400">JPEG/PNG/WebP, tối đa 10MB.</p>
               </div>
             </div>
             {avatarError && (
