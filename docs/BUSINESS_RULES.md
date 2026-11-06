@@ -13,6 +13,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 - Mỗi tài khoản đúng 1 vai trò; nhiều thiết bị đăng nhập cùng lúc. Dashboard chung toàn công ty (đã duyệt).
 - Vai trò accounting, order_staff, shuttle_staff gắn với module riêng (Kế toán, Quản lý đơn, Đưa đón) — **[chưa xác minh chi tiết]**.
 - Quyền module hiển thị trên sidebar do `MODULE_REGISTRY` + trang Admin "Phân quyền" quyết định.
+- Tài khoản bị vô hiệu hóa (duyệt 2026-11-06): không đăng nhập được; không còn trong danh sách chọn Sale/bộ lọc (`GET /team/:id/member`), bảng/Top theo nhân viên ở Dashboard, Tiến độ chăm sóc, Báo cáo hằng ngày. Số **tổng** nhóm/công ty vẫn tính kết quả cũ của họ. Data đang giao cho họ giữ nguyên, vẫn hiện tên phụ trách để Leader chuyển lại.
 
 ## Data lao động (Lead)
 - Tối thiểu: tên, SĐT, nguồn (Facebook/TikTok/Zalo/Khác), thời gian up, ghi chú MKT. Nhập tay hoặc import Excel.

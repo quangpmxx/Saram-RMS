@@ -366,8 +366,11 @@ export class DailyReportsService {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
+      // Ẩn Sale đã vô hiệu hóa (yêu cầu người dùng 2026-11-06) — không còn
+      // hiện dòng "Chưa nộp" của người đã nghỉ.
       employeeWhere = {
         role: 'sale',
+        status: 'active',
         teamId: account?.teamId ?? '__none__',
         ...(query.account_id ? { id: query.account_id } : {}),
       };
@@ -375,6 +378,7 @@ export class DailyReportsService {
       // admin/manager
       employeeWhere = {
         role: 'sale',
+        status: 'active',
         ...(query.team_id ? { teamId: query.team_id } : {}),
         ...(query.account_id ? { id: query.account_id } : {}),
       };

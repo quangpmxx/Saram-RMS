@@ -200,8 +200,11 @@ export class TeamsService {
       }
     }
 
+    // Chỉ Sale đang hoạt động (yêu cầu người dùng 2026-11-06): người đã vô hiệu
+    // hóa không còn trong danh sách chọn Sale / bộ lọc. Data đang giao cho họ
+    // vẫn giữ nguyên, vẫn hiện tên phụ trách ở danh sách data.
     const members = await this.prisma.account.findMany({
-      where: { teamId, role: 'sale' },
+      where: { teamId, role: 'sale', status: 'active' },
       include: { team: { select: { id: true, name: true } } },
       orderBy: { fullName: 'asc' },
     });

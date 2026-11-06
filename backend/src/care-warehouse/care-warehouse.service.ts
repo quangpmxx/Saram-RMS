@@ -1685,11 +1685,15 @@ export class CareWarehouseService {
       where: accountWhere,
       select: {
         ...ACCOUNT_REF_SELECT,
+        status: true,
         team: { select: { id: true, name: true } },
       },
       orderBy: { fullName: 'asc' },
     });
     const saleIds = sales.map((s) => s.id);
+    const inactiveIds = new Set(
+      sales.filter((s) => s.status !== 'active').map((s) => s.id),
+    );
 
     const assignments = saleIds.length
       ? await this.prisma.careAssignment.findMany({
@@ -1789,6 +1793,10 @@ export class CareWarehouseService {
       (n, r) => n + r.monthly.care_turns,
       0,
     );
+
+    // Ẩn dòng của Sale đã vô hiệu hóa nhưng dòng tổng vẫn tính kết quả của họ
+    // (yêu cầu người dùng 2026-11-06).
+    rows = rows.filter((r) => !inactiveIds.has(r.account.id));
 
     return {
       date,

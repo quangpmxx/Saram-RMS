@@ -255,9 +255,13 @@ export class DashboardService {
     teamId: string | undefined,
     accountId: string | undefined,
   ): Promise<SalePerformanceDto[]> {
+    // Bảng/Top theo nhân viên: ẩn tài khoản đã vô hiệu hóa (yêu cầu người dùng
+    // 2026-11-06). Số tổng của nhóm/công ty vẫn tính kết quả của họ — các truy
+    // vấn tổng khác KHÔNG lọc status.
     const sales = await this.prisma.account.findMany({
       where: {
         role: 'sale',
+        status: 'active',
         ...(teamId ? { teamId } : {}),
         ...(accountId ? { id: accountId } : {}),
       },
