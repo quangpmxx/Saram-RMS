@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { AccountRole, Prisma } from '../../generated/prisma/client';
@@ -22,9 +23,6 @@ import { ROLE_LABEL } from '../common/constants/role-label';
  * PR/commit liên quan module này.
  */
 const EMPLOYEE_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
-
-/** Mục 8, yêu cầu người dùng: Admin/Quản lý/Leader/Nhân viên đều xem được (phạm vi khác nhau). */
-const VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'mkt', 'sale']);
 
 /**
  * Chỉ Admin/Quản lý chấm công & sửa vị trí (rà soát phân quyền 2026-10-30);
@@ -531,9 +529,9 @@ export class AttendanceService {
     query: ListAttendanceQueryDto,
     currentUser: AuthenticatedUser,
   ) {
-    if (!VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException('Bạn không có quyền xem chấm công');
-    }
+    // Ai mở được trang do Phân quyền quyết định (ModulePermissionGuard); vai
+    // trò khác (NV Đưa đón, Kế toán...) được cấp trang thì xem phạm vi của
+    // chính mình như nhân viên — trước đây ném 403 làm sập trang (2026-11-06).
 
     const employeeWhere = await this.resolveEmployeeWhere(query, currentUser);
     const employees = await this.prisma.account.findMany({
@@ -570,7 +568,12 @@ export class AttendanceService {
       ? {}
       : { status: 'active' };
 
-    if (currentUser.role === 'sale' || currentUser.role === 'mkt') {
+    // Sale/MKT và mọi vai trò khác ngoài Leader/Quản lý/Admin: chỉ chính mình.
+    if (
+      currentUser.role !== 'leader' &&
+      currentUser.role !== 'admin' &&
+      currentUser.role !== 'manager'
+    ) {
       return { id: currentUser.id, role: { in: EMPLOYEE_ROLES } };
     }
     if (currentUser.role === 'leader') {
@@ -579,7 +582,7 @@ export class AttendanceService {
       });
       return {
         role: { in: EMPLOYEE_ROLES },
-        teamId: account?.teamId ?? '__none__',
+        teamId: account?.teamId ?? NO_MATCH_UUID,
         ...(query.account_id ? { id: query.account_id } : {}),
         ...statusFilter,
       };
@@ -610,7 +613,7 @@ export class AttendanceService {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
-      where = { ...where, teamId: account?.teamId ?? '__none__' };
+      where = { ...where, teamId: account?.teamId ?? NO_MATCH_UUID };
     }
     const inScope = await this.prisma.account.findMany({
       where,

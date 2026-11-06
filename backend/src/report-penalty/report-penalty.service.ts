@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ForbiddenException,
   Injectable,
@@ -451,7 +452,7 @@ export class ReportPenaltyService {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
-      accountWhere.teamId = account?.teamId ?? '__none__';
+      accountWhere.teamId = account?.teamId ?? NO_MATCH_UUID;
       if (query.account_id) accountWhere.id = query.account_id;
     } else {
       if (query.team_id) accountWhere.teamId = query.team_id;

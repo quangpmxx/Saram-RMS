@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ConflictException,
   ForbiddenException,
@@ -355,12 +356,11 @@ export class DailyReportsService {
     query: ListDailyReportQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<{ employees: EmployeeWithTeam[]; dates: string[] }> {
-    if (!ALLOWED_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException('Bạn không có quyền xem báo cáo hằng ngày');
-    }
-
     let employeeWhere: Prisma.AccountWhereInput;
-    if (currentUser.role === 'sale') {
+    if (!ALLOWED_ROLES.has(currentUser.role) || currentUser.role === 'sale') {
+      // Vai trò khác (MKT, NV Đưa đón...) được Admin cấp trang: chỉ phạm vi
+      // của chính mình (báo cáo chỉ dành cho Sale → danh sách rỗng) — trước
+      // đây ném 403 làm sập trang (2026-11-06).
       employeeWhere = { id: currentUser.id, role: 'sale' };
     } else if (currentUser.role === 'leader') {
       const account = await this.prisma.account.findUnique({
@@ -371,7 +371,7 @@ export class DailyReportsService {
       employeeWhere = {
         role: 'sale',
         status: 'active',
-        teamId: account?.teamId ?? '__none__',
+        teamId: account?.teamId ?? NO_MATCH_UUID,
         ...(query.account_id ? { id: query.account_id } : {}),
       };
     } else {

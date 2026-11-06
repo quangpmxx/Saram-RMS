@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   BadRequestException,
   ConflictException,
@@ -147,15 +148,16 @@ export class LeaveRequestsService {
       };
     }
 
-    if (currentUser.role === 'sale' || currentUser.role === 'mkt') {
-      where.accountId = currentUser.id;
-    } else if (currentUser.role === 'leader') {
+    if (currentUser.role === 'leader') {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
-      where.account = { teamId: account?.teamId ?? '__none__' };
+      where.account = { teamId: account?.teamId ?? NO_MATCH_UUID };
     } else if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
-      throw new ForbiddenException('Bạn không có quyền xem đơn xin nghỉ phép');
+      // Sale/MKT và vai trò khác (NV Đưa đón, Kế toán...) được cấp trang: chỉ
+      // đơn của chính mình — trước đây vai trò khác bị 403 làm sập trang Chấm
+      // công (2026-11-06).
+      where.accountId = currentUser.id;
     }
 
     const requests = await this.prisma.leaveRequest.findMany({
@@ -344,7 +346,12 @@ export class LeaveRequestsService {
       throw new NotFoundException('Không tìm thấy đơn xin nghỉ phép');
     }
 
-    if (currentUser.role === 'sale' || currentUser.role === 'mkt') {
+    if (
+      currentUser.role !== 'leader' &&
+      currentUser.role !== 'admin' &&
+      currentUser.role !== 'manager'
+    ) {
+      // Sale/MKT và vai trò khác: chỉ đơn của chính mình (2026-11-06).
       if (request.accountId !== currentUser.id) {
         throw new ForbiddenException('Bạn chỉ được xem đơn của chính mình');
       }
@@ -361,8 +368,6 @@ export class LeaveRequestsService {
           'Bạn chỉ được xem đơn của thành viên trong nhóm mình',
         );
       }
-    } else if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
-      throw new ForbiddenException('Bạn không có quyền xem đơn xin nghỉ phép');
     }
 
     return request;

@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ForbiddenException,
   Injectable,
@@ -536,7 +537,7 @@ export class CheckinService {
       });
       return {
         role: { in: CHECKIN_ROLES },
-        teamId: account?.teamId ?? '__none__',
+        teamId: account?.teamId ?? NO_MATCH_UUID,
         ...(query.account_id ? { id: query.account_id } : {}),
         status: 'active',
       };

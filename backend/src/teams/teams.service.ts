@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ConflictException,
   ForbiddenException,
@@ -40,7 +41,7 @@ export class TeamsService {
 
     if (currentUser.role === 'leader') {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
-      where.id = ownTeamId ?? '__none__';
+      where.id = ownTeamId ?? NO_MATCH_UUID;
     }
 
     const [total, teams] = await this.prisma.$transaction([

@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -189,7 +190,7 @@ export class CalendarService {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
-      where.assignedTeamId = account?.teamId ?? '__none__';
+      where.assignedTeamId = account?.teamId ?? NO_MATCH_UUID;
       if (query.account_id) {
         where.assignedToId = query.account_id;
       }

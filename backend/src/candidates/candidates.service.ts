@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   BadRequestException,
   ConflictException,
@@ -836,7 +837,7 @@ export class CandidatesService {
     if (currentUser.role === 'leader' || currentUser.role === 'sale') {
       const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.OR = [
-        { assignedTeamId: teamId ?? '__none__' },
+        { assignedTeamId: teamId ?? NO_MATCH_UUID },
         { assignedTeamId: null },
       ];
     }
@@ -1361,7 +1362,7 @@ export class CandidatesService {
       if (assignedToFilter) {
         // Tab "Cá nhân" — thu hẹp về đúng 1 người, KHÔNG gộp thêm lead chờ
         // phân chia (khác nghĩa "cá nhân").
-        where.assignedTeamId = teamId ?? '__none__';
+        where.assignedTeamId = teamId ?? NO_MATCH_UUID;
         where.assignedToId = assignedToFilter;
         return where;
       }
@@ -1378,7 +1379,7 @@ export class CandidatesService {
       where.AND = [
         {
           OR: [
-            { assignedTeamId: teamId ?? '__none__' },
+            { assignedTeamId: teamId ?? NO_MATCH_UUID },
             { assignedTeamId: null },
           ],
         },

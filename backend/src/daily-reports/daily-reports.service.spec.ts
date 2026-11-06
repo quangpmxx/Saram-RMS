@@ -177,10 +177,10 @@ describe('DailyReportsService', () => {
       expect(dates).toEqual(['2026-07-10', '2026-07-11', '2026-07-12']);
     });
 
-    it('MKT không có quyền xem', async () => {
-      await expect(service.list({}, mktUser)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+    it('MKT (hoặc vai trò khác được cấp trang) chỉ xem phạm vi của chính mình, không lỗi', async () => {
+      await expect(service.list({}, mktUser)).resolves.toBeDefined();
+      const call = prisma.account.findMany.mock.calls[0][0];
+      expect(call.where).toMatchObject({ id: mktUser.id, role: 'sale' });
     });
 
     it('Manager thấy toàn bộ giống Admin', async () => {

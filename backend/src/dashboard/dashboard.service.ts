@@ -1,3 +1,4 @@
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -204,7 +205,7 @@ export class DashboardService {
     query = await this.sanitizeQuery(query, currentUser);
     const teamId =
       currentUser.role === 'leader'
-        ? ((await findOwnTeamId(this.prisma, currentUser.id)) ?? '__none__')
+        ? ((await findOwnTeamId(this.prisma, currentUser.id)) ?? NO_MATCH_UUID)
         : query.team_id;
     const accountId =
       currentUser.role === 'sale' ? currentUser.id : query.account_id;
@@ -775,7 +776,7 @@ export class DashboardService {
             {
               assignedTeamId:
                 (await findOwnTeamId(this.prisma, currentUser.id)) ??
-                '__none__',
+                NO_MATCH_UUID,
             },
             { assignedTeamId: null },
           ],
@@ -807,7 +808,7 @@ export class DashboardService {
       if (teamId) where.assignedTeamId = teamId;
     } else if (currentUser.role === 'leader' || currentUser.role === 'sale') {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
-      where.assignedTeamId = ownTeamId ?? '__none__';
+      where.assignedTeamId = ownTeamId ?? NO_MATCH_UUID;
     } else {
       return 0;
     }
@@ -828,7 +829,7 @@ export class DashboardService {
     if (currentUser.role === 'leader' && query.account_id) {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       const member = await this.prisma.account.findFirst({
-        where: { id: query.account_id, teamId: ownTeamId ?? '__none__' },
+        where: { id: query.account_id, teamId: ownTeamId ?? NO_MATCH_UUID },
         select: { id: true },
       });
       return { ...query, team_id: undefined, account_id: member?.id };
