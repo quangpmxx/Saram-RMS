@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDMY, formatHMDMY } from "@/lib/date-format";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -44,11 +44,33 @@ import {
   canProcessLead,
   canQuickEditLead,
   canToggleHold as canToggleLeadHold,
+  heldByOther,
   type LeadViewer,
 } from "@/lib/lead-permissions";
 import { InlineNoteComposer } from "./inline-note-composer";
 import { NoteTimeline } from "../note-timeline";
 import { ActivityPanel } from "./activity-panel";
+
+/** Ẩn/hiện khung Lịch sử truy cập & thao tác — mặc định ẩn, nhớ lựa chọn trên trình duyệt (2026-11-06). */
+const ACTIVITY_COLLAPSED_KEY = "saram.lead-detail.activity-collapsed";
+const activityCollapsedListeners = new Set<() => void>();
+let activityCollapsedMemory: boolean | null = null;
+
+function readActivityCollapsed(): boolean {
+  if (activityCollapsedMemory !== null) return activityCollapsedMemory;
+  try {
+    return localStorage.getItem(ACTIVITY_COLLAPSED_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function subscribeActivityCollapsed(callback: () => void) {
+  activityCollapsedListeners.add(callback);
+  return () => {
+    activityCollapsedListeners.delete(callback);
+  };
+}
 
 
 function formatDateTime(value: string): string {
@@ -89,6 +111,17 @@ export function CandidateDetailClient({
   const router = useRouter();
   const [candidate, setCandidate] = useState(initialCandidate);
   const [notes, setNotes] = useState(initialNotes);
+  // Ẩn/hiện khung Lịch sử truy cập & thao tác; nhớ lựa chọn trên trình duyệt này.
+  const activityCollapsed = useSyncExternalStore(subscribeActivityCollapsed, readActivityCollapsed, () => true);
+  function toggleActivityCollapsed() {
+    activityCollapsedMemory = !readActivityCollapsed();
+    try {
+      localStorage.setItem(ACTIVITY_COLLAPSED_KEY, activityCollapsedMemory ? "1" : "0");
+    } catch {
+      // Trình duyệt chặn lưu: vẫn đổi trong phiên này.
+    }
+    activityCollapsedListeners.forEach((l) => l());
+  }
   const toast = useToast();
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
   // UI Polish — "Tình trạng cuộc gọi"/"Kết quả cuộc gọi" đổi từ popup sang
@@ -178,7 +211,7 @@ export function CandidateDetailClient({
   // mình); Admin/Quản lý kế thừa quyền này không giới hạn (yêu cầu bổ sung
   // "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp dưới").
   // Sale giữ được mọi số mình xem được (rà soát phân quyền 2026-10-30). Số
-  // người khác đang giữ: chỉ người giữ (hoặc Admin) bỏ giữ — khớp setHold().
+  // người khác đang giữ: người giữ, Leader nhóm, Quản lý, Admin bỏ giữ được — khớp setHold().
   const canToggleHold = canToggleLeadHold(candidate, viewer);
   // Sửa nhanh Năm sinh/Địa chỉ — khớp assertCanQuickEdit() ở backend.
   const canQuickEdit = !isReadOnly && canQuickEditLead(candidate, viewer);
@@ -189,6 +222,7 @@ export function CandidateDetailClient({
   const [isCareSubmitting, setIsCareSubmitting] = useState(false);
   const canToggleCare =
     !isReadOnly &&
+    !heldByOther(candidate, viewer) &&
     (currentUserRole === "admin" ||
       currentUserRole === "manager" ||
       (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId) ||
@@ -200,19 +234,23 @@ export function CandidateDetailClient({
   const visibleNotes = notes.filter((note) => !note.is_deleted);
   // Sale: chỉ ghi chú của chính mình; Admin/Quản lý kế thừa quyền này, xóa được ghi chú bất kỳ.
   // Leader xoá được ghi chú của mọi Sale trên data nhóm mình (rà soát phân quyền 2026-10-30).
+  // Số người khác đang giữ: không ai sửa/xoá ghi chú được (2026-11-06).
+  const isHeldByOther = heldByOther(candidate, viewer);
   const canDeleteNote = (note: Note) =>
+    !isHeldByOther && (
     currentUserRole === "admin" ||
     currentUserRole === "manager" ||
     (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
-    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId);
+    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
   // Sửa ghi chú — khớp đúng phạm vi quyền của updateNote() ở backend
   // (lead-pipeline.service.ts): Sale (ghi chú của mình), Leader (ghi chú
   // trên lead thuộc nhóm mình), Quản lý/Admin (không giới hạn), MKT không có quyền.
   const canEditNote = (note: Note) =>
+    !isHeldByOther && (
     currentUserRole === "admin" ||
     currentUserRole === "manager" ||
     (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
-    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId);
+    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
 
   async function refreshNotes() {
     const result = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
@@ -608,7 +646,14 @@ export function CandidateDetailClient({
   return (
     // Màn rộng: dữ liệu bên trái, lịch sử truy cập/thao tác cố định bên phải
     // (yêu cầu người dùng 2026-10-29); màn hẹp: lịch sử xuống dưới.
-    <div className="mx-auto grid max-w-[1440px] gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+    // Khi ẩn lịch sử: cột phải thu còn dải hẹp chỉ có nút "Hiện".
+    <div
+      className={
+        activityCollapsed
+          ? "mx-auto grid max-w-[1440px] gap-5 xl:grid-cols-[minmax(0,1fr)_44px]"
+          : "mx-auto grid max-w-[1440px] gap-5 xl:grid-cols-[minmax(0,1fr)_360px]"
+      }
+    >
       <div className="min-w-0">
         <Link
           href="/candidates"
@@ -1054,7 +1099,13 @@ export function CandidateDetailClient({
       </div>
       <ActivityPanel
         candidateId={candidate.id}
-        className="h-[520px] xl:sticky xl:top-0 xl:h-[calc(100vh-7.5rem)]"
+        collapsed={activityCollapsed}
+        onToggleCollapsed={toggleActivityCollapsed}
+        className={
+          activityCollapsed
+            ? "xl:sticky xl:top-0 xl:h-[calc(100vh-7.5rem)]"
+            : "h-[520px] xl:sticky xl:top-0 xl:h-[calc(100vh-7.5rem)]"
+        }
       />
     </div>
   );

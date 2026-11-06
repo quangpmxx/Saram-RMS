@@ -14,6 +14,10 @@ import {
   SORT_ORDERS,
   type SortOrder,
 } from '../../common/utils/sort-order.util';
+import {
+  NOTE_COLOR_FILTERS,
+  type NoteColorFilter,
+} from '../../care-warehouse/dto/list-care-warehouse-query.dto';
 
 /** Cột bấm để sắp xếp ở tab Tất cả/Chờ phân chia: STT (thứ tự mặc định) / Ngày lên số. */
 export const CANDIDATE_SORTS = ['stt', 'date'] as const;
@@ -114,6 +118,11 @@ export class ListCandidatesQueryDto {
   @IsOptional()
   @IsIn(LEAD_STATE_FILTERS)
   lead_state?: LeadStateFilter;
+
+  /** Bộ lọc "Đánh giá" — màu đánh dấu của data (2026-11-06). */
+  @IsOptional()
+  @IsIn(NOTE_COLOR_FILTERS)
+  note_color?: NoteColorFilter;
 
   @IsOptional()
   @IsIn(CANDIDATE_SORTS)

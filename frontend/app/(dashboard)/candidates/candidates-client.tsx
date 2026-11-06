@@ -3,6 +3,7 @@
 import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMY } from "@/lib/date-format";
 import { LEAD_STATE_OPTIONS, type LeadStateFilter } from "@/lib/lead-state";
+import { NoteColorFilter, type NoteColorValue } from "./note-color-filter";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
@@ -41,6 +42,7 @@ import {
   canDeleteLeads,
   canEditLead,
   canProcessLead,
+  heldByOther,
   type LeadViewer,
 } from "@/lib/lead-permissions";
 import { zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
@@ -137,6 +139,8 @@ interface Filters {
   source_id: string;
   /** Trạng thái data: "" = tất cả. Có thể thiếu ở trạng thái danh sách đã lưu từ bản cũ. */
   lead_state?: LeadStateFilter;
+  /** Bộ lọc "Đánh giá" — màu đánh dấu: "" = tất cả. Có thể thiếu ở trạng thái đã lưu từ bản cũ. */
+  note_color?: NoteColorValue | "";
   team_sale: TeamSaleValue | null;
   /** Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng chung (xem components/ui/date-range-picker.tsx). */
   date: DateRangeValue;
@@ -253,6 +257,8 @@ export function CandidatesClient({
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers);
   const [notesByLeadId, setNotesByLeadId] = useState<Map<string, Note[]>>(new Map());
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  // Leader: ẩn/hiện khối "Khối lượng công việc nhóm" (mặc định ẩn cho thoáng).
+  const [isTeamWorkloadOpen, setIsTeamWorkloadOpen] = useState(false);
   const [isAutoUpOpen, setIsAutoUpOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   /** Người dùng đã tự bấm chọn tab — khôi phục trạng thái cũ (sessionStorage) không được đè lên. */
@@ -380,6 +386,7 @@ export function CandidatesClient({
     if (mktSourceFilter && mode === "all") query.set("mkt_source_id", mktSourceFilter);
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
     if (activeFilters.lead_state) query.set("lead_state", activeFilters.lead_state);
+    if (activeFilters.note_color) query.set("note_color", activeFilters.note_color);
     if (activeFilters.team_sale?.type === "team") query.set("team_id", activeFilters.team_sale.id);
     if (activeFilters.team_sale?.type === "sale") query.set("assigned_to", activeFilters.team_sale.id);
     // DateRangePicker đã tự quy đổi preset ("7 ngày qua"...) thành from/to cụ
@@ -607,6 +614,29 @@ export function CandidatesClient({
   async function handlePageSizeChange(nextSize: (typeof PAGE_SIZE_OPTIONS)[number]) {
     await refresh(1, viewMode, nextSize);
   }
+
+  // Thanh "Khối lượng công việc nhóm" (Leader, 2026-11-06): số data mỗi Sale
+  // nhận (không tính lượt giao từ Kho chăm sóc), theo bộ lọc "Ngày lên số" của
+  // tab Tất cả. Tải riêng để không ảnh hưởng số "đang phụ trách" ở hộp chọn Sale.
+  const [workloadMembers, setWorkloadMembers] = useState(initialTeamMembers);
+  const workloadFrom = filters.date.from;
+  const workloadTo = filters.date.to;
+  useEffect(() => {
+    if (currentUserRole !== "leader" || !currentUserTeamId) return;
+    const query = new URLSearchParams();
+    if (workloadFrom) query.set("date_from", new Date(workloadFrom).toISOString());
+    if (workloadTo) query.set("date_to", new Date(`${workloadTo}T23:59:59.999`).toISOString());
+    let cancelled = false;
+    clientApi<TeamMember[]>(`/team/${currentUserTeamId}/member?${query.toString()}`)
+      .then((members) => {
+        if (!cancelled) setWorkloadMembers(members);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // teamMembers: tải lại sau khi chia/chuyển data (refreshTeamMembers).
+  }, [currentUserRole, currentUserTeamId, workloadFrom, workloadTo, teamMembers]);
 
   async function refreshTeamMembers(teamId: string) {
     const members = await clientApi<TeamMember[]>(`/team/${teamId}/member`);
@@ -1060,7 +1090,7 @@ export function CandidatesClient({
             Duyệt đóng
           </ActionLink>
         )}
-        {canDeleteAny && (
+        {canDeleteAny && !heldByOther(candidate, viewer) && (
           <ActionLink
             icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={2} />}
             title="Xóa"
@@ -1085,12 +1115,24 @@ export function CandidatesClient({
 
       {currentUserRole === "leader" && teamMembers.length > 0 && (
         <Card className="mb-2 p-2.5">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+          <div className={cn("flex items-center justify-between gap-2", isTeamWorkloadOpen && "mb-1.5")}>
+            <button
+              type="button"
+              onClick={() => setIsTeamWorkloadOpen((v) => !v)}
+              aria-expanded={isTeamWorkloadOpen}
+              className="flex items-center gap-2 text-xs font-semibold text-slate-800 hover:text-brand-700"
+            >
               <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
               Khối lượng công việc nhóm
-            </div>
-            {currentUserTeamId && (
+              <span className="font-normal text-brand-600">
+                {isTeamWorkloadOpen ? "Ẩn bớt" : "Xem chi tiết"}
+              </span>
+              <ChevronDown
+                className={cn("h-3.5 w-3.5 text-brand-600 transition-transform", isTeamWorkloadOpen && "rotate-180")}
+                strokeWidth={2}
+              />
+            </button>
+            {isTeamWorkloadOpen && currentUserTeamId && (
               <Button
                 type="button"
                 size="sm"
@@ -1102,13 +1144,15 @@ export function CandidatesClient({
               </Button>
             )}
           </div>
+          {isTeamWorkloadOpen && (
           <div className="flex flex-wrap gap-2">
-            {teamMembers.map((member) => (
+            {workloadMembers.map((member) => (
               <Badge key={member.id} variant="info">
-                {member.full_name}: {member.assigned_count} lead
+                {member.full_name}: {member.assigned_count} Data nóng
               </Badge>
             ))}
           </div>
+          )}
         </Card>
       )}
 
@@ -1327,6 +1371,12 @@ export function CandidatesClient({
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field uiSize="xs" label="Đánh giá">
+              <NoteColorFilter
+                value={filters.note_color}
+                onChange={(next) => applyFiltersNow({ ...filters, note_color: next })}
+              />
             </Field>
             <Field uiSize="xs" label="Ngày lên số" className="w-40">
               <DateRangePicker
@@ -2216,7 +2266,7 @@ function AssignModal({
             <option value="">— Chọn Sale —</option>
             {members.map((member) => (
               <option key={member.id} value={member.id}>
-                {member.full_name} ({member.assigned_count} lead đang phụ trách)
+                {member.full_name} ({member.assigned_count} data đang phụ trách)
               </option>
             ))}
           </Select>
@@ -2308,7 +2358,7 @@ function TransferModal({
             <option value="">— Chọn Sale —</option>
             {members?.map((member) => (
               <option key={member.id} value={member.id}>
-                {member.full_name} ({member.assigned_count} lead đang phụ trách)
+                {member.full_name} ({member.assigned_count} data đang phụ trách)
               </option>
             ))}
           </Select>

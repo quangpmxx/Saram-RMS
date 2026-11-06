@@ -1568,10 +1568,11 @@ export function ShuttleClient({
               <col className="w-[120px]" />
               <col className="w-[110px]" />
               <col className="w-[120px]" />
-              <col className="w-[140px]" />
+              {/* NV Đưa đón +20% (140→168), Tình trạng +25% (110→138) — yêu cầu người dùng 2026-11-06. */}
+              <col className="w-[168px]" />
               <col className="w-[90px]" />
               <col className="w-[98px]" />
-              <col className="w-[110px]" />
+              <col className="w-[138px]" />
               <col className="w-[110px]" />
               {/* Nguồn (Data/GT) — vừa đủ dữ liệu (yêu cầu người dùng 2026-11-04). */}
               <col className="w-[76px]" />

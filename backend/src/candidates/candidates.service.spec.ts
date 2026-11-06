@@ -571,7 +571,7 @@ describe('CandidatesService', () => {
       ).resolves.toBeDefined();
     });
 
-    it('Dự án phụ — nâng cấp toàn diện: lead đang giữ số — Admin vẫn sửa được bình thường (full quyền)', async () => {
+    it('lead đang giữ số — Admin cũng KHÔNG sửa được (2026-11-06: chỉ người giữ thao tác)', async () => {
       const heldLead = {
         ...baseLead,
         assignedToId: 'sale-1',
@@ -579,12 +579,11 @@ describe('CandidatesService', () => {
         heldById: 'sale-1',
       };
       prisma.lead.findUnique.mockResolvedValue(heldLead);
-      prisma.lead.update.mockResolvedValue(heldLead);
-      prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
 
       await expect(
         service.update('lead-1', { full_name: 'X' }, adminUser),
-      ).resolves.toBeDefined();
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.lead.update).not.toHaveBeenCalled();
     });
 
     it('đổi SĐT → đồng bộ lại cờ trùng cho cả nhóm SĐT cũ và mới', async () => {
@@ -652,11 +651,28 @@ describe('CandidatesService', () => {
       await expect(
         service.removeBulk(['lead-1', 'lead-2', 'lead-x', 'lead-1'], mktUser),
       ).resolves.toEqual({ deleted_count: 1, skipped_count: 2 });
-      expect(prisma.lead.update).toHaveBeenCalledTimes(1);
-      expect(prisma.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
+      expect(prisma.lead.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          OR: [{ isHeld: false }, { heldById: mktUser.id }],
+        },
         data: { deletedAt: expect.any(Date), deletedById: mktUser.id },
       });
+    });
+
+    it('bỏ qua số người khác đang giữ (kể cả Admin xoá)', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        isHeld: true,
+        heldById: 'sale-1',
+      });
+      await expect(service.removeBulk(['lead-1'], adminUser)).resolves.toEqual({
+        deleted_count: 0,
+        skipped_count: 1,
+      });
+      expect(prisma.lead.updateMany).not.toHaveBeenCalled();
     });
 
     it('Leader không có quyền xoá → không xoá data nào', async () => {
@@ -677,8 +693,12 @@ describe('CandidatesService', () => {
       await expect(
         service.remove('lead-1', adminUser),
       ).resolves.toBeUndefined();
-      expect(prisma.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          OR: [{ isHeld: false }, { heldById: adminUser.id }],
+        },
         data: { deletedAt: expect.any(Date), deletedById: adminUser.id },
       });
     });
@@ -829,18 +849,31 @@ describe('CandidatesService', () => {
       );
     });
 
-    it('Giữ số bởi Admin/Quản lý: không bị chặn bởi điều kiện "chưa ai giữ" (ghi đè như quy tắc cũ)', async () => {
+    it('Giữ số bởi Admin/Quản lý: KHÔNG giữ đè số người khác đang giữ (2026-11-06)', async () => {
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+
+      await expect(service.hold('lead-1', managerUser)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      await expect(service.hold('lead-1', adminUser)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.lead.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('Giữ số bởi Quản lý: điều kiện "chưa ai giữ" nằm trong câu lệnh ghi', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
       prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
 
       await service.hold('lead-1', managerUser);
 
-      const where = (
-        prisma.lead.updateMany.mock.calls[0] as [
-          { where: Record<string, unknown> },
-        ]
-      )[0].where;
-      expect(where.OR).toBeUndefined();
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ isHeld: false }, { heldById: managerUser.id }],
+          }),
+        }),
+      );
     });
 
     it('Race: bỏ giữ số khi số vừa được người khác giữ → ConflictException', async () => {
@@ -869,12 +902,36 @@ describe('CandidatesService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
-    it('Bỏ giữ số (unhold): Quản lý KHÔNG phải người giữ số thì KHÔNG bỏ được', async () => {
+    it('Bỏ giữ số (unhold): Quản lý bỏ được số người khác đang giữ (2026-11-06)', async () => {
       prisma.lead.findUnique.mockResolvedValue(heldLead);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(heldLead);
 
       await expect(
         service.unhold('lead-1', managerUser),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).resolves.toBeDefined();
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          isHeld: true,
+          heldById: 'sale-1',
+        },
+        data: { isHeld: false, heldById: null, heldAt: null },
+      });
+    });
+
+    it('Bỏ giữ số (unhold): Leader nhóm của data bỏ được, Leader nhóm khác thì không', async () => {
+      const teamHeld = { ...heldLead, assignedTeamId: 'team-1' };
+      prisma.lead.findUnique.mockResolvedValue(teamHeld);
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(teamHeld);
+
+      prisma.account.findUnique.mockResolvedValueOnce({ teamId: 'team-1' });
+      await expect(service.unhold('lead-1', leaderUser)).resolves.toBeDefined();
+
+      prisma.account.findUnique.mockResolvedValueOnce({ teamId: 'team-2' });
+      await expect(service.unhold('lead-1', leaderUser)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
     it('Bỏ giữ số (unhold): Admin bỏ được bất kỳ lead nào, bất kể ai đang giữ', async () => {
@@ -1137,7 +1194,12 @@ describe('CandidatesService', () => {
       ).resolves.toBeDefined();
 
       expect(prisma.lead.updateMany).toHaveBeenCalledWith({
-        where: { id: 'lead-1', deletedAt: null, assignedToId: null },
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          assignedToId: null,
+          OR: [{ isHeld: false }, { heldById: 'sale-1' }],
+        },
         data: {
           assignedToId: 'sale-1',
           assignedTeamId: 'team-1',
@@ -1196,7 +1258,12 @@ describe('CandidatesService', () => {
       ).resolves.toBeDefined();
 
       expect(prisma.lead.updateMany).toHaveBeenCalledWith({
-        where: { id: 'lead-1', deletedAt: null, assignedToId: null },
+        where: {
+          id: 'lead-1',
+          deletedAt: null,
+          assignedToId: null,
+          OR: [{ isHeld: false }, { heldById: 'sale-1' }],
+        },
         data: {
           assignedToId: 'sale-1',
           assignedTeamId: 'team-1',
@@ -1263,6 +1330,7 @@ describe('CandidatesService', () => {
           id: { in: ['lead-1', 'lead-2', 'lead-3'] },
           deletedAt: null,
           assignedToId: null,
+          OR: [{ isHeld: false }, { heldById: 'sale-1' }],
         },
         select: { id: true },
       });

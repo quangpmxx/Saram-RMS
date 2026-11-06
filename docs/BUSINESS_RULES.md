@@ -23,7 +23,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 - Trùng SĐT: **vẫn cho up**, chỉ cảnh báo. **Chu kỳ lọc trùng 30 ngày**: chỉ tính trùng khi 2 lần up cách nhau <30 ngày (`LeadDuplicateService`). Số up lại trong 30 ngày kể từ lần up gốc (sớm nhất trong 30 ngày qua) **tự chuyển về nhóm đang giữ số gốc** (nhập tay + import Excel; không áp dụng "Up data cũ"), cảnh báo báo rõ đã chuyển nhóm. Cùng nhóm: đánh dấu màu; khác nhóm: Sale không thấy, MKT/Quản lý/Admin thấy hết.
 - Ghi chú chỉ **thêm**, không ghi đè; xoá là xoá mềm (giữ lịch sử).
 - Gán lead (đơn/hàng loạt) phải an toàn khi nhiều người bấm cùng lúc: người đến sau nhận lỗi 409.
-- "Giữ số": Sale giữ riêng lead, không giới hạn số lượng.
+- "Giữ số": Sale (và Quản lý/Admin) giữ riêng lead, không giới hạn số lượng. Số đang giữ (duyệt 2026-11-06): **chỉ người giữ** thao tác được (sửa, ghi chú, trạng thái, Zalo, lịch PV/gọi lại, xoá, chia/chuyển, dừng chăm sóc) — mọi người khác, kể cả Leader/Quản lý/Admin, bị chặn; không ai giữ đè. Người khác chỉ được **bỏ giữ số**: Leader nhóm của data, Quản lý, Admin. Ngoại lệ: Leader/Quản lý/Admin vẫn duyệt/từ chối được đề nghị đóng data mà người giữ gửi. Kiểm ở `common/utils/lead-hold.util.ts` + `lib/lead-permissions.ts`.
 - Sale nhận data (thủ công/hàng loạt/tự động) được thông báo.
 
 ## Kho chăm sóc

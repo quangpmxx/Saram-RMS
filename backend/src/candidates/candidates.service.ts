@@ -49,6 +49,7 @@ import { LeadAssignmentNoticeService } from '../notification/lead-assignment-not
 import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { RealtimeService } from '../realtime/realtime.service';
 import { findOwnTeamId } from '../common/utils/account-team.util';
+import { assertNotHeldByOther } from '../common/utils/lead-hold.util';
 
 /** Mục 8, docs/09: Admin/Quản lý/Leader có quyền chia (cho người khác)/chuyển lead. */
 const ASSIGNMENT_ROLES = new Set(['admin', 'manager', 'leader']);
@@ -156,6 +157,9 @@ export class CandidatesService {
         contains: query.partner_company_name,
         mode: 'insensitive',
       };
+    }
+    if (query.note_color) {
+      where.noteColor = query.note_color;
     }
     if (query.lead_state === 'held') {
       where.isHeld = true;
@@ -613,10 +617,10 @@ export class CandidatesService {
    * Mục 6, docs/13: DELETE /candidate/:id/hold.
    *
    * Dự án phụ — nâng cấp toàn diện (bổ sung nghiệp vụ ngoài docs/09-13 gốc,
-   * yêu cầu trực tiếp người dùng): CHỈ người ĐANG giữ số (lead.heldById)
-   * mới được bỏ giữ — người khác (kể cả Quản lý, kể cả Sale đang phụ trách
-   * lead nhưng không phải người giữ) không bỏ được. Admin có full quyền,
-   * bỏ được bất kỳ lead nào bất kể ai đang giữ.
+   * yêu cầu trực tiếp người dùng): bỏ giữ được bởi người ĐANG giữ số, Admin,
+   * Quản lý, và Leader của nhóm đang có data (2026-11-06) — Sale khác (kể cả
+   * Sale đang phụ trách nhưng không phải người giữ) không bỏ được. Đây là
+   * thao tác DUY NHẤT người khác được làm trên số đang giữ.
    */
   async unhold(
     id: string,
@@ -629,8 +633,9 @@ export class CandidatesService {
    * Admin/Quản lý kế thừa toàn bộ quyền nghiệp vụ của Sale (yêu cầu bổ
    * sung "Admin và Quản lý phải có toàn bộ quyền của các vai trò cấp
    * dưới") — không giới hạn theo người phụ trách, khác Sale (chỉ lead
-   * của mình). Riêng BỎ giữ số (isHeld=false) có thêm ràng buộc: chỉ đúng
-   * người đang giữ số hoặc Admin mới được bỏ (xem unhold()).
+   * của mình). Từ 2026-11-06: KHÔNG ai giữ đè lên số người khác đang giữ
+   * (kể cả Admin/Quản lý); bỏ giữ số người khác: Admin, Quản lý, Leader nhóm
+   * của data (xem unhold()).
    */
   private async setHold(
     id: string,
@@ -641,46 +646,53 @@ export class CandidatesService {
     if (!lead || lead.deletedAt) {
       throw new NotFoundException('Không tìm thấy ứng viên');
     }
+    const heldByOther = lead.isHeld && lead.heldById !== currentUser.id;
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-      // không giới hạn theo người phụ trách.
-    } else if (currentUser.role === 'sale') {
-      // Sale giữ được mọi số mình xem được, kể cả data không do mình phụ
-      // trách (rà soát phân quyền 2026-10-30) — trừ số người khác đang giữ.
-      await this.assertInScope(lead, currentUser);
-      if (isHeld && lead.isHeld && lead.heldById !== currentUser.id) {
-        throw new ForbiddenException('Số này đang được người khác giữ');
+    if (isHeld) {
+      if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+        // không giới hạn theo người phụ trách.
+      } else if (currentUser.role === 'sale') {
+        // Sale giữ được mọi số mình xem được, kể cả data không do mình phụ
+        // trách (rà soát phân quyền 2026-10-30).
+        await this.assertInScope(lead, currentUser);
+      } else {
+        throw new ForbiddenException(
+          'Chỉ Sale, Quản lý hoặc Admin mới được giữ số',
+        );
       }
-    } else {
-      throw new ForbiddenException(
-        'Chỉ Sale, Quản lý hoặc Admin mới được đánh dấu/bỏ đánh dấu giữ số',
-      );
-    }
-
-    if (
-      !isHeld &&
-      currentUser.role !== 'admin' &&
-      lead.isHeld &&
-      lead.heldById !== currentUser.id
+      if (heldByOther) {
+        throw new ForbiddenException(
+          'Số này đang được người khác giữ — cần bỏ giữ số trước',
+        );
+      }
+    } else if (heldByOther) {
+      let allowed =
+        currentUser.role === 'admin' || currentUser.role === 'manager';
+      if (currentUser.role === 'leader') {
+        const teamId = await findOwnTeamId(this.prisma, currentUser.id);
+        allowed = Boolean(teamId && lead.assignedTeamId === teamId);
+      }
+      if (!allowed) {
+        throw new ForbiddenException(
+          'Chỉ người đang giữ số, Leader nhóm, Quản lý hoặc Admin mới được bỏ giữ số',
+        );
+      }
+    } else if (
+      !['admin', 'manager', 'sale', 'leader'].includes(currentUser.role)
     ) {
-      throw new ForbiddenException(
-        'Chỉ người đang giữ số này (hoặc Admin) mới được bỏ giữ số',
-      );
+      throw new ForbiddenException('Bạn không có quyền bỏ giữ số');
     }
 
     // Rà soát 2026-10-31: kiểm tra quyền ở trên đọc lead TRƯỚC khi ghi — 2 người
     // bấm "Giữ số" cùng lúc đều qua được kiểm tra rồi người sau đè người trước
     // (cả hai đều báo thành công). Đưa điều kiện vào chính câu lệnh ghi để chỉ
-    // một người thắng; Admin (và Quản lý khi giữ số) vẫn ghi đè như quy tắc cũ.
-    const unrestricted =
-      currentUser.role === 'admin' ||
-      (currentUser.role === 'manager' && isHeld);
+    // một người thắng. Bỏ giữ số người khác: chỉ ghi khi vẫn đúng người đã kiểm.
     const { count } = await this.prisma.lead.updateMany({
       where: {
         id,
         deletedAt: null,
-        ...(unrestricted
-          ? {}
+        ...(!isHeld && heldByOther
+          ? { isHeld: true, heldById: lead.heldById }
           : { OR: [{ isHeld: false }, { heldById: currentUser.id }] }),
       },
       data: isHeld
@@ -756,11 +768,22 @@ export class CandidatesService {
     }
 
     this.assertCanDelete(currentUser);
+    assertNotHeldByOther(existing, currentUser);
 
-    await this.prisma.lead.update({
-      where: { id },
+    // Điều kiện giữ số nằm trong câu lệnh ghi: ai đó vừa giữ số thì không xoá.
+    const { count } = await this.prisma.lead.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        OR: [{ isHeld: false }, { heldById: currentUser.id }],
+      },
       data: { deletedAt: new Date(), deletedById: currentUser.id },
     });
+    if (count === 0) {
+      throw new ForbiddenException(
+        'Số này vừa được người khác giữ — không xoá được',
+      );
+    }
 
     // Xóa mềm không tự động gỡ cờ "Trùng SĐT" ở các lead còn lại cùng SĐT —
     // tính lại đúng như create()/update() (LeadDuplicateService.syncDuplicateFlags
@@ -859,7 +882,7 @@ export class CandidatesService {
     }
     if (lead.assignedToId) {
       throw new BadRequestException(
-        'Ứng viên đã được phân chia — dùng chức năng Chuyển lead để đổi người phụ trách',
+        'Ứng viên đã được phân chia — dùng chức năng Chuyển data để đổi người phụ trách',
       );
     }
 
@@ -867,12 +890,23 @@ export class CandidatesService {
       dto.account_id,
       currentUser,
     );
+    // Số đang giữ: chỉ người giữ được chia (cho chính mình) — 2026-11-06.
+    if (lead.isHeld && lead.heldById !== target.id) {
+      throw new UnprocessableEntityException(
+        'Ứng viên đang được giữ số — không chia cho người khác cho tới khi bỏ giữ số',
+      );
+    }
 
     // Ghi CÓ ĐIỀU KIỆN "chưa có người phụ trách" trong cùng câu lệnh: 2 người
     // bấm Nhận/phân chia cùng lúc thì chỉ 1 người thành công (rà soát
     // 2026-10-30 — trước đây người sau đè người trước).
     const { count } = await this.prisma.lead.updateMany({
-      where: { id, deletedAt: null, assignedToId: null },
+      where: {
+        id,
+        deletedAt: null,
+        assignedToId: null,
+        OR: [{ isHeld: false }, { heldById: target.id }],
+      },
       data: {
         assignedToId: target.id,
         assignedTeamId: target.teamId,
@@ -914,11 +948,16 @@ export class CandidatesService {
       currentUser,
     );
 
+    // Bỏ qua số người khác đang giữ (2026-11-06).
+    const notHeldByOther = {
+      OR: [{ isHeld: false }, { heldById: target.id }],
+    };
     const eligible = await this.prisma.lead.findMany({
       where: {
         id: { in: dto.candidate_ids },
         deletedAt: null,
         assignedToId: null,
+        ...notHeldByOther,
       },
       select: { id: true },
     });
@@ -934,6 +973,7 @@ export class CandidatesService {
         id: { in: eligible.map((lead) => lead.id) },
         deletedAt: null,
         assignedToId: null,
+        ...notHeldByOther,
       },
       data: {
         assignedToId: target.id,
@@ -1411,23 +1451,15 @@ export class CandidatesService {
    * Dự án phụ — nâng cấp toàn diện (bổ sung nghiệp vụ ngoài docs/09-13 gốc,
    * yêu cầu trực tiếp người dùng): lead đang được giữ số (isHeld=true) thì
    * CHỈ đúng người đang giữ (heldById) mới sửa được — người khác (kể cả
-   * Quản lý) đều bị chặn. Admin có full quyền, không bị ràng buộc này.
+   * Quản lý, và từ 2026-11-06 kể cả Admin) đều bị chặn.
    */
   private async assertCanModify(
     lead: Lead,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
-    if (currentUser.role === 'admin') {
-      return;
-    }
+    assertNotHeldByOther(lead, currentUser);
 
-    if (lead.isHeld && lead.heldById !== currentUser.id) {
-      throw new ForbiddenException(
-        'Ứng viên này đang được giữ số, chỉ người đang giữ mới sửa được',
-      );
-    }
-
-    if (currentUser.role === 'manager') {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       return;
     }
 
@@ -1485,19 +1517,19 @@ export class CandidatesService {
    * Sửa nhanh Năm sinh/Địa chỉ (rà soát phân quyền 2026-10-30): ai được sửa
    * data (assertCanModify) HOẶC được xử lý hộ data đó (Sale/Leader cùng
    * nhóm, data đã có người phụ trách) — người gọi điện cập nhật được thông
-   * tin vừa hỏi. Data người khác đang giữ số: chỉ người giữ (hoặc Admin).
+   * tin vừa hỏi. Data người khác đang giữ số: chỉ người giữ (cả Admin bị chặn).
    */
   private async assertCanQuickEdit(
     lead: Lead,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
-    if (currentUser.role === 'admin') return;
-    if (lead.isHeld && lead.heldById !== currentUser.id) {
-      throw new ForbiddenException(
-        'Ứng viên này đang được giữ số, chỉ người đang giữ mới sửa được',
-      );
-    }
-    if (currentUser.role === 'manager' || currentUser.role === 'mkt') return;
+    assertNotHeldByOther(lead, currentUser);
+    if (
+      currentUser.role === 'admin' ||
+      currentUser.role === 'manager' ||
+      currentUser.role === 'mkt'
+    )
+      return;
     if (currentUser.role === 'sale' || currentUser.role === 'leader') {
       if (lead.assignedToId === currentUser.id) return;
       const teamId = await findOwnTeamId(this.prisma, currentUser.id);

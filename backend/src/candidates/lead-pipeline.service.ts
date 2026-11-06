@@ -8,6 +8,7 @@ import { Lead } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
+import { assertNotHeldByOther } from '../common/utils/lead-hold.util';
 import { CandidatesService } from './candidates.service';
 import {
   CANDIDATE_INCLUDE,
@@ -383,6 +384,7 @@ export class LeadPipelineService {
     if (!note || note.leadId !== id || note.isDeleted) {
       throw new NotFoundException('Không tìm thấy ghi chú');
     }
+    await this.assertLeadNotHeldByOther(id, currentUser);
 
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       // không giới hạn.
@@ -457,6 +459,7 @@ export class LeadPipelineService {
     if (!note || note.leadId !== id || note.isDeleted) {
       throw new NotFoundException('Không tìm thấy ghi chú');
     }
+    await this.assertLeadNotHeldByOther(id, currentUser);
     const isFullAccess =
       currentUser.role === 'admin' || currentUser.role === 'manager';
     const isOwnNote =
@@ -704,6 +707,7 @@ export class LeadPipelineService {
           'Bạn chỉ được cập nhật lịch gọi lại của mình',
         );
       }
+      await this.assertLeadNotHeldByOther(callback.leadId, currentUser);
     } else {
       await this.loadLeadForUpdate(callback.leadId, currentUser);
     }
@@ -777,6 +781,7 @@ export class LeadPipelineService {
       if (callback.createdById !== currentUser.id) {
         throw new ForbiddenException('Bạn chỉ được xoá lịch gọi lại của mình');
       }
+      await this.assertLeadNotHeldByOther(callback.leadId, currentUser);
     } else {
       await this.loadLeadForUpdate(callback.leadId, currentUser);
     }
@@ -805,6 +810,18 @@ export class LeadPipelineService {
    * Quản lý, Admin. KHÔNG gồm MKT (khác với PUT /candidate/:id vốn cho MKT
    * sửa data do mình upload — đây là dữ liệu do Sale xử lý, không phải MKT).
    */
+  /** Chặn thao tác trên số người khác đang giữ (cả Admin) — dùng ở nhánh không qua loadLeadForUpdate. */
+  private async assertLeadNotHeldByOther(
+    leadId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { isHeld: true, heldById: true },
+    });
+    if (lead) assertNotHeldByOther(lead, currentUser);
+  }
+
   private async loadLeadForUpdate(
     id: string,
     currentUser: AuthenticatedUser,
@@ -813,6 +830,8 @@ export class LeadPipelineService {
     if (!lead || lead.deletedAt) {
       throw new NotFoundException('Không tìm thấy ứng viên');
     }
+    // Số đang giữ: chỉ người giữ thao tác được, kể cả Admin (2026-11-06).
+    assertNotHeldByOther(lead, currentUser);
 
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       return lead;

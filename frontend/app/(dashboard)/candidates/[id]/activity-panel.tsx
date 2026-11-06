@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, History, PencilLine } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Eye, History, PencilLine } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import type { LeadActivityItem } from "@/lib/types";
@@ -50,7 +50,18 @@ function timeLabel(date: Date): string {
   return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ActivityPanel({ candidateId, className }: { candidateId: string; className?: string }) {
+export function ActivityPanel({
+  candidateId,
+  className,
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  candidateId: string;
+  className?: string;
+  /** Ẩn phần danh sách (vẫn tải + ghi lượt truy cập như bình thường). */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   const [items, setItems] = useState<LeadActivityItem[] | null>(null);
   const [error, setError] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
@@ -125,12 +136,45 @@ export function ActivityPanel({ candidateId, className }: { candidateId: string;
     return result;
   }, [items, filter]);
 
+  if (collapsed) {
+    // Màn rộng: dải dọc hẹp; màn hẹp: 1 dòng. Bấm để hiện lại.
+    return (
+      <Card className={cn("overflow-hidden", className)}>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          title="Hiện lịch sử truy cập & thao tác"
+          className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 xl:h-full xl:flex-col xl:justify-start xl:px-0 xl:py-4"
+        >
+          <History className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} />
+          <span className="xl:[writing-mode:vertical-rl]">Lịch sử truy cập & thao tác</span>
+          <span className="ml-auto flex items-center gap-1 text-xs font-medium text-brand-600 xl:ml-0">
+            <ChevronDown className="h-3.5 w-3.5 xl:rotate-90" strokeWidth={2} />
+            <span className="xl:hidden">Hiện</span>
+          </span>
+        </button>
+      </Card>
+    );
+  }
+
   return (
     <Card className={cn("flex min-h-0 flex-col overflow-hidden", className)}>
       <div className="border-b border-slate-100 px-4 pt-4 pb-3">
         <div className="flex items-center gap-2">
           <History className="h-4 w-4 text-slate-500" strokeWidth={2} />
           <p className="text-sm font-semibold text-slate-800">Lịch sử truy cập & thao tác</p>
+          {onToggleCollapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              title="Ẩn lịch sử cho đỡ rối mắt"
+              className="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-brand-600 hover:bg-slate-100"
+            >
+              Ẩn
+              <ChevronRight className="hidden h-3.5 w-3.5 xl:block" strokeWidth={2} />
+              <ChevronUp className="h-3.5 w-3.5 xl:hidden" strokeWidth={2} />
+            </button>
+          )}
         </div>
         <div className="mt-3 flex gap-1.5">
           {FILTERS.map((f) => (

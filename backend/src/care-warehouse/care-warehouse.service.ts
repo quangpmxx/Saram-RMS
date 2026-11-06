@@ -10,6 +10,7 @@ import { CareAssignmentMethod, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { SYSTEM_USERNAME } from '../common/utils/system-account.util';
+import { assertNotHeldByOther } from '../common/utils/lead-hold.util';
 import {
   CANDIDATE_INCLUDE,
   CandidateResponseDto,
@@ -222,12 +223,13 @@ export class CareWarehouseService {
 
     const leads = await this.prisma.lead.findMany({
       where: leadWhere,
-      select: { id: true, uploadedAt: true },
+      select: { id: true, uploadedAt: true, noteColor: true },
     });
     const ids = leads.map((l) => l.id);
     const uploadedAt = new Map(
       leads.map((l) => [l.id, l.uploadedAt.getTime()]),
     );
+    const noteColor = new Map(leads.map((l) => [l.id, l.noteColor]));
 
     const { summaries, totals, lastAssigned } = await this.loadLeadSummaries(
       leadWhere,
@@ -334,6 +336,9 @@ export class CareWarehouseService {
       const up = uploadedAt.get(id)!;
       if (uploadedFrom !== null && up < uploadedFrom) return false;
       if (uploadedTo !== null && up >= uploadedTo) return false;
+      if (query.note_color && noteColor.get(id) !== query.note_color) {
+        return false;
+      }
       return true;
     });
 
@@ -992,11 +997,17 @@ export class CareWarehouseService {
       await this.lockLeads(tx, [leadId]);
       const lead = await tx.lead.findUnique({
         where: { id: leadId },
-        select: { assignedTeamId: true, deletedAt: true },
+        select: {
+          assignedTeamId: true,
+          deletedAt: true,
+          isHeld: true,
+          heldById: true,
+        },
       });
       if (!lead || lead.deletedAt) {
         throw new NotFoundException('Không tìm thấy data');
       }
+      assertNotHeldByOther(lead, user);
       this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
       const open = await this.loadOpenAssignments(
         tx,
@@ -1290,6 +1301,8 @@ export class CareWarehouseService {
         careStoppedAt: true,
         careStopRequestedAt: true,
         careStopRequestedById: true,
+        isHeld: true,
+        heldById: true,
       },
     });
     if (!lead || lead.deletedAt) {
@@ -1503,9 +1516,16 @@ export class CareWarehouseService {
   private assertCanStop(
     user: AuthenticatedUser,
     actorTeamId: string | null,
-    lead: { assignedTeamId: string | null; assignedToId: string | null },
+    lead: {
+      assignedTeamId: string | null;
+      assignedToId: string | null;
+      isHeld: boolean;
+      heldById: string | null;
+    },
     openAssigneeId: string | null,
   ): void {
+    // Số đang giữ: chỉ người giữ thao tác được, kể cả Admin (2026-11-06).
+    assertNotHeldByOther(lead, user);
     if (ALL_TEAMS_ROLES.has(user.role)) return;
     if (user.role === 'leader') {
       this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);

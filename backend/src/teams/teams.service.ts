@@ -181,12 +181,16 @@ export class TeamsService {
   /**
    * Mục 3, docs/13: danh sách nhân viên (Sale) trong nhóm kèm khối lượng lead
    * đang phụ trách. `assigned_count` có dữ liệu thật từ Phase 2 (đếm số
-   * `leads.assigned_to` chưa xóa mềm); `care_pool_count` luôn 0 tới khi
-   * Phase 5 dựng cột chăm sóc.
+   * `leads.assigned_to` chưa xóa mềm — data được chia/nhận, KHÔNG gồm lượt
+   * giao từ Kho chăm sóc vốn nằm ở bảng care_assignments); `care_pool_count`
+   * luôn 0 tới khi Phase 5 dựng cột chăm sóc.
+   * Có date_from/date_to (2026-11-06): chỉ đếm data có ngày lên số trong khoảng
+   * đó — khớp bộ lọc "Ngày lên số" ở tab Tất cả.
    */
   async getMembers(
     teamId: string,
     currentUser: AuthenticatedUser,
+    query: { date_from?: string; date_to?: string } = {},
   ): Promise<TeamMemberResponseDto[]> {
     const team = await this.prisma.team.findUnique({ where: { id: teamId } });
     if (!team) {
@@ -214,6 +218,14 @@ export class TeamsService {
       where: {
         assignedToId: { in: members.map((member) => member.id) },
         deletedAt: null,
+        ...(query.date_from || query.date_to
+          ? {
+              uploadedAt: {
+                gte: query.date_from ? new Date(query.date_from) : undefined,
+                lte: query.date_to ? new Date(query.date_to) : undefined,
+              },
+            }
+          : {}),
       },
       _count: { _all: true },
     });

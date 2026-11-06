@@ -198,7 +198,7 @@ describe('DashboardService', () => {
       const funnel = await service['computeFunnel']({});
 
       expect(funnel).toEqual([
-        { code: 'LEAD', label: 'Lead', count: 10, percentage: 100 },
+        { code: 'LEAD', label: 'Data', count: 10, percentage: 100 },
         {
           code: 'INTERVIEW_SCHEDULED',
           label: 'Hẹn PV',

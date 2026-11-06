@@ -15,6 +15,7 @@ import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
+import { TeamMembersQueryDto } from './dto/team-members-query.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -69,8 +70,9 @@ export class TeamsController {
   @Roles('admin', 'manager', 'leader')
   getMembers(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: TeamMembersQueryDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.teamsService.getMembers(id, user);
+    return this.teamsService.getMembers(id, user, query);
   }
 }

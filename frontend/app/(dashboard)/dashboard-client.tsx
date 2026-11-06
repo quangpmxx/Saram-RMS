@@ -865,7 +865,7 @@ export function DashboardClient({
               <dd className="font-semibold text-slate-900">{quickView.calls.toLocaleString("vi-VN")}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">Lead tiềm năng</dt>
+              <dt className="text-xs text-slate-500">Data tiềm năng</dt>
               <dd className="font-semibold text-slate-900">{quickView.potential_leads.toLocaleString("vi-VN")}</dd>
             </div>
             <div>

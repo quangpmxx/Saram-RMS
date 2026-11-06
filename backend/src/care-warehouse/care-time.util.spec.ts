@@ -1,4 +1,5 @@
 import {
+  countCareDays,
   TIMEZONE,
   vnDateOnly,
   vnMonthKey,
@@ -46,5 +47,25 @@ describe('care-time.util (tối ưu 2026-10-30: dùng chung 1 bộ định dạn
     expect(
       vnNextMonthStart(new Date('2026-12-15T00:00:00.000Z')).toISOString(),
     ).toBe('2026-12-31T17:00:00.000Z');
+  });
+});
+
+describe('countCareDays — đếm theo NGÀY LỊCH giờ VN, không phải 24 giờ', () => {
+  it('ghi chú 21h rồi 6h sáng hôm sau = 2 lượt (dù cách nhau chỉ 9 tiếng)', () => {
+    expect(
+      countCareDays([
+        new Date('2026-11-05T21:00:00+07:00'),
+        new Date('2026-11-06T06:00:00+07:00'),
+      ]),
+    ).toBe(2);
+  });
+
+  it('nhiều ghi chú trong cùng 1 ngày (0h01 và 23h59) = 1 lượt', () => {
+    expect(
+      countCareDays([
+        new Date('2026-11-06T00:01:00+07:00'),
+        new Date('2026-11-06T23:59:00+07:00'),
+      ]),
+    ).toBe(1);
   });
 });

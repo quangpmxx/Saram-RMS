@@ -46,6 +46,7 @@ import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { SortableTh, applySortParams, type SortOrder } from "@/components/ui/sortable-th";
 import { SourceBadge } from "./source-badge";
 import { shouldOpenRowDetail } from "./row-click";
+import { NoteColorFilter, type NoteColorValue } from "./note-color-filter";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
 import {
   LEAD_CARD_CLASS,
@@ -76,6 +77,8 @@ interface CareFilters {
   assigned: DateRangeValue;
   /** Ngày lên số (yêu cầu người dùng 2026-11-06). */
   uploaded: DateRangeValue;
+  /** Bộ lọc "Đánh giá" — màu đánh dấu: "" = tất cả. */
+  note_color: NoteColorValue | "";
   scope: "all" | "assigned";
   /** Khoảng ngày cho thanh thống kê Được giao / Đã xử lý / Chưa xử lý. */
   stats_range: DateRangeValue;
@@ -95,6 +98,7 @@ const EMPTY_FILTERS: CareFilters = {
   care_max: "",
   assigned: EMPTY_DATE_RANGE,
   uploaded: EMPTY_DATE_RANGE,
+  note_color: "",
   scope: "all",
   stats_range: { preset: "this_month", ...computeDateRange("this_month") },
   stats_team_id: "",
@@ -168,6 +172,7 @@ function buildQuery(filters: CareFilters, page: number, pageSize: number): strin
   if (filters.assigned.to) q.set("assigned_to", filters.assigned.to);
   if (filters.uploaded.from) q.set("uploaded_from", filters.uploaded.from);
   if (filters.uploaded.to) q.set("uploaded_to", filters.uploaded.to);
+  if (filters.note_color) q.set("note_color", filters.note_color);
   // Preset (vd "Tháng này") tính lại mỗi lần tải để không bị cũ khi qua ngày.
   // "Tối đa" = không có from → backend không giới hạn đầu (vẫn gửi to).
   const range =
@@ -820,6 +825,12 @@ export function CareWarehousePanel({
             />
           </div>
         </Field>
+        <Field uiSize="xs" label="Đánh giá">
+          <NoteColorFilter
+            value={filters.note_color}
+            onChange={(next) => applyFilters({ ...filters, note_color: next })}
+          />
+        </Field>
         <Field uiSize="xs" label="Ngày lên số" className="w-32">
           <DateRangePicker
             value={filters.uploaded}
@@ -1143,13 +1154,28 @@ function CareStatsBar({
     });
   }
   return (
-    <Card className="mb-2 p-2.5">
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="flex items-center gap-1.5 font-semibold text-slate-800">
-          <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
-          Tiến độ
-        </span>
-        <div className="flex flex-wrap items-center gap-1.5">
+    // Chữ "Tiến độ" + ô số liệu (nhỏ gọn, nhãn trên/số dưới) cùng 1 hàng bên trái;
+    // bộ lọc Nhóm/NV/ngày + nút giao data dồn bên phải (2026-11-06).
+    <Card className="mb-2 px-2.5 py-1.5">
+      {/* Ô số liệu kéo cao bằng cụm bộ lọc + nút bên phải (items-stretch). */}
+      <div className="flex flex-wrap items-stretch justify-between gap-2">
+        <div className="flex flex-wrap items-stretch gap-2">
+          <span className="flex items-center gap-1.5 self-center text-xs font-semibold text-slate-800">
+            <Users className="h-3.5 w-3.5 text-brand-600" strokeWidth={2} />
+            Tiến độ
+          </span>
+          {tiles.map((t) => (
+            <div
+              key={t.key}
+              className="flex min-w-[110px] flex-col justify-center rounded-lg border border-slate-200 bg-white px-3 py-1 text-center"
+            >
+              <p className="text-[11px] text-slate-500">{t.label}</p>
+              <p className={cn("text-lg leading-tight font-bold tabular-nums", t.tone)}>{t.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="ml-auto flex flex-col items-end justify-center gap-1">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs">
           {canPickTeam && (
             <Select
               uiSize="xs"
@@ -1197,19 +1223,9 @@ function CareStatsBar({
               onChange={(stats_range) => onStatsFiltersChange({ stats_range })}
             />
           </div>
+          </div>
+          {actions}
         </div>
-      </div>
-      {/* Ô số liệu bên trái; nút giao data bên phải, ngay dưới bộ lọc Nhóm/NV/ngày (yêu cầu người dùng 2026-11-04). */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-2">
-          {tiles.map((t) => (
-            <div key={t.key} className="min-w-[120px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-center">
-              <p className="text-[11px] text-slate-500">{t.label}</p>
-              <p className={cn("text-lg font-bold tabular-nums", t.tone)}>{t.value}</p>
-            </div>
-          ))}
-        </div>
-        {actions && <div className="ml-auto">{actions}</div>}
       </div>
     </Card>
   );

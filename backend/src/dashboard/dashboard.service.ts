@@ -542,7 +542,7 @@ export class DashboardService {
       leadCount > 0 ? round1((count / leadCount) * 100) : 0;
 
     return [
-      { code: 'LEAD', label: 'Lead', count: leadCount, percentage: 100 },
+      { code: 'LEAD', label: 'Data', count: leadCount, percentage: 100 },
       {
         code: 'INTERVIEW_SCHEDULED',
         label: 'Hẹn PV',
@@ -899,7 +899,7 @@ export class DashboardService {
     }
     if (sales.length === 0 || sources.length === 0) {
       throw new Error(
-        'Cần có ít nhất 1 tài khoản Sale và 1 nguồn lead trước khi tạo demo data',
+        'Cần có ít nhất 1 tài khoản Sale và 1 nguồn data trước khi tạo demo data',
       );
     }
 

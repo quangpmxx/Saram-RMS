@@ -19,6 +19,9 @@ import {
 export const CARE_WAREHOUSE_SORTS = ['stt'] as const;
 export type CareWarehouseSort = (typeof CARE_WAREHOUSE_SORTS)[number];
 
+export const NOTE_COLOR_FILTERS = ['green', 'red', 'yellow'] as const;
+export type NoteColorFilter = (typeof NOTE_COLOR_FILTERS)[number];
+
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Kho chăm sóc — GET /care-warehouse (query). Ngày dạng "YYYY-MM-DD" giờ Việt Nam. */
@@ -111,6 +114,11 @@ export class ListCareWarehouseQueryDto {
   @IsOptional()
   @Matches(DATE_ONLY)
   uploaded_to?: string;
+
+  /** Bộ lọc "Đánh giá" — màu đánh dấu của data (2026-11-06). */
+  @IsOptional()
+  @IsIn(NOTE_COLOR_FILTERS)
+  note_color?: NoteColorFilter;
 
   /** Tìm theo họ tên hoặc số điện thoại. */
   @IsOptional()

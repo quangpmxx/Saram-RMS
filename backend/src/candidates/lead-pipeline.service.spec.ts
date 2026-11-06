@@ -181,6 +181,20 @@ describe('LeadPipelineService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
+    it('số người khác đang giữ: Admin cũng KHÔNG cập nhật/ghi chú được (2026-11-06)', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        isHeld: true,
+        heldById: 'sale-1',
+      });
+      await expect(
+        service.updateCallStatus('lead-1', { call_status_id: 'x' }, adminUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(
+        service.createNote('lead-1', { content: 'x' }, adminUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
     it('Sale không được cập nhật lead không phải của mình', async () => {
       prisma.lead.findUnique.mockResolvedValue(baseLead);
       await expect(
@@ -798,6 +812,19 @@ describe('LeadPipelineService', () => {
       createdById: 'sale-1',
       isDeleted: false,
     };
+
+    it('số người khác đang giữ: Admin cũng KHÔNG xoá ghi chú được', async () => {
+      prisma.leadNote.findUnique.mockResolvedValue(note);
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        isHeld: true,
+        heldById: 'sale-1',
+      });
+      await expect(
+        service.deleteNote('lead-1', 'note-1', adminUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.leadNote.update).not.toHaveBeenCalled();
+    });
 
     it('ném NotFoundException nếu note không tồn tại/không thuộc lead/đã xóa', async () => {
       prisma.leadNote.findUnique.mockResolvedValue(null);
