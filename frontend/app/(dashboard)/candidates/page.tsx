@@ -1,3 +1,5 @@
+import { isSaleRole } from "@/lib/types";
+import { hasCap } from "@/lib/capabilities";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
@@ -51,16 +53,22 @@ export default async function CandidatesPage({
 
   // Dự án phụ — nâng cấp toàn diện: bổ sung 'mkt' — MKT giờ bắt buộc chọn
   // nhóm khi up data mới, cần danh sách nhóm để hiển thị lựa chọn.
-  const canListTeams = ["admin", "manager", "leader", "mkt"].includes(user.role);
-  const canBrowseAllSales = ["admin", "manager"].includes(user.role);
+  // Phân quyền chi tiết (2026-11-07): theo quyền nhỏ (backend chặn thật).
+  const canListTeams =
+    ["admin", "manager", "leader", "mkt"].includes(user.role) || hasCap(user, "lead.view_all") || hasCap(user, "lead.create");
+  const canBrowseAllSales = hasCap(user, "lead.manage_all_teams") || hasCap(user, "care.view_all");
   // Dự án phụ — nâng cấp toàn diện: Sale giờ cũng xem "Chờ phân chia" (tự
   // nhận data). "Cột chăm sóc" đã ẩn khỏi UI — không còn nhận view=care_pool.
-  const canViewPending = ["admin", "manager", "leader", "mkt", "sale"].includes(user.role);
-  const canViewMine = user.role === "sale";
+  const canViewPending = hasCap(user, "lead.view_pending");
+  const canViewMine = isSaleRole(user.role) || hasCap(user, "lead.claim");
+  // Sale trong nhóm mình: cho người chia/chuyển/giao Kho chỉ trong nhóm (mặc định Leader).
+  const needsOwnTeamMembers =
+    !hasCap(user, "lead.manage_all_teams") &&
+    ["lead.assign", "lead.transfer", "care.assign", "distribution.config_team"].some((c) => hasCap(user, c));
 
   // Kho chăm sóc (2026-10-28): ?view=care[&care_assignee=<id>] — mở sẵn tab
   // Kho (vd bấm 1 Sale ở bảng Tiến độ chăm sóc). MKT chỉ xem.
-  const canViewCare = ["admin", "manager", "leader", "sale", "mkt"].includes(user.role);
+  const canViewCare = hasCap(user, "care.view_all") || user.team_id !== null;
 
   const requestedView = getParam("view");
   const initialViewMode =
@@ -119,7 +127,7 @@ export default async function CandidatesPage({
   const [candidatesResult, sources, teamMembers, teamsResult, zaloStatuses, zaloFriendStatuses] = await Promise.all([
     serverApi<PaginatedResult<Candidate>>(candidateEndpoint),
     serverApi<LeadSource[]>("/lead-source"),
-    user.role === "leader" && user.team_id
+    needsOwnTeamMembers && user.team_id
       ? serverApi<TeamMember[]>(`/team/${user.team_id}/member`)
       : Promise.resolve<TeamMember[]>([]),
     canListTeams

@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -22,7 +23,7 @@ import { RealtimeService } from '../realtime/realtime.service';
 const TEAM_SELECT = { id: true, name: true } as const;
 
 /** Vai trò bắt buộc phải thuộc 1 nhóm — Mục 2.2, docs/11-database-design.md. */
-const ROLES_REQUIRING_TEAM = new Set(['leader', 'sale']);
+const ROLES_REQUIRING_TEAM = new Set(['leader', 'sale', 'sup_leader']);
 
 /** Không ai được tự khóa/xóa tài khoản đang đăng nhập (yêu cầu người dùng 2026-10-30). */
 const SELF_DEACTIVATE_MESSAGE =
@@ -149,6 +150,38 @@ export class AccountsService {
       await this.assertTeamExists(dto.team_id);
     }
 
+    // Đổi vai trò (yêu cầu người dùng 2026-11-07): chỉ Admin (người được cấp
+    // trang Quản lý tài khoản không tự nâng mình/người khác lên Admin được),
+    // không đổi vai trò của chính mình (tránh Admin tự khoá mình).
+    const roleChanged = dto.role !== undefined && dto.role !== existing.role;
+    let teamIdForRole: string | null | undefined = undefined;
+    if (roleChanged) {
+      const actor = await this.prisma.account.findUnique({
+        where: { id: actorId },
+        select: { role: true },
+      });
+      if (actor?.role !== 'admin') {
+        throw new ForbiddenException('Chỉ Admin được đổi vai trò tài khoản');
+      }
+      if (id === actorId) {
+        throw new UnprocessableEntityException(
+          'Không thể đổi vai trò của chính bạn',
+        );
+      }
+      const nextTeamId =
+        dto.team_id === undefined ? existing.teamId : dto.team_id;
+      if (ROLES_REQUIRING_TEAM.has(dto.role!)) {
+        if (!nextTeamId) {
+          throw new UnprocessableEntityException(
+            'Vai trò Leader/Sale/Sup Leader bắt buộc phải thuộc 1 nhóm — chọn nhóm trước',
+          );
+        }
+      } else {
+        // Vai trò không thuộc nhóm (Admin/Quản lý/MKT...) → bỏ nhóm, khớp create().
+        teamIdForRole = null;
+      }
+    }
+
     // Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
     // dùng): cho phép Admin sửa `username` — bọc try/catch để bắt trùng tên
     // đăng nhập với tài khoản khác (unique constraint, P2002) → 409 thân
@@ -163,8 +196,14 @@ export class AccountsService {
           fullName: dto.full_name,
           nickname: dto.nickname,
           username: dto.username,
-          teamId: dto.team_id === undefined ? undefined : dto.team_id,
+          teamId:
+            teamIdForRole !== undefined
+              ? teamIdForRole
+              : dto.team_id === undefined
+                ? undefined
+                : dto.team_id,
           status: dto.status,
+          role: roleChanged ? dto.role : undefined,
           dateOfBirth:
             dto.date_of_birth === undefined
               ? undefined
@@ -189,9 +228,29 @@ export class AccountsService {
       throw this.mapKnownError(error);
     }
 
+    // Không còn là Leader → gỡ khỏi vị trí Leader của nhóm (nhóm phải có Leader là vai trò Leader).
+    if (roleChanged && existing.role === 'leader') {
+      await this.prisma.team.updateMany({
+        where: { leaderId: id },
+        data: { leaderId: null },
+      });
+    }
+
     await this.logFieldChanges(actorId, id, existing, dto);
-    // Bị khoá hoặc đổi nhóm → ngắt realtime để không nhận sự kiện phạm vi cũ.
+    if (roleChanged) {
+      await this.auditLog.log({
+        accountId: actorId,
+        actionType: 'update',
+        entityType: 'account',
+        entityId: id,
+        fieldChanged: 'role',
+        oldValue: existing.role,
+        newValue: account.role,
+      });
+    }
+    // Bị khoá, đổi nhóm hoặc đổi vai trò → ngắt realtime để không nhận sự kiện phạm vi cũ.
     if (
+      roleChanged ||
       account.status !== existing.status ||
       account.teamId !== existing.teamId
     ) {

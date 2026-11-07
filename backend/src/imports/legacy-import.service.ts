@@ -1,3 +1,4 @@
+import { SALE_ROLES } from '../common/utils/sale-roles';
 import {
   BadRequestException,
   Injectable,
@@ -245,7 +246,7 @@ export class LegacyImportService {
         id: true,
         name: true,
         members: {
-          where: { status: 'active', role: { in: ['leader', 'sale'] } },
+          where: { status: 'active', role: { in: ['leader', ...SALE_ROLES] } },
           select: { id: true, fullName: true, nickname: true, role: true },
           orderBy: { fullName: 'asc' },
         },

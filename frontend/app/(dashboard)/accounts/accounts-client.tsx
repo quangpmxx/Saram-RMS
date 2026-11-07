@@ -18,18 +18,21 @@ import { useToast } from "@/lib/toast-context";
 import { TeamsClient } from "../teams/teams-client";
 import { cn } from "@/lib/cn";
 
-const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale"];
+const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale", "sup_leader"];
 
 type ModalState = { mode: "none" } | { mode: "create" } | { mode: "edit"; account: Account };
 
 export function AccountsClient({
   currentUserId,
+  isAdmin,
   permissionLevel,
   initialAccounts,
   teams,
 }: {
   /** Tài khoản đang đăng nhập — không cho tự vô hiệu hóa/xóa chính mình (backend cũng chặn). */
   currentUserId: string;
+  /** Chỉ Admin đổi được vai trò tài khoản (2026-11-07, backend cũng chặn). */
+  isAdmin: boolean;
   permissionLevel: ModulePermissionLevel;
   initialAccounts: Account[];
   teams: Team[];
@@ -290,6 +293,7 @@ export function AccountsClient({
           title={`Sửa tài khoản "${modal.account.username}"`}
           teams={teams}
           initialAccount={modal.account}
+          canEditRole={isAdmin && modal.account.id !== currentUserId}
           onClose={() => setModal({ mode: "none" })}
           onSubmit={async (payload) => {
             await clientApi(`/account/${modal.account.id}`, {
@@ -297,6 +301,7 @@ export function AccountsClient({
               body: JSON.stringify({
                 full_name: payload.full_name,
                 username: payload.username,
+                ...(isAdmin && modal.account.id !== currentUserId ? { role: payload.role } : {}),
                 team_id: payload.team_id ?? null,
                 date_of_birth: payload.date_of_birth ?? null,
                 hire_date: payload.hire_date ?? null,
@@ -347,12 +352,15 @@ function AccountModal({
   title,
   teams,
   initialAccount,
+  canEditRole = false,
   onClose,
   onSubmit,
 }: {
   title: string;
   teams: Team[];
   initialAccount?: Account;
+  /** Sửa tài khoản: hiện ô đổi vai trò (chỉ Admin, không phải chính mình). */
+  canEditRole?: boolean;
   onClose: () => void;
   onSubmit: (payload: AccountFormPayload) => Promise<void>;
 }) {
@@ -381,8 +389,9 @@ function AccountModal({
   async function handleSubmit() {
     setError(null);
 
-    if (!isEdit && requiresTeam && !teamId) {
-      setError("Vai trò leader/sale bắt buộc phải thuộc 1 nhóm");
+    const roleChanged = isEdit && role !== initialAccount?.role;
+    if ((!isEdit || roleChanged) && requiresTeam && !teamId) {
+      setError("Vai trò Leader/Sale/Sup Leader bắt buộc phải thuộc 1 nhóm");
       return;
     }
 
@@ -454,7 +463,7 @@ function AccountModal({
           <Input value={username} onChange={(event) => setUsername(event.target.value)} />
         </Field>
 
-        {!isEdit && (
+        {(!isEdit || canEditRole) && (
           <Field label="Vai trò">
             <Select value={role} onChange={(event) => setRole(event.target.value as AccountRole)}>
               {Object.entries(ACCOUNT_ROLE_LABEL).map(([value, label]) => (
@@ -463,6 +472,12 @@ function AccountModal({
                 </option>
               ))}
             </Select>
+            {isEdit && role !== initialAccount?.role && (
+              <p className="mt-1 text-xs text-amber-600">
+                Đổi vai trò: quyền mặc định theo vai trò mới (quyền chỉnh riêng ở trang Phân quyền vẫn giữ).
+                {!requiresTeam && " Vai trò này không thuộc nhóm — tài khoản sẽ được gỡ khỏi nhóm."}
+              </p>
+            )}
           </Field>
         )}
 

@@ -1,3 +1,6 @@
+import type { AccountRole } from '../../generated/prisma/enums';
+import { RECRUITER_ROLES } from '../common/utils/sale-roles';
+import { can } from '../common/permissions/capability-catalog';
 import {
   BadRequestException,
   ForbiddenException,
@@ -124,11 +127,11 @@ export class SalesEntryService {
     if (query.sale_user_id) where.saleUserId = query.sale_user_id;
     if (query.pickup_user_id) where.pickupUserId = query.pickup_user_id;
 
-    if (currentUser.role === 'sale') {
+    if (salesScope(currentUser) === 'own') {
       // Ghi đè, KHÔNG cộng thêm điều kiện — Sale chỉ được xem đúng 1 phạm
       // vi duy nhất (chính mình), bất kể query.sale_user_id gửi lên là gì.
       where.saleUserId = currentUser.id;
-    } else if (currentUser.role === 'leader') {
+    } else if (salesScope(currentUser) === 'team') {
       const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       // Chưa có nhóm — không thấy dòng nào, an toàn hơn là lộ hết dữ liệu.
       // "saleUserId: { in: [] }" (không phải 1 UUID giả) để tránh lỗi kiểu
@@ -170,7 +173,7 @@ export class SalesEntryService {
     currentUser: AuthenticatedUser,
   ): boolean {
     const saleFieldBlank =
-      currentUser.role === 'sale' ? true : !dto.sale_user_id;
+      salesScope(currentUser) === 'own' ? true : !dto.sale_user_id;
     return (
       isBlank(dto.employee_code) &&
       isBlank(dto.full_name) &&
@@ -246,7 +249,7 @@ export class SalesEntryService {
     // Không gửi sale_user_id = giữ nguyên Sale cũ (gửi null = bỏ gán có chủ ý).
     // Sale luôn bị ép về chính mình nên vẫn đi qua resolveSaleUserId.
     const saleUserId =
-      dto.sale_user_id === undefined && currentUser.role !== 'sale'
+      dto.sale_user_id === undefined && salesScope(currentUser) !== 'own'
         ? existing.saleUserId
         : await this.resolveSaleUserId(dto.sale_user_id ?? null, currentUser);
 
@@ -283,9 +286,9 @@ export class SalesEntryService {
     currentUser: AuthenticatedUser,
   ): Promise<{ deleted: number }> {
     const where: Prisma.SalesEntryRecordWhereInput = { id: { in: ids } };
-    if (currentUser.role === 'sale') {
+    if (salesScope(currentUser) === 'own') {
       where.saleUserId = currentUser.id;
-    } else if (currentUser.role === 'leader') {
+    } else if (salesScope(currentUser) === 'team') {
       // Leader xoá được dòng của Sale trong nhóm mình, và dòng CHƯA GÁN Sale do
       // chính mình tạo (quyết định người dùng 2026-10-31) — không xoá được dòng
       // chưa gán do người khác tạo.
@@ -361,10 +364,10 @@ export class SalesEntryService {
     requested: string | null,
     currentUser: AuthenticatedUser,
   ): Promise<string | null> {
-    if (currentUser.role === 'sale') {
+    if (salesScope(currentUser) === 'own') {
       return currentUser.id;
     }
-    if (currentUser.role === 'leader' && requested) {
+    if (salesScope(currentUser) === 'team' && requested) {
       const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       const target = await this.prisma.account.findUnique({
         where: { id: requested },
@@ -382,7 +385,7 @@ export class SalesEntryService {
     existingSaleUserId: string | null,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
-    if (currentUser.role === 'sale') {
+    if (salesScope(currentUser) === 'own') {
       if (existingSaleUserId !== currentUser.id) {
         throw new ForbiddenException(
           'Bạn chỉ được sửa dòng doanh số của chính mình',
@@ -390,7 +393,7 @@ export class SalesEntryService {
       }
       return;
     }
-    if (currentUser.role === 'leader') {
+    if (salesScope(currentUser) === 'team') {
       const teamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (!existingSaleUserId) return; // Chưa gán Sale — Leader vẫn nhận (gán) được, khớp resolveSaleUserId.
       const target = await this.prisma.account.findUnique({
@@ -420,7 +423,8 @@ export class SalesEntryService {
   }
 
   /**
-   * Mục 5: nguồn Sale = tài khoản role 'sale' đang active — khớp đúng
+   * Mục 5: nguồn Sale = tài khoản Sale/Sup Leader/Leader đang active
+   * (RECRUITER_ROLES — Leader cũng tự tuyển được, 2026-11-07) — khớp đúng
    * listSaleAccounts() ở shuttle.service.ts. Yêu cầu trực tiếp người dùng
    * (2026-07-27): Leader chỉ thấy Sale TRONG NHÓM mình (khớp phạm vi
    * xem/sửa đã ép ở buildWhere/resolveSaleUserId) — Quản lý/Admin/Kế toán
@@ -431,10 +435,10 @@ export class SalesEntryService {
     currentUser: AuthenticatedUser,
   ): Promise<DsSaleAccountOptionDto[]> {
     const teamId =
-      currentUser.role === 'leader'
+      salesScope(currentUser) === 'team'
         ? await findOwnTeamId(this.prisma, currentUser.id)
         : undefined;
-    return this.listAccountOptions('sale', teamId);
+    return this.listAccountOptions(RECRUITER_ROLES, teamId);
   }
 
   /**
@@ -444,17 +448,21 @@ export class SalesEntryService {
    * không map được về 1 tài khoản thật).
    */
   async listPickupAccounts(): Promise<DsSaleAccountOptionDto[]> {
-    return this.listAccountOptions('shuttle_staff');
+    return this.listAccountOptions(['shuttle_staff']);
   }
 
   private async listAccountOptions(
-    role: 'sale' | 'shuttle_staff',
+    roles: AccountRole[],
     /** undefined = không lọc theo nhóm; null = có nhóm nhưng KHÔNG lọc được (an toàn: trả rỗng) — chỉ dùng cho Leader. */
     teamId?: string | null,
   ): Promise<DsSaleAccountOptionDto[]> {
     if (teamId === null) return [];
     const accounts = await this.prisma.account.findMany({
-      where: { role, status: 'active', ...(teamId ? { teamId } : {}) },
+      where: {
+        role: { in: roles },
+        status: 'active',
+        ...(teamId ? { teamId } : {}),
+      },
       select: {
         id: true,
         fullName: true,
@@ -488,4 +496,15 @@ export class SalesEntryService {
     });
     return records;
   }
+}
+
+/**
+ * Phân quyền chi tiết (2026-11-07): phạm vi doanh số — sales.all toàn công ty
+ * (mặc định Quản lý/Kế toán/Admin), sales.team cả nhóm (Leader), còn lại chỉ
+ * dòng của chính mình (Sale).
+ */
+function salesScope(user: AuthenticatedUser): 'all' | 'team' | 'own' {
+  if (can(user, 'sales.all')) return 'all';
+  if (can(user, 'sales.team')) return 'team';
+  return 'own';
 }

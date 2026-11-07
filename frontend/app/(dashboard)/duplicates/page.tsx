@@ -1,3 +1,4 @@
+import { hasCap } from "@/lib/capabilities";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
@@ -16,7 +17,7 @@ export default async function DuplicatesPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const canFilterByTeam = ["admin", "manager"].includes(user.role);
+  const canFilterByTeam = hasCap(user, "lead.manage_all_teams");
 
   const [duplicates, teamsResult] = await Promise.all([
     serverApi<PaginatedResult<DuplicateGroup>>("/candidate/duplicate?page=1&page_size=20"),

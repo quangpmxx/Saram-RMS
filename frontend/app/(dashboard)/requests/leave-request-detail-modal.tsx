@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useState } from "react";
 import { Check, X as XIcon } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
@@ -106,10 +107,11 @@ export function LeaveRequestDetailModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Admin/Quản lý duyệt tắt được cả đơn đang chờ Leader (rà soát phân quyền 2026-10-30).
-  const canLeaderDecide = currentUser.role === "leader" && request.status === "pending_leader";
+  const can = useCan();
+  const canLeaderDecide =
+    can("leave.approve_team") && request.status === "pending_leader" && (currentUser.role === "leader" || request.account.id !== currentUser.id);
   const canAdminDecide =
-    (currentUser.role === "admin" || currentUser.role === "manager") &&
-    (request.status === "pending_admin" || request.status === "pending_leader");
+    can("leave.approve_final") && (request.status === "pending_admin" || request.status === "pending_leader");
 
   async function handleDecision(stage: "leader" | "admin", decision: "approved" | "rejected") {
     setIsSubmitting(true);

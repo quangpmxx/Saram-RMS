@@ -1,3 +1,4 @@
+import { SALE_ROLES } from '../common/utils/sale-roles';
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
@@ -44,7 +45,7 @@ export class NotificationService {
             OR: [
               { accountId: currentUser.id },
               {
-                account: { role: 'sale' as const },
+                account: { role: { in: SALE_ROLES } },
                 type: { not: 'lead_assigned' as const },
               },
             ],

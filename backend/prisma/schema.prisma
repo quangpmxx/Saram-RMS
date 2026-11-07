@@ -73,6 +73,8 @@ enum AccountRole {
   leader
   mkt
   sale
+  /// Sup Leader (2026-11-07): làm việc như Sale (nhận data, hiệu suất, báo cáo...), quyền mặc định như Sale.
+  sup_leader
   accounting
   order_staff
   shuttle_staff
@@ -311,6 +313,9 @@ model Account {
   // Dự án phụ — nâng cấp toàn diện (2026-07-24): quan hệ ngược từ UserModulePermission (Phân quyền)
   modulePermissions        UserModulePermission[] @relation("UserModulePermissionAccount")
   updatedModulePermissions UserModulePermission[] @relation("UserModulePermissionUpdatedBy")
+  // Phân quyền chi tiết (2026-11-07)
+  capabilityOverrides        UserCapability[] @relation("UserCapabilityAccount")
+  updatedCapabilityOverrides UserCapability[] @relation("UserCapabilityUpdatedBy")
 
   // Kho chăm sóc (2026-10-28): quan hệ ngược từ Lead.careStoppedBy/CareAssignment/CareAssignmentBatch
   careStoppedLeads        Lead[]                @relation("LeadCareStoppedBy")
@@ -1412,6 +1417,23 @@ model UserModulePermission {
 
   @@unique([accountId, module])
   @@map("user_module_permissions")
+}
+
+/// Phân quyền chi tiết (2026-11-07): quyền nhỏ chỉnh riêng cho 1 tài khoản —
+/// `code` khớp CAPABILITY_CATALOG (common/permissions/capability-catalog.ts).
+/// Không có dòng = theo vai trò mặc định. granted=true cho phép, false không cho phép.
+model UserCapability {
+  accountId   String   @map("account_id") @db.Uuid
+  code        String   @db.VarChar(80)
+  granted     Boolean
+  updatedById String   @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  account   Account @relation("UserCapabilityAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  updatedBy Account @relation("UserCapabilityUpdatedBy", fields: [updatedById], references: [id])
+
+  @@id([accountId, code])
+  @@map("user_capabilities")
 }
 
 enum ModulePermissionLevel {

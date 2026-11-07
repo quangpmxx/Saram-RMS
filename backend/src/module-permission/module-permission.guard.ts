@@ -4,7 +4,9 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { ALLOW_WITHOUT_MODULE_KEY } from '../common/decorators/require-cap.decorator';
 import { ModulePermissionService } from './module-permission.service';
 import { findModuleByController } from './module-registry';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -31,11 +33,20 @@ const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export class ModulePermissionGuard implements CanActivate {
   constructor(
     private readonly modulePermissionService: ModulePermissionService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const moduleEntry = findModuleByController(context.getClass());
     if (!moduleEntry) return true;
+    if (
+      this.reflector.get<boolean>(
+        ALLOW_WITHOUT_MODULE_KEY,
+        context.getHandler(),
+      )
+    ) {
+      return true;
+    }
 
     const request = context
       .switchToHttp()

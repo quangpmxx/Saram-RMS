@@ -1,3 +1,5 @@
+import { SALE_ROLES } from '../common/utils/sale-roles';
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ConflictException,
@@ -20,9 +22,6 @@ import {
   emptyTotals,
   NamedRefWithRole,
 } from './dto/daily-report-response.dto';
-
-/** Vai trò được phép xem module Báo cáo hằng ngày — yêu cầu trực tiếp người dùng (Mục 3), MKT không có trong danh sách. */
-const ALLOWED_ROLES = new Set(['admin', 'manager', 'leader', 'sale']);
 
 /** Múi giờ hệ thống — giống hệt hằng số đã dùng ở sale-reminder.service.ts, không phát minh quy ước mới. */
 const TIMEZONE = 'Asia/Ho_Chi_Minh';
@@ -222,10 +221,8 @@ export class DailyReportsService {
     dto: UpsertDailyReportDto,
     currentUser: AuthenticatedUser,
   ): Promise<DailyReportRowDto> {
-    if (currentUser.role !== 'sale') {
-      throw new ForbiddenException(
-        'Chỉ Nhân viên/Sale được tạo báo cáo hằng ngày',
-      );
+    if (!can(currentUser, 'report.submit')) {
+      throw new ForbiddenException('Bạn không có quyền nộp báo cáo hằng ngày');
     }
     const today = toDateOnly(new Date());
     const existing = await this.prisma.dailyReport.findUnique({
@@ -357,19 +354,20 @@ export class DailyReportsService {
     currentUser: AuthenticatedUser,
   ): Promise<{ employees: EmployeeWithTeam[]; dates: string[] }> {
     let employeeWhere: Prisma.AccountWhereInput;
-    if (!ALLOWED_ROLES.has(currentUser.role) || currentUser.role === 'sale') {
-      // Vai trò khác (MKT, NV Đưa đón...) được Admin cấp trang: chỉ phạm vi
-      // của chính mình (báo cáo chỉ dành cho Sale → danh sách rỗng) — trước
-      // đây ném 403 làm sập trang (2026-11-06).
-      employeeWhere = { id: currentUser.id, role: 'sale' };
-    } else if (currentUser.role === 'leader') {
+    const viewAll = can(currentUser, 'report.view_all');
+    if (!viewAll && !can(currentUser, 'report.view_team')) {
+      // Không có quyền xem nhóm/toàn công ty: chỉ phạm vi của chính mình
+      // (người không có quyền nộp báo cáo → danh sách rỗng) — trước đây ném
+      // 403 làm sập trang (2026-11-06).
+      employeeWhere = { id: currentUser.id, role: { in: SALE_ROLES } };
+    } else if (!viewAll) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
       // Ẩn Sale đã vô hiệu hóa (yêu cầu người dùng 2026-11-06) — không còn
       // hiện dòng "Chưa nộp" của người đã nghỉ.
       employeeWhere = {
-        role: 'sale',
+        role: { in: SALE_ROLES },
         status: 'active',
         teamId: account?.teamId ?? NO_MATCH_UUID,
         ...(query.account_id ? { id: query.account_id } : {}),
@@ -377,7 +375,7 @@ export class DailyReportsService {
     } else {
       // admin/manager
       employeeWhere = {
-        role: 'sale',
+        role: { in: SALE_ROLES },
         status: 'active',
         ...(query.team_id ? { teamId: query.team_id } : {}),
         ...(query.account_id ? { id: query.account_id } : {}),

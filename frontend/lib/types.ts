@@ -11,10 +11,19 @@ export type AccountRole =
   | "leader"
   | "mkt"
   | "sale"
+  | "sup_leader"
   | "accounting"
   | "order_staff"
   | "shuttle_staff";
 export type AccountStatus = "active" | "inactive";
+
+/**
+ * Vai trò "làm việc như Sale" (2026-11-07): Sale + Sup Leader — nhận data, có
+ * trong ô chọn Sale, tính hiệu suất, nộp báo cáo. Khớp backend common/utils/sale-roles.ts.
+ */
+export const SALE_ROLES: readonly AccountRole[] = ["sale", "sup_leader"];
+export const isSaleRole = (role: AccountRole | string | null | undefined): boolean =>
+  (SALE_ROLES as readonly string[]).includes(role ?? "");
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
@@ -36,6 +45,17 @@ export interface AccountModulePermissions {
   role: AccountRole;
   is_admin: boolean;
   permissions: Record<string, ModulePermissionLevel>;
+  /** Phân quyền chi tiết (2026-11-07): quyền nhỏ chỉnh riêng — true cho phép, false không cho phép; không có = theo vai trò. */
+  capability_overrides: Record<string, boolean>;
+}
+
+/** GET /module-permission/capabilities — 1 quyền nhỏ trong danh mục. `module` = mã trang, "other" = Khác. */
+export interface CapabilitySummary {
+  code: string;
+  module: string;
+  label: string;
+  hint: string | null;
+  default_roles: AccountRole[];
 }
 
 export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
@@ -44,6 +64,7 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   leader: "Leader",
   mkt: "NV MKT",
   sale: "NV Sale",
+  sup_leader: "Sup Leader",
   accounting: "Kế toán",
   order_staff: "NV QL Đơn hàng",
   shuttle_staff: "NV Đưa đón",
@@ -59,6 +80,8 @@ export interface Account {
   nickname: string | null;
   username: string;
   role: AccountRole;
+  /** Phân quyền chi tiết (2026-11-07): mã quyền nhỏ hiệu lực — chỉ có ở GET /me. */
+  capabilities?: string[];
   /** Đang dùng mật khẩu mặc định → phải đổi ở /doi-mat-khau trước khi dùng hệ thống. */
   must_change_password: boolean;
   team_id: string | null;

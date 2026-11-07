@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -50,10 +51,9 @@ import { LeaveRequestClient } from "../requests/leave-request-client";
  *   chức năng xuất dữ liệu" (Mục 1); đã rà soát toàn bộ codebase, chưa có
  *   export Excel ở bất kỳ trang nào (chỉ có NHẬP), nên bỏ qua theo đúng điều
  *   kiện đã nêu thay vì tự xây cả hạ tầng xuất file mới.
- * - Danh sách nhân viên hiện trong bảng = vai trò leader/mkt/sale — khớp
- *   đúng danh sách vai trò đã thấy nút "Chấm công" ở header (layout.tsx: mọi
- *   vai trò TRỪ Admin/Quản lý) — giả định hợp lý, CHƯA có tài liệu nghiệp vụ
- *   xác nhận riêng cho module này.
+ * - Danh sách nhân viên hiện trong bảng = Quản lý/Leader/MKT/Sale/Sup Leader
+ *   (2026-11-07: thêm Quản lý — cũng là đối tượng chấm công, chỉ không Check
+ *   in hằng ngày). Admin không có dòng.
  * - "Đánh dấu có công toàn bộ ngày làm việc chưa chấm" (click dòng, "ngày
  *   làm việc" = Thứ 2–Thứ 7 loại Chủ nhật) — Ý NÀY ĐÃ BỊ THAY THẾ, xem CẬP
  *   NHẬT 2026-07-15 bên dưới, giữ lại đoạn này chỉ để biết lý do ban đầu của
@@ -102,7 +102,8 @@ const WORK_UNITS: Record<AttendanceStatus, number> = {
   compensatory_leave: 0,
 };
 
-const EMPLOYEE_ROLES: AccountRole[] = ["leader", "mkt", "sale"];
+// Quản lý cũng có dòng trong bảng chấm công (2026-11-07), chỉ không Check in hằng ngày.
+const EMPLOYEE_ROLES: AccountRole[] = ["manager", "leader", "mkt", "sale", "sup_leader"];
 
 /** Y hệt danh sách mức thu phóng của trang Đưa đón (shuttle-client.tsx) — yêu cầu trực tiếp người dùng. */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
@@ -483,8 +484,8 @@ export function AttendanceClient({
   // Yêu cầu trực tiếp người dùng (2026-07-24): "Trang chấm công GPS chỉ có
   // quản lý và admin xem được, còn lại không ai có quyền" — ẩn hẳn tab này
   // với Leader/MKT/Sale (kể cả deep-link ?tab=checkin cũng không mở được).
-  // Backend (checkin.service.ts#VIEW_ROLES) là lớp chặn thật, đây chỉ là UI.
-  const canViewCheckin = currentUserRole === "admin" || currentUserRole === "manager";
+  // Backend (quyền checkin.manage) là lớp chặn thật, đây chỉ là UI.
+  const canViewCheckin = useCan()("checkin.manage");
   const [activeTab, setActiveTab] = useState<"manual" | "checkin" | "requests">(() => {
     const tab = searchParams.get("tab");
     if (tab === "checkin") return canViewCheckin ? "checkin" : "manual";

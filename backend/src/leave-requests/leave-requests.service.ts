@@ -1,3 +1,5 @@
+import { findOwnTeamId } from '../common/utils/account-team.util';
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   BadRequestException,
@@ -31,7 +33,6 @@ import {
  * cho phép Leader tự duyệt bước của mình rồi mới chuyển tiếp Admin.
  * Admin/Quản lý vẫn KHÔNG tạo đơn — không phải "nhân viên".
  */
-const CREATE_ROLES = new Set(['mkt', 'sale', 'leader']);
 
 /** "YYYY-MM-DD" -> Date UTC nửa đêm — đủ dùng cho cột @db.Date, không cần theo timezone hệ thống vì đây là NGÀY LỊCH đơn thuần (không phải mốc "hôm nay" như attendance/checkin). */
 function dateOnlyToUtcMidnight(dateOnly: string): Date {
@@ -59,10 +60,8 @@ export class LeaveRequestsService {
     dto: CreateLeaveRequestDto,
     currentUser: AuthenticatedUser,
   ): Promise<LeaveRequestResponseDto> {
-    if (!CREATE_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException(
-        'Vai trò của bạn không tạo được đơn xin nghỉ phép',
-      );
+    if (!can(currentUser, 'leave.create')) {
+      throw new ForbiddenException('Bạn không có quyền tạo đơn xin nghỉ phép');
     }
 
     const startDate = dateOnlyToUtcMidnight(dto.start_date);
@@ -148,12 +147,13 @@ export class LeaveRequestsService {
       };
     }
 
-    if (currentUser.role === 'leader') {
+    const scope = leaveScope(currentUser);
+    if (scope === 'team') {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
       where.account = { teamId: account?.teamId ?? NO_MATCH_UUID };
-    } else if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+    } else if (scope === 'own') {
       // Sale/MKT và vai trò khác (NV Đưa đón, Kế toán...) được cấp trang: chỉ
       // đơn của chính mình — trước đây vai trò khác bị 403 làm sập trang Chấm
       // công (2026-11-06).
@@ -183,8 +183,8 @@ export class LeaveRequestsService {
     dto: LeaveRequestDecisionDto,
     currentUser: AuthenticatedUser,
   ): Promise<LeaveRequestResponseDto> {
-    if (currentUser.role !== 'leader') {
-      throw new ForbiddenException('Chỉ Leader được duyệt bước này');
+    if (!can(currentUser, 'leave.approve_team')) {
+      throw new ForbiddenException('Bạn không có quyền duyệt bước này');
     }
 
     const request = await this.prisma.leaveRequest.findUnique({
@@ -199,7 +199,18 @@ export class LeaveRequestsService {
         'Đơn này không ở trạng thái chờ Leader duyệt',
       );
     }
-    if (request.account.team?.leaderId !== currentUser.id) {
+    // Leader của nhóm; hoặc người được cấp quyền duyệt cấp 1 trong cùng nhóm
+    // (không tự duyệt đơn của chính mình).
+    const isTeamLeader = request.account.team?.leaderId === currentUser.id;
+    const ownTeamId = isTeamLeader
+      ? null
+      : await findOwnTeamId(this.prisma, currentUser.id);
+    const isGrantedSameTeam = Boolean(
+      ownTeamId &&
+      request.account.teamId === ownTeamId &&
+      request.accountId !== currentUser.id,
+    );
+    if (!isTeamLeader && !isGrantedSameTeam) {
       throw new ForbiddenException(
         'Bạn chỉ được duyệt đơn của thành viên trong nhóm mình',
       );
@@ -253,10 +264,8 @@ export class LeaveRequestsService {
     dto: LeaveRequestDecisionDto,
     currentUser: AuthenticatedUser,
   ): Promise<LeaveRequestResponseDto> {
-    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
-      throw new ForbiddenException(
-        'Chỉ Admin hoặc Quản lý được duyệt bước này',
-      );
+    if (!can(currentUser, 'leave.approve_final')) {
+      throw new ForbiddenException('Bạn không có quyền duyệt bước này');
     }
 
     const request = await this.prisma.leaveRequest.findUnique({
@@ -346,16 +355,13 @@ export class LeaveRequestsService {
       throw new NotFoundException('Không tìm thấy đơn xin nghỉ phép');
     }
 
-    if (
-      currentUser.role !== 'leader' &&
-      currentUser.role !== 'admin' &&
-      currentUser.role !== 'manager'
-    ) {
-      // Sale/MKT và vai trò khác: chỉ đơn của chính mình (2026-11-06).
+    const scope = leaveScope(currentUser);
+    if (scope === 'own') {
+      // Không có quyền duyệt: chỉ đơn của chính mình (2026-11-06).
       if (request.accountId !== currentUser.id) {
         throw new ForbiddenException('Bạn chỉ được xem đơn của chính mình');
       }
-    } else if (currentUser.role === 'leader') {
+    } else if (scope === 'team' && request.accountId !== currentUser.id) {
       const [leaderAccount, requestAccount] = await Promise.all([
         this.prisma.account.findUnique({ where: { id: currentUser.id } }),
         this.prisma.account.findUnique({ where: { id: request.accountId } }),
@@ -449,4 +455,11 @@ export class LeaveRequestsService {
       );
     }
   }
+}
+
+/** Phân quyền chi tiết (2026-11-07): phạm vi xem đơn nghỉ phép theo quyền duyệt. */
+function leaveScope(user: AuthenticatedUser): 'all' | 'team' | 'own' {
+  if (can(user, 'leave.approve_final')) return 'all';
+  if (can(user, 'leave.approve_team')) return 'team';
+  return 'own';
 }

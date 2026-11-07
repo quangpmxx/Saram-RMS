@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, CalendarDays, Search, Trash2 } from "lucide-react";
@@ -120,13 +121,17 @@ export function CalendarClient({
 
   /**
    * Nút xoá trên từng dòng (yêu cầu người dùng 2026-10-29) — khớp quyền
-   * backend: MKT chỉ xem; Sale chỉ xoá lịch gọi lại do chính mình đặt (lịch
-   * PV theo phạm vi lead, backend kiểm tra lại). Xoá mềm — vẫn còn trong
-   * lịch sử thao tác của data.
+   * backend (lead-pipeline.service.ts): cần quyền xử lý data; chỉ có "xử lý
+   * hộ" (mặc định Sale) thì chỉ xoá lịch gọi lại do chính mình đặt (lịch PV
+   * theo phạm vi lead, backend kiểm tra lại). Xoá mềm — vẫn còn trong lịch
+   * sử thao tác của data.
    */
+  const can = useCan();
+  const canProcessAny = can("lead.process_all") || can("lead.edit_team");
+  const canProcessOwn = canProcessAny || can("lead.edit_help") || currentUserRole !== "mkt";
   function canDelete(event: CalendarEvent): boolean {
-    if (isReadOnly || currentUserRole === "mkt") return false;
-    if (currentUserRole === "sale" && event.type === "callback") return event.created_by.id === currentUserId;
+    if (isReadOnly || !canProcessOwn) return false;
+    if (!canProcessAny && event.type === "callback") return event.created_by.id === currentUserId;
     return true;
   }
 

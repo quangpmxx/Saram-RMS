@@ -1,3 +1,4 @@
+import { hasCap } from "@/lib/capabilities";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
@@ -42,11 +43,12 @@ export default async function CalendarPage() {
   // Tái dùng đúng cách candidates/page.tsx đã lấy danh sách Sale (gọi
   // GET /team/:id/member cho từng nhóm — Admin/Quản lý; Leader dùng lại
   // danh sách nhóm mình đã có sẵn) — không thêm endpoint mới.
-  const canFilterBySale = ["admin", "manager", "leader"].includes(user.role);
-  const canBrowseAllSales = ["admin", "manager"].includes(user.role);
+  // Phân quyền chi tiết (2026-11-07): lịch toàn công ty / cả nhóm.
+  const canBrowseAllSales = hasCap(user, "calendar.view_all");
+  const canFilterBySale = canBrowseAllSales || hasCap(user, "calendar.view_team");
 
   const [teamMembers, teamsResult] = await Promise.all([
-    user.role === "leader" && user.team_id
+    !canBrowseAllSales && canFilterBySale && user.team_id
       ? serverApi<TeamMember[]>(`/team/${user.team_id}/member`)
       : Promise.resolve<TeamMember[]>([]),
     canBrowseAllSales

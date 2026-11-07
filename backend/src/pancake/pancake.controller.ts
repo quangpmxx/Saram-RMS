@@ -1,3 +1,4 @@
+import { RequireCap } from '../common/decorators/require-cap.decorator';
 import {
   Body,
   Controller,
@@ -11,7 +12,6 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { PancakeService } from './pancake.service';
@@ -28,7 +28,6 @@ import {
  * MKT (MKT chỉ page của mình). Đổi người phụ trách / Nguồn MKT: Admin.
  */
 @Controller('pancake')
-@Roles('admin', 'manager', 'mkt')
 export class PancakeController {
   constructor(private readonly service: PancakeService) {}
 
@@ -39,7 +38,7 @@ export class PancakeController {
 
   @Post('pages/connect')
   @HttpCode(200)
-  @Roles('admin', 'mkt')
+  @RequireCap('mkt.link_own')
   connect(
     @Body() dto: ConnectPancakeDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -48,7 +47,7 @@ export class PancakeController {
   }
 
   @Patch('pages/:id/owner')
-  @Roles('admin')
+  @RequireCap('mkt.assign_owner')
   changeOwner(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: PancakeOwnerDto,
@@ -58,7 +57,7 @@ export class PancakeController {
   }
 
   @Patch('pages/:id/mkt-source')
-  @Roles('admin')
+  @RequireCap('mkt.config')
   setMktSource(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: PancakeMktSourceDto,
@@ -68,7 +67,7 @@ export class PancakeController {
   }
 
   @Delete('pages/:id')
-  @Roles('admin', 'mkt')
+  @RequireCap('mkt.link_own')
   disconnect(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -79,7 +78,7 @@ export class PancakeController {
 
 /** Cài đặt Up tự động (thuộc module Data lao động): Admin/MKT. */
 @Controller('pancake')
-@Roles('admin', 'mkt')
+@RequireCap('lead.pancake_auto_up')
 export class PancakeAutoUpController {
   constructor(private readonly service: PancakeService) {}
 

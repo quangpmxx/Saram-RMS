@@ -1,3 +1,5 @@
+import { RECRUITER_ROLES, SALE_ROLES } from '../common/utils/sale-roles';
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
@@ -30,7 +32,6 @@ import {
  * - Ô "Chờ phân chia": Leader/Sale chỉ data nhóm mình + data chưa có nhóm
  *   (khớp tab Chờ phân chia); Quản lý/Admin/MKT toàn bộ.
  */
-const FULL_VIEW_ROLES = new Set(['admin', 'manager', 'mkt']);
 
 /** Bám sát đúng 3 trạng thái phỏng vấn tính là "đã đến PV" — SCHEDULED chưa đến, NO_SHOW là bùng (không đến). */
 const ATTENDED_INTERVIEW_STATUS_CODES = ['ATTENDED', 'PASSED', 'FAILED'];
@@ -203,12 +204,14 @@ export class DashboardService {
   ): Promise<SalePerformanceDto[]> {
     // Chi tiết từng cá nhân: Sale chỉ mình, Leader nhóm mình, còn lại toàn bộ.
     query = await this.sanitizeQuery(query, currentUser);
-    const teamId =
-      currentUser.role === 'leader'
-        ? ((await findOwnTeamId(this.prisma, currentUser.id)) ?? NO_MATCH_UUID)
-        : query.team_id;
-    const accountId =
-      currentUser.role === 'sale' ? currentUser.id : query.account_id;
+    // Phân quyền chi tiết (2026-11-07): dashboard.perf_all → theo bộ lọc;
+    // dashboard.perf_team → nhóm mình; không có cả 2 → chỉ của mình.
+    const perfAll = can(currentUser, 'dashboard.perf_all');
+    const perfTeam = !perfAll && can(currentUser, 'dashboard.perf_team');
+    const teamId = perfTeam
+      ? ((await findOwnTeamId(this.prisma, currentUser.id)) ?? NO_MATCH_UUID)
+      : query.team_id;
+    const accountId = perfAll || perfTeam ? query.account_id : currentUser.id;
     return this.computePerformance(query, teamId, accountId);
   }
 
@@ -261,7 +264,7 @@ export class DashboardService {
     // vấn tổng khác KHÔNG lọc status.
     const sales = await this.prisma.account.findMany({
       where: {
-        role: 'sale',
+        role: { in: SALE_ROLES },
         status: 'active',
         ...(teamId ? { teamId } : {}),
         ...(accountId ? { id: accountId } : {}),
@@ -438,9 +441,10 @@ export class DashboardService {
       }),
       // Sale của từng nhóm (thu hẹp thêm theo account_id nếu có lọc) — dùng
       // để tính 5 chỉ số Shuttle-based cho đúng nhóm (computeShuttleKpi()).
+      // Gồm cả Leader — cột Sale ở Đưa đón chọn được Leader (2026-11-07).
       this.prisma.account.findMany({
         where: {
-          role: 'sale',
+          role: { in: RECRUITER_ROLES },
           teamId: { in: teamIds },
           ...(query.account_id ? { id: query.account_id } : {}),
         },
@@ -713,9 +717,10 @@ export class DashboardService {
     // dòng này nên Đến PV/Bùng PV… trên Dashboard thiếu so với trang Đưa đón).
     const teamId = query.team_id;
     if (!teamId && !query.account_id) return null;
+    // Cột Sale ở Đưa đón chọn được cả Leader (2026-11-07) → tính cả dòng Leader tự tuyển.
     const sales = await this.prisma.account.findMany({
       where: {
-        role: 'sale',
+        role: { in: RECRUITER_ROLES },
         ...(teamId ? { teamId } : {}),
         ...(query.account_id ? { id: query.account_id } : {}),
       },
@@ -767,9 +772,7 @@ export class DashboardService {
     dateTo?: string,
   ): Promise<number> {
     const dateWhere = this.buildDateWhere(dateFrom, dateTo);
-    const teamWhere: Prisma.LeadWhereInput = FULL_VIEW_ROLES.has(
-      currentUser.role,
-    )
+    const teamWhere: Prisma.LeadWhereInput = can(currentUser, 'lead.view_all')
       ? {}
       : {
           OR: [
@@ -796,21 +799,17 @@ export class DashboardService {
     currentUser: AuthenticatedUser,
     teamId?: string,
   ): Promise<number> {
-    if (currentUser.role === 'mkt') {
-      return 0;
-    }
     const where: Prisma.LeadWhereInput = {
       deletedAt: null,
       enteredCarePoolAt: { not: null },
       removedFromCarePoolAt: null,
     };
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+    if (can(currentUser, 'lead.manage_all_teams')) {
       if (teamId) where.assignedTeamId = teamId;
-    } else if (currentUser.role === 'leader' || currentUser.role === 'sale') {
+    } else {
+      // Không thuộc nhóm nào (vd MKT) → 0.
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.assignedTeamId = ownTeamId ?? NO_MATCH_UUID;
-    } else {
-      return 0;
     }
     return this.prisma.lead.count({ where });
   }
@@ -825,8 +824,8 @@ export class DashboardService {
     query: DashboardQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<DashboardQueryDto> {
-    if (FULL_VIEW_ROLES.has(currentUser.role)) return query;
-    if (currentUser.role === 'leader') {
+    if (can(currentUser, 'dashboard.filter_all')) return query;
+    if (can(currentUser, 'dashboard.filter_team')) {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (query.account_id) {
         const member = await this.prisma.account.findFirst({
@@ -842,15 +841,12 @@ export class DashboardService {
         account_id: undefined,
       };
     }
-    if (currentUser.role === 'sale') {
-      return {
-        ...query,
-        team_id: undefined,
-        account_id:
-          query.account_id === currentUser.id ? currentUser.id : undefined,
-      };
-    }
-    return { ...query, team_id: undefined, account_id: undefined };
+    return {
+      ...query,
+      team_id: undefined,
+      account_id:
+        query.account_id === currentUser.id ? currentUser.id : undefined,
+    };
   }
 
   private buildDateWhere(
@@ -904,7 +900,7 @@ export class DashboardService {
         },
       }),
       this.prisma.account.findMany({
-        where: { role: 'sale', status: 'active' },
+        where: { role: { in: SALE_ROLES }, status: 'active' },
         select: { id: true, teamId: true, fullName: true },
       }),
     ]);

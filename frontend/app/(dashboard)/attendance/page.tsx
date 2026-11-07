@@ -1,3 +1,4 @@
+import { hasCap } from "@/lib/capabilities";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
@@ -17,8 +18,9 @@ export default async function AttendancePage() {
   if (!user) redirect("/login");
   const permissionLevel = await requirePageAccess("attendance");
 
-  const canFilterByTeam = ["admin", "manager"].includes(user.role);
-  const canFilterByAccount = ["admin", "manager", "leader"].includes(user.role);
+  // Phân quyền chi tiết (2026-11-07): xem chấm công toàn công ty / cả nhóm.
+  const canFilterByTeam = hasCap(user, "attendance.view_all");
+  const canFilterByAccount = canFilterByTeam || hasCap(user, "attendance.view_team");
 
   // Không dùng new Date().getFullYear()/getMonth() (giờ UTC của server có
   // thể lệch ngày với giờ Việt Nam) — tính tháng/năm mặc định theo đúng múi

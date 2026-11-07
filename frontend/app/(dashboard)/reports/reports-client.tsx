@@ -377,7 +377,7 @@ export function ReportsClient({
   useAppRealtime(handleAppRealtimeEvent);
   useRealtimeReconnect(() => void silentRefresh());
 
-  const showByTeam = currentUserRole !== "sale" && summary.by_team.length > 0;
+  const showByTeam = canFilterBySale && summary.by_team.length > 0;
   const isReadOnly = permissionLevel === "view";
 
   return (

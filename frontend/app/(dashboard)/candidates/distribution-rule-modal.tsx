@@ -1,5 +1,6 @@
 "use client";
 
+import { isSaleRole } from "@/lib/types";
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -52,7 +53,7 @@ export function DistributionRuleModal({
         if (cancelled) return;
         setRule(result);
         setOrderedIds(result.members.map((member) => member.account_id));
-        if (members) setLoadedMembers(members.filter((m) => m.role === "sale" && m.status === "active"));
+        if (members) setLoadedMembers(members.filter((m) => isSaleRole(m.role) && m.status === "active"));
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra");

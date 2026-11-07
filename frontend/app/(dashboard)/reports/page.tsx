@@ -1,3 +1,4 @@
+import { hasCap } from "@/lib/capabilities";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
@@ -31,9 +32,11 @@ export default async function ReportsPage({
   }
   const permissionLevel = await requirePageAccess("reports");
 
-  const canFilterByTeam = ["admin", "manager"].includes(user.role);
-  const canFilterBySale = ["admin", "manager", "leader"].includes(user.role);
-  const canSubmitReport = user.role === "sale";
+  // Phân quyền chi tiết (2026-11-07): báo cáo / phạt báo cáo xem toàn công ty hoặc cả nhóm.
+  const canFilterByTeam = hasCap(user, "report.view_all") || hasCap(user, "penalty.view_all");
+  const canFilterBySale =
+    canFilterByTeam || hasCap(user, "report.view_team") || hasCap(user, "penalty.view_team");
+  const canSubmitReport = hasCap(user, "report.submit");
 
   // Không tự tính "hôm nay" ở đây (new Date().toISOString() lấy theo giờ
   // UTC — lệch mất 1 ngày vào khoảng 00:00-07:00 giờ Việt Nam, đúng lỗi đã

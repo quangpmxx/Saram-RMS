@@ -1,3 +1,4 @@
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
@@ -15,20 +16,24 @@ import {
 import { ROLE_LABEL } from '../common/constants/role-label';
 
 /**
- * Vai trò xuất hiện dưới dạng 1 DÒNG trong bảng chấm công — khớp đúng danh
- * sách vai trò đã thấy nút "Chấm công" ở header (layout.tsx: mọi vai trò TRỪ
- * Admin/Quản lý), vì Admin/Quản lý là người quản lý bảng chứ không tự chấm
- * công cho chính mình. Đây là 1 giả định hợp lý dựa trên quyết định trước đó
- * trong hệ thống — CHƯA có tài liệu nghiệp vụ nào xác nhận, xem ghi chú cuối
- * PR/commit liên quan module này.
+ * Vai trò xuất hiện dưới dạng 1 DÒNG trong bảng chấm công. Quản lý cũng là
+ * đối tượng chấm công (yêu cầu người dùng 2026-11-07) — chỉ không phải Check
+ * in hằng ngày (CHECKIN_ROLES ở checkin.service.ts không có 'manager').
+ * Admin không có dòng (người quản lý bảng).
  */
-const EMPLOYEE_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
+const EMPLOYEE_ROLES: AccountRole[] = [
+  'manager',
+  'leader',
+  'mkt',
+  'sale',
+  'sup_leader',
+];
 
 /**
  * Chỉ Admin/Quản lý chấm công & sửa vị trí (rà soát phân quyền 2026-10-30);
- * Leader xem cả nhóm, nhân viên xem của mình.
+ * Leader xem cả nhóm, nhân viên xem của mình. Từ 2026-11-07 theo quyền
+ * attendance.edit / attendance.view_team / attendance.view_all.
  */
-const EDIT_ROLES = new Set(['admin', 'manager']);
 
 const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
@@ -58,6 +63,37 @@ const WORK_UNITS: Record<AttendanceStatusValue, number> = {
 const HEADER_FILL = 'FFEFF6FF';
 const SUNDAY_HEADER_FILL = 'FFFEE2E2';
 const SUNDAY_EMPTY_FILL = 'FFFEF2F2';
+
+/** Thứ tự vai trò trong 1 nhóm: Leader → Sup Leader → nhân viên. */
+const IN_TEAM_ROLE_ORDER: Partial<Record<AccountRole, number>> = {
+  leader: 0,
+  sup_leader: 1,
+  sale: 2,
+};
+
+/**
+ * Thứ tự dòng bảng chấm công (yêu cầu người dùng 2026-11-07): các Quản lý →
+ * các MKT → theo từng nhóm (tên nhóm A→Z): Leader → Sup Leader → nhân viên.
+ * Người chưa thuộc nhóm nào xếp cuối. Cùng vị trí thì theo tên A→Z.
+ */
+export function sortForAttendance<
+  T extends {
+    role: AccountRole;
+    fullName: string;
+    team: { name: string } | null;
+  },
+>(employees: T[]): T[] {
+  const group = (e: T) =>
+    e.role === 'manager' ? 0 : e.role === 'mkt' ? 1 : e.team ? 2 : 3;
+  const cmp = (a: string, b: string) => a.localeCompare(b, 'vi');
+  return [...employees].sort(
+    (a, b) =>
+      group(a) - group(b) ||
+      (group(a) === 2 ? cmp(a.team!.name, b.team!.name) : 0) ||
+      (IN_TEAM_ROLE_ORDER[a.role] ?? 9) - (IN_TEAM_ROLE_ORDER[b.role] ?? 9) ||
+      cmp(a.fullName, b.fullName),
+  );
+}
 
 const ACCOUNT_SELECT = {
   id: true,
@@ -165,7 +201,7 @@ export class AttendanceService {
         note: r.note,
         updated_at: r.updatedAt.toISOString(),
       })),
-      can_edit: EDIT_ROLES.has(currentUser.role),
+      can_edit: can(currentUser, 'attendance.edit'),
     };
   }
 
@@ -317,7 +353,7 @@ export class AttendanceService {
     dto: BulkSaveAttendanceDto,
     currentUser: AuthenticatedUser,
   ): Promise<{ saved: number; deleted: number }> {
-    if (!EDIT_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'attendance.edit')) {
       throw new ForbiddenException('Bạn không có quyền chấm công');
     }
 
@@ -534,11 +570,12 @@ export class AttendanceService {
     // chính mình như nhân viên — trước đây ném 403 làm sập trang (2026-11-06).
 
     const employeeWhere = await this.resolveEmployeeWhere(query, currentUser);
-    const employees = await this.prisma.account.findMany({
-      where: employeeWhere,
-      select: ACCOUNT_SELECT,
-      orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
-    });
+    const employees = sortForAttendance(
+      await this.prisma.account.findMany({
+        where: employeeWhere,
+        select: ACCOUNT_SELECT,
+      }),
+    );
 
     const days = buildDays(query.year, query.month);
     const employeeIds = employees.map((e) => e.id);
@@ -568,15 +605,12 @@ export class AttendanceService {
       ? {}
       : { status: 'active' };
 
-    // Sale/MKT và mọi vai trò khác ngoài Leader/Quản lý/Admin: chỉ chính mình.
-    if (
-      currentUser.role !== 'leader' &&
-      currentUser.role !== 'admin' &&
-      currentUser.role !== 'manager'
-    ) {
+    // Không có quyền xem cả nhóm/toàn công ty: chỉ chính mình.
+    const viewAll = can(currentUser, 'attendance.view_all');
+    if (!viewAll && !can(currentUser, 'attendance.view_team')) {
       return { id: currentUser.id, role: { in: EMPLOYEE_ROLES } };
     }
-    if (currentUser.role === 'leader') {
+    if (!viewAll) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
@@ -597,9 +631,9 @@ export class AttendanceService {
   }
 
   /**
-   * Chặn Leader chỉnh công nhân viên ngoài nhóm mình, chặn mọi vai trò
-   * KHÔNG thuộc EDIT_ROLES đi vòng qua bulkSave() — "Không cho nhân viên
-   * thường sửa công của người khác" (Mục 11, yêu cầu người dùng).
+   * Người sửa chấm công không có quyền xem toàn công ty chỉ chỉnh được nhân
+   * viên trong nhóm mình — "Không cho nhân viên thường sửa công của người
+   * khác" (Mục 11, yêu cầu người dùng).
    */
   private async assertEmployeesInScope(
     accountIds: string[],
@@ -609,7 +643,7 @@ export class AttendanceService {
       id: { in: accountIds },
       role: { in: EMPLOYEE_ROLES },
     };
-    if (currentUser.role === 'leader') {
+    if (!can(currentUser, 'attendance.view_all')) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
@@ -629,7 +663,7 @@ export class AttendanceService {
   /**
    * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
    * docs/09-13, yêu cầu trực tiếp người dùng): "cho phép sửa tay tên các vị
-   * trí". Dùng đúng EDIT_ROLES + phạm vi nhóm (giống bulkSave) — không phát
+   * trí". Dùng đúng quyền attendance.edit + phạm vi nhóm (giống bulkSave) — không phát
    * minh quyền riêng cho việc đổi tên chức vụ. Chuỗi rỗng/khoảng trắng ->
    * lưu `null` (xóa chức vụ tùy chỉnh, quay về nhãn vai trò mặc định).
    */
@@ -638,7 +672,7 @@ export class AttendanceService {
     position: string | null | undefined,
     currentUser: AuthenticatedUser,
   ): Promise<{ account_id: string; position: string | null }> {
-    if (!EDIT_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'attendance.edit')) {
       throw new ForbiddenException('Bạn không có quyền sửa vị trí');
     }
     await this.assertEmployeesInScope([accountId], currentUser);

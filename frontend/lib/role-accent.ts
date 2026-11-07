@@ -4,7 +4,7 @@ import type { AccountRole } from "./types";
 /**
  * Dự án phụ — nâng cấp toàn diện: tên + nhãn vai trò hiển thị màu riêng theo
  * vai trò ở MỌI nơi có hiển thị tên tài khoản (yêu cầu trực tiếp người dùng)
- * — Admin: vàng gold (gradient), Quản lý: đỏ thẫm, Leader: tím. Dùng inline
+ * — Admin: vàng gold (gradient), Quản lý: đỏ thẫm, Leader: tím, Sup Leader: xanh lá. Dùng inline
  * style (không phải class Tailwind nối thêm qua cn()) vì cn() trong dự án
  * chỉ join chuỗi, không dedup theo thuộc tính CSS — nối thêm text-color/bg-color
  * qua className không đảm bảo thắng class màu gốc (bài học lặp lại nhiều lần
@@ -18,6 +18,10 @@ export const MANAGER_DARK_RED_RING = "rgba(127, 29, 29, 0.35)";
 
 export const LEADER_PURPLE = "#6d28d9";
 export const LEADER_PURPLE_RING = "rgba(109, 40, 217, 0.35)";
+
+/** Sup Leader (2026-11-07): xanh lá cây. */
+export const SUP_LEADER_GREEN = "#15803d";
+export const SUP_LEADER_GREEN_RING = "rgba(21, 128, 61, 0.35)";
 
 /**
  * style={} cho chữ tên/nhãn thường (không phải badge). Admin được "cắt" chữ
@@ -42,6 +46,9 @@ export function roleAccentTextStyle(role: AccountRole | undefined | null): CSSPr
   }
   if (role === "leader") {
     return { color: LEADER_PURPLE, fontWeight: 600 };
+  }
+  if (role === "sup_leader") {
+    return { color: SUP_LEADER_GREEN, fontWeight: 600 };
   }
   return undefined;
 }
@@ -73,6 +80,14 @@ export function roleAccentBadgeStyle(role: AccountRole | undefined | null): CSSP
       color: "#ffffff",
       fontWeight: 700,
       boxShadow: `inset 0 0 0 1px ${LEADER_PURPLE_RING}`,
+    };
+  }
+  if (role === "sup_leader") {
+    return {
+      backgroundColor: SUP_LEADER_GREEN,
+      color: "#ffffff",
+      fontWeight: 700,
+      boxShadow: `inset 0 0 0 1px ${SUP_LEADER_GREEN_RING}`,
     };
   }
   return undefined;

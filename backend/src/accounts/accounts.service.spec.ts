@@ -1,6 +1,7 @@
 import {
   ConflictException,
   NotFoundException,
+  ForbiddenException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -23,7 +24,7 @@ describe('AccountsService', () => {
       count: jest.Mock;
       findMany: jest.Mock;
     };
-    team: { findUnique: jest.Mock };
+    team: { findUnique: jest.Mock; updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let auditLog: { log: jest.Mock };
@@ -52,7 +53,7 @@ describe('AccountsService', () => {
         count: jest.fn(),
         findMany: jest.fn(),
       },
-      team: { findUnique: jest.fn() },
+      team: { findUnique: jest.fn(), updateMany: jest.fn() },
       $transaction: jest.fn(),
     };
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
@@ -177,6 +178,82 @@ describe('AccountsService', () => {
       await expect(
         service.update('ghost', { full_name: 'X' }, 'admin-1'),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    describe('đổi vai trò (2026-11-07)', () => {
+      it('Admin đổi Sale → Sup Leader: lưu vai trò, ghi nhật ký', async () => {
+        prisma.account.findUnique
+          .mockResolvedValueOnce(baseAccount)
+          .mockResolvedValueOnce({ role: 'admin' });
+        prisma.account.update.mockResolvedValue({
+          ...baseAccount,
+          role: 'sup_leader',
+        });
+
+        await service.update('acc-1', { role: 'sup_leader' }, 'admin-1');
+
+        expect(prisma.account.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ role: 'sup_leader' }),
+          }),
+        );
+        expect(auditLog.log).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fieldChanged: 'role',
+            oldValue: 'sale',
+            newValue: 'sup_leader',
+          }),
+        );
+      });
+
+      it('người không phải Admin không đổi được vai trò', async () => {
+        prisma.account.findUnique
+          .mockResolvedValueOnce(baseAccount)
+          .mockResolvedValueOnce({ role: 'manager' });
+
+        await expect(
+          service.update('acc-1', { role: 'admin' }, 'manager-1'),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(prisma.account.update).not.toHaveBeenCalled();
+      });
+
+      it('không tự đổi vai trò của chính mình', async () => {
+        prisma.account.findUnique
+          .mockResolvedValueOnce({
+            ...baseAccount,
+            id: 'admin-1',
+            role: 'admin',
+          })
+          .mockResolvedValueOnce({ role: 'admin' });
+
+        await expect(
+          service.update('admin-1', { role: 'sale' }, 'admin-1'),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      });
+
+      it('Leader → MKT: gỡ khỏi nhóm và khỏi vị trí Leader của nhóm', async () => {
+        prisma.account.findUnique
+          .mockResolvedValueOnce({ ...baseAccount, role: 'leader' })
+          .mockResolvedValueOnce({ role: 'admin' });
+        prisma.account.update.mockResolvedValue({
+          ...baseAccount,
+          role: 'mkt',
+          teamId: null,
+          team: null,
+        });
+
+        await service.update('acc-1', { role: 'mkt' }, 'admin-1');
+
+        expect(prisma.account.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ role: 'mkt', teamId: null }),
+          }),
+        );
+        expect(prisma.team.updateMany).toHaveBeenCalledWith({
+          where: { leaderId: 'acc-1' },
+          data: { leaderId: null },
+        });
+      });
     });
 
     it('ghi 1 dòng audit log cho mỗi trường thay đổi', async () => {

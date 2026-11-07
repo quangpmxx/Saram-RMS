@@ -109,7 +109,10 @@ describe('AttendanceService', () => {
       );
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'sale-1', role: { in: ['leader', 'mkt', 'sale'] } },
+          where: {
+            id: 'sale-1',
+            role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
+          },
         }),
       );
     });
@@ -118,7 +121,10 @@ describe('AttendanceService', () => {
       await service.getGrid({ year: 2026, month: 7 }, mktUser);
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'mkt-1', role: { in: ['leader', 'mkt', 'sale'] } },
+          where: {
+            id: 'mkt-1',
+            role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
+          },
         }),
       );
     });
@@ -133,7 +139,7 @@ describe('AttendanceService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             teamId: 'team-A',
-            role: { in: ['leader', 'mkt', 'sale'] },
+            role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
           }),
         }),
       );

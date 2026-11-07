@@ -1,9 +1,9 @@
+import { RequireCap } from '../common/decorators/require-cap.decorator';
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { ListNotificationQueryDto } from './dto/list-notification-query.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
 /**
@@ -28,13 +28,13 @@ export class NotificationController {
 
   /** Danh sách tài khoản đang hoạt động để chọn người nhận thông báo. */
   @Get('recipients')
-  @Roles('admin', 'manager')
+  @RequireCap('notification.send')
   recipients() {
     return this.notificationService.listRecipients();
   }
 
   @Post()
-  @Roles('admin', 'manager')
+  @RequireCap('notification.send')
   send(
     @Body() dto: SendNotificationDto,
     @CurrentUser() user: AuthenticatedUser,

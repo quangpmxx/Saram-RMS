@@ -1,3 +1,5 @@
+import { findOwnTeamId } from '../common/utils/account-team.util';
+import { can } from '../common/permissions/capability-catalog';
 import {
   ForbiddenException,
   Injectable,
@@ -386,26 +388,13 @@ export class LeadPipelineService {
     }
     await this.assertLeadNotHeldByOther(id, currentUser);
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-      // không giới hạn.
-    } else if (currentUser.role === 'sale') {
-      if (note.createdById !== currentUser.id) {
-        throw new ForbiddenException(
-          'Bạn chỉ được sửa ghi chú do chính mình ghi',
-        );
-      }
-    } else if (currentUser.role === 'leader') {
-      const [lead, account] = await Promise.all([
-        this.prisma.lead.findUnique({ where: { id } }),
-        this.prisma.account.findUnique({ where: { id: currentUser.id } }),
-      ]);
-      if (!lead || !account?.teamId || lead.assignedTeamId !== account.teamId) {
-        throw new ForbiddenException(
-          'Bạn chỉ được sửa ghi chú của ứng viên trong nhóm mình',
-        );
-      }
-    } else {
-      throw new ForbiddenException('Bạn không có quyền sửa ghi chú này');
+    if (
+      note.createdById !== currentUser.id &&
+      !(await this.canManageOthersNote(id, currentUser))
+    ) {
+      throw new ForbiddenException(
+        'Bạn chỉ được sửa ghi chú do chính mình ghi',
+      );
     }
 
     const oldContent = note.content;
@@ -460,23 +449,10 @@ export class LeadPipelineService {
       throw new NotFoundException('Không tìm thấy ghi chú');
     }
     await this.assertLeadNotHeldByOther(id, currentUser);
-    const isFullAccess =
-      currentUser.role === 'admin' || currentUser.role === 'manager';
-    const isOwnNote =
-      currentUser.role === 'sale' && note.createdById === currentUser.id;
-    // Leader xoá được ghi chú của mọi Sale trên data nhóm mình (rà soát
-    // phân quyền 2026-10-30) — cùng phạm vi với quyền sửa ghi chú.
-    let isTeamLeader = false;
-    if (currentUser.role === 'leader') {
-      const [lead, account] = await Promise.all([
-        this.prisma.lead.findUnique({ where: { id } }),
-        this.prisma.account.findUnique({ where: { id: currentUser.id } }),
-      ]);
-      isTeamLeader = Boolean(
-        lead && account?.teamId && lead.assignedTeamId === account.teamId,
-      );
-    }
-    if (!isFullAccess && !isOwnNote && !isTeamLeader) {
+    if (
+      note.createdById !== currentUser.id &&
+      !(await this.canManageOthersNote(id, currentUser))
+    ) {
       throw new ForbiddenException(
         'Bạn chỉ được xóa ghi chú do chính mình ghi',
       );
@@ -701,7 +677,7 @@ export class LeadPipelineService {
       throw new NotFoundException('Không tìm thấy lịch gọi lại');
     }
 
-    if (currentUser.role === 'sale') {
+    if (!this.canProcessBeyondHelp(currentUser)) {
       if (callback.createdById !== currentUser.id) {
         throw new ForbiddenException(
           'Bạn chỉ được cập nhật lịch gọi lại của mình',
@@ -777,7 +753,7 @@ export class LeadPipelineService {
     if (!callback || callback.deletedAt) {
       throw new NotFoundException('Không tìm thấy lịch gọi lại');
     }
-    if (currentUser.role === 'sale') {
+    if (!this.canProcessBeyondHelp(currentUser)) {
       if (callback.createdById !== currentUser.id) {
         throw new ForbiddenException('Bạn chỉ được xoá lịch gọi lại của mình');
       }
@@ -833,42 +809,56 @@ export class LeadPipelineService {
     // Số đang giữ: chỉ người giữ thao tác được, kể cả Admin (2026-11-06).
     assertNotHeldByOther(lead, currentUser);
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+    // Phân quyền chi tiết (2026-11-07): Admin/Quản lý mặc định có
+    // lead.process_all; Leader lead.edit_team; Sale lead.edit_help.
+    if (can(currentUser, 'lead.process_all')) {
       return lead;
     }
-    if (currentUser.role === 'sale') {
-      if (lead.assignedToId === currentUser.id) {
+    if (lead.assignedToId === currentUser.id) {
+      return lead;
+    }
+    const canTeam = can(currentUser, 'lead.edit_team');
+    const canHelp = can(currentUser, 'lead.edit_help');
+    if (canTeam || canHelp) {
+      const teamId = await findOwnTeamId(this.prisma, currentUser.id);
+      const sameTeam = Boolean(teamId && lead.assignedTeamId === teamId);
+      if (sameTeam && canTeam) {
         return lead;
       }
-      const account = await this.prisma.account.findUnique({
-        where: { id: currentUser.id },
-      });
-      const sameTeam = Boolean(
-        account?.teamId && lead.assignedTeamId === account.teamId,
-      );
-      // Rà soát phân quyền 2026-10-30: Sale xử lý hộ (ghi chú, trạng thái,
-      // lịch...) MỌI data trong nhóm mình, miễn data đã có người phụ trách.
-      // (Nhánh "khoá xử lý Cột chăm sóc" cũ đã gỡ cùng tính năng đó.)
+      // Xử lý hộ (ghi chú, trạng thái, lịch...) MỌI data trong nhóm mình,
+      // miễn data đã có người phụ trách.
       if (sameTeam && lead.assignedToId !== null) {
         return lead;
       }
       throw new ForbiddenException(
-        'Bạn chỉ được cập nhật ứng viên đang phụ trách',
-      );
-    }
-    if (currentUser.role === 'leader') {
-      const account = await this.prisma.account.findUnique({
-        where: { id: currentUser.id },
-      });
-      if (account?.teamId && lead.assignedTeamId === account.teamId) {
-        return lead;
-      }
-      throw new ForbiddenException(
-        'Bạn chỉ được cập nhật ứng viên trong nhóm mình',
+        canTeam
+          ? 'Bạn chỉ được cập nhật ứng viên trong nhóm mình'
+          : 'Bạn chỉ được cập nhật ứng viên đang phụ trách',
       );
     }
 
     throw new ForbiddenException('Bạn không có quyền thực hiện hành động này');
+  }
+
+  /** Sửa/xử lý được data ngoài phạm vi "xử lý hộ" (vd lịch gọi lại người khác tạo). */
+  private canProcessBeyondHelp(currentUser: AuthenticatedUser): boolean {
+    return (
+      can(currentUser, 'lead.process_all') || can(currentUser, 'lead.edit_team')
+    );
+  }
+
+  /** Sửa/xoá ghi chú người khác ghi: quyền note.manage_others, trong nhóm mình trừ khi có quyền mọi nhóm. */
+  private async canManageOthersNote(
+    leadId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<boolean> {
+    if (!can(currentUser, 'note.manage_others')) return false;
+    if (can(currentUser, 'lead.manage_all_teams')) return true;
+    const [lead, teamId] = await Promise.all([
+      this.prisma.lead.findUnique({ where: { id: leadId } }),
+      findOwnTeamId(this.prisma, currentUser.id),
+    ]);
+    return Boolean(lead && teamId && lead.assignedTeamId === teamId);
   }
 
   private async assertStatusInCategory(

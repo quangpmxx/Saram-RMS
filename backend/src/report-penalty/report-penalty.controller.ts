@@ -39,8 +39,8 @@ export class ReportPenaltyController {
   }
 
   @Get('deadline')
-  getDeadline(@CurrentUser() user: AuthenticatedUser) {
-    return this.reportPenaltyService.getDeadline(user);
+  getDeadline() {
+    return this.reportPenaltyService.getDeadline();
   }
 
   /** Mục 5: "Chỉ Admin được thay đổi." */

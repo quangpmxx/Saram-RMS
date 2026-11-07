@@ -124,7 +124,10 @@ describe('DailyReportsService', () => {
       await service.list({ team_id: 'team-OTHER' }, leaderUser);
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ role: 'sale', teamId: 'team-1' }),
+          where: expect.objectContaining({
+            role: { in: ['sale', 'sup_leader'] },
+            teamId: 'team-1',
+          }),
         }),
       );
     });
@@ -154,7 +157,9 @@ describe('DailyReportsService', () => {
         saleUser,
       );
       expect(prisma.account.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'sale-1', role: 'sale' } }),
+        expect.objectContaining({
+          where: { id: 'sale-1', role: { in: ['sale', 'sup_leader'] } },
+        }),
       );
     });
 
@@ -180,7 +185,10 @@ describe('DailyReportsService', () => {
     it('MKT (hoặc vai trò khác được cấp trang) chỉ xem phạm vi của chính mình, không lỗi', async () => {
       await expect(service.list({}, mktUser)).resolves.toBeDefined();
       const call = prisma.account.findMany.mock.calls[0][0];
-      expect(call.where).toMatchObject({ id: mktUser.id, role: 'sale' });
+      expect(call.where).toMatchObject({
+        id: mktUser.id,
+        role: { in: ['sale', 'sup_leader'] },
+      });
     });
 
     it('Manager thấy toàn bộ giống Admin', async () => {

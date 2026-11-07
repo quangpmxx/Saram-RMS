@@ -1,3 +1,4 @@
+import { hasCap } from "@/lib/capabilities";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
 import { requirePageAccess } from "@/lib/module-permission";
@@ -25,8 +26,8 @@ export default async function HomePage() {
   // lọc nhân viên: thêm Leader (nhân viên nhóm mình).
   const canViewPerformance = true;
   const canViewByTeam = true;
-  const canFilterByTeam = ["admin", "manager", "mkt"].includes(user.role);
-  const canFilterBySale = ["admin", "manager", "mkt"].includes(user.role);
+  const canFilterByTeam = hasCap(user, "dashboard.filter_all");
+  const canFilterBySale = hasCap(user, "dashboard.filter_all");
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

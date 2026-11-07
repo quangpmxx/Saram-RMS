@@ -10,7 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { AccountStatus } from '../../../generated/prisma/enums';
+import { AccountRole, AccountStatus } from '../../../generated/prisma/enums';
 
 /**
  * Mục 2, docs/13-api-design.md — PUT /account/:id (full_name, team_id,
@@ -54,6 +54,11 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsEnum(AccountStatus)
   status?: AccountStatus;
+
+  /** Đổi vai trò (yêu cầu người dùng 2026-11-07) — CHỈ Admin, không đổi được vai trò của chính mình. */
+  @IsOptional()
+  @IsEnum(AccountRole, { message: 'Vai trò không hợp lệ' })
+  role?: AccountRole;
 
   /** "YYYY-MM-DD" */
   @IsOptional()

@@ -1,4 +1,4 @@
-import { IsObject } from 'class-validator';
+import { IsObject, IsOptional } from 'class-validator';
 import { MODULE_REGISTRY } from '../module-registry';
 
 const LEVELS = ['none', 'view', 'edit'] as const;
@@ -10,8 +10,17 @@ const LEVELS = ['none', 'view', 'edit'] as const;
  * tạp — module list còn mở rộng, không muốn hard-code từng key ở đây.
  */
 export class SetModulePermissionsDto {
+  @IsOptional()
   @IsObject()
-  permissions: Record<string, (typeof LEVELS)[number]>;
+  permissions?: Record<string, (typeof LEVELS)[number]>;
+
+  /**
+   * Phân quyền chi tiết (2026-11-07): { [mã quyền]: true (cho phép) | false
+   * (không cho phép) | null (theo vai trò) } — chỉ gửi quyền cần đổi.
+   */
+  @IsOptional()
+  @IsObject()
+  capabilities?: Record<string, boolean | null>;
 }
 
 export const MODULE_CODES = MODULE_REGISTRY.map((m) => m.code);

@@ -14,4 +14,6 @@ export interface AuthenticatedUser {
   sessionId: string;
   /** Đang bị bắt đổi mật khẩu — xem PasswordChangeGuard. */
   mustChangePassword?: boolean;
+  /** Phân quyền chi tiết: quyền chỉnh riêng (true/false) — xem capability-catalog.ts#can. */
+  capabilityOverrides?: Record<string, boolean>;
 }

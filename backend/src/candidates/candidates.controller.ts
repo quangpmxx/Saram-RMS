@@ -1,3 +1,4 @@
+import { RequireCap } from '../common/decorators/require-cap.decorator';
 import {
   Body,
   Controller,
@@ -36,7 +37,6 @@ import { ListNotesBatchQueryDto } from './dto/list-notes-batch-query.dto';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { CreateCallbackDto } from './dto/create-callback.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { LeadActivityService } from './lead-activity.service';
 
@@ -97,7 +97,7 @@ export class CandidatesController {
 
   @Post()
   // Quản lý cũng được thêm data thủ công (rà soát phân quyền 2026-10-30).
-  @Roles('mkt', 'manager', 'admin')
+  @RequireCap('lead.create')
   create(
     @Body() dto: CreateCandidateDto,
     @CurrentUser() user: AuthenticatedUser,

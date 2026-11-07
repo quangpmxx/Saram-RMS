@@ -138,7 +138,10 @@ describe('LeaveAccrualService', () => {
     await service.runAccrual();
 
     expect(prisma.account.findMany).toHaveBeenCalledWith({
-      where: { role: { in: ['leader', 'mkt', 'sale'] }, status: 'active' },
+      where: {
+        role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
+        status: 'active',
+      },
       select: expect.objectContaining({
         id: true,
         fullName: true,

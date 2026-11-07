@@ -144,6 +144,46 @@ describe('ShuttleService', () => {
     service = moduleRef.get(ShuttleService);
   });
 
+  describe('listSaleAccounts — xếp theo nhóm (2026-11-07)', () => {
+    it('Sale cùng nhóm đứng liền nhau: nhóm A→Z, Leader → Sup Leader → Sale, chưa có nhóm cuối', async () => {
+      const acc = (fullName: string, role: string, team: string | null) => ({
+        id: fullName,
+        fullName,
+        nickname: null,
+        role,
+        team: team ? { name: team } : null,
+      });
+      // Prisma trả theo tên A→Z.
+      prisma.account.findMany.mockResolvedValueOnce([
+        acc('An', 'sale', 'Nhóm B'),
+        acc('Bình', 'sale', null),
+        acc('Chi', 'sale', 'Nhóm A'),
+        acc('Dũng', 'sup_leader', 'Nhóm B'),
+        acc('Em', 'sale', 'Nhóm A'),
+        acc('Giang', 'leader', 'Nhóm B'),
+      ]);
+
+      const result = await service.listSaleAccounts();
+
+      expect(result.map((r) => r.full_name)).toEqual([
+        'Chi',
+        'Em',
+        'Giang',
+        'Dũng',
+        'An',
+        'Bình',
+      ]);
+      // Cột Sale chọn được cả Leader (Leader cũng tự tuyển được người).
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            role: { in: ['leader', 'sale', 'sup_leader'] },
+          }),
+        }),
+      );
+    });
+  });
+
   describe('list', () => {
     it('phân trang đúng, trả về total/page/page_size/items', async () => {
       prisma.$transaction.mockResolvedValue([1, [record]]);

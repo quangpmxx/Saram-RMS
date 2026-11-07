@@ -36,6 +36,7 @@ export function PancakeSection({
   from,
   to,
   isAdmin,
+  canConfig,
   canConnect,
   userId,
   staff,
@@ -44,6 +45,8 @@ export function PancakeSection({
   from: string;
   to: string;
   isAdmin: boolean;
+  /** Gắn Nguồn MKT (quyền mkt.config). */
+  canConfig: boolean;
   canConnect: boolean;
   userId: string;
   staff: { id: string; full_name: string }[];
@@ -169,7 +172,7 @@ export function PancakeSection({
                     )}
                   </td>
                   <td className={td}>
-                    {isAdmin ? (
+                    {canConfig ? (
                       <Select
                         value={i.mkt_source?.id ?? ""}
                         disabled={busyId === i.id}

@@ -13,8 +13,7 @@ interface MarketingToday {
   cost_per_interview: number | null;
 }
 
-/** Vai trò xem được khối Marketing (khớp quyền GET /marketing-hub/today). */
-export const MARKETING_TODAY_ROLES = ["admin", "manager", "mkt"];
+// Hiện khi có quyền dashboard.mkt_cost (phân quyền chi tiết 2026-11-07).
 
 const vnd = (n: number | null) => (n === null ? "—" : `${Math.round(n).toLocaleString("vi-VN")} ₫`);
 

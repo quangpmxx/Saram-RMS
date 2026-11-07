@@ -16,6 +16,7 @@ describe('JwtStrategy.validate', () => {
     role: 'sale',
     status: 'active',
     mustChangePassword: false,
+    capabilityOverrides: [],
   };
 
   beforeEach(() => {

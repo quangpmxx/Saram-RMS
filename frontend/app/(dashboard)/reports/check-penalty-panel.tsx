@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, RotateCcw, Search, Settings2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -59,7 +60,7 @@ const STATUS_BADGE: Record<ReportViolationStatus, string> = {
 
 const PAGE_SIZE = 20;
 type PenaltySortKey = "stt" | "report_date" | "deadline" | "submitted_at";
-const EMPLOYEE_ROLES = ["sale"];
+const EMPLOYEE_ROLES = ["sale", "sup_leader"];
 
 function formatDateOnly(value: string): string {
   const [y, m, d] = value.split("-");
@@ -88,7 +89,6 @@ function pad2(n: number): string {
  * lý kết quả (Mục 6/7/8).
  */
 export function CheckPenaltyPanel({
-  currentUserRole,
   canFilterByTeam,
   canFilterBySale,
   teams,
@@ -102,8 +102,8 @@ export function CheckPenaltyPanel({
 }) {
   const toast = useToast();
   // Đổi giờ hạn nộp: Admin và Quản lý (rà soát phân quyền 2026-10-30).
-  const isAdmin = currentUserRole === "admin" || currentUserRole === "manager";
-  const canManage = currentUserRole === "admin" || currentUserRole === "manager";
+  const isAdmin = useCan()("penalty.manage");
+  const canManage = isAdmin;
   const saleOptions = saleMembers.filter((m) => EMPLOYEE_ROLES.includes(m.role));
 
   const [dateRange, setDateRange] = useState<DateRangeValue>(EMPTY_DATE_RANGE);

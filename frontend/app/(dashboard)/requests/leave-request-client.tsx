@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FilePlus2, MessageSquareWarning } from "lucide-react";
@@ -31,12 +32,12 @@ import { AnonymousFeedbackList } from "./anonymous-feedback-list";
  * không phải chỉ riêng đơn nghỉ phép) — Leader vào thẳng trang này qua
  * sidebar, không qua nút "Tạo đơn" đó.
  */
-const CREATE_ROLES = ["mkt", "sale", "leader"];
 /**
- * Đơn phản ánh ẩn danh (2026-10-28): Quản lý/Admin xem (chỉ đọc), MỌI vai trò
- * còn lại gửi — khớp VIEW_ROLES ở anonymous-feedback.service.ts.
+ * Đơn phản ánh ẩn danh (2026-10-28): Quản lý/Admin là người nhận (không gửi),
+ * MỌI vai trò còn lại gửi — khớp anonymous-feedback.service.ts. Xem đơn theo
+ * quyền feedback.view (phân quyền chi tiết 2026-11-07).
  */
-const FEEDBACK_VIEW_ROLES = ["admin", "manager"];
+const FEEDBACK_RECEIVER_ROLES = ["admin", "manager"];
 
 const STATUS_FILTER_OPTIONS: Array<{ value: LeaveRequestStatus | "all"; label: string }> = [
   { value: "all", label: "Tất cả trạng thái" },
@@ -114,15 +115,15 @@ export function LeaveRequestClient({
     queueMicrotask(() => setView("feedback"));
   }, [searchParams]);
 
-  const canCreate = CREATE_ROLES.includes(currentUser.role);
-  const canViewFeedback = FEEDBACK_VIEW_ROLES.includes(currentUser.role);
-  const canSendFeedback = !canViewFeedback;
-  const isLeader = currentUser.role === "leader";
-  const isAdmin = currentUser.role === "admin" || currentUser.role === "manager";
-  // Sale/MKT chỉ bao giờ thấy đúng đơn của chính mình (1 người) — các vai
-  // trò còn lại (kể cả Leader, nay đã thấy CẢ đơn của chính mình LẪN đơn
-  // thành viên nhóm) đều có thể thấy đơn của nhiều người khác nhau cùng lúc.
-  const showEmployeeColumn = currentUser.role !== "sale" && currentUser.role !== "mkt";
+  const can = useCan();
+  const canCreate = can("leave.create");
+  const canViewFeedback = can("feedback.view");
+  const canSendFeedback = !FEEDBACK_RECEIVER_ROLES.includes(currentUser.role);
+  const isLeader = can("leave.approve_team");
+  const isAdmin = can("leave.approve_final");
+  // Không có quyền duyệt → chỉ thấy đúng đơn của chính mình (1 người); người
+  // duyệt (cấp 1: cả nhóm, cấp 2: toàn công ty) thấy đơn của nhiều người.
+  const showEmployeeColumn = isLeader || isAdmin;
 
   const introText = isLeader
     ? "Tạo đơn xin nghỉ phép cho bản thân, hoặc duyệt đơn của thành viên trong nhóm bạn."

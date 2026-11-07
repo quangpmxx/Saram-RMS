@@ -44,6 +44,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const account = await this.prisma.account.findUnique({
       where: { id: payload.sub },
+      include: {
+        capabilityOverrides: { select: { code: true, granted: true } },
+      },
     });
     if (!account || account.status === 'inactive') {
       throw new UnauthorizedException('Tài khoản không còn hoạt động');
@@ -70,6 +73,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: account.role,
       sessionId: session.id,
       mustChangePassword: account.mustChangePassword,
+      capabilityOverrides: Object.fromEntries(
+        account.capabilityOverrides.map((o) => [o.code, o.granted]),
+      ),
     };
   }
 }

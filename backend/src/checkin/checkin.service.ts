@@ -1,3 +1,4 @@
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ForbiddenException,
@@ -30,7 +31,7 @@ const TIMEZONE = 'Asia/Ho_Chi_Minh';
  * Admin/Quản lý không dùng. Khớp đúng EMPLOYEE_ROLES ở attendance.service.ts
  * (module Chấm công) — không phát minh danh sách vai trò riêng.
  */
-const CHECKIN_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
+const CHECKIN_ROLES: AccountRole[] = ['leader', 'mkt', 'sale', 'sup_leader'];
 
 /**
  * Yêu cầu trực tiếp người dùng (2026-07-24): "Trang chấm công GPS chỉ có
@@ -42,15 +43,9 @@ const CHECKIN_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
  * POST /checkin — vẫn giữ nguyên, đó là hành động tự phục vụ khác hẳn
  * "xem trang quản lý").
  */
-const VIEW_ROLES = new Set(['admin', 'manager']);
-
-/** Mục 10: chỉ Admin/Quản lý "xem chi tiết GPS, IP, thiết bị" của người KHÁC — Leader/Nhân viên chỉ xem được đầy đủ bản ghi CỦA CHÍNH MÌNH. */
-const FULL_DETAIL_ROLES = new Set(['admin', 'manager']);
-/**
- * Reset / duyệt hợp lệ / ghi chú Check in và cấu hình vị trí công ty — Admin
- * và Quản lý (rà soát phân quyền 2026-10-30; trước đây chỉ Admin).
- */
-const CHECKIN_ADMIN_ROLES = new Set(['admin', 'manager']);
+// Xem trang quản lý, xem chi tiết GPS/IP/thiết bị của người khác, reset/duyệt
+// hợp lệ/ghi chú Check in, cấu hình vị trí công ty: quyền checkin.manage
+// (mặc định Admin/Quản lý — phân quyền chi tiết 2026-11-07).
 
 /** Mục 3, yêu cầu người dùng: "Accuracy lớn hơn 100m -> Cần xác minh". */
 const ACCURACY_NEEDS_VERIFICATION_METERS = 100;
@@ -376,7 +371,7 @@ export class CheckinService {
   async getCompanyLocation(
     currentUser: AuthenticatedUser,
   ): Promise<CompanyLocationResponseDto | null> {
-    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException(
         'Chỉ Admin/Quản lý được xem cấu hình vị trí công ty',
       );
@@ -403,7 +398,7 @@ export class CheckinService {
     dto: UpdateCompanyLocationDto,
     currentUser: AuthenticatedUser,
   ): Promise<CompanyLocationResponseDto> {
-    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException(
         'Chỉ Admin/Quản lý được thay đổi cấu hình vị trí công ty',
       );
@@ -462,7 +457,7 @@ export class CheckinService {
     query: ListCheckinQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<CheckinListResponseDto> {
-    if (!VIEW_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException('Bạn không có quyền xem Check in');
     }
 
@@ -487,7 +482,7 @@ export class CheckinService {
           });
     const recordByAccount = new Map(records.map((r) => [r.accountId, r]));
 
-    const canViewFullDetail = FULL_DETAIL_ROLES.has(currentUser.role);
+    const canViewFullDetail = can(currentUser, 'checkin.manage');
 
     let rows = employees.map((employee) => {
       const record = recordByAccount.get(employee.id);
@@ -528,10 +523,11 @@ export class CheckinService {
     query: ListCheckinQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<Prisma.AccountWhereInput> {
-    if (currentUser.role === 'sale' || currentUser.role === 'mkt') {
+    const viewAll = can(currentUser, 'attendance.view_all');
+    if (!viewAll && !can(currentUser, 'attendance.view_team')) {
       return { id: currentUser.id, role: { in: CHECKIN_ROLES } };
     }
-    if (currentUser.role === 'leader') {
+    if (!viewAll) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
@@ -564,7 +560,7 @@ export class CheckinService {
     reason: string,
     currentUser: AuthenticatedUser,
   ): Promise<{ success: true }> {
-    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException('Chỉ Admin/Quản lý được Reset Check in');
     }
 
@@ -613,7 +609,7 @@ export class CheckinService {
     recordId: string,
     currentUser: AuthenticatedUser,
   ): Promise<CheckinRecordResponseDto> {
-    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException(
         'Chỉ Admin/Quản lý được xác nhận trạng thái Check in',
       );
@@ -664,7 +660,7 @@ export class CheckinService {
     note: string,
     currentUser: AuthenticatedUser,
   ): Promise<CheckinRecordResponseDto> {
-    if (!CHECKIN_ADMIN_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException(
         'Chỉ Admin/Quản lý được sửa ghi chú Check in',
       );

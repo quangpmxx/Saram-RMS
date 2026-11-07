@@ -1,3 +1,4 @@
+import { effectiveCapabilities } from '../common/permissions/capability-catalog';
 import { randomUUID } from 'crypto';
 import { extname, join } from 'path';
 import {
@@ -88,7 +89,12 @@ export class AuthController {
   @Get('me')
   @AllowPasswordChange()
   async me(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.me(user.id);
+    // Phân quyền chi tiết (2026-11-07): kèm danh sách quyền nhỏ hiệu lực để
+    // giao diện ẩn/hiện nút — máy chủ vẫn là lớp chặn thật.
+    return {
+      ...(await this.authService.me(user.id)),
+      capabilities: effectiveCapabilities(user),
+    };
   }
 
   @Put('me/password')

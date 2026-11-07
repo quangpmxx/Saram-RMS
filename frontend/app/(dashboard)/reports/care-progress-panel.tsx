@@ -1,5 +1,7 @@
 "use client";
 
+import { isSaleRole } from "@/lib/types";
+import { useCan } from "@/lib/capability-context";
 import { useState } from "react";
 import type { AccountRole, Team, TeamMember } from "@/lib/types";
 import { Card } from "@/components/ui/card";
@@ -29,8 +31,8 @@ export function CareProgressPanel({
   const [accountId, setAccountId] = useState("");
   const [status, setStatus] = useState<"" | "pending" | "done">("");
 
-  const sales = saleMembers.filter((m) => m.role === "sale" && (!teamId || m.team_id === teamId));
-  const showFilters = currentUserRole !== "sale";
+  const sales = saleMembers.filter((m) => isSaleRole(m.role) && (!teamId || m.team_id === teamId));
+  const showFilters = useCan()("care.progress");
 
   return (
     <div className="space-y-3">

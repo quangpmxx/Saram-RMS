@@ -19,6 +19,8 @@ import { APP_SCROLL_CONTAINER_ID } from "@/lib/app-scroll-container";
 import { NavigationTracker } from "@/lib/navigation-history";
 import { BirthdayThemeProvider } from "@/lib/birthday-theme-context";
 import { UiThemeProvider } from "@/lib/ui-theme";
+import { CapabilityProvider } from "@/lib/capability-context";
+import { hasCap } from "@/lib/capabilities";
 import { BirthdayLayoutBackground } from "@/components/birthday/birthday-layout-background";
 import { BirthdayHeaderStrip } from "@/components/birthday/birthday-header-strip";
 import { BirthdayHeaderBackground } from "@/components/birthday/birthday-header-background";
@@ -57,6 +59,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const navItems: NavItem[] = MODULE_REGISTRY.map((item) => ({ href: item.href, label: item.label, icon: item.icon }));
 
   return (
+    <CapabilityProvider capabilities={user.capabilities ?? []}>
     <PageTitleProvider>
       <ToastProvider>
         <BirthdayThemeProvider initialData={birthdayToday}>
@@ -112,7 +115,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   </div>
                   <BirthdayBanner />
                   <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
-                    {(user.role === "admin" || user.role === "manager") && <SendNotificationButton />}
+                    {hasCap(user, "notification.send") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
                     <NotificationBell userId={user.id} />
@@ -162,5 +165,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </BirthdayThemeProvider>
       </ToastProvider>
     </PageTitleProvider>
+    </CapabilityProvider>
   );
 }

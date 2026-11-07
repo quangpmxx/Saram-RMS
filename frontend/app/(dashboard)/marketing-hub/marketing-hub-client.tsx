@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useSetPageTitle } from "@/lib/page-title-context";
@@ -69,7 +70,6 @@ const today = () =>
  * đồng bộ từ Facebook (tài khoản chưa đồng bộ hiện "—"); không có chi phí/data theo nhân viên.
  */
 export function MarketingHubClient({
-  role,
   userId,
 }: {
   role: string;
@@ -77,8 +77,11 @@ export function MarketingHubClient({
 }) {
   useSetPageTitle("Marketing Hub");
   const toast = useToast();
-  const isAdmin = role === "admin";
-  const canConnect = isAdmin || role === "mkt";
+  // Phân quyền chi tiết (2026-11-07): isAdmin = được đổi người phụ trách / thao tác TKQC người khác.
+  const can = useCan();
+  const isAdmin = can("mkt.assign_owner");
+  const canConfig = can("mkt.config");
+  const canConnect = can("mkt.link_own");
 
   const [date, setDate] = useState<DateRangeValue>(() => ({
     preset: "30d",
@@ -141,11 +144,11 @@ export function MarketingHubClient({
 
   // Danh mục Nguồn MKT cho ô gắn nguồn (Admin); tải lại khi đóng hộp sửa nguồn.
   useEffect(() => {
-    if (!isAdmin || showMktSources) return;
+    if (!canConfig || showMktSources) return;
     clientApi<{ id: string; name: string }[]>("/marketing-hub/mkt-sources")
       .then(setMktSources)
       .catch(() => {});
-  }, [isAdmin, showMktSources]);
+  }, [canConfig, showMktSources]);
 
   async function act(id: string, fn: () => Promise<unknown>, okMsg: string) {
     setBusyId(id);
@@ -209,7 +212,7 @@ export function MarketingHubClient({
             ))}
           </Select>
         </Field>
-        {isAdmin && (
+        {canConfig && (
           <>
             <Button
               type="button"
@@ -234,7 +237,7 @@ export function MarketingHubClient({
           <Button
             type="button"
             size="xs"
-            className={isAdmin ? "" : "ml-auto"}
+            className={canConfig ? "" : "ml-auto"}
             onClick={() => setShowConnect(true)}
           >
             Liên kết Facebook
@@ -270,6 +273,7 @@ export function MarketingHubClient({
         from={from}
         to={to}
         isAdmin={isAdmin}
+        canConfig={canConfig}
         canConnect={canConnect}
         userId={userId}
         staff={staff}
@@ -338,7 +342,7 @@ export function MarketingHubClient({
                   <td className="px-3 py-2">{i.name}</td>
                   <td className="px-3 py-2">{PLATFORM_LABEL[i.platform]}</td>
                   <td className="px-3 py-2">
-                    {isAdmin ? (
+                    {canConfig ? (
                       <Select
                         value={i.mkt_source?.id ?? ""}
                         disabled={busyId === i.id}

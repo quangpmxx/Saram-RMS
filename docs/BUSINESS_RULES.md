@@ -10,9 +10,12 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 | Leader | Chỉ nhóm mình | Chia/chuyển lead trong nhóm, sửa mọi lead nhóm, cấu hình vòng quay, xoá ghi chú trong nhóm |
 | MKT | Data mình upload + xem (không sửa) ghi chú của Sale | Sửa/xoá data (đã duyệt: MKT sửa/xoá mọi data) |
 | Sale | Lead được giao + Kho chăm sóc nhóm mình | Cập nhật trạng thái/ghi chú; xử lý hộ data trong nhóm khi data có người phụ trách |
+| Sup Leader (2026-11-07, màu xanh lá) | Như Sale | Làm việc như Sale ở mọi chỗ (nhận data, chia tự động, hiệu suất, báo cáo/phạt, chấm công, ô chọn Sale); quyền mặc định như Sale, Admin cấp thêm ở trang Phân quyền. Code: `SALE_ROLES` (`common/utils/sale-roles.ts`, frontend `lib/types.ts`) |
+- Đổi vai trò (2026-11-07): chỉ Admin, ở hộp Sửa tài khoản; không đổi vai trò của chính mình. Vai trò cần nhóm (Leader/Sale/Sup Leader) phải có nhóm; đổi sang vai trò không thuộc nhóm → gỡ khỏi nhóm; hết là Leader → gỡ khỏi vị trí Leader của nhóm. Quyền chỉnh riêng ở trang Phân quyền giữ nguyên. Ghi Nhật ký.
 - Mỗi tài khoản đúng 1 vai trò; nhiều thiết bị đăng nhập cùng lúc. Dashboard mặc định chung toàn công ty (đã duyệt); ô "Phạm vi" (2026-11-06): Leader chọn Toàn công ty / Nhóm mình / 1 nhân viên trong nhóm, Sale chọn Tất cả / chính mình — máy chủ bỏ qua giá trị ngoài phạm vi.
 - Vai trò accounting, order_staff, shuttle_staff gắn với module riêng (Kế toán, Quản lý đơn, Đưa đón) — **[chưa xác minh chi tiết]**.
 - Quyền module hiển thị trên sidebar do `MODULE_REGISTRY` + trang Admin "Phân quyền" quyết định.
+- **Phân quyền chi tiết** (duyệt 2026-11-07): ngoài mức trang (Không/Xem/Sửa), mỗi trang có các quyền nhỏ (thêm/xoá/chia/chuyển data, xem toàn công ty/cả nhóm, hiệu quả nhóm…). Mỗi người, mỗi quyền: Theo vai trò / Cho phép / Không cho phép. Mặc định = đúng quyền cũ theo vai trò. Danh mục + mặc định: `backend/src/common/permissions/capability-catalog.ts`. Thiếu cả quyền "toàn công ty" lẫn "cả nhóm" → chỉ thấy phần của mình. Thao tác "trong nhóm" (chia/chuyển/giao Kho/bỏ giữ số/sửa ghi chú người khác) mở ra mọi nhóm khi có `lead.manage_all_teams`. Luật cứng không mở bằng phân quyền: số đang giữ chỉ người giữ thao tác; chỉ chia cho tài khoản vai trò Sale; Phân quyền, thêm/xoá NV, reset mật khẩu chỉ Admin. Admin có mọi quyền trừ việc chỉ của nhân viên (nộp báo cáo, xin nghỉ, duyệt nghỉ cấp 1).
 - Tài khoản bị vô hiệu hóa (duyệt 2026-11-06): không đăng nhập được; không còn trong danh sách chọn Sale/bộ lọc (`GET /team/:id/member`), bảng/Top theo nhân viên ở Dashboard, Tiến độ chăm sóc, Báo cáo hằng ngày. Số **tổng** nhóm/công ty vẫn tính kết quả cũ của họ. Data đang giao cho họ giữ nguyên, vẫn hiện tên phụ trách để Leader chuyển lại.
 
 ## Data lao động (Lead)
@@ -45,7 +48,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 Bảo toàn lịch sử (ghi chú, lịch hẹn, phân công, Nhật ký) · gán/chuyển lead không race · phạm vi dữ liệu theo vai trò ở mọi API (kể cả tìm kiếm/lọc) · Đưa đón và ghi chú xoá mềm · tài khoản bị khoá/đổi nhóm thì mất realtime · mật khẩu mặc định buộc đổi.
 
 ## Điểm đặc tả còn mở (doc 09 mục 11)
-Danh sách quyền chi tiết cho Quản lý/Leader (khung đã có, chưa có danh mục) · ranh giới Admin–Quản lý · quy trình bộ phận đưa đón · danh mục công ty đối tác (hiện nhập tự do) · báo cáo so sánh theo kỳ.
+Ranh giới Admin–Quản lý · quy trình bộ phận đưa đón · danh mục công ty đối tác (hiện nhập tự do) · báo cáo so sánh theo kỳ.
 
 ## Marketing Hub (đã duyệt 2026-11-02)
 - Chỉ VNĐ. Mỗi tài khoản quảng cáo đúng 1 nhân viên phụ trách (unique nền tảng + mã ngoài). Admin gán/đổi cho ai cũng được; MKT chỉ liên kết/đồng bộ/gỡ tài khoản của mình, không giành tài khoản đã có người phụ trách; Quản lý chỉ xem.

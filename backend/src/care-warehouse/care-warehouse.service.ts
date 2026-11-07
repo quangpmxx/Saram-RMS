@@ -1,3 +1,5 @@
+import { SALE_ROLES, isSaleRole } from '../common/utils/sale-roles';
+import { can } from '../common/permissions/capability-catalog';
 import {
   BadRequestException,
   ConflictException,
@@ -45,10 +47,6 @@ import { ListCareWarehouseQueryDto } from './dto/list-care-warehouse-query.dto';
 import { RandomPreviewDto } from './dto/random-assign.dto';
 import { CareProgressQueryDto } from './dto/care-progress-query.dto';
 import { ListBatchesQueryDto } from './dto/list-batches-query.dto';
-
-/** Quản lý/Admin thao tác trên mọi nhóm (Câu 4 đã chốt — giống mọi module hiện nay). */
-const ALL_TEAMS_ROLES = new Set(['admin', 'manager']);
-const ASSIGNER_ROLES = new Set(['admin', 'manager', 'leader']);
 
 /** field_changed của audit_logs dùng để dựng lại trạng thái Dừng chăm sóc theo thời gian. */
 export const CARE_STOP_AUDIT_FIELD = 'care_stopped_at';
@@ -181,11 +179,8 @@ export class CareWarehouseService {
   ): Promise<string | null> {
     // MKT xem Kho toàn công ty (yêu cầu người dùng 2026-10-28) — CHỈ xem:
     // mọi thao tác giao/nhận/dừng đều chặn MKT ở các hàm tương ứng.
-    if (ALL_TEAMS_ROLES.has(user.role) || user.role === 'mkt') {
+    if (can(user, 'care.view_all')) {
       return requestedTeamId ?? null;
-    }
-    if (user.role !== 'leader' && user.role !== 'sale') {
-      throw new ForbiddenException('Bạn không có quyền xem Kho chăm sóc');
     }
     const teamId = await this.getOwnTeamId(user.id);
     if (!teamId) {
@@ -272,12 +267,11 @@ export class CareWarehouseService {
     // Thẻ "Chăm sóc (N)": tổng data trong Kho theo bộ lọc Nhóm/Nhân viên của
     // thanh Tiến độ (yêu cầu người dùng 2026-10-29), không tính ô tìm kiếm.
     // Sale không có bộ lọc đó → tổng Kho của nhóm mình.
-    const warehouseTotal =
-      user.role !== 'sale'
-        ? range.in_warehouse
-        : searchWhere
-          ? await this.prisma.lead.count({ where: scopeWhere })
-          : ids.length;
+    const warehouseTotal = can(user, 'care.progress')
+      ? range.in_warehouse
+      : searchWhere
+        ? await this.prisma.lead.count({ where: scopeWhere })
+        : ids.length;
 
     const lastCareFrom = query.last_care_from
       ? vnDayRange(query.last_care_from).start
@@ -395,12 +389,12 @@ export class CareWarehouseService {
     listTeamId: string | null,
     listCounts: { cared: number; total: number } | null,
   ) {
-    const teamId =
-      ALL_TEAMS_ROLES.has(user.role) || user.role === 'mkt'
-        ? (query.stats_team_id ?? null)
-        : await this.resolveTeamScope(user);
-    const assigneeId =
-      user.role === 'sale' ? user.id : (query.stats_assignee_id ?? null);
+    const teamId = can(user, 'care.view_all')
+      ? (query.stats_team_id ?? null)
+      : await this.resolveTeamScope(user);
+    const assigneeId = !can(user, 'care.progress')
+      ? user.id
+      : (query.stats_assignee_id ?? null);
 
     const range = await this.assignmentRangeStats(
       query,
@@ -412,7 +406,7 @@ export class CareWarehouseService {
     let cared = listCounts?.cared ?? 0;
     let total = listCounts?.total ?? 0;
     if (
-      user.role !== 'sale' &&
+      can(user, 'care.progress') &&
       (!listCounts || teamId !== listTeamId || assigneeId)
     ) {
       const monthStart = vnMonthStart(now);
@@ -819,8 +813,8 @@ export class CareWarehouseService {
 
   /** Sale tự nhận 1 data trong Kho của nhóm mình. */
   async claim(leadId: string, user: AuthenticatedUser) {
-    if (user.role !== 'sale') {
-      throw new ForbiddenException('Chỉ Sale mới tự nhận data trong Kho');
+    if (!can(user, 'care.claim')) {
+      throw new ForbiddenException('Bạn không có quyền tự nhận data trong Kho');
     }
     const result = await this.assignPairs(
       [{ leadId, assigneeId: user.id }],
@@ -1116,9 +1110,9 @@ export class CareWarehouseService {
     user: AuthenticatedUser,
   ): Promise<CandidateResponseDto> {
     const now = new Date();
-    const actorTeamId =
-      user.role === 'leader' ? await this.actorTeamId(user) : null;
-    const isRequest = stopped && user.role === 'sale';
+    const canStop = can(user, 'care.stop');
+    const actorTeamId = canStop ? await this.actorTeamId(user) : null;
+    const isRequest = stopped && !canStop;
     let pendingRequesterId: string | null = null;
     let leadName = '';
     let leadTeamId: string | null = null;
@@ -1226,9 +1220,9 @@ export class CareWarehouseService {
     approve: boolean,
     user: AuthenticatedUser,
   ): Promise<CandidateResponseDto> {
-    if (!ASSIGNER_ROLES.has(user.role)) {
+    if (!can(user, 'care.decide_stop')) {
       throw new ForbiddenException(
-        'Chỉ Leader, Quản lý hoặc Admin mới duyệt đề nghị dừng chăm sóc',
+        'Bạn không có quyền duyệt đề nghị dừng chăm sóc',
       );
     }
     const now = new Date();
@@ -1526,13 +1520,15 @@ export class CareWarehouseService {
   ): void {
     // Số đang giữ: chỉ người giữ thao tác được, kể cả Admin (2026-11-06).
     assertNotHeldByOther(lead, user);
-    if (ALL_TEAMS_ROLES.has(user.role)) return;
-    if (user.role === 'leader') {
-      this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
+    if (can(user, 'care.stop')) {
+      // actorTeamId null = có quyền thao tác mọi nhóm.
+      if (actorTeamId !== null) {
+        this.assertLeadInTeam(actorTeamId, lead.assignedTeamId);
+      }
       return;
     }
     if (
-      user.role === 'sale' &&
+      can(user, 'care.stop_request') &&
       (lead.assignedToId === user.id || openAssigneeId === user.id)
     ) {
       return;
@@ -1673,14 +1669,12 @@ export class CareWarehouseService {
 
     let teamId: string | null;
     let accountId = query.account_id;
-    if (user.role === 'sale') {
-      teamId = await this.resolveTeamScope(user);
-      accountId = user.id;
-    } else if (ASSIGNER_ROLES.has(user.role) || user.role === 'mkt') {
-      // MKT xem toàn bộ như Admin (rà soát phân quyền 2026-10-30).
+    if (can(user, 'care.progress')) {
       teamId = await this.resolveTeamScope(user, query.team_id);
     } else {
-      throw new ForbiddenException('Bạn không có quyền xem tiến độ chăm sóc');
+      // Không có quyền xem cả nhóm: chỉ tiến độ của chính mình.
+      teamId = await this.resolveTeamScope(user);
+      accountId = user.id;
     }
 
     const dayMonthStart = vnMonthStart(day.start);
@@ -1689,7 +1683,7 @@ export class CareWarehouseService {
     const windowEnd = day.end > monthRange.end ? day.end : monthRange.end;
 
     const accountWhere: Prisma.AccountWhereInput = {
-      role: 'sale',
+      role: { in: SALE_ROLES },
       ...(teamId ? { teamId } : {}),
       ...(accountId ? { id: accountId } : {}),
       OR: [
@@ -1905,9 +1899,9 @@ export class CareWarehouseService {
   // ===========================================================================
 
   private assertAssigner(user: AuthenticatedUser): void {
-    if (!ASSIGNER_ROLES.has(user.role)) {
+    if (!can(user, 'care.assign')) {
       throw new ForbiddenException(
-        'Chỉ Leader, Quản lý hoặc Admin mới được phân công trong Kho',
+        'Bạn không có quyền phân công trong Kho chăm sóc',
       );
     }
   }
@@ -1919,7 +1913,7 @@ export class CareWarehouseService {
    * mọi truy vấn qua this.prisma bên trong transaction sẽ chờ mãi.
    */
   private async actorTeamId(user: AuthenticatedUser): Promise<string | null> {
-    if (ALL_TEAMS_ROLES.has(user.role)) return null;
+    if (can(user, 'lead.manage_all_teams')) return null;
     const teamId = await this.getOwnTeamId(user.id);
     if (!teamId) {
       throw new ForbiddenException('Tài khoản của bạn chưa thuộc nhóm nào');
@@ -1945,7 +1939,7 @@ export class CareWarehouseService {
     const ownTeamId = await this.actorTeamId(user);
     for (const id of ids) {
       const a = accounts.find((x) => x.id === id);
-      if (!a || a.role !== 'sale' || a.status !== 'active' || !a.teamId) {
+      if (!a || !isSaleRole(a.role) || a.status !== 'active' || !a.teamId) {
         throw new BadRequestException(
           'Người nhận phải là Sale đang hoạt động và đã thuộc 1 nhóm',
         );

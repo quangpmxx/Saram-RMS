@@ -1,3 +1,4 @@
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,9 +47,6 @@ export function dailyOccurrences(
   }
   return result;
 }
-
-/** Mục 2.6 & 8, docs/09: Admin/Quản lý/MKT xem toàn bộ, không giới hạn nhóm. */
-const VIEW_ALL_LEADS_ROLES = new Set(['admin', 'manager', 'mkt']);
 
 /**
  * Mục 7, docs/13-api-design.md — GET /calendar: gộp lịch hẹn PV + lịch gọi
@@ -176,7 +174,7 @@ export class CalendarService {
   ): Promise<Record<string, unknown>> {
     const where: Record<string, unknown> = { deletedAt: null };
 
-    if (VIEW_ALL_LEADS_ROLES.has(currentUser.role)) {
+    if (can(currentUser, 'calendar.view_all')) {
       if (query.team_id) {
         where.assignedTeamId = query.team_id;
       }
@@ -186,7 +184,7 @@ export class CalendarService {
       return where;
     }
 
-    if (currentUser.role === 'leader') {
+    if (can(currentUser, 'calendar.view_team')) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
@@ -197,7 +195,7 @@ export class CalendarService {
       return where;
     }
 
-    // sale
+    // Không có quyền xem cả nhóm/toàn công ty: chỉ lịch data mình phụ trách.
     where.assignedToId = currentUser.id;
     return where;
   }

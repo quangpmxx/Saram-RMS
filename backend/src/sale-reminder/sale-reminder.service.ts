@@ -1,3 +1,4 @@
+import { SALE_ROLES, isSaleRole } from '../common/utils/sale-roles';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
@@ -84,7 +85,7 @@ export class SaleReminderService {
     const today = toDateOnlyInTimezone(new Date(), TIMEZONE);
 
     const sales = await this.prisma.account.findMany({
-      where: { role: 'sale', status: 'active' },
+      where: { role: { in: SALE_ROLES }, status: 'active' },
       include: { team: { include: { leader: true } } },
     });
 
@@ -166,7 +167,7 @@ export class SaleReminderService {
     username: string,
   ): Promise<{ account: string; seeded_record_date: string }> {
     const sale = await this.prisma.account.findUnique({ where: { username } });
-    if (!sale || sale.role !== 'sale') {
+    if (!sale || !isSaleRole(sale.role)) {
       throw new NotFoundException(
         `Không tìm thấy tài khoản Sale với username "${username}"`,
       );

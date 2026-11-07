@@ -1,3 +1,4 @@
+import { RequireCap } from '../common/decorators/require-cap.decorator';
 import {
   BadRequestException,
   Body,
@@ -16,7 +17,6 @@ import {
   LegacyImportService,
   type LegacyImportInput,
 } from './legacy-import.service';
-import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
@@ -56,7 +56,7 @@ function toLegacyInput(
  * kế thừa toàn bộ quyền của vai trò cấp dưới" (yêu cầu trực tiếp người dùng).
  */
 @Controller('candidate')
-@Roles('mkt', 'admin')
+@RequireCap('lead.import')
 export class ImportsController {
   constructor(
     private readonly importsService: ImportsService,
@@ -65,7 +65,7 @@ export class ImportsController {
 
   /** "Tải data cũ" bước 1 — đọc file, liệt kê sheet / xem trước (không ghi gì). */
   @Post('legacy-import/preview')
-  @Roles('admin')
+  @RequireCap('lead.import_legacy')
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: LEGACY_MAX_FILE_SIZE_BYTES },
@@ -80,7 +80,7 @@ export class ImportsController {
 
   /** "Tải data cũ" bước 2 — tạo data theo bảng ghép nhân viên ↔ tài khoản. */
   @Post('legacy-import/commit')
-  @Roles('admin')
+  @RequireCap('lead.import_legacy')
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: LEGACY_MAX_FILE_SIZE_BYTES },

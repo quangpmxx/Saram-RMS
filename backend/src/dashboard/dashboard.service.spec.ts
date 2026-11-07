@@ -139,7 +139,10 @@ describe('DashboardService', () => {
       await service.getPerformance({ account_id: 'sale-2' }, saleUser);
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ role: 'sale', id: 'sale-1' }),
+          where: expect.objectContaining({
+            role: { in: ['sale', 'sup_leader'] },
+            id: 'sale-1',
+          }),
         }),
       );
       prisma.account.findMany.mockClear();
@@ -154,7 +157,10 @@ describe('DashboardService', () => {
       await service.getPerformance({ team_id: 'team-OTHER' }, leaderUser);
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ role: 'sale', teamId: 'team-1' }),
+          where: expect.objectContaining({
+            role: { in: ['sale', 'sup_leader'] },
+            teamId: 'team-1',
+          }),
         }),
       );
     });

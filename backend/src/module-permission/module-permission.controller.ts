@@ -13,6 +13,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { MODULE_REGISTRY } from './module-registry';
+import { CAPABILITY_CATALOG } from '../common/permissions/capability-catalog';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
@@ -31,6 +32,19 @@ export class ModulePermissionController {
   @Get('modules')
   listModules() {
     return MODULE_REGISTRY.map((m) => ({ code: m.code, label: m.label }));
+  }
+
+  /** Phân quyền chi tiết (2026-11-07): danh mục quyền nhỏ + vai trò mặc định — dựng trang Phân quyền. */
+  @Get('capabilities')
+  @Roles('admin')
+  listCapabilities() {
+    return CAPABILITY_CATALOG.map((c) => ({
+      code: c.code,
+      module: c.module,
+      label: c.label,
+      hint: c.hint ?? null,
+      default_roles: c.defaultRoles,
+    }));
   }
 
   /** Quyền hiệu lực của CHÍNH người đang đăng nhập — mọi vai trò gọi được (dùng để lọc menu/route phía frontend). */
@@ -55,6 +69,8 @@ export class ModulePermissionController {
         accountId,
         account.role,
       ),
+      capability_overrides:
+        await this.modulePermissionService.getCapabilityOverrides(accountId),
     };
   }
 
@@ -67,9 +83,20 @@ export class ModulePermissionController {
   ) {
     const permissions = await this.modulePermissionService.setPermissions(
       accountId,
-      dto.permissions,
+      dto.permissions ?? {},
       user,
     );
-    return { account_id: accountId, permissions };
+    const capabilityOverrides = dto.capabilities
+      ? await this.modulePermissionService.setCapabilities(
+          accountId,
+          dto.capabilities,
+          user,
+        )
+      : await this.modulePermissionService.getCapabilityOverrides(accountId);
+    return {
+      account_id: accountId,
+      permissions,
+      capability_overrides: capabilityOverrides,
+    };
   }
 }

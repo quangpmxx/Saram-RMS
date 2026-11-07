@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
-import type { Account, ModulePermissionSummary, PaginatedResult } from "@/lib/types";
+import type { Account, CapabilitySummary, ModulePermissionSummary, PaginatedResult } from "@/lib/types";
 import { PermissionsClient } from "./permissions-client";
 import { AccountTabs } from "../account-tabs";
 
@@ -22,15 +22,21 @@ export default async function PermissionsPage() {
     redirect("/access-denied");
   }
 
-  const [accountsResult, modules] = await Promise.all([
+  const [accountsResult, modules, capabilities] = await Promise.all([
     serverApi<PaginatedResult<Account>>("/account?page=1&page_size=200"),
     serverApi<ModulePermissionSummary[]>("/module-permission/modules"),
+    serverApi<CapabilitySummary[]>("/module-permission/capabilities"),
   ]);
 
   return (
     <>
       <AccountTabs active="permissions" isAdmin />
-      <PermissionsClient accounts={accountsResult.items} modules={modules} currentAdminId={user.id} />
+      <PermissionsClient
+        accounts={accountsResult.items}
+        modules={modules}
+        capabilities={capabilities}
+        currentAdminId={user.id}
+      />
     </>
   );
 }

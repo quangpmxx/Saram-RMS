@@ -1,3 +1,4 @@
+import { isSaleRole } from '../common/utils/sale-roles';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -151,7 +152,7 @@ export class RealtimeGateway
       if (user.role === 'admin' || user.role === 'manager') {
         rooms.push(ADMIN_MANAGER_ROOM);
       }
-      if (user.role === 'leader' || user.role === 'sale') {
+      if (user.role === 'leader' || isSaleRole(user.role)) {
         rooms.push(LEADER_SALE_GENERAL_ROOM);
         const account = await this.prisma.account.findUnique({
           where: { id: user.id },

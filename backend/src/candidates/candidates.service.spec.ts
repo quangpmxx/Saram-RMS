@@ -826,6 +826,27 @@ describe('CandidatesService', () => {
       });
     });
 
+    it('Phân quyền chi tiết: bị thu quyền giữ số vẫn bỏ giữ được số của chính mình, nhưng không giữ số mới', async () => {
+      const noHold = {
+        ...saleUser,
+        capabilityOverrides: { 'lead.hold': false },
+      };
+      prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
+      prisma.lead.updateMany.mockResolvedValue({ count: 1 });
+      prisma.lead.findUniqueOrThrow.mockResolvedValue(baseLead);
+
+      prisma.lead.findUnique.mockResolvedValue(heldLead);
+      await expect(service.unhold('lead-1', noHold)).resolves.toBeDefined();
+
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedTeamId: 'team-1',
+      });
+      await expect(service.hold('lead-1', noHold)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
     it('Race: 2 Sale cùng bấm Giữ số — người sau (đã qua kiểm tra nhưng số vừa bị giữ) nhận ConflictException, không đè người trước', async () => {
       prisma.account.findUnique.mockResolvedValue({ teamId: 'team-1' });
       prisma.lead.findUnique.mockResolvedValue({
@@ -1178,6 +1199,40 @@ describe('CandidatesService', () => {
       await expect(
         service.assign('lead-1', { account_id: 'sale-2' }, saleUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Phân quyền chi tiết: không tự nhận/chia được data chờ của nhóm khác', async () => {
+      prisma.lead.findUnique.mockResolvedValue({
+        ...baseLead,
+        assignedTeamId: 'team-2',
+      });
+      prisma.account.findUnique.mockResolvedValue(saleAccount);
+
+      await expect(
+        service.assign('lead-1', { account_id: 'sale-1' }, saleUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.lead.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('Phân quyền chi tiết: Sale được cấp quyền phân chia → chia được cho Sale cùng nhóm', async () => {
+      prisma.lead.findUnique.mockResolvedValue(baseLead);
+      prisma.account.findUnique.mockResolvedValue({
+        ...saleAccount,
+        id: 'sale-2',
+      });
+      prisma.lead.updateMany.mockResolvedValue({ count: 1 });
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...baseLead,
+        assignedToId: 'sale-2',
+      });
+
+      await expect(
+        service.assign(
+          'lead-1',
+          { account_id: 'sale-2' },
+          { ...saleUser, capabilityOverrides: { 'lead.assign': true } },
+        ),
+      ).resolves.toBeDefined();
     });
 
     it('Dự án phụ — nâng cấp toàn diện: Sale tự nhận data cho chính mình qua nút "Nhận data"', async () => {
@@ -1965,16 +2020,21 @@ describe('CandidatesService', () => {
       ]);
     });
 
-    it('vai trò khác (vd Kế toán) không xem được gì, không truy vấn', async () => {
+    it('không có quyền xem nhóm/toàn công ty (vd Kế toán) → chỉ data mình phụ trách', async () => {
       const accounting = {
         id: 'acc-1',
         role: 'accounting' as const,
         sessionId: 's',
       };
+      prisma.lead.findMany.mockResolvedValue([]);
       await expect(
         service.filterViewableLeadIds(['lead-1'], accounting),
       ).resolves.toEqual([]);
-      expect(prisma.lead.findMany).not.toHaveBeenCalled();
+      expect(prisma.lead.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ assignedToId: 'acc-1' }),
+        }),
+      );
     });
 
     it('danh sách rỗng → không truy vấn', async () => {

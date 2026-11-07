@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { MODULE_REGISTRY } from './module-registry';
+import { CAPABILITY_CODES } from '../common/permissions/capability-catalog';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
@@ -152,6 +153,85 @@ export class ModulePermissionService {
       });
     }
 
+    return after;
+  }
+
+  /** Phân quyền chi tiết (2026-11-07): quyền nhỏ chỉnh riêng của 1 tài khoản (không có = theo vai trò). */
+  async getCapabilityOverrides(
+    accountId: string,
+  ): Promise<Record<string, boolean>> {
+    const rows = await this.prisma.userCapability.findMany({
+      where: { accountId },
+      select: { code: true, granted: true },
+    });
+    return Object.fromEntries(rows.map((r) => [r.code, r.granted]));
+  }
+
+  /**
+   * Lưu quyền nhỏ: true cho phép, false không cho phép, null về theo vai trò
+   * (xoá dòng). Có hiệu lực ngay ở request kế tiếp (JwtStrategy nạp lại mỗi
+   * request). Ghi Nhật ký từng quyền đổi.
+   */
+  async setCapabilities(
+    targetAccountId: string,
+    changes: Record<string, boolean | null>,
+    currentUser: AuthenticatedUser,
+  ): Promise<Record<string, boolean>> {
+    const targetAccount = await this.prisma.account.findUnique({
+      where: { id: targetAccountId },
+    });
+    if (!targetAccount) {
+      throw new BadRequestException('Không tìm thấy tài khoản');
+    }
+    if (targetAccount.role === 'admin') {
+      throw new BadRequestException(
+        'Tài khoản Admin luôn có toàn quyền, không thể chỉnh sửa phân quyền riêng',
+      );
+    }
+    for (const [code, value] of Object.entries(changes)) {
+      if (!CAPABILITY_CODES.has(code)) {
+        throw new BadRequestException(`Quyền không hợp lệ: ${code}`);
+      }
+      if (value !== null && typeof value !== 'boolean') {
+        throw new BadRequestException(`Giá trị quyền không hợp lệ: ${code}`);
+      }
+    }
+
+    const before = await this.getCapabilityOverrides(targetAccountId);
+    await this.prisma.$transaction(
+      Object.entries(changes).map(([code, value]) =>
+        value === null
+          ? this.prisma.userCapability.deleteMany({
+              where: { accountId: targetAccountId, code },
+            })
+          : this.prisma.userCapability.upsert({
+              where: { accountId_code: { accountId: targetAccountId, code } },
+              create: {
+                accountId: targetAccountId,
+                code,
+                granted: value,
+                updatedById: currentUser.id,
+              },
+              update: { granted: value, updatedById: currentUser.id },
+            }),
+      ),
+    );
+    const after = await this.getCapabilityOverrides(targetAccountId);
+
+    const label = (v: boolean | undefined) =>
+      v === undefined ? 'theo vai trò' : v ? 'cho phép' : 'không cho phép';
+    for (const code of Object.keys(changes)) {
+      if (before[code] === after[code]) continue;
+      await this.auditLog.log({
+        accountId: currentUser.id,
+        actionType: 'update',
+        entityType: 'user_capability',
+        entityId: targetAccountId,
+        fieldChanged: code,
+        oldValue: label(before[code]),
+        newValue: label(after[code]),
+      });
+    }
     return after;
   }
 }

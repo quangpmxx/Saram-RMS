@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, Plus, Rows3, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -190,7 +191,6 @@ function toInput(row: SheetRow): DsSaleRowInput {
 export function DsSaleClient({
   permissionLevel,
   currentUserId,
-  currentUserRole,
   currentUserFullName,
   currentUserNickname,
   initialRows,
@@ -219,7 +219,9 @@ export function DsSaleClient({
   // Yêu cầu trực tiếp người dùng (2026-07-27): "Sale sẽ tự nhập doanh số
   // cho chính mình... không cần chọn sale ở cột này mà sẽ hiện luôn tên
   // mình, chỉ có leader, quản lý, admin là được chọn sale như hiện tại".
-  const isSaleRole = currentUserRole === "sale";
+  // Chỉ nhập doanh số của chính mình khi không có quyền cả nhóm/toàn công ty (mặc định Sale).
+  const can = useCan();
+  const isSaleRole = !can("sales.team") && !can("sales.all");
   const selfOption: DsSaleSelectOption = useMemo(
     () => ({ id: currentUserId, label: currentUserNickname ?? currentUserFullName }),
     [currentUserId, currentUserFullName, currentUserNickname],

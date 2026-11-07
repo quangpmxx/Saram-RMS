@@ -1,3 +1,4 @@
+import { can } from '../common/permissions/capability-catalog';
 import { createReadStream } from 'fs';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -24,8 +25,7 @@ import {
   toAnonymousFeedbackResponse,
 } from './dto/anonymous-feedback-response.dto';
 
-/** Chỉ Quản lý/Admin xem đơn; mọi vai trò còn lại (nhân viên + Leader) được gửi. */
-const VIEW_ROLES = new Set(['admin', 'manager']);
+// Xem đơn: quyền feedback.view (mặc định Quản lý/Admin); mọi người gửi được.
 
 /** Ảnh đính kèm (2026-10-30): tối đa 5 ảnh, mỗi ảnh tối đa 5MB. */
 export const FEEDBACK_MAX_IMAGES = 5;
@@ -107,7 +107,7 @@ export class AnonymousFeedbackService {
     currentUser: AuthenticatedUser,
     images: Express.Multer.File[] = [],
   ): Promise<{ message: string }> {
-    if (VIEW_ROLES.has(currentUser.role)) {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       throw new ForbiddenException(
         'Quản lý/Admin là người nhận đơn phản ánh, không gửi đơn',
       );
@@ -219,7 +219,7 @@ export class AnonymousFeedbackService {
   }
 
   private assertViewer(currentUser: AuthenticatedUser): void {
-    if (!VIEW_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'feedback.view')) {
       throw new ForbiddenException('Chỉ Quản lý/Admin xem được đơn phản ánh');
     }
   }

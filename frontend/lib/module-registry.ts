@@ -20,13 +20,13 @@ export interface ModuleRegistryEntry {
 }
 
 export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
-  { code: "dashboard", href: "/", label: "Trang chủ Dashboard", icon: "home", defaultRoles: ["admin", "manager", "leader", "mkt", "sale"] },
+  { code: "dashboard", href: "/", label: "Trang chủ Dashboard", icon: "home", defaultRoles: ["admin", "manager", "leader", "mkt", "sale", "sup_leader"] },
   {
     code: "candidates",
     href: "/candidates",
     label: "Data lao động",
     icon: "candidates",
-    defaultRoles: ["admin", "manager", "mkt", "leader", "sale"],
+    defaultRoles: ["admin", "manager", "mkt", "leader", "sale", "sup_leader"],
   },
   // Marketing Hub — khung sườn, chưa có nghiệp vụ (2026-11-01). Khớp backend/src/module-permission/module-registry.ts.
   {
@@ -41,15 +41,15 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     href: "/shuttle",
     label: "Danh sách đưa đón",
     icon: "shuttle",
-    defaultRoles: ["admin", "manager", "leader", "mkt", "sale"],
+    defaultRoles: ["admin", "manager", "leader", "mkt", "sale", "sup_leader"],
   },
-  { code: "reports", href: "/reports", label: "Báo cáo", icon: "reports", defaultRoles: ["admin", "manager", "leader", "sale"] },
+  { code: "reports", href: "/reports", label: "Báo cáo", icon: "reports", defaultRoles: ["admin", "manager", "leader", "sale", "sup_leader"] },
   {
     code: "attendance",
     href: "/attendance",
     label: "Chấm công",
     icon: "attendance",
-    defaultRoles: ["admin", "manager", "leader", "mkt", "sale"],
+    defaultRoles: ["admin", "manager", "leader", "mkt", "sale", "sup_leader"],
   },
   { code: "accounting", href: "/accounting", label: "Kế toán", icon: "accounting", defaultRoles: ["admin"] },
   {
@@ -61,7 +61,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     // chính mình; Leader/Quản lý/Admin/Kế toán giữ nguyên như trước. Phạm
     // vi xem/sửa chi tiết theo vai trò (Sale: chỉ dòng mình; Leader: cả
     // nhóm; còn lại: toàn bộ) enforce ở backend, không chỉ dừng ở đây.
-    defaultRoles: ["admin", "manager", "leader", "sale", "accounting"],
+    defaultRoles: ["admin", "manager", "leader", "sale", "sup_leader", "accounting"],
   },
   {
     code: "order-management",
@@ -70,7 +70,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "orderManagement",
     defaultRoles: ["admin"],
   },
-  { code: "calendar", href: "/calendar", label: "Lịch hẹn", icon: "calendar", defaultRoles: ["admin", "manager", "leader", "sale"] },
+  { code: "calendar", href: "/calendar", label: "Lịch hẹn", icon: "calendar", defaultRoles: ["admin", "manager", "leader", "sale", "sup_leader"] },
   { code: "audit-log", href: "/audit-log", label: "Nhật ký", icon: "auditLog", defaultRoles: ["admin", "manager"] },
   { code: "accounts", href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", defaultRoles: ["admin"] },
 ];

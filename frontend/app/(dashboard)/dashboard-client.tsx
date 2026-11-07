@@ -42,7 +42,8 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { computeDateRange, type DatePreset, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
-import { MARKETING_TODAY_ROLES, MarketingTodayCard } from "./marketing-today-card";
+import { MarketingTodayCard } from "./marketing-today-card";
+import { useCan } from "@/lib/capability-context";
 import { CARE_PROGRESS_ROLES, CareProgressBlock } from "@/components/care-progress/care-progress-block";
 
 /**
@@ -54,7 +55,6 @@ import { CARE_PROGRESS_ROLES, CareProgressBlock } from "@/components/care-progre
  * dashboard.service.ts, computeKpiBreakdown() — tách riêng khỏi
  * computeFunnel() nên không ảnh hưởng trang Báo cáo).
  */
-const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt", "sale"];
 
 type KpiKey = keyof Pick<
   KpiBreakdown,
@@ -276,7 +276,12 @@ export function DashboardClient({
   const [employeeSort, setEmployeeSort] = useState<EmployeeSort>("employed");
   const [teamSort, setTeamSort] = useState<TeamSort>("new_leads");
 
-  const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
+  const can = useCan();
+  const canViewPending = can("lead.view_pending");
+  // Phạm vi (2026-11-07 theo quyền): dashboard.filter_team → Toàn công ty / Nhóm mình / NV trong nhóm;
+  // không có quyền lọc nào → Tất cả / chính mình.
+  const canFilterTeamScope = can("dashboard.filter_team");
+  const showScopeSelect = !can("dashboard.filter_all");
 
   // Tiêu đề khối hiệu suất theo bộ lọc đang chọn (2026-11-06): 1 nhân viên →
   // "Hiệu suất <tên>"; 1 nhóm → "Hiệu suất theo nhóm"; không lọc → toàn công ty.
@@ -519,7 +524,7 @@ export function DashboardClient({
             </Field>
           )}
           {/* Leader: Toàn công ty / Nhóm mình / nhân viên trong nhóm; Sale: Tất cả / chính mình (2026-11-06). */}
-          {(currentUserRole === "leader" || currentUserRole === "sale") && (
+          {showScopeSelect && (
             <Field label="Phạm vi" uiSize="xs" className="w-36">
               <Select
                 uiSize="xs"
@@ -533,15 +538,15 @@ export function DashboardClient({
                   void refresh({ teamId: nextTeamId, accountId: nextAccountId });
                 }}
               >
-                <option value="">{currentUserRole === "leader" ? "Toàn công ty" : "Tất cả"}</option>
-                {currentUserRole === "leader" && currentUserTeamId && <option value="team">Nhóm mình</option>}
-                {currentUserRole === "leader" &&
+                <option value="">{canFilterTeamScope ? "Toàn công ty" : "Tất cả"}</option>
+                {canFilterTeamScope && currentUserTeamId && <option value="team">Nhóm mình</option>}
+                {canFilterTeamScope &&
                   employeeOptions.map((employee) => (
                     <option key={employee.account_id} value={employee.account_id}>
                       {employee.full_name}
                     </option>
                   ))}
-                {currentUserRole === "sale" && <option value={currentUserId}>{currentUserFullName}</option>}
+                {!canFilterTeamScope && <option value={currentUserId}>{currentUserFullName}</option>}
               </Select>
             </Field>
           )}
@@ -657,7 +662,7 @@ export function DashboardClient({
         })}
       </div>
 
-      {MARKETING_TODAY_ROLES.includes(currentUserRole) && <MarketingTodayCard from={dateRange.from} to={dateRange.to} />}
+      {can("dashboard.mkt_cost") && <MarketingTodayCard from={dateRange.from} to={dateRange.to} />}
 
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">

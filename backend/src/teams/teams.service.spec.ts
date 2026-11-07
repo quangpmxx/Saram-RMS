@@ -276,7 +276,11 @@ describe('TeamsService', () => {
 
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { teamId: 'team-1', role: 'sale', status: 'active' },
+          where: {
+            teamId: 'team-1',
+            role: { in: ['sale', 'sup_leader'] },
+            status: 'active',
+          },
         }),
       );
       expect(result).toEqual([

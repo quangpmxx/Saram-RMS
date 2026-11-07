@@ -1,5 +1,6 @@
 "use client";
 
+import { hasCap } from "@/lib/capabilities";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, FilePlus2, LogOut, MessageSquareWarning, Settings } from "lucide-react";
@@ -16,9 +17,9 @@ import { cn } from "@/lib/cn";
  * nhân viên TRỪ Quản lý/Leader — tức chỉ MKT/Sale (Admin không phải "nhân
  * viên", Quản lý/Leader bị loại rõ theo đúng yêu cầu). Chuyển tới /requests
  * — trang hiện mục "Tạo đơn xin nghỉ phép" (module đầu tiên trong nhóm
- * "Tạo đơn", các loại đơn khác sẽ bổ sung sau).
+ * "Tạo đơn", các loại đơn khác sẽ bổ sung sau). Từ 2026-11-07: ai có quyền
+ * leave.create (trừ Leader — vào thẳng qua sidebar).
  */
-const CREATE_REQUEST_ROLES: AccountRole[] = ["mkt", "sale"];
 /**
  * Đơn phản ánh ẩn danh (2026-10-28): mọi tài khoản TRỪ Quản lý/Admin (người
  * nhận đơn) — khớp anonymous-feedback.service.ts. Đặt thêm ở đây vì Kế toán/
@@ -126,7 +127,7 @@ export function UserMenu({ user }: { user: Account }) {
               <Settings className="h-4 w-4 text-slate-400" strokeWidth={2} />
               Cài đặt tài khoản
             </button>
-            {CREATE_REQUEST_ROLES.includes(user.role) && (
+            {hasCap(user, "leave.create") && user.role !== "leader" && (
               <button
                 type="button"
                 role="menuitem"

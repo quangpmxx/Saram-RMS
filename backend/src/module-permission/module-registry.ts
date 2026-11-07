@@ -79,7 +79,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   {
     code: 'dashboard',
     label: 'Trang chủ Dashboard',
-    defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale'],
+    defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale', 'sup_leader'],
     // CareProgressController: khối "Tiến độ chăm sóc" (Kho chăm sóc) trên
     // Dashboard — tab cùng tên trong Báo cáo gọi chung API này.
     controllers: [DashboardController, CareProgressController],
@@ -87,7 +87,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   {
     code: 'candidates',
     label: 'Data lao động',
-    defaultRoles: ['admin', 'manager', 'mkt', 'leader', 'sale'],
+    defaultRoles: ['admin', 'manager', 'mkt', 'leader', 'sale', 'sup_leader'],
     controllers: [
       CandidatesController,
       ImportsController,
@@ -113,19 +113,19 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     // Rà soát phân quyền 2026-10-30: chỉ Admin/Quản lý thêm/sửa/xoá (cả danh
     // mục tuỳ chọn); Leader/MKT/Sale chỉ xem mọi dòng.
     defaultRoles: ['admin', 'manager'],
-    viewRoles: ['leader', 'mkt', 'sale'],
+    viewRoles: ['leader', 'mkt', 'sale', 'sup_leader'],
     controllers: [ShuttleController],
   },
   {
     code: 'reports',
     label: 'Báo cáo',
-    defaultRoles: ['admin', 'manager', 'leader', 'sale'],
+    defaultRoles: ['admin', 'manager', 'leader', 'sale', 'sup_leader'],
     controllers: [DailyReportsController, ReportPenaltyController],
   },
   {
     code: 'attendance',
     label: 'Chấm công',
-    defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale'],
+    defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale', 'sup_leader'],
     controllers: [AttendanceController],
   },
   {
@@ -138,13 +138,20 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     // Leader: cả nhóm; Quản lý/Admin/Kế toán: toàn bộ) được enforce THẬT ở
     // sales-entry.service.ts (buildWhere/createRow/updateRow/deleteRows),
     // không chỉ dừng ở việc cho vào trang.
-    defaultRoles: ['admin', 'manager', 'leader', 'sale', 'accounting'],
+    defaultRoles: [
+      'admin',
+      'manager',
+      'leader',
+      'sale',
+      'sup_leader',
+      'accounting',
+    ],
     controllers: [SalesEntryController],
   },
   {
     code: 'calendar',
     label: 'Lịch hẹn',
-    defaultRoles: ['admin', 'manager', 'leader', 'sale'],
+    defaultRoles: ['admin', 'manager', 'leader', 'sale', 'sup_leader'],
     controllers: [CalendarController],
   },
   {

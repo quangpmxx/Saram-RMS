@@ -1,3 +1,4 @@
+import { can } from '../common/permissions/capability-catalog';
 import {
   BadRequestException,
   ForbiddenException,
@@ -93,7 +94,11 @@ export class PancakeService {
     const existing = await this.prisma.pancakePage.findUnique({
       where: { pageId },
     });
-    if (existing && existing.ownerId !== user.id && user.role !== 'admin') {
+    if (
+      existing &&
+      existing.ownerId !== user.id &&
+      !can(user, 'mkt.assign_owner')
+    ) {
       throw new ForbiddenException('Page này đã có nhân viên khác phụ trách');
     }
     const data = {
@@ -131,7 +136,7 @@ export class PancakeService {
 
   async disconnect(id: string, user: AuthenticatedUser) {
     const page = await this.findPage(id);
-    if (user.role !== 'admin' && page.ownerId !== user.id) {
+    if (!can(user, 'mkt.assign_owner') && page.ownerId !== user.id) {
       throw new ForbiddenException('Bạn chỉ được gỡ page của mình');
     }
     await this.prisma.pancakePage.update({

@@ -1,10 +1,12 @@
+import { SALE_ROLES } from '../common/utils/sale-roles';
+import { can } from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AccountRole, Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -26,13 +28,7 @@ import {
 const TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 /** Mục 2, yêu cầu người dùng: "Áp dụng cho tài khoản Sale phải nộp báo cáo hằng ngày" — khớp đúng role duy nhất được tạo Báo cáo hằng ngày (daily-reports.service.ts). */
-const REPORTER_ROLE: AccountRole = 'sale';
-
-/** Mục 8: Admin/Quản lý/Leader/Sale đều xem được (phạm vi khác nhau). */
-const VIEW_ROLES = new Set(['admin', 'manager', 'leader', 'sale']);
-
-/** Mục 8: chỉ Admin/Quản lý được cập nhật trạng thái vi phạm — Leader/Sale chỉ xem. */
-const MANAGE_ROLES = new Set(['admin', 'manager']);
+const REPORTER_ROLES = SALE_ROLES; // Sale + Sup Leader (2026-11-07)
 
 /** Mục 5: mặc định 22:30 khi Admin chưa từng cấu hình. */
 const DEFAULT_DEADLINE_HOUR = 22;
@@ -160,12 +156,7 @@ export class ReportPenaltyService {
       : { hour: DEFAULT_DEADLINE_HOUR, minute: DEFAULT_DEADLINE_MINUTE };
   }
 
-  async getDeadline(
-    currentUser: AuthenticatedUser,
-  ): Promise<ReportDeadlineResponseDto> {
-    if (!VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException('Bạn không có quyền xem Check phạt');
-    }
+  async getDeadline(): Promise<ReportDeadlineResponseDto> {
     const config = await this.prisma.reportDeadlineConfig.findFirst({
       include: { updatedBy: { select: { fullName: true } } },
     });
@@ -196,9 +187,9 @@ export class ReportPenaltyService {
     currentUser: AuthenticatedUser,
   ): Promise<ReportDeadlineResponseDto> {
     // Quản lý cũng đổi được giờ hạn nộp (rà soát phân quyền 2026-10-30).
-    if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+    if (!can(currentUser, 'penalty.manage')) {
       throw new ForbiddenException(
-        'Chỉ Admin/Quản lý được thay đổi thời hạn nộp báo cáo',
+        'Bạn không có quyền thay đổi thời hạn nộp báo cáo',
       );
     }
 
@@ -272,7 +263,7 @@ export class ReportPenaltyService {
 
     const reportDate = dateOnlyToUtcMidnight(today);
     const sales = await this.prisma.account.findMany({
-      where: { role: REPORTER_ROLE, status: 'active' },
+      where: { role: { in: REPORTER_ROLES }, status: 'active' },
       select: { id: true, fullName: true },
     });
     const saleIds = sales.map((s) => s.id);
@@ -427,10 +418,6 @@ export class ReportPenaltyService {
     query: ListReportPenaltyQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<ReportViolationResponseDto>> {
-    if (!VIEW_ROLES.has(currentUser.role)) {
-      throw new ForbiddenException('Bạn không có quyền xem Check phạt');
-    }
-
     const where: Prisma.ReportViolationWhereInput = {};
     if (query.date_from || query.date_to) {
       where.reportDate = {
@@ -446,9 +433,11 @@ export class ReportPenaltyService {
     if (query.status) where.status = query.status;
 
     const accountWhere: Prisma.AccountWhereInput = {};
-    if (currentUser.role === 'sale') {
+    // Phân quyền chi tiết (2026-11-07): toàn công ty / cả nhóm / chỉ mình.
+    const viewAll = can(currentUser, 'penalty.view_all');
+    if (!viewAll && !can(currentUser, 'penalty.view_team')) {
       accountWhere.id = currentUser.id;
-    } else if (currentUser.role === 'leader') {
+    } else if (!viewAll) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
@@ -488,9 +477,9 @@ export class ReportPenaltyService {
     dto: UpdateViolationStatusDto,
     currentUser: AuthenticatedUser,
   ): Promise<ReportViolationResponseDto> {
-    if (!MANAGE_ROLES.has(currentUser.role)) {
+    if (!can(currentUser, 'penalty.manage')) {
       throw new ForbiddenException(
-        'Chỉ Admin/Quản lý được cập nhật trạng thái vi phạm',
+        'Bạn không có quyền cập nhật trạng thái vi phạm',
       );
     }
     const existing = await this.prisma.reportViolation.findUnique({

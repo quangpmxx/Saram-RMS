@@ -282,7 +282,7 @@ describe('ReportPenaltyService', () => {
       expect(prisma.account.findUnique).not.toHaveBeenCalled();
     });
 
-    it('Vai trò không hợp lệ (mkt) bị chặn xem Check phạt', async () => {
+    it('Vai trò không có quyền xem nhóm/toàn công ty (mkt) chỉ thấy của chính mình', async () => {
       const mkt: AuthenticatedUser = {
         id: 'mkt-1',
         role: 'mkt',
@@ -290,7 +290,22 @@ describe('ReportPenaltyService', () => {
       };
       await expect(
         service.listRecords({ page: 1, page_size: 20 }, mkt),
-      ).rejects.toThrow(ForbiddenException);
+      ).resolves.toBeDefined();
+      // Phạm vi chính mình: không cần tra teamId.
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('Sale được cấp quyền xem phạt cả nhóm → thấy cả nhóm', async () => {
+      const sale: AuthenticatedUser = {
+        id: 'sale-9',
+        role: 'sale',
+        sessionId: 's6',
+        capabilityOverrides: { 'penalty.view_team': true },
+      };
+      await service.listRecords({ page: 1, page_size: 20 }, sale);
+      expect(prisma.account.findUnique).toHaveBeenCalledWith({
+        where: { id: 'sale-9' },
+      });
     });
   });
 

@@ -26,6 +26,7 @@ export default async function AccountsPage() {
       <AccountTabs active="accounts" isAdmin={user.role === "admin"} />
       <AccountsClient
         currentUserId={user.id}
+        isAdmin={user.role === "admin"}
         permissionLevel={permissionLevel}
         initialAccounts={accountsResult.items}
         teams={teamsResult.items}

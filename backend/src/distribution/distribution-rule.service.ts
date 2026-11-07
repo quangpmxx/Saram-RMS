@@ -1,3 +1,5 @@
+import { SALE_ROLES } from '../common/utils/sale-roles';
+import { can } from '../common/permissions/capability-catalog';
 import {
   ForbiddenException,
   Injectable,
@@ -60,7 +62,11 @@ export class DistributionRuleService {
 
     if (dto.account_ids.length > 0) {
       const validAccounts = await this.prisma.account.findMany({
-        where: { id: { in: dto.account_ids }, role: 'sale', teamId },
+        where: {
+          id: { in: dto.account_ids },
+          role: { in: SALE_ROLES },
+          teamId,
+        },
         select: { id: true },
       });
       if (validAccounts.length !== dto.account_ids.length) {
@@ -320,10 +326,13 @@ export class DistributionRuleService {
     teamId: string,
     currentUser: AuthenticatedUser,
   ): Promise<void> {
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+    if (
+      can(currentUser, 'distribution.view_all') ||
+      can(currentUser, 'distribution.config_all')
+    ) {
       return;
     }
-    if (currentUser.role === 'leader') {
+    if (can(currentUser, 'distribution.config_team')) {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (ownTeamId === teamId) {
         return;
@@ -340,10 +349,10 @@ export class DistributionRuleService {
     currentUser: AuthenticatedUser,
   ): Promise<void> {
     // Admin cấu hình được cho mọi nhóm (rà soát phân quyền 2026-10-30).
-    if (currentUser.role === 'admin') return;
-    if (currentUser.role !== 'leader') {
+    if (can(currentUser, 'distribution.config_all')) return;
+    if (!can(currentUser, 'distribution.config_team')) {
       throw new ForbiddenException(
-        'Chỉ Leader hoặc Admin mới được cấu hình tự động phân chia',
+        'Bạn không có quyền cấu hình tự động phân chia',
       );
     }
     const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);

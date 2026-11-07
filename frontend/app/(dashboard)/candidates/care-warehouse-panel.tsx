@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMYHM } from "@/lib/date-format";
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
@@ -107,7 +108,7 @@ const EMPTY_FILTERS: CareFilters = {
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
-const ASSIGNER_ROLES: AccountRole[] = ["admin", "manager", "leader"];
+
 /** Khung ghi chú thu gọn ở tab Chăm sóc — vừa dòng cao 84px, ~1,5 ghi chú. */
 const CARE_NOTE_COLLAPSED_HEIGHT = 44;
 /** Gộp nhiều sự kiện realtime liên tiếp (vd giao 50 data 1 lần) thành 1 lần tải lại. */
@@ -209,7 +210,6 @@ export function CareWarehousePanel({
   active,
   onWarehouseTotal,
   currentUserId,
-  currentUserRole,
   isReadOnly,
   teams,
   saleOptions,
@@ -236,9 +236,14 @@ export function CareWarehousePanel({
 }) {
   const toast = useToast();
   const router = useRouter();
-  const canAssign = ASSIGNER_ROLES.includes(currentUserRole) && !isReadOnly;
-  const canClaim = currentUserRole === "sale" && !isReadOnly;
-  const canPickTeam = ["admin", "manager", "mkt"].includes(currentUserRole);
+  // Phân quyền chi tiết (2026-11-07): theo quyền nhỏ, backend chặn thật.
+  const can = useCan();
+  const isAssigner = can("care.assign");
+  const canAssign = isAssigner && !isReadOnly;
+  const canClaim = can("care.claim") && !isReadOnly;
+  const canPickTeam = can("care.view_all");
+  /** Không có quyền xem tiến độ cả nhóm → thống kê/bộ lọc chỉ của mình (mặc định Sale). */
+  const isSelfOnly = !can("care.progress");
   /** MKT (chỉ xem) và tài khoản "Chỉ xem" không có thao tác nào → ẩn cột Hành động. */
   const hasActions = canAssign || canClaim;
 
@@ -666,7 +671,7 @@ export function CareWarehousePanel({
 
   /** Nút Lịch sử phân công / Giao ngẫu nhiên / Giao data đã chọn — nằm trên thanh Tiến độ (2026-11-04). */
   const assignActions =
-    canAssign || ASSIGNER_ROLES.includes(currentUserRole) ? (
+    canAssign || isAssigner ? (
       <div className="flex flex-wrap items-center gap-1.5">
         <Button type="button" size="xs" variant="outline" onClick={() => setModal({ mode: "history" })}>
           <History className="h-3.5 w-3.5" strokeWidth={2} />
@@ -698,7 +703,7 @@ export function CareWarehousePanel({
       {stats && (
         <CareStatsBar
           stats={stats}
-          isSale={currentUserRole === "sale"}
+          isSale={isSelfOnly}
           canPickTeam={canPickTeam}
           teams={teams}
           saleOptions={saleOptions}
@@ -727,7 +732,7 @@ export function CareWarehousePanel({
             ))}
           </Select>
         </Field>
-        {currentUserRole === "sale" && (
+        {isSelfOnly && (
           <div className="inline-flex self-end rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
             {(["all", "assigned"] as const).map((scope) => (
               <button

@@ -41,12 +41,14 @@ import { InlineEditField } from "./inline-edit-field";
 import {
   canDecideStop as canDecideLeadStop,
   canEditLead,
+  canManageNote,
   canProcessLead,
   canQuickEditLead,
   canToggleHold as canToggleLeadHold,
   heldByOther,
   type LeadViewer,
 } from "@/lib/lead-permissions";
+import { useCapabilities } from "@/lib/capability-context";
 import { InlineNoteComposer } from "./inline-note-composer";
 import { NoteTimeline } from "../note-timeline";
 import { ActivityPanel } from "./activity-panel";
@@ -204,7 +206,9 @@ export function CandidateDetailClient({
   const [conflictNoteId, setConflictNoteId] = useState<string | null>(null);
 
   // Quyền dùng chung với trang danh sách — lib/lead-permissions.ts.
-  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId };
+  const caps = useCapabilities();
+  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId, caps };
+  const canStopDirect = caps.includes("care.stop");
   const canUpdate = canProcessLead(candidate, viewer);
   const canEditPhone = canEditLead(candidate, viewer);
   // Mục 2.2, docs/12: "Đánh dấu/Bỏ đánh dấu giữ số" — hiện với Sale (lead của
@@ -223,10 +227,9 @@ export function CandidateDetailClient({
   const canToggleCare =
     !isReadOnly &&
     !heldByOther(candidate, viewer) &&
-    (currentUserRole === "admin" ||
-      currentUserRole === "manager" ||
-      (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId) ||
-      (currentUserRole === "sale" && (candidate.assigned_to?.id === currentUserId || isCareAssignee)));
+    ((canStopDirect &&
+      (caps.includes("lead.manage_all_teams") || candidate.assigned_team_id === currentUserTeamId)) ||
+      (caps.includes("care.stop_request") && (candidate.assigned_to?.id === currentUserId || isCareAssignee)));
   // Sale bấm "Dừng chăm sóc" chỉ tạo ĐỀ NGHỊ chờ duyệt; Leader (nhóm của
   // data)/Quản lý/Admin duyệt hoặc từ chối — khớp decideStopRequest() ở backend.
   const isStopPending = Boolean(candidate.care_stop_requested_at) && !candidate.care_stopped_at;
@@ -236,21 +239,11 @@ export function CandidateDetailClient({
   // Leader xoá được ghi chú của mọi Sale trên data nhóm mình (rà soát phân quyền 2026-10-30).
   // Số người khác đang giữ: không ai sửa/xoá ghi chú được (2026-11-06).
   const isHeldByOther = heldByOther(candidate, viewer);
-  const canDeleteNote = (note: Note) =>
-    !isHeldByOther && (
-    currentUserRole === "admin" ||
-    currentUserRole === "manager" ||
-    (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
-    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
+  const canDeleteNote = (note: Note) => !isHeldByOther && canManageNote(candidate, note.created_by.id, viewer);
   // Sửa ghi chú — khớp đúng phạm vi quyền của updateNote() ở backend
   // (lead-pipeline.service.ts): Sale (ghi chú của mình), Leader (ghi chú
   // trên lead thuộc nhóm mình), Quản lý/Admin (không giới hạn), MKT không có quyền.
-  const canEditNote = (note: Note) =>
-    !isHeldByOther && (
-    currentUserRole === "admin" ||
-    currentUserRole === "manager" ||
-    (currentUserRole === "sale" && note.created_by.id === currentUserId) ||
-    (currentUserRole === "leader" && candidate.assigned_team_id === currentUserTeamId));
+  const canEditNote = (note: Note) => !isHeldByOther && canManageNote(candidate, note.created_by.id, viewer);
 
   async function refreshNotes() {
     const result = await clientApi<Note[]>(`/candidate/${candidate.id}/note`);
@@ -296,7 +289,7 @@ export function CandidateDetailClient({
   // Sale không phụ trách gốc: kiểm tra xem có đang được giao chăm sóc data
   // này không (lượt giao chưa đóng, trong tháng hiện tại).
   useEffect(() => {
-    if (currentUserRole !== "sale" || candidate.assigned_to?.id === currentUserId) return;
+    if (canStopDirect || candidate.assigned_to?.id === currentUserId) return;
     let cancelled = false;
     clientApi<{ assignee: { id: string }; assigned_at: string; ended_at: string | null }[]>(
       `/care-warehouse/${candidate.id}/assignments`,
@@ -321,7 +314,7 @@ export function CandidateDetailClient({
 
   async function handleToggleCareStopped() {
     const stopping = !candidate.care_stopped_at;
-    const isRequest = stopping && currentUserRole === "sale";
+    const isRequest = stopping && !canStopDirect;
     await runCareAction(
       `/care-warehouse/${candidate.id}/${stopping ? "stop" : "resume"}`,
       isRequest

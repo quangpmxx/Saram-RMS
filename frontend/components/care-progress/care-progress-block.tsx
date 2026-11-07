@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, HeartHandshake, Inbox } from "lucide-react";
@@ -19,7 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 
 /** Vai trò xem được Tiến độ chăm sóc — khớp CareWarehouseService.progress() ở backend. */
-export const CARE_PROGRESS_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "mkt"];
+export const CARE_PROGRESS_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "sup_leader", "mkt"];
 
 /** Gộp nhiều tín hiệu "dashboard invalidate" liên tiếp thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 800;
@@ -338,7 +339,6 @@ function SaleTable({
  * theo từng Sale.
  */
 export function CareProgressBlock({
-  currentUserRole,
   teamId = "",
   accountId = "",
   status = "",
@@ -352,7 +352,8 @@ export function CareProgressBlock({
   /** false = ẩn các dòng chú thích giải thích (Dashboard — yêu cầu người dùng 2026-10-29). */
   showNotes?: boolean;
 }) {
-  const isSale = currentUserRole === "sale";
+  // Không có quyền xem tiến độ cả nhóm (mặc định Sale) → chỉ của mình.
+  const isSale = !useCan()("care.progress");
   const [mode, setMode] = useState<ViewMode>("day");
   const [date, setDate] = useState(vnToday);
   const [month, setMonth] = useState(() => vnToday().slice(0, 7));

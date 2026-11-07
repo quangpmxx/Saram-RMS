@@ -1,3 +1,4 @@
+import { RequireCap } from '../common/decorators/require-cap.decorator';
 import {
   Body,
   Controller,
@@ -16,7 +17,6 @@ import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
 import { TeamMembersQueryDto } from './dto/team-members-query.dto';
-import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 
@@ -29,8 +29,9 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
 export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
+  // Phân quyền chi tiết (2026-11-07): mọi vai trò gọi được — phạm vi nhóm
+  // xem được kiểm ở TeamsService (canSeeAllTeams).
   @Get()
-  @Roles('admin', 'manager', 'leader', 'mkt')
   list(
     @Query() query: ListTeamsQueryDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -39,13 +40,13 @@ export class TeamsController {
   }
 
   @Post()
-  @Roles('admin')
+  @RequireCap('team.manage')
   create(@Body() dto: CreateTeamDto, @CurrentUser() user: AuthenticatedUser) {
     return this.teamsService.create(dto, user.id);
   }
 
   @Put(':id')
-  @Roles('admin')
+  @RequireCap('team.manage')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTeamDto,
@@ -56,7 +57,7 @@ export class TeamsController {
 
   /** Yêu cầu trực tiếp người dùng (2026-07-15): xóa nhóm — cho xóa kể cả còn thành viên (tự gỡ). */
   @Delete(':id')
-  @Roles('admin')
+  @RequireCap('team.manage')
   @HttpCode(HttpStatus.OK)
   async delete(
     @Param('id', ParseUUIDPipe) id: string,
@@ -67,7 +68,6 @@ export class TeamsController {
   }
 
   @Get(':id/member')
-  @Roles('admin', 'manager', 'leader')
   getMembers(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: TeamMembersQueryDto,

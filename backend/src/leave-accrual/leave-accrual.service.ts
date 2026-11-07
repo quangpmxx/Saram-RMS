@@ -12,7 +12,14 @@ import { PrismaService } from '../prisma/prisma.service';
  * số nhỏ theo từng module đã có sẵn trong dự án, ví dụ TIMEZONE lặp lại ở
  * cả sale-reminder.service.ts và daily-reports.service.ts).
  */
-const EMPLOYEE_ROLES: AccountRole[] = ['leader', 'mkt', 'sale'];
+// 2026-11-07: thêm Quản lý — cũng được cộng phép hằng tháng như nhân viên.
+const EMPLOYEE_ROLES: AccountRole[] = [
+  'manager',
+  'leader',
+  'mkt',
+  'sale',
+  'sup_leader',
+];
 
 /** Múi giờ hệ thống — công ty vận hành tại Việt Nam, cố định để job/độ lệch ngày luôn nhất quán bất kể server chạy ở múi giờ nào. */
 const TIMEZONE = 'Asia/Ho_Chi_Minh';

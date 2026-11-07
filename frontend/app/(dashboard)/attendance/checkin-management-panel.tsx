@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/lib/capability-context";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, ShieldCheck, RotateCcw } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -13,7 +14,7 @@ import { Modal } from "@/components/ui/modal";
 import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { useToast } from "@/lib/toast-context";
 
-const EMPLOYEE_ROLES = ["leader", "mkt", "sale"];
+const EMPLOYEE_ROLES = ["leader", "mkt", "sale", "sup_leader"];
 
 function todayDateOnly(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -59,7 +60,6 @@ export function CheckinManagementPanel({
   canFilterByTeam,
   teams,
   accountOptions,
-  currentUserRole,
 }: {
   canFilterByTeam: boolean;
   teams: Team[];
@@ -101,7 +101,7 @@ export function CheckinManagementPanel({
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
   // Reset / duyệt / ghi chú Check in: Admin và Quản lý (rà soát phân quyền 2026-10-30).
-  const isAdmin = currentUserRole === "admin" || currentUserRole === "manager";
+  const isAdmin = useCan()("checkin.manage");
   const filteredAccountOptions = accountOptions.filter((a) => EMPLOYEE_ROLES.includes(a.role));
 
   // Đo chiều cao thật của header hệ thống + thanh bộ lọc bằng ResizeObserver

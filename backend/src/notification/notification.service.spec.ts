@@ -91,7 +91,10 @@ describe('NotificationService', () => {
         where: expect.objectContaining({
           OR: [
             { accountId: 'admin-1' },
-            { account: { role: 'sale' }, type: { not: 'lead_assigned' } },
+            {
+              account: { role: { in: ['sale', 'sup_leader'] } },
+              type: { not: 'lead_assigned' },
+            },
           ],
         }),
       }),
@@ -109,7 +112,7 @@ describe('NotificationService', () => {
     // Nhánh "thông báo của chính Admin" không bị lọc theo loại → Admin vẫn nhận lead_assigned của mình.
     expect(where.OR[0]).toEqual({ accountId: 'admin-1' });
     expect(where.OR[1]).toEqual({
-      account: { role: 'sale' },
+      account: { role: { in: ['sale', 'sup_leader'] } },
       type: { not: 'lead_assigned' },
     });
   });
@@ -125,7 +128,10 @@ describe('NotificationService', () => {
         where: expect.objectContaining({
           OR: [
             { accountId: 'admin-1' },
-            { account: { role: 'sale' }, type: { not: 'lead_assigned' } },
+            {
+              account: { role: { in: ['sale', 'sup_leader'] } },
+              type: { not: 'lead_assigned' },
+            },
           ],
           status: 'pending',
         }),

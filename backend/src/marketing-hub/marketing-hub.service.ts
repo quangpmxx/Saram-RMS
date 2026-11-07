@@ -1,3 +1,4 @@
+import { can } from '../common/permissions/capability-catalog';
 import {
   BadRequestException,
   ConflictException,
@@ -70,7 +71,7 @@ export class MarketingHubService {
     account: { ownerId: string },
     user: AuthenticatedUser,
   ) {
-    if (user.role !== 'admin' && account.ownerId !== user.id) {
+    if (!can(user, 'mkt.assign_owner') && account.ownerId !== user.id) {
       throw new ForbiddenException(
         'Bạn chỉ được thao tác tài khoản quảng cáo của mình',
       );
@@ -109,7 +110,11 @@ export class MarketingHubService {
         },
       };
       const existing = await this.prisma.adAccount.findUnique({ where });
-      if (existing && existing.ownerId !== user.id && user.role !== 'admin') {
+      if (
+        existing &&
+        existing.ownerId !== user.id &&
+        !can(user, 'mkt.assign_owner')
+      ) {
         skipped.push({
           name: fb.name,
           reason: 'Đã có nhân viên khác phụ trách',
@@ -343,8 +348,10 @@ export class MarketingHubService {
   }
 
   async changeOwner(id: string, ownerId: string, user: AuthenticatedUser) {
-    if (user.role !== 'admin')
-      throw new ForbiddenException('Chỉ Admin được đổi nhân viên phụ trách');
+    if (!can(user, 'mkt.assign_owner'))
+      throw new ForbiddenException(
+        'Bạn không có quyền đổi nhân viên phụ trách',
+      );
     const [account, owner] = await Promise.all([
       this.prisma.adAccount.findUnique({ where: { id } }),
       this.prisma.account.findUnique({ where: { id: ownerId } }),

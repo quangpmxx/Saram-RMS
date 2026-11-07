@@ -1,3 +1,8 @@
+import { SALE_ROLES } from '../common/utils/sale-roles';
+import {
+  canSeeAllMembers,
+  canSeeAllTeams,
+} from '../common/permissions/capability-catalog';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   ConflictException,
@@ -39,7 +44,7 @@ export class TeamsService {
   ): Promise<PaginatedResult<TeamResponseDto>> {
     const where: Prisma.TeamWhereInput = {};
 
-    if (currentUser.role === 'leader') {
+    if (!canSeeAllTeams(currentUser)) {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       where.id = ownTeamId ?? NO_MATCH_UUID;
     }
@@ -198,7 +203,7 @@ export class TeamsService {
       throw new NotFoundException('Không tìm thấy nhóm');
     }
 
-    if (currentUser.role === 'leader') {
+    if (!canSeeAllMembers(currentUser)) {
       const ownTeamId = await findOwnTeamId(this.prisma, currentUser.id);
       if (ownTeamId !== teamId) {
         throw new ForbiddenException('Bạn chỉ được xem nhóm của mình');
@@ -209,7 +214,7 @@ export class TeamsService {
     // hóa không còn trong danh sách chọn Sale / bộ lọc. Data đang giao cho họ
     // vẫn giữ nguyên, vẫn hiện tên phụ trách ở danh sách data.
     const members = await this.prisma.account.findMany({
-      where: { teamId, role: 'sale', status: 'active' },
+      where: { teamId, role: { in: SALE_ROLES }, status: 'active' },
       include: { team: { select: { id: true, name: true } } },
       orderBy: { fullName: 'asc' },
     });

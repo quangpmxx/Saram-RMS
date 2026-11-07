@@ -1,3 +1,12 @@
+import type { AccountRole } from '../../generated/prisma/enums';
+import { RECRUITER_ROLES } from '../common/utils/sale-roles';
+
+/** Thứ tự trong 1 nhóm ở ô chọn Sale: Leader → Sup Leader → Sale. */
+const IN_TEAM_ORDER: Partial<Record<AccountRole, number>> = {
+  leader: 0,
+  sup_leader: 1,
+  sale: 2,
+};
 import {
   BadRequestException,
   ConflictException,
@@ -622,14 +631,15 @@ export class ShuttleService {
   }
 
   /**
-   * Danh sách tài khoản role=sale, đang active — nguồn gợi ý cho cột "Sale"
+   * Danh sách tài khoản Sale/Sup Leader/Leader (RECRUITER_ROLES — Leader cũng
+   * tự tuyển được, 2026-11-07), đang active — nguồn gợi ý cho cột "Sale"
    * (yêu cầu trực tiếp người dùng: "lấy nguồn danh sách nhân viên sale từ
    * danh sách tài khoản... về sau sẽ lấy dữ liệu để làm báo cáo"). Endpoint
    * riêng trong module Shuttle (không dùng /account — chỉ Admin gọi được
    * theo docs/13) để mọi vai trò đang dùng Danh sách đưa đón đều xem được.
    */
   async listSaleAccounts(): Promise<AccountOptionItemDto[]> {
-    return this.listAccountOptions('sale');
+    return this.listAccountOptions(RECRUITER_ROLES);
   }
 
   /**
@@ -639,16 +649,36 @@ export class ShuttleService {
    * 'sale').
    */
   async listDriverAccounts(): Promise<AccountOptionItemDto[]> {
-    return this.listAccountOptions('shuttle_staff');
+    return this.listAccountOptions(['shuttle_staff']);
   }
 
   private async listAccountOptions(
-    role: 'sale' | 'shuttle_staff',
+    roles: AccountRole[],
   ): Promise<AccountOptionItemDto[]> {
     const accounts = await this.prisma.account.findMany({
-      where: { role, status: 'active' },
-      select: { id: true, fullName: true, nickname: true },
+      where: { role: { in: roles }, status: 'active' },
+      select: {
+        id: true,
+        fullName: true,
+        nickname: true,
+        role: true,
+        team: { select: { name: true } },
+      },
       orderBy: { fullName: 'asc' },
+    });
+    // Xếp theo nhóm (yêu cầu người dùng 2026-11-07): Sale cùng nhóm đứng liền
+    // nhau trong ô chọn — nhóm A→Z, trong nhóm Leader → Sup Leader → Sale, rồi tên A→Z;
+    // chưa có nhóm xếp cuối. Danh sách đã theo tên nên sort ổn định giữ thứ tự tên.
+    const teamKey = (a: (typeof accounts)[number]) => a.team?.name ?? null;
+    accounts.sort((a, b) => {
+      const ta = teamKey(a);
+      const tb = teamKey(b);
+      if (ta !== tb) {
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        return ta.localeCompare(tb, 'vi');
+      }
+      return (IN_TEAM_ORDER[a.role] ?? 9) - (IN_TEAM_ORDER[b.role] ?? 9);
     });
 
     return accounts.map((account) => ({

@@ -1,5 +1,6 @@
 "use client";
 
+import { isSaleRole, SALE_ROLES } from "@/lib/types";
 import { fetchNotesByLeadIds } from "@/lib/notes-batch";
 import { formatDMY } from "@/lib/date-format";
 import { LEAD_STATE_OPTIONS, type LeadStateFilter } from "@/lib/lead-state";
@@ -45,6 +46,7 @@ import {
   heldByOther,
   type LeadViewer,
 } from "@/lib/lead-permissions";
+import { useCan, useCapabilities } from "@/lib/capability-context";
 import { EMPTY_OPTION_STYLE, resultStatusStyle, zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type {
   AccountRole,
@@ -104,16 +106,8 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 const LIST_STATE_SESSION_KEY = "saram_rms_candidates_list_state";
 /** Dự án phụ — nâng cấp toàn diện: mức thu phóng bảng, y hệt danh sách % của Google Sheet (yêu cầu trực tiếp người dùng). */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
-/** Mục 8, docs/09 + Mục 5, docs/13: ai được phân chia (cho người khác)/chuyển lead. */
-const ASSIGNMENT_ROLES: AccountRole[] = ["admin", "manager", "leader"];
-/**
- * Dự án phụ — nâng cấp toàn diện: bổ sung "sale" — Sale giờ cũng xem được
- * "Chờ phân chia" và tự nhận data qua nút "Nhận data" (xem handleClaim()),
- * khác ASSIGNMENT_ROLES (chỉ vai trò trên mới được phân chia CHO NGƯỜI KHÁC).
- */
-const PENDING_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "mkt", "sale"];
 /** Dự án phụ — nâng cấp toàn diện: tab "Cá nhân" (lead đang gán cho chính mình) — chỉ Sale. */
-const MINE_VIEW_ROLES: AccountRole[] = ["sale"];
+const MINE_VIEW_ROLES: readonly AccountRole[] = SALE_ROLES;
 
 type ModalState =
   | { mode: "none" }
@@ -131,8 +125,7 @@ const DEFAULT_CANDIDATE_SORT: SortState<CandidateSortKey> = { key: "date", order
 
 /** "care" = Kho chăm sóc (2026-10-28). Cột chăm sóc cũ ("care_pool") đã gỡ hẳn (rà soát 2026-10-30). */
 type ViewMode = "all" | "pending" | "mine" | "care";
-/** Vai trò xem được tab Kho chăm sóc — MKT chỉ xem (toàn công ty), khớp backend. */
-const CARE_VIEW_ROLES: AccountRole[] = ["admin", "manager", "leader", "sale", "mkt"];
+
 
 interface Filters {
   keyword: string;
@@ -274,23 +267,33 @@ export function CandidatesClient({
   // (ModulePermissionGuard) là lớp chặn thật.
   const isReadOnly = permissionLevel === "view";
 
-  const canAssign = ASSIGNMENT_ROLES.includes(currentUserRole);
-  // Có quyền xoá data (Admin; MKT với data mình up) → cũng được tick chọn để "Xoá data đã chọn".
+  // Phân quyền chi tiết (2026-11-07): ẩn/hiện theo quyền nhỏ (backend chặn thật).
+  const can = useCan();
+  const caps = useCapabilities();
+  const canAssign = can("lead.assign");
+  const canTransfer = can("lead.transfer");
+  const canRemind = can("lead.remind");
+  const canManageAllTeams = can("lead.manage_all_teams");
+  // Có quyền xoá data → cũng được tick chọn để "Xoá data đã chọn".
   // Quyền trên từng data dùng chung với trang chi tiết — lib/lead-permissions.ts.
-  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId };
-  const canDeleteAny = canDeleteLeads(currentUserRole);
+  const viewer: LeadViewer = { id: currentUserId, role: currentUserRole, teamId: currentUserTeamId, caps };
+  const canDeleteAny = canDeleteLeads(viewer);
   const canSelect = canAssign || canDeleteAny;
-  const canViewPending = PENDING_VIEW_ROLES.includes(currentUserRole);
-  const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole);
-  const canClaim = currentUserRole === "sale";
-  const canViewCare = CARE_VIEW_ROLES.includes(currentUserRole);
+  const canViewPending = can("lead.view_pending");
+  const canViewMine = MINE_VIEW_ROLES.includes(currentUserRole) || can("lead.claim");
+  const canClaim = can("lead.claim");
+  // Kho chăm sóc: xem mọi nhóm, hoặc Kho của nhóm mình (chưa thuộc nhóm thì không có Kho).
+  const canViewCare = can("care.view_all") || currentUserTeamId !== null;
+  // Bảng "Khối lượng nhóm" + chọn Sale trong nhóm: người chia/chuyển/cấu hình chia tự
+  // động chỉ trong nhóm mình (mặc định Leader).
+  const showTeamWorkload = !canManageAllTeams && (canAssign || canTransfer || can("distribution.config_team"));
   const [careTotal, setCareTotal] = useState<number | null>(null);
   // Số data đang chờ phân chia — hiện trên thẻ "Chờ phân chia (N)" (2026-11-02).
   const [pendingTotal, setPendingTotal] = useState<number | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Leader: Sale nhóm mình (initialTeamMembers); Quản lý/Admin: mọi Sale.
-  const careSaleOptions: CareSaleOption[] = (currentUserRole === "leader" ? teamMembers : allSaleMembers)
-    .filter((m) => m.role === "sale" && m.status === "active")
+  const careSaleOptions: CareSaleOption[] = (canManageAllTeams || can("care.view_all") ? allSaleMembers : teamMembers)
+    .filter((m) => isSaleRole(m.role) && m.status === "active")
     .map((m) => ({ id: m.id, name: m.full_name, team_id: m.team_id, team_name: m.team_name }));
 
   /**
@@ -618,7 +621,7 @@ export function CandidatesClient({
   const workloadFrom = filters.date.from;
   const workloadTo = filters.date.to;
   useEffect(() => {
-    if (currentUserRole !== "leader" || !currentUserTeamId) return;
+    if (!showTeamWorkload || !currentUserTeamId) return;
     const query = new URLSearchParams();
     if (workloadFrom) query.set("date_from", new Date(workloadFrom).toISOString());
     if (workloadTo) query.set("date_to", new Date(`${workloadTo}T23:59:59.999`).toISOString());
@@ -632,7 +635,7 @@ export function CandidatesClient({
       cancelled = true;
     };
     // teamMembers: tải lại sau khi chia/chuyển data (refreshTeamMembers).
-  }, [currentUserRole, currentUserTeamId, workloadFrom, workloadTo, teamMembers]);
+  }, [showTeamWorkload, currentUserTeamId, workloadFrom, workloadTo, teamMembers]);
 
   async function refreshTeamMembers(teamId: string) {
     const members = await clientApi<TeamMember[]>(`/team/${teamId}/member`);
@@ -1076,14 +1079,14 @@ export function CandidatesClient({
             onClick={() => setModal({ mode: "assign", candidateIds: [candidate.id] })}
           />
         )}
-        {canAssign && candidate.assigned_to && !candidate.is_held && (
+        {canTransfer && candidate.assigned_to && !candidate.is_held && (
           <ActionLink
             icon={<ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={2} />}
             title="Chuyển"
             onClick={() => setModal({ mode: "transfer", candidate })}
           />
         )}
-        {canAssign && candidate.assigned_team_id && (
+        {canRemind && candidate.assigned_team_id && (
           <ActionLink
             icon={<PhoneCall className="h-3.5 w-3.5" strokeWidth={2} />}
             title="Nhắc gọi lại"
@@ -1124,7 +1127,7 @@ export function CandidatesClient({
         </div>
       )}
 
-      {currentUserRole === "leader" && teamMembers.length > 0 && (
+      {showTeamWorkload && teamMembers.length > 0 && (
         <Card className="mb-2 p-2.5">
           <div className={cn("flex items-center justify-between gap-2", isTeamWorkloadOpen && "mb-1.5")}>
             <button
@@ -1143,7 +1146,7 @@ export function CandidatesClient({
                 strokeWidth={2}
               />
             </button>
-            {isTeamWorkloadOpen && currentUserTeamId && (
+            {isTeamWorkloadOpen && currentUserTeamId && can("distribution.config_team") && (
               <Button
                 type="button"
                 size="sm"
@@ -1171,7 +1174,7 @@ export function CandidatesClient({
       {/* Dự án phụ — nâng cấp toàn diện: gộp hàng tab (Tất cả/Chờ phân chia/Cá
           nhân) và 2 nút Nhập từ Excel/Thêm lao động mới vào chung 1 hàng
           (song song, 2 đầu trái-phải) để tiết kiệm chiều cao cho phần bảng data. */}
-      {(canViewPending || canViewMine || currentUserRole === "mkt" || currentUserRole === "admin") && (
+      {(canViewPending || canViewMine || can("lead.import") || can("lead.create")) && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           {(canViewPending || canViewMine) && (
             // Điện thoại: hàng tab cuộn ngang, chữ không xuống dòng.
@@ -1230,44 +1233,44 @@ export function CandidatesClient({
               <Copy className="h-4 w-4" strokeWidth={2} />
               Trùng lặp
             </Button>
-            {(currentUserRole === "mkt" || currentUserRole === "admin") && (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={isReadOnly}
-                  onClick={() => setModal({ mode: "import" })}
-                >
-                  <Upload className="h-4 w-4" strokeWidth={2} />
-                  Nhập từ Excel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={isReadOnly}
-                  onClick={() => setIsAutoUpOpen(true)}
-                >
-                  <Zap className="h-4 w-4" strokeWidth={2} />
-                  Up tự động
-                </Button>
-                {currentUserRole === "admin" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={isReadOnly}
-                    onClick={() => setModal({ mode: "legacy-import" })}
-                  >
-                    <History className="h-4 w-4" strokeWidth={2} />
-                    Tải data cũ
-                  </Button>
-                )}
-              </>
+            {can("lead.import") && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isReadOnly}
+                onClick={() => setModal({ mode: "import" })}
+              >
+                <Upload className="h-4 w-4" strokeWidth={2} />
+                Nhập từ Excel
+              </Button>
+            )}
+            {can("lead.pancake_auto_up") && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isReadOnly}
+                onClick={() => setIsAutoUpOpen(true)}
+              >
+                <Zap className="h-4 w-4" strokeWidth={2} />
+                Up tự động
+              </Button>
+            )}
+            {can("lead.import_legacy") && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isReadOnly}
+                onClick={() => setModal({ mode: "legacy-import" })}
+              >
+                <History className="h-4 w-4" strokeWidth={2} />
+                Tải data cũ
+              </Button>
             )}
             {/* Admin cấu hình Chia tự động cho mọi nhóm (rà soát phân quyền 2026-10-30). */}
-            {currentUserRole === "admin" && teams.length > 0 && (
+            {can("distribution.config_all") && teams.length > 0 && (
               <Button
                 type="button"
                 size="sm"
@@ -1280,7 +1283,7 @@ export function CandidatesClient({
               </Button>
             )}
             {/* Thêm data thủ công: MKT, Quản lý, Admin (rà soát phân quyền 2026-10-30). */}
-            {(currentUserRole === "mkt" || currentUserRole === "manager" || currentUserRole === "admin") && (
+            {can("lead.create") && (
               <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
                 <Plus className="h-4 w-4" strokeWidth={2.5} />
                 Thêm lao động mới
@@ -1397,7 +1400,7 @@ export function CandidatesClient({
                 allowClear
               />
             </Field>
-            {currentUserRole !== "sale" && currentUserRole !== "mkt" && (
+            {(canManageAllTeams || can("lead.edit_team") || can("lead.assign")) && (
               <Field uiSize="xs" label="Nhóm / Nhân viên" className="w-40">
                 <TeamSaleFilter
                   teams={teams}
@@ -1759,7 +1762,7 @@ export function CandidatesClient({
         />
       )}
 
-      {isDistributionModalOpen && currentUserRole === "admin" && teams.length > 0 && (
+      {isDistributionModalOpen && can("distribution.config_all") && teams.length > 0 && (
         <DistributionRuleModal
           teamId={teams[0].id}
           teams={teams}
@@ -1767,7 +1770,7 @@ export function CandidatesClient({
           onChanged={() => toast.success("Đã cập nhật cấu hình tự động phân chia")}
         />
       )}
-      {isDistributionModalOpen && currentUserRole !== "admin" && currentUserTeamId && (
+      {isDistributionModalOpen && !can("distribution.config_all") && currentUserTeamId && (
         <DistributionRuleModal
           teamId={currentUserTeamId}
           teamMembers={teamMembers}
@@ -2163,7 +2166,6 @@ function ImportModal({
  */
 function AssignModal({
   candidateIds,
-  currentUserRole,
   ownTeamMembers,
   onClose,
   onAssigned,
@@ -2174,7 +2176,7 @@ function AssignModal({
   onClose: () => void;
   onAssigned: (count: number) => Promise<void>;
 }) {
-  const needsTeamPicker = currentUserRole !== "leader";
+  const needsTeamPicker = useCan()("lead.manage_all_teams");
   const [teams, setTeams] = useState<Team[] | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [members, setMembers] = useState<TeamMember[]>(ownTeamMembers);
