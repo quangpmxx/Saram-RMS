@@ -203,6 +203,7 @@ export class AccountsService {
                 ? undefined
                 : dto.team_id,
           status: dto.status,
+          attendanceTracked: dto.attendance_tracked,
           role: roleChanged ? dto.role : undefined,
           dateOfBirth:
             dto.date_of_birth === undefined
@@ -376,6 +377,7 @@ export class AccountsService {
       username: string;
       teamId: string | null;
       status: string;
+      attendanceTracked: boolean;
       dateOfBirth: Date | null;
       hireDate: Date | null;
       personalPhone: string | null;
@@ -418,6 +420,16 @@ export class AccountsService {
         field: 'team_id',
         oldValue: before.teamId,
         newValue: dto.team_id,
+      });
+    }
+    if (
+      dto.attendance_tracked !== undefined &&
+      dto.attendance_tracked !== before.attendanceTracked
+    ) {
+      changes.push({
+        field: 'attendance_tracked',
+        oldValue: String(before.attendanceTracked),
+        newValue: String(dto.attendance_tracked),
       });
     }
     if (dto.status !== undefined && dto.status !== before.status) {

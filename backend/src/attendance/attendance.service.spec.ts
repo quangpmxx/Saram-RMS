@@ -112,6 +112,7 @@ describe('AttendanceService', () => {
           where: {
             id: 'sale-1',
             role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
+            attendanceTracked: true,
           },
         }),
       );
@@ -124,6 +125,7 @@ describe('AttendanceService', () => {
           where: {
             id: 'mkt-1',
             role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
+            attendanceTracked: true,
           },
         }),
       );

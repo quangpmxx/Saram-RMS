@@ -178,6 +178,8 @@ model Account {
   /// Phải đổi mật khẩu trước khi dùng hệ thống (rà soát 2026-10-30): bật khi
   /// đăng nhập bằng mật khẩu mặc định / Admin tạo mới hoặc đặt lại mật khẩu.
   mustChangePassword Boolean       @default(false) @map("must_change_password")
+  /// Có dòng trong bảng chấm công + được cộng phép hằng tháng (2026-11-07) — Admin bỏ tick cho người không cần chấm công.
+  attendanceTracked  Boolean       @default(true) @map("attendance_tracked")
   role               AccountRole
   teamId             String?       @map("team_id") @db.Uuid
   status             AccountStatus @default(active)

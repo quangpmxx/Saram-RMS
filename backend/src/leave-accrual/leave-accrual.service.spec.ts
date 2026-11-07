@@ -141,6 +141,7 @@ describe('LeaveAccrualService', () => {
       where: {
         role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
         status: 'active',
+        attendanceTracked: true,
       },
       select: expect.objectContaining({
         id: true,

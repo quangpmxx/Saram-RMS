@@ -256,6 +256,37 @@ describe('AccountsService', () => {
       });
     });
 
+    it('bỏ tick "Chấm công": lưu attendanceTracked=false, ghi nhật ký', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        ...baseAccount,
+        attendanceTracked: true,
+      });
+      prisma.account.update.mockResolvedValue({
+        ...baseAccount,
+        attendanceTracked: false,
+      });
+
+      const result = await service.update(
+        'acc-1',
+        { attendance_tracked: false },
+        'admin-1',
+      );
+
+      expect(prisma.account.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ attendanceTracked: false }),
+        }),
+      );
+      expect(result.attendance_tracked).toBe(false);
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fieldChanged: 'attendance_tracked',
+          oldValue: 'true',
+          newValue: 'false',
+        }),
+      );
+    });
+
     it('ghi 1 dòng audit log cho mỗi trường thay đổi', async () => {
       prisma.account.findUnique.mockResolvedValue(baseAccount);
       prisma.account.update.mockResolvedValue({

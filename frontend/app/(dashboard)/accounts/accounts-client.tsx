@@ -9,7 +9,7 @@ import { ACCOUNT_ROLE_LABEL, type Account, type AccountRole, type ModulePermissi
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Field, Input, Select } from "@/components/ui/form";
+import { Checkbox, Field, Input, Select } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
@@ -311,6 +311,7 @@ export function AccountsClient({
                 citizen_id: payload.citizen_id ?? null,
                 bank_account_number: payload.bank_account_number ?? null,
                 nickname: payload.nickname ?? null,
+                attendance_tracked: payload.attendance_tracked,
               }),
             });
             setModal({ mode: "none" });
@@ -346,6 +347,8 @@ interface AccountFormPayload {
   bank_account_number?: string | null;
   /** Bổ sung 2026-07-26 (yêu cầu trực tiếp người dùng): biệt danh — hiển thị thay họ tên đầy đủ ở cột Sale/Đưa đón, cùng quy tắc CHỈ Admin sửa. */
   nickname?: string | null;
+  /** Ô "Chấm công" — chỉ khi sửa tài khoản. */
+  attendance_tracked?: boolean;
 }
 
 function AccountModal({
@@ -381,6 +384,7 @@ function AccountModal({
   const [citizenId, setCitizenId] = useState(initialAccount?.citizen_id ?? "");
   const [bankAccountNumber, setBankAccountNumber] = useState(initialAccount?.bank_account_number ?? "");
   const [nickname, setNickname] = useState(initialAccount?.nickname ?? "");
+  const [attendanceTracked, setAttendanceTracked] = useState(initialAccount?.attendance_tracked ?? true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -421,6 +425,7 @@ function AccountModal({
           citizen_id: citizenId.trim() || null,
           bank_account_number: bankAccountNumber.trim() || null,
           nickname: nickname.trim() || null,
+          attendance_tracked: attendanceTracked,
         }),
       });
     } catch (err) {
@@ -492,6 +497,24 @@ function AccountModal({
               ))}
             </Select>
           </Field>
+        )}
+
+        {/* Ô "Chấm công" (2026-11-07): bỏ tick cho người không cần chấm công (vd sếp) —
+            không có dòng trong bảng chấm công, không tự cộng phép hằng tháng. */}
+        {isEdit && (
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <Checkbox
+              className="mt-0.5"
+              checked={attendanceTracked}
+              onChange={(event) => setAttendanceTracked(event.target.checked)}
+            />
+            <span>
+              Chấm công
+              <span className="block text-xs text-slate-400">
+                Bỏ tick: không hiện trong bảng chấm công, không tự cộng phép hằng tháng.
+              </span>
+            </span>
+          </label>
         )}
 
         {/* 5 field hồ sơ nhân sự (yêu cầu trực tiếp người dùng, 2026-07-15)

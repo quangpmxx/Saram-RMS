@@ -572,7 +572,8 @@ export class AttendanceService {
     const employeeWhere = await this.resolveEmployeeWhere(query, currentUser);
     const employees = sortForAttendance(
       await this.prisma.account.findMany({
-        where: employeeWhere,
+        // Bỏ người Admin đã bỏ tick "Chấm công" ở Sửa tài khoản (2026-11-07).
+        where: { ...employeeWhere, attendanceTracked: true },
         select: ACCOUNT_SELECT,
       }),
     );

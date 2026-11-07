@@ -10,6 +10,8 @@ export interface AccountResponseDto {
   role: string;
   /** Đang bị bắt đổi mật khẩu (dùng mật khẩu mặc định) — rà soát 2026-10-30. */
   must_change_password: boolean;
+  /** Có chấm công (dòng trong bảng chấm công + cộng phép hằng tháng) — 2026-11-07. */
+  attendance_tracked: boolean;
   team_id: string | null;
   team_name: string | null;
   status: string;
@@ -50,6 +52,7 @@ export function toAccountResponse(
     username: account.username,
     role: account.role,
     must_change_password: account.mustChangePassword,
+    attendance_tracked: account.attendanceTracked,
     team_id: account.teamId,
     team_name: account.team?.name ?? null,
     status: account.status,

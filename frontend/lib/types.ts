@@ -84,6 +84,8 @@ export interface Account {
   capabilities?: string[];
   /** Đang dùng mật khẩu mặc định → phải đổi ở /doi-mat-khau trước khi dùng hệ thống. */
   must_change_password: boolean;
+  /** Có chấm công (dòng trong bảng chấm công + cộng phép hằng tháng) — Admin bỏ tick ở Sửa tài khoản (2026-11-07). */
+  attendance_tracked: boolean;
   team_id: string | null;
   team_name: string | null;
   status: AccountStatus;

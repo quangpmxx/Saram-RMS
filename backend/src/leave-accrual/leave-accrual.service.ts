@@ -70,7 +70,12 @@ export class LeaveAccrualService {
     const currentMonth = monthKeyInTimezone(now, TIMEZONE);
 
     const employees = await this.prisma.account.findMany({
-      where: { role: { in: EMPLOYEE_ROLES }, status: 'active' },
+      // Bỏ người không chấm công (ô "Chấm công" ở Sửa tài khoản, 2026-11-07).
+      where: {
+        role: { in: EMPLOYEE_ROLES },
+        status: 'active',
+        attendanceTracked: true,
+      },
       select: {
         id: true,
         fullName: true,

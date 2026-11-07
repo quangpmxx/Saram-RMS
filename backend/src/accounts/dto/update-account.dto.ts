@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -54,6 +55,11 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsEnum(AccountStatus)
   status?: AccountStatus;
+
+  /** Ô "Chấm công" (2026-11-07): false = không có dòng trong bảng chấm công, không cộng phép. */
+  @IsOptional()
+  @IsBoolean()
+  attendance_tracked?: boolean;
 
   /** Đổi vai trò (yêu cầu người dùng 2026-11-07) — CHỈ Admin, không đổi được vai trò của chính mình. */
   @IsOptional()
