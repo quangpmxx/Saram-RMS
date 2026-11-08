@@ -14,6 +14,7 @@ import {
   TeamSummaryDto,
 } from './dto/dashboard-response.dto';
 import { findOwnTeamId } from '../common/utils/account-team.util';
+import { countShuttlePersons } from '../shuttle/shuttle-person.util';
 import {
   SHUTTLE_RESULT_FAILED,
   SHUTTLE_RESULT_PASSED,
@@ -57,6 +58,8 @@ type ShuttleRow = {
   status: string | null;
   interviewResult: string | null;
   type: string | null;
+  phoneNumber: string;
+  fullName: string;
 };
 
 const EMPTY_COUNTS: ShuttleCounts = {
@@ -72,15 +75,22 @@ const EMPTY_SHUTTLE_KPI: ShuttleKpi = {
   tv: EMPTY_COUNTS,
 };
 
+/** Đếm NGƯỜI, không đếm dòng: gộp trùng SĐT + tên (Đưa đón cho nhập trùng — 2026-11-08). */
 function countShuttle(rows: ShuttleRow[]): ShuttleCounts {
   return {
-    interview_scheduled: rows.length,
-    attended: rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED).length,
-    no_show: rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW).length,
-    passed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED)
-      .length,
-    failed: rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_FAILED)
-      .length,
+    interview_scheduled: countShuttlePersons(rows),
+    attended: countShuttlePersons(
+      rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED),
+    ),
+    no_show: countShuttlePersons(
+      rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW),
+    ),
+    passed: countShuttlePersons(
+      rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED),
+    ),
+    failed: countShuttlePersons(
+      rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_FAILED),
+    ),
   };
 }
 
@@ -700,6 +710,8 @@ export class DashboardService {
         status: true,
         interviewResult: true,
         type: true,
+        phoneNumber: true,
+        fullName: true,
       },
     });
   }

@@ -56,15 +56,14 @@ export interface SheetReport {
   columns: string[];
   rows: number;
   will_create: number;
-  duplicates: number;
   bad_date: number;
 }
 
 /**
  * Nhập danh sách đưa đón cũ từ Excel (yêu cầu người dùng 2026-11-08) — chỉ Admin. 2 bước, mỗi
  * bước gửi lại file: xem trước (không ghi gì) → nhập. Ô không đối chiếu được → để trống; dòng
- * không đọc được ngày → bỏ qua (báo lại); dòng đã có (cùng ngày + SĐT) → bỏ qua để nhập lại
- * file không bị nhân đôi.
+ * không đọc được ngày → bỏ qua (báo lại). Dòng trùng VẪN nhập (lao động hẹn lại nhiều lần) —
+ * Dashboard gộp trùng SĐT + tên khi đếm người.
  */
 @Injectable()
 export class ShuttleImportService {
@@ -160,7 +159,6 @@ export class ShuttleImportService {
       m.set(value, (m.get(value) ?? 0) + 1);
     };
     const badDates: { sheet: string; row: number; value: string }[] = [];
-    const seen = new Set<string>();
     const sheets: { report: SheetReport; rows: ParsedRow[] }[] = [];
     let total = 0;
 
@@ -178,7 +176,6 @@ export class ShuttleImportService {
           : [],
         rows: 0,
         will_create: 0,
-        duplicates: 0,
         bad_date: 0,
       };
       const rows: ParsedRow[] = [];
@@ -206,13 +203,6 @@ export class ShuttleImportService {
           badDates.push({ sheet: ws.name, row: r, value: dateRaw });
           continue;
         }
-        const dupKey = `${date}|${phone || fold(fullName)}`;
-        if (seen.has(dupKey)) {
-          report.duplicates++;
-          continue;
-        }
-        seen.add(dupKey);
-
         const option = (key: OptionColumn): string | null => {
           const raw = text(r, key);
           if (!raw) return null;
@@ -259,31 +249,8 @@ export class ShuttleImportService {
       }
     }
 
-    // Dòng đã có trong phần mềm (cùng ngày + SĐT, chưa xoá) → bỏ qua.
-    const all = sheets.flatMap((s) => s.rows);
-    const phones = [...new Set(all.map((r) => r.phoneNumber).filter(Boolean))];
-    const existing = new Set<string>();
-    for (let i = 0; i < phones.length; i += 1000) {
-      const found = await this.prisma.shuttleRecord.findMany({
-        where: {
-          phoneNumber: { in: phones.slice(i, i + 1000) },
-          deletedAt: null,
-        },
-        select: { date: true, phoneNumber: true },
-      });
-      for (const f of found) {
-        existing.add(`${f.date.toISOString().slice(0, 10)}|${f.phoneNumber}`);
-      }
-    }
-    for (const s of sheets) {
-      const before = s.rows.length;
-      const kept = s.rows.filter(
-        (r) => !r.phoneNumber || !existing.has(`${r.date}|${r.phoneNumber}`),
-      );
-      s.report.duplicates += before - kept.length;
-      s.rows.splice(0, s.rows.length, ...kept);
-      s.report.will_create = kept.length;
-    }
+    // Cho phép nhập trùng (2026-11-08) — Dashboard tự gộp trùng SĐT + tên khi đếm người.
+    for (const s of sheets) s.report.will_create = s.rows.length;
 
     return { sheets, unmatched, badDates };
   }

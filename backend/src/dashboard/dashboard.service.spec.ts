@@ -28,6 +28,16 @@ describe('DashboardService', () => {
   const saleUser = { id: 'sale-1', role: 'sale' as const, sessionId: 's' };
   const mktUser = { id: 'mkt-1', role: 'mkt' as const, sessionId: 's' };
 
+  /** Dòng đưa đón mẫu: mỗi dòng 1 người khác nhau (SĐT + tên riêng) trừ khi test tự đặt. */
+  const mockShuttle = (rows: object[]) =>
+    prisma.shuttleRecord.findMany.mockResolvedValue(
+      rows.map((r, i) => ({
+        phoneNumber: `09000000${String(i).padStart(2, '0')}`,
+        fullName: `Người ${i}`,
+        ...r,
+      })),
+    );
+
   beforeEach(async () => {
     prisma = {
       account: {
@@ -263,7 +273,7 @@ describe('DashboardService', () => {
     it('tách riêng no_show (Bùng PV)/failed (Trượt PV), employed=null (chưa có nguồn dữ liệu)', async () => {
       prisma.lead.count.mockResolvedValue(20); // new_leads
       prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]); // resolveSaleAccountIdsInScope (admin)
-      prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
+      mockShuttle(SHUTTLE_ROWS);
 
       const result = await service.getSummary({}, adminUser);
 
@@ -313,7 +323,7 @@ describe('DashboardService', () => {
     it('lọc theo Nhóm → chỉ đếm dòng đưa đón của Sale trong nhóm', async () => {
       prisma.lead.count.mockResolvedValue(20);
       prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
-      prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
+      mockShuttle(SHUTTLE_ROWS);
 
       await service.getSummary({ team_id: 'team-1' }, adminUser);
 
@@ -324,10 +334,28 @@ describe('DashboardService', () => {
       );
     });
 
+    it('đếm NGƯỜI theo SĐT + tên: 1 SĐT 3 tên = 3 người; cùng SĐT + tên nhập lại = 1 (2026-11-08)', async () => {
+      prisma.lead.count.mockResolvedValue(10);
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
+      mockShuttle([
+        { phoneNumber: '0911', fullName: 'An', status: 'Chưa đón được' },
+        { phoneNumber: '0911', fullName: 'an ', status: 'Đã đón' },
+        { phoneNumber: '0911', fullName: 'Ân', status: 'Đã đón' },
+        { phoneNumber: '0911', fullName: 'Bình', status: 'Đã đón' },
+        { phoneNumber: '0911', fullName: 'Chi', status: 'Đã đón' },
+      ]);
+
+      const { kpi } = await service.getSummary({}, adminUser);
+
+      expect(kpi.interview_scheduled).toBe(3);
+      expect(kpi.attended).toBe(3);
+      expect(kpi.no_show).toBe(1);
+    });
+
     it('"Hẹn lại"/để trống Tình trạng KHÔNG tính vào attended lẫn no_show (vẫn tính vào interview_scheduled)', async () => {
       prisma.lead.count.mockResolvedValue(5);
       prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
-      prisma.shuttleRecord.findMany.mockResolvedValue([
+      mockShuttle([
         { status: 'Hẹn lại', interviewResult: null },
         { status: null, interviewResult: null },
       ]);
@@ -342,7 +370,7 @@ describe('DashboardService', () => {
     it('Ví dụ người dùng (2026-11-06): 100 data, hẹn 10, đến 6, đỗ 3 → 10% / 60% / 50%', async () => {
       prisma.lead.count.mockResolvedValue(100);
       prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
-      prisma.shuttleRecord.findMany.mockResolvedValue([
+      mockShuttle([
         ...Array(3).fill({ status: 'Đã đón', interviewResult: 'Đỗ PV' }),
         ...Array(3).fill({ status: 'Đã đón', interviewResult: 'Trượt PV' }),
         ...Array(4).fill({ status: 'Chưa đón được', interviewResult: null }),
@@ -357,7 +385,7 @@ describe('DashboardService', () => {
 
     it('MKT xem số liệu chung toàn công ty → vẫn đếm dòng đưa đón (2026-11-04)', async () => {
       prisma.lead.count.mockResolvedValue(5);
-      prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
+      mockShuttle(SHUTTLE_ROWS);
       const result = await service.getSummary({}, mktUser);
       expect(result.kpi.interview_scheduled).toBe(12);
     });
@@ -376,7 +404,7 @@ describe('DashboardService', () => {
     it('lọc theo Nguồn (source_id) → 5 chỉ số Shuttle-based về 0 (yêu cầu trực tiếp người dùng)', async () => {
       prisma.lead.count.mockResolvedValue(20);
       prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
-      prisma.shuttleRecord.findMany.mockResolvedValue(SHUTTLE_ROWS);
+      mockShuttle(SHUTTLE_ROWS);
 
       const result = await service.getSummary(
         { source_id: 'src-fb' },
@@ -489,7 +517,7 @@ describe('DashboardService', () => {
       prisma.interviewAppointment.groupBy.mockResolvedValue([
         { createdById: 's2', _count: { _all: 2 } },
       ]);
-      prisma.shuttleRecord.findMany.mockResolvedValue([
+      mockShuttle([
         { saleUserId: 's1', status: 'Đã đón', interviewResult: 'Đỗ PV' },
         { saleUserId: 's1', status: 'Chưa đón được', interviewResult: null },
       ]);

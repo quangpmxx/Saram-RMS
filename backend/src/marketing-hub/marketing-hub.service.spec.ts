@@ -244,6 +244,14 @@ describe('MarketingHubService', () => {
 });
 
 describe('MarketingHubService.today', () => {
+  /** n người khác nhau + 1 dòng nhập lại của người đầu (không được đếm thêm). */ const people =
+    (n: number) => [
+      ...Array.from({ length: n }, (_, i) => ({
+        phoneNumber: `09${i}`,
+        fullName: `P${i}`,
+      })),
+      ...(n ? [{ phoneNumber: '090', fullName: 'p0' }] : []),
+    ];
   it('CP/phỏng vấn = chi tiêu hôm qua ÷ số đưa đón hôm nay; chi phí/data theo hôm nay', async () => {
     const aggregate = jest
       .fn()
@@ -255,7 +263,7 @@ describe('MarketingHubService.today', () => {
         findMany: jest.fn().mockResolvedValue([{ mktSourceId: 's1' }]),
       },
       lead: { count: jest.fn().mockResolvedValue(20) },
-      shuttleRecord: { count: jest.fn().mockResolvedValue(3) },
+      shuttleRecord: { findMany: jest.fn().mockResolvedValue(people(3)) },
     };
     const r = await build(prisma).today();
     expect(r).toMatchObject({
@@ -273,14 +281,14 @@ describe('MarketingHubService.today', () => {
       .fn()
       .mockResolvedValueOnce({ _sum: { spend: 3000000 } })
       .mockResolvedValueOnce({ _sum: { spend: 2400000 } });
-    const shuttleCount = jest.fn().mockResolvedValue(8);
+    const shuttleCount = jest.fn().mockResolvedValue(people(8));
     const prisma = {
       adSpendDaily: { aggregate },
       adAccount: {
         findMany: jest.fn().mockResolvedValue([{ mktSourceId: 's1' }]),
       },
       lead: { count: jest.fn().mockResolvedValue(100) },
-      shuttleRecord: { count: shuttleCount },
+      shuttleRecord: { findMany: shuttleCount },
     };
     const r = await build(prisma).today({
       from: '2026-11-01',
@@ -316,7 +324,7 @@ describe('MarketingHubService.today', () => {
         aggregate: jest.fn().mockResolvedValue({ _sum: { spend: 0 } }),
       },
       lead: { count: leadCount },
-      shuttleRecord: { count: jest.fn().mockResolvedValue(0) },
+      shuttleRecord: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const r = await build(prisma).today({
       from: '2026-11-01',

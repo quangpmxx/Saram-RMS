@@ -12,7 +12,6 @@ interface SheetReport {
   columns: string[];
   rows: number;
   will_create: number;
-  duplicates: number;
   bad_date: number;
 }
 
@@ -134,7 +133,6 @@ export function ShuttleImportModal({
                     <th className="px-2 py-1.5 text-left">Cột nhận được</th>
                     <th className="px-2 py-1.5">Số dòng</th>
                     <th className="px-2 py-1.5">Sẽ nhập</th>
-                    <th className="px-2 py-1.5">Đã có / trùng</th>
                     <th className="px-2 py-1.5">Sai ngày</th>
                   </tr>
                 </thead>
@@ -171,7 +169,6 @@ export function ShuttleImportModal({
                       <td className="px-2 py-1.5 text-center font-semibold text-emerald-700">
                         {num(s.will_create)}
                       </td>
-                      <td className="px-2 py-1.5 text-center">{num(s.duplicates)}</td>
                       <td
                         className={`px-2 py-1.5 text-center ${s.bad_date ? "text-red-600" : ""}`}
                       >

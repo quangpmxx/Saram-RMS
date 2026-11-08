@@ -26,6 +26,7 @@ import {
   MarketingPeriodQueryDto,
   OverviewQueryDto,
 } from './dto/marketing-hub.dto';
+import { countShuttlePersons } from '../shuttle/shuttle-person.util';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_SYNC_DAYS = 30;
@@ -455,15 +456,19 @@ export class MarketingHubService {
             },
           },
         }),
-        this.prisma.shuttleRecord.count({
-          where: {
-            date: {
-              ...(from ? { gte: new Date(from) } : {}),
-              lte: new Date(to),
+        // Số người phỏng vấn = dòng đưa đón trong kỳ, gộp trùng SĐT + tên (2026-11-08).
+        this.prisma.shuttleRecord
+          .findMany({
+            where: {
+              date: {
+                ...(from ? { gte: new Date(from) } : {}),
+                lte: new Date(to),
+              },
+              deletedAt: null,
             },
-            deletedAt: null,
-          },
-        }),
+            select: { phoneNumber: true, fullName: true },
+          })
+          .then(countShuttlePersons),
       ]);
     return {
       date: to,
