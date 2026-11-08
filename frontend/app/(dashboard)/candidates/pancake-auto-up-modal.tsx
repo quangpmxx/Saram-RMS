@@ -112,8 +112,15 @@ export function PancakeAutoUpModal({
       title="Up tự động từ Pancake"
       maxWidth="max-w-sm"
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
+        // 3 nút luôn nằm 1 hàng ngang (kể cả trên điện thoại): cỡ nhỏ, chia đều chiều rộng.
+        <div className="flex w-full gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="flex-1 whitespace-nowrap"
+            onClick={onClose}
+          >
             Đóng
           </Button>
           {config?.is_active ? (
@@ -121,6 +128,8 @@ export function PancakeAutoUpModal({
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="flex-1 whitespace-nowrap"
                 disabled={busy}
                 onClick={() => void save(false)}
               >
@@ -128,6 +137,8 @@ export function PancakeAutoUpModal({
               </Button>
               <Button
                 type="button"
+                size="sm"
+                className="flex-1 whitespace-nowrap"
                 disabled={busy || receiving.length === 0}
                 onClick={() => void save(true)}
               >
@@ -139,6 +150,8 @@ export function PancakeAutoUpModal({
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="flex-1 whitespace-nowrap"
                 disabled={busy || !config}
                 onClick={() => void save(false)}
               >
@@ -146,6 +159,8 @@ export function PancakeAutoUpModal({
               </Button>
               <Button
                 type="button"
+                size="sm"
+                className="flex-1 whitespace-nowrap"
                 disabled={busy || receiving.length === 0}
                 onClick={() => void save(true)}
               >
@@ -153,7 +168,7 @@ export function PancakeAutoUpModal({
               </Button>
             </>
           )}
-        </>
+        </div>
       }
     >
       {!config && !error && (
