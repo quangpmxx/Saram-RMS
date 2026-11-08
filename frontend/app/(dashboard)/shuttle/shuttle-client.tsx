@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { cn } from "@/lib/cn";
@@ -30,6 +30,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
+import { ShuttleImportModal } from "./shuttle-import-modal";
 
 /**
  * Màu 1 tài khoản Sale/NV đưa đón trong bộ lọc (2026-11-06) — màu lưu ở
@@ -961,7 +962,10 @@ export function ShuttleClient({
   initialSaleAccounts,
   initialDriverAccounts,
   initialCompanies,
+  isAdmin,
 }: {
+  /** Nút "Nhập Excel" danh sách cũ — chỉ Admin (2026-11-08). */
+  isAdmin: boolean;
   permissionLevel: ModulePermissionLevel;
   initialResult: ShuttleListResult;
   initialOptions: ShuttleOptions;
@@ -1057,6 +1061,7 @@ export function ShuttleClient({
   const [isManagingSaleColors, setIsManagingSaleColors] = useState(false);
   const [isManagingDriverColors, setIsManagingDriverColors] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<(typeof ZOOM_LEVELS)[number]>(100);
+  const [showImport, setShowImport] = useState(false);
 
   /**
    * Dự án phụ — nâng cấp toàn diện: đo chiều cao THẬT của header hệ thống
@@ -1583,6 +1588,12 @@ export function ShuttleClient({
             <X className="h-3.5 w-3.5" strokeWidth={2} />
             Xóa bộ lọc
           </Button>
+          {isAdmin && !isReadOnly && (
+            <Button type="button" size="xs" variant="outline" onClick={() => setShowImport(true)}>
+              <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+              Nhập Excel
+            </Button>
+          )}
         </div>
       </div>
       </Card>
@@ -1819,6 +1830,10 @@ export function ShuttleClient({
           onSetTextColor={(accountId, textColorKey) => handleAddOption("driver", accountId, undefined, textColorKey)}
           onClose={() => setIsManagingDriverColors(false)}
         />
+      )}
+
+      {showImport && (
+        <ShuttleImportModal onClose={() => setShowImport(false)} onImported={() => void handleSearch()} />
       )}
     </div>
   );

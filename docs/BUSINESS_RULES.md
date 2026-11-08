@@ -42,6 +42,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 - Hiệu suất/xếp hạng gom query cả danh sách Sale (B7) — giữ nguyên kết quả khi tối ưu; có test hồi quy.
 
 - **Chính thức / Thời vụ** (2026-11-04): ô Hẹn/Đến/Bùng/Đỗ/Trượt PV và 3 ô tỷ lệ hẹn/đến/đỗ ở Dashboard bấm vào mới hiện tách **CT / TV**, theo cột "Loại hình" của Đưa đón. **Tỷ lệ theo phễu (2026-11-06):** hẹn PV / Data mới; đến PV / hẹn PV; đỗ PV / đến PV (mẫu số 0 → 0%), áp dụng cho toàn công ty/nhóm/cá nhân. Tách CT/TV: hẹn PV vẫn chia tổng Data mới; đến/đỗ chia trong cùng loại hình.
+- **Nhập Excel Đưa đón** (chỉ Admin, 2026-11-08): xem trước → chọn sheet → nhập. Tự tìm dòng tiêu đề (10 dòng đầu, cần cột Ngày + Họ tên/SĐT). Ô không đối chiếu được (công ty ↔ Quản lý đơn, Sale/NV đưa đón ↔ tài khoản kể cả đã nghỉ, lựa chọn Khu vực/Loại hình/Nhà thầu/Tình trạng/Kết quả/Nguồn, Giờ PV) → để trống. Dòng sai ngày → bỏ qua; dòng đã có cùng ngày + SĐT → bỏ qua. Không gửi thông báo/realtime từng dòng.
 - Nguồn số PV ở Dashboard = Đưa đón: Hẹn PV = mọi dòng; Đến PV = Tình trạng "Đã đón"; Bùng PV = "Chưa đón được"; Đỗ/Trượt PV = Kết quả "Đỗ PV"/"Trượt PV". Không lọc Nhóm/NV → đếm **mọi dòng** (kể cả chưa chọn Sale); có lọc → chỉ dòng của Sale thuộc phạm vi. Các giá trị trên + `CT`/`TV` là **lựa chọn cố định** (không xoá/đổi tên, chỉ đổi màu).
 
 ## Bất biến không được phá

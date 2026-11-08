@@ -39,6 +39,7 @@ export default async function ShuttlePage() {
       initialSaleAccounts={saleAccounts}
       initialDriverAccounts={driverAccounts}
       initialCompanies={companies}
+      isAdmin={user.role === "admin"}
     />
   );
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,8 +11,13 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Roles } from '../common/decorators/roles.decorator';
 import { ShuttleService } from './shuttle.service';
+import { ShuttleImportService } from './shuttle-import.service';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
 import { UpdateShuttleDto } from './dto/update-shuttle.dto';
 import { ListShuttleQueryDto } from './dto/list-shuttle-query.dto';
@@ -27,9 +33,14 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
  * RolesGuard mặc định cho phép mọi vai trò đã đăng nhập khi không có
  * @Roles() (xem roles.guard.ts).
  */
+const IMPORT_MAX_FILE_BYTES = 20 * 1024 * 1024;
+
 @Controller('shuttle')
 export class ShuttleController {
-  constructor(private readonly shuttleService: ShuttleService) {}
+  constructor(
+    private readonly shuttleService: ShuttleService,
+    private readonly importService: ShuttleImportService,
+  ) {}
 
   @Get()
   list(@Query() query: ListShuttleQueryDto) {
@@ -110,5 +121,42 @@ export class ShuttleController {
   ) {
     await this.shuttleService.remove(id, user);
     return { message: 'Đã xóa dòng đưa đón' };
+  }
+
+  /** Nhập Excel danh sách cũ — bước 1: xem trước, không ghi gì. Chỉ Admin. */
+  @Post('import/preview')
+  @HttpCode(HttpStatus.OK)
+  @Roles('admin')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: IMPORT_MAX_FILE_BYTES } }),
+  )
+  importPreview(@UploadedFile() file: Express.Multer.File | undefined) {
+    if (!file) throw new BadRequestException('Chưa chọn file Excel (.xlsx)');
+    return this.importService.preview(file.buffer);
+  }
+
+  /** Nhập Excel — bước 2: nhập các sheet đã chọn (gửi lại file). Chỉ Admin. */
+  @Post('import/commit')
+  @HttpCode(HttpStatus.OK)
+  @Roles('admin')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: IMPORT_MAX_FILE_BYTES } }),
+  )
+  importCommit(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('sheets') sheets: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!file) throw new BadRequestException('Chưa chọn file Excel (.xlsx)');
+    let names: unknown;
+    try {
+      names = JSON.parse(sheets ?? '[]');
+    } catch {
+      names = null;
+    }
+    if (!Array.isArray(names) || !names.every((n) => typeof n === 'string')) {
+      throw new BadRequestException('Danh sách sheet không hợp lệ');
+    }
+    return this.importService.commit(file.buffer, names, user);
   }
 }
