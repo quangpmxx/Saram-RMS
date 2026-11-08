@@ -17,7 +17,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ShuttleService } from './shuttle.service';
-import { ShuttleImportService } from './shuttle-import.service';
+import {
+  ShuttleImportService,
+  type DriverMapping,
+} from './shuttle-import.service';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
 import { UpdateShuttleDto } from './dto/update-shuttle.dto';
 import { ListShuttleQueryDto } from './dto/list-shuttle-query.dto';
@@ -145,18 +148,36 @@ export class ShuttleController {
   importCommit(
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body('sheets') sheets: string | undefined,
+    @Body('drivers') drivers: string | undefined,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     if (!file) throw new BadRequestException('Chưa chọn file Excel (.xlsx)');
-    let names: unknown;
-    try {
-      names = JSON.parse(sheets ?? '[]');
-    } catch {
-      names = null;
-    }
+    const parse = (raw: string | undefined, fallback: string): unknown => {
+      try {
+        return JSON.parse(raw ?? fallback);
+      } catch {
+        return null;
+      }
+    };
+    const names = parse(sheets, '[]');
     if (!Array.isArray(names) || !names.every((n) => typeof n === 'string')) {
       throw new BadRequestException('Danh sách sheet không hợp lệ');
     }
-    return this.importService.commit(file.buffer, names, user);
+    // Bảng ghép tên NV đưa đón trong sheet → id tài khoản (null = để trống) đã xác nhận.
+    const mapping = parse(drivers, '{}');
+    if (
+      !mapping ||
+      typeof mapping !== 'object' ||
+      Array.isArray(mapping) ||
+      !Object.values(mapping).every((v) => v === null || typeof v === 'string')
+    ) {
+      throw new BadRequestException('Bảng ghép NV đưa đón không hợp lệ');
+    }
+    return this.importService.commit(
+      file.buffer,
+      names,
+      mapping as DriverMapping,
+      user,
+    );
   }
 }

@@ -1,5 +1,6 @@
 import {
   matchAccount,
+  suggestAccount,
   parseShuttleDate,
   parseShuttleTime,
   splitNamePhone,
@@ -76,5 +77,29 @@ describe('matchAccount', () => {
     expect(matchAccount('Thu Hà', accounts)).toBe('2');
     expect(matchAccount('Hà', accounts)).toBeNull();
     expect(matchAccount('Không ai', accounts)).toBeNull();
+  });
+});
+
+describe('suggestAccount (NV đưa đón)', () => {
+  const drivers = [
+    { id: 'd1', fullName: 'Nguyễn Văn Tuấn', nickname: 'Tuấn xe' },
+    { id: 'd2', fullName: 'Trần Minh Đức', nickname: null },
+  ];
+  it('khớp chính xác biệt danh/họ tên → exact', () => {
+    expect(suggestAccount('tuan xe', drivers)).toEqual({
+      id: 'd1',
+      exact: true,
+    });
+    expect(suggestAccount('Trần Minh Đức', drivers)).toEqual({
+      id: 'd2',
+      exact: true,
+    });
+  });
+  it('không chính xác → gợi ý tên giống nhất, chờ xác nhận', () => {
+    expect(suggestAccount('Đức', drivers)).toEqual({ id: 'd2', exact: false });
+    expect(suggestAccount('Tuan', drivers)).toEqual({ id: 'd1', exact: false });
+  });
+  it('không ai đủ giống → null', () => {
+    expect(suggestAccount('Hoàng Thị Lan Anh', drivers)).toBeNull();
   });
 });

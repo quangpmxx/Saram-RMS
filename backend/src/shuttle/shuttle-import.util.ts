@@ -34,7 +34,7 @@ export const SHUTTLE_COLUMNS = {
   ],
   phone: ['sdt', 'so dien thoai', 'so dt', 'dien thoai', 'sđt', 'phone'],
   company: ['cong ty', 'cty', 'don hang', 'ten cong ty'],
-  area: ['khu vuc', 'kcn', 'khu cong nghiep'],
+  area: ['khu vuc', 'kv', 'kcn', 'khu cong nghiep'],
   type: ['loai hinh', 'loai'],
   sale: ['sale', 'nv sale', 'nhan vien sale', 'nguoi tuyen', 'tuyen dung'],
   driver: ['nv dua don', 'dua don', 'nguoi don', 'nhan vien dua don', 'lai xe'],
@@ -206,4 +206,59 @@ export function matchAccount(
       );
     }),
   );
+}
+
+/** Cách ghi trong sheet → lựa chọn cố định của phần mềm (so sau khi fold). */
+export const STATUS_ALIASES: Record<string, string> = {
+  'khong don duoc': 'Chưa đón được',
+};
+
+/** Độ giống 2 chuỗi đã fold: 1 = y hệt, 0 = khác hẳn (theo khoảng cách sửa chữ Levenshtein). */
+export function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (!a || !b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return 1 - prev[b.length] / Math.max(a.length, b.length);
+}
+
+/**
+ * NV đưa đón (yêu cầu người dùng 2026-11-08): khớp CHÍNH XÁC (biệt danh hoặc họ tên, không phân
+ * biệt dấu/hoa thường, đúng 1 người) → `exact`; không thì gợi ý tài khoản giống nhất (so với biệt
+ * danh, họ tên, tên gọi) để người dùng xác nhận trước khi nhập. Không ai đủ giống → null.
+ */
+export function suggestAccount(
+  label: string,
+  accounts: { id: string; fullName: string; nickname: string | null }[],
+): { id: string; exact: boolean } | null {
+  const l = fold(label);
+  if (!l) return null;
+  const exact = accounts.filter(
+    (a) => fold(a.fullName) === l || (a.nickname && fold(a.nickname) === l),
+  );
+  if (exact.length === 1) return { id: exact[0].id, exact: true };
+  let best: { id: string; score: number } | null = null;
+  for (const a of accounts) {
+    const full = fold(a.fullName);
+    const words = full.split(' ');
+    const lWords = l.split(' ').length;
+    const candidates = [
+      full,
+      a.nickname ? fold(a.nickname) : '',
+      words.slice(-lWords).join(' '),
+    ];
+    const score = Math.max(...candidates.map((c) => similarity(l, c)));
+    if (!best || score > best.score) best = { id: a.id, score };
+  }
+  return best && best.score >= 0.5 ? { id: best.id, exact: false } : null;
 }

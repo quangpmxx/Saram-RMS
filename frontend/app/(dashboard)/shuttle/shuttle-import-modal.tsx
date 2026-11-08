@@ -20,6 +20,9 @@ interface PreviewResult {
   /** Tên cột → các giá trị không đối chiếu được (sẽ để trống). */
   unmatched: Record<string, { value: string; count: number }[]>;
   bad_dates: { sheet: string; row: number; value: string }[];
+  /** Tên NV đưa đón trong sheet + tài khoản gợi ý (exact = khớp chính xác 100%). */
+  drivers: { value: string; count: number; exact: boolean; suggested_account_id: string | null }[];
+  driver_accounts: { id: string; name: string }[];
 }
 
 const num = (n: number) => n.toLocaleString("vi-VN");
@@ -39,6 +42,8 @@ export function ShuttleImportModal({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  /** Tên NV đưa đón trong sheet → id tài khoản ("" = để trống). */
+  const [driverMap, setDriverMap] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +57,9 @@ export function ShuttleImportModal({
       data.append("file", f);
       const res = await clientApiUpload<PreviewResult>("/shuttle/import/preview", data);
       setPreview(res);
+      setDriverMap(
+        Object.fromEntries(res.drivers.map((d) => [d.value, d.suggested_account_id ?? ""])),
+      );
       setPicked(
         new Set(res.sheets.filter((s) => s.will_create > 0).map((s) => s.name)),
       );
@@ -70,6 +78,10 @@ export function ShuttleImportModal({
       const data = new FormData();
       data.append("file", file);
       data.append("sheets", JSON.stringify([...picked]));
+      data.append(
+        "drivers",
+        JSON.stringify(Object.fromEntries(Object.entries(driverMap).map(([k, v]) => [k, v || null]))),
+      );
       const res = await clientApiUpload<{ created: number }>("/shuttle/import/commit", data);
       toast.success(`Đã nhập ${num(res.created)} dòng đưa đón`);
       onImported();
@@ -198,6 +210,62 @@ export function ShuttleImportModal({
                       </span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {preview.drivers.length > 0 && (
+              <div>
+                <p className="mb-1 font-semibold text-slate-700">NV đưa đón — kiểm tra trước khi nhập</p>
+                <p className="mb-2 text-xs text-slate-500">
+                  Tên không khớp chính xác đã được gợi ý người giống nhất — sửa lại nếu sai, hoặc chọn
+                  “Để trống”.
+                </p>
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full border-collapse text-xs">
+                    <thead className="bg-slate-100 text-slate-600">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left">Tên trong sheet</th>
+                        <th className="px-2 py-1.5">Số dòng</th>
+                        <th className="px-2 py-1.5 text-left">Tài khoản trong phần mềm</th>
+                        <th className="px-2 py-1.5" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.drivers.map((d) => (
+                        <tr
+                          key={d.value}
+                          className={`border-t border-slate-100 ${d.exact ? "" : "bg-amber-50"}`}
+                        >
+                          <td className="px-2 py-1.5 font-medium">{d.value}</td>
+                          <td className="px-2 py-1.5 text-center">{num(d.count)}</td>
+                          <td className="px-2 py-1.5">
+                            <select
+                              className="w-full rounded border border-slate-300 bg-white px-1.5 py-1"
+                              value={driverMap[d.value] ?? ""}
+                              onChange={(e) =>
+                                setDriverMap((prev) => ({ ...prev, [d.value]: e.target.value }))
+                              }
+                            >
+                              <option value="">— Để trống —</option>
+                              {preview.driver_accounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            {d.exact ? (
+                              <span className="text-emerald-700">Khớp chính xác</span>
+                            ) : (
+                              <span className="font-medium text-amber-700">Cần xác nhận</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
