@@ -259,8 +259,10 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
 
           {/* Xem thử giao diện sinh nhật — dời từ trang Cấu hình vận hành
               sang đây (yêu cầu trực tiếp người dùng, 2026-07-24), chỉ Admin
-              thấy — cùng pattern admin-only với "Cài đặt Check in" ở trên. */}
-          {user.role === "admin" && (
+              thấy — cùng pattern admin-only với "Cài đặt Check in" ở trên.
+              Ẩn trên server thật (production): backend chỉ cho xem thử khi
+              không phải production nên hiện ra chỉ gây nhầm (2026-11-07). */}
+          {user.role === "admin" && process.env.NODE_ENV !== "production" && (
             <section>
               <BirthdayPreviewPanel accounts={accounts} />
             </section>
