@@ -1572,8 +1572,8 @@ model PancakePage {
   name           String          @db.VarChar(255)
   ownerId        String          @map("owner_id") @db.Uuid
   mktSourceId    String?         @map("mkt_source_id") @db.Uuid
-  /// "Ghi chú khi up số": gắn vào Ghi chú MKT của data up tự động từ page này (null = không ghi chú).
-  upNote         String?         @map("up_note") @db.VarChar(500)
+  /// Không dùng nữa (2026-11-08: ghi chú chuyển sang theo bài — PancakePostNote). Giữ cột, chưa xoá.
+  upNote        String?         @map("up_note") @db.VarChar(500)
   encryptedToken String?         @map("encrypted_token")
   status         AdAccountStatus @default(connected)
   /// Mốc updated_at (giờ Pancake) mới nhất đã xử lý — lần đọc sau chỉ cần tới mốc này.
@@ -1617,11 +1617,12 @@ model PancakeConversation {
   @@map("pancake_conversations")
 }
 
-/// "Ghi chú khi up số" theo bài — ưu tiên hơn ghi chú của page. Không có dòng = không ghi chú.
+/// Bài được chọn ở bảng "Ghi chú khi up số theo bài" + ghi chú. Chỉ bài đang chọn mới áp ghi chú.
 model PancakePostNote {
   postId        String   @id @map("post_id") @db.VarChar(128)
   pancakePageId String   @map("pancake_page_id") @db.Uuid
-  upNote        String   @map("up_note") @db.VarChar(500)
+  upNote        String?  @map("up_note") @db.VarChar(500)
+  isSelected    Boolean  @default(false) @map("is_selected")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   page PancakePage @relation(fields: [pancakePageId], references: [id], onDelete: Cascade)

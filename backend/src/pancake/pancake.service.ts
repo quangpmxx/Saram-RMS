@@ -47,7 +47,6 @@ type PageRow = {
   name: string;
   ownerId: string;
   mktSourceId: string | null;
-  upNote: string | null;
 };
 
 @Injectable()
@@ -212,61 +211,89 @@ export class PancakeService {
     return { ok: true };
   }
 
-  /** "Ghi chú khi up số" của page — rỗng = bỏ ghi chú. */
-  async setUpNote(id: string, upNote: string, user: AuthenticatedUser) {
-    const page = await this.findPage(id);
+  /** Ghi chú khi up số của 1 bài ĐANG CHỌN — rỗng = không ghi chú. */
+  async setPostNote(postId: string, upNote: string, user: AuthenticatedUser) {
+    const old = await this.prisma.pancakePostNote.findUnique({
+      where: { postId },
+    });
+    if (!old?.isSelected)
+      throw new BadRequestException(
+        'Bài chưa được chọn — bấm "Chọn bài viết" trước',
+      );
     const value = upNote.trim() || null;
-    await this.prisma.pancakePage.update({
-      where: { id },
+    await this.prisma.pancakePostNote.update({
+      where: { postId },
       data: { upNote: value },
     });
     await this.audit.log({
       accountId: user.id,
       actionType: 'update',
-      entityType: 'pancake_page',
-      entityId: id,
-      fieldChanged: 'up_note',
-      oldValue: page.upNote ?? undefined,
+      entityType: 'pancake_post',
+      entityId: old.pancakePageId,
+      fieldChanged: `up_note:${postId}`,
+      oldValue: old.upNote ?? undefined,
       newValue: value ?? undefined,
     });
     return { ok: true };
   }
 
-  /** "Ghi chú khi up số" theo bài — rỗng = bỏ ghi chú (bài sẽ dùng ghi chú của page). */
-  async setPostNote(postId: string, upNote: string, user: AuthenticatedUser) {
-    const conv = await this.prisma.pancakeConversation.findFirst({
-      where: { postId },
-      select: { pancakePageId: true },
-    });
-    if (!conv) throw new NotFoundException('Không tìm thấy bài');
-    const old = await this.prisma.pancakePostNote.findUnique({
-      where: { postId },
-    });
-    const value = upNote.trim();
-    if (value) {
-      await this.prisma.pancakePostNote.upsert({
-        where: { postId },
-        create: { postId, pancakePageId: conv.pancakePageId, upNote: value },
-        update: { upNote: value },
+  /**
+   * Lưu danh sách bài được chọn (thay cả danh sách). Bỏ chọn giữ lại ghi chú (chọn lại thì có
+   * lại) nhưng không áp khi up số; dòng bỏ chọn không ghi chú thì xoá luôn.
+   */
+  async setSelectedPosts(postIds: string[], user: AuthenticatedUser) {
+    const ids = [...new Set(postIds)];
+    const [convs, existing] = await Promise.all([
+      this.prisma.pancakeConversation.findMany({
+        where: { postId: { in: ids } },
+        distinct: ['postId'],
+        select: { postId: true, pancakePageId: true },
+      }),
+      this.prisma.pancakePostNote.findMany({
+        where: { postId: { in: ids } },
+        select: { postId: true, pancakePageId: true },
+      }),
+    ]);
+    const pageOf = new Map<string, string>([
+      ...convs.map((c) => [c.postId!, c.pancakePageId] as [string, string]),
+      ...existing.map((e) => [e.postId, e.pancakePageId] as [string, string]),
+    ]);
+    const unknown = ids.filter((id) => !pageOf.has(id));
+    if (unknown.length)
+      throw new NotFoundException(`Không tìm thấy bài ${unknown[0]}`);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.pancakePostNote.updateMany({
+        where: { postId: { notIn: ids }, isSelected: true },
+        data: { isSelected: false },
       });
-    } else if (old) {
-      await this.prisma.pancakePostNote.delete({ where: { postId } });
-    }
+      await tx.pancakePostNote.deleteMany({
+        where: { isSelected: false, upNote: null },
+      });
+      for (const postId of ids) {
+        await tx.pancakePostNote.upsert({
+          where: { postId },
+          create: {
+            postId,
+            pancakePageId: pageOf.get(postId)!,
+            isSelected: true,
+          },
+          update: { isSelected: true },
+        });
+      }
+    });
     await this.audit.log({
       accountId: user.id,
       actionType: 'update',
       entityType: 'pancake_post',
-      entityId: conv.pancakePageId,
-      fieldChanged: `up_note:${postId}`,
-      oldValue: old?.upNote,
-      newValue: value || undefined,
+      fieldChanged: 'selected_posts',
+      newValue: `${ids.length} bài`,
     });
     return { ok: true };
   }
 
   /**
-   * Bài có khách nhắn trong kỳ (bài của quảng cáo khách bấm / bài khách bình luận) + bài đã có
-   * ghi chú: số hội thoại, để lại SĐT, data đã up tự động trong kỳ, ghi chú.
+   * Bài có khách nhắn trong kỳ (bài của quảng cáo khách bấm / bài khách bình luận) + bài đang
+   * chọn: số hội thoại, để lại SĐT, data đã up tự động trong kỳ, đang chọn, ghi chú.
    */
   async listPosts(from?: string, to?: string) {
     const t = to ?? vnToday();
@@ -296,9 +323,13 @@ export class PancakeService {
     ]);
     const noteMap = new Map(notes.map((n) => [n.postId, n]));
     const postIds = [
-      ...new Set([...messages.keys(), ...leads.keys(), ...noteMap.keys()]),
+      ...new Set([
+        ...messages.keys(),
+        ...leads.keys(),
+        ...notes.filter((n) => n.isSelected).map((n) => n.postId),
+      ]),
     ];
-    // Page của từng bài: lấy từ ghi chú, nếu chưa có thì từ 1 hội thoại bất kỳ của bài.
+    // Page của từng bài: lấy từ dòng đã lưu, nếu chưa có thì từ 1 hội thoại bất kỳ của bài.
     const missing = postIds.filter((id) => !noteMap.has(id));
     const convPages = missing.length
       ? await this.prisma.pancakeConversation.findMany({
@@ -320,6 +351,7 @@ export class PancakeService {
         message_count: messages.get(id) ?? 0,
         phone_count: phones.get(id) ?? 0,
         lead_count: leads.get(id) ?? 0,
+        is_selected: noteMap.get(id)?.isSelected ?? false,
         up_note: noteMap.get(id)?.upNote ?? null,
       }))
       .sort(
@@ -386,7 +418,6 @@ export class PancakeService {
           phone_count: ph,
           phone_rate: m > 0 ? ph / m : null,
           lead_count: leads.get(p.id) ?? 0,
-          up_note: p.upNote,
         };
       }),
     };
@@ -763,11 +794,11 @@ export class PancakeService {
       });
       teamId = sequence[(next.position - 1) % sequence.length];
     }
-    // Ghi chú MKT: ghi chú của bài → của page → không có.
+    // Ghi chú MKT: ghi chú của bài đang chọn ở bảng "theo bài"; không có thì để trống.
     const postNote = postId
       ? await this.prisma.pancakePostNote.findUnique({ where: { postId } })
       : null;
-    const mktNote = postNote?.upNote ?? page.upNote ?? undefined;
+    const mktNote = (postNote?.isSelected && postNote.upNote) || undefined;
     const result = await this.candidates.create(
       {
         full_name: name,

@@ -21,6 +21,7 @@ import {
   PancakeMktSourceDto,
   PancakeOwnerDto,
   PancakePagesQueryDto,
+  PancakeSelectedPostsDto,
   PancakeUpNoteDto,
   POST_ID_RE,
   SaveAutoUpDto,
@@ -69,22 +70,23 @@ export class PancakeController {
     return this.service.setMktSource(id, dto.mkt_source_id ?? null, user);
   }
 
-  /** Ghi chú khi up số: ai có quyền "Chỉnh sửa" Marketing Hub (guard phân quyền module chặn "Chỉ xem"). */
-  @Patch('pages/:id/up-note')
-  setUpNote(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: PancakeUpNoteDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.service.setUpNote(id, dto.up_note, user);
-  }
-
   @Get('posts')
   listPosts(@Query() q: PancakePagesQueryDto) {
     return this.service.listPosts(q.from, q.to);
   }
 
-  /** Ghi chú khi up số theo bài: cùng quyền với ghi chú theo page. */
+  /**
+   * Chọn bài + ghi chú khi up số theo bài: ai có quyền "Chỉnh sửa" Marketing Hub (guard phân
+   * quyền module chặn "Chỉ xem").
+   */
+  @Put('posts/selected')
+  setSelectedPosts(
+    @Body() dto: PancakeSelectedPostsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.setSelectedPosts(dto.post_ids, user);
+  }
+
   @Patch('posts/:postId/up-note')
   setPostNote(
     @Param('postId') postId: string,
