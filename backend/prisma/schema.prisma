@@ -1572,8 +1572,6 @@ model PancakePage {
   name           String          @db.VarChar(255)
   ownerId        String          @map("owner_id") @db.Uuid
   mktSourceId    String?         @map("mkt_source_id") @db.Uuid
-  /// Không dùng nữa (2026-11-08: ghi chú chuyển sang theo bài — PancakePostNote). Giữ cột, chưa xoá.
-  upNote        String?         @map("up_note") @db.VarChar(500)
   encryptedToken String?         @map("encrypted_token")
   status         AdAccountStatus @default(connected)
   /// Mốc updated_at (giờ Pancake) mới nhất đã xử lý — lần đọc sau chỉ cần tới mốc này.

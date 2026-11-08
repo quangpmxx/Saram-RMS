@@ -390,14 +390,9 @@ function PancakePostsTable({
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-700">
-            Ghi chú khi up số theo bài
-          </h2>
-          <p className="text-xs text-slate-500">
-            Data up tự động từ bài đang chọn sẽ mang ghi chú của bài vào Ghi chú MKT.
-          </p>
-        </div>
+        <h2 className="text-sm font-semibold text-slate-700">
+          Ghi chú theo bài
+        </h2>
         {canEditNote && (
           <Button
             type="button"
