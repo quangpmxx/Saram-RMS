@@ -308,4 +308,21 @@ describe('MarketingHubService.today', () => {
       cost_per_interview: 300000,
     });
   });
+
+  it('Data thu được đếm MỌI số up trong kỳ, không lọc Nguồn MKT (2026-11-08)', async () => {
+    const leadCount = jest.fn().mockResolvedValue(5);
+    const prisma = {
+      adSpendDaily: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { spend: 0 } }),
+      },
+      lead: { count: leadCount },
+      shuttleRecord: { count: jest.fn().mockResolvedValue(0) },
+    };
+    const r = await build(prisma).today({
+      from: '2026-11-01',
+      to: '2026-11-06',
+    });
+    expect(leadCount.mock.calls[0][0].where).not.toHaveProperty('mktSourceId');
+    expect(r).toMatchObject({ data_count: 5 });
+  });
 });

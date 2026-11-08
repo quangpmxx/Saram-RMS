@@ -440,27 +440,21 @@ export class MarketingHubService {
           })
         )._sum.spend ?? 0,
       );
-    const linked = await this.prisma.adAccount.findMany({
-      where: { mktSourceId: { not: null } },
-      select: { mktSourceId: true },
-      distinct: ['mktSourceId'],
-    });
     const [spend, yesterdaySpend, dataCount, interviewCount] =
       await Promise.all([
         spendBetween(from, to),
         spendBetween(from ? shift(from) : undefined, shift(to)),
-        linked.length
-          ? this.prisma.lead.count({
-              where: {
-                deletedAt: null,
-                mktSourceId: { in: linked.map((l) => l.mktSourceId!) },
-                uploadedAt: {
-                  ...(from ? { gte: vnDayRange(from).start } : {}),
-                  lt: vnDayRange(to).end,
-                },
-              },
-            })
-          : 0,
+        // Data thu được = MỌI số up trong kỳ (yêu cầu người dùng 2026-11-08 — data cũ tải lên
+        // không có Nguồn MKT vẫn phải được đếm); trước đây chỉ đếm số có Nguồn MKT đã gắn TKQC.
+        this.prisma.lead.count({
+          where: {
+            deletedAt: null,
+            uploadedAt: {
+              ...(from ? { gte: vnDayRange(from).start } : {}),
+              lt: vnDayRange(to).end,
+            },
+          },
+        }),
         this.prisma.shuttleRecord.count({
           where: {
             date: {
