@@ -1520,7 +1520,8 @@ export function CandidatesClient({
               {canSelect && <col className="w-6" />}
               <col className="w-9" />
               <col className="w-[6%]" />
-              <col className="w-[17%]" />
+              {/* Thông tin lao động: 70% so với trước (17% → 11.9%, yêu cầu người dùng 2026-11-08). */}
+              <col className="w-[11.9%]" />
               <col className="w-[6%]" />
               <col className="w-[10%]" />
               {/* Tình trạng cuộc gọi — tự động (phần còn lại). */}
