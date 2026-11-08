@@ -545,7 +545,6 @@ function SelectPostsModal({
   return (
     <Modal
       title="Chọn bài viết"
-      description="Bài có khách nhắn tin / bình luận trong kỳ đang lọc, xếp theo số data đã up. Bỏ chọn thì bài ẩn khỏi bảng và không gắn ghi chú khi up số (ghi chú vẫn giữ, chọn lại sẽ có lại)."
       maxWidth="max-w-2xl"
       footer={
         <>
