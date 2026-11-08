@@ -20,6 +20,7 @@ import {
   PancakeMktSourceDto,
   PancakeOwnerDto,
   PancakePagesQueryDto,
+  PancakeUpNoteDto,
   SaveAutoUpDto,
 } from './pancake.dto';
 
@@ -64,6 +65,16 @@ export class PancakeController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.setMktSource(id, dto.mkt_source_id ?? null, user);
+  }
+
+  /** Ghi chú khi up số: ai có quyền "Chỉnh sửa" Marketing Hub (guard phân quyền module chặn "Chỉ xem"). */
+  @Patch('pages/:id/up-note')
+  setUpNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PancakeUpNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.setUpNote(id, dto.up_note, user);
   }
 
   @Delete('pages/:id')

@@ -36,6 +36,13 @@ export class PancakeMktSourceDto {
   @IsOptional() @IsUUID('4') mkt_source_id: string | null;
 }
 
+export class PancakeUpNoteDto {
+  /** Rỗng = bỏ ghi chú. */
+  @IsString()
+  @MaxLength(500, { message: 'Ghi chú tối đa 500 ký tự' })
+  up_note: string;
+}
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export class PancakePagesQueryDto {
   @IsOptional() @Matches(DATE) from?: string;

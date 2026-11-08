@@ -71,9 +71,12 @@ const today = () =>
  */
 export function MarketingHubClient({
   userId,
+  canEdit,
 }: {
   role: string;
   userId: string;
+  /** Quyền "Chỉnh sửa" module Marketing Hub (không phải "Chỉ xem"). */
+  canEdit: boolean;
 }) {
   useSetPageTitle("Marketing Hub");
   const toast = useToast();
@@ -275,6 +278,7 @@ export function MarketingHubClient({
         isAdmin={isAdmin}
         canConfig={canConfig}
         canConnect={canConnect}
+        canEditNote={canEdit}
         userId={userId}
         staff={staff}
         mktSources={mktSources}

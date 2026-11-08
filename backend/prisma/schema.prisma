@@ -1572,6 +1572,8 @@ model PancakePage {
   name           String          @db.VarChar(255)
   ownerId        String          @map("owner_id") @db.Uuid
   mktSourceId    String?         @map("mkt_source_id") @db.Uuid
+  /// "Ghi chú khi up số": gắn vào Ghi chú MKT của data up tự động từ page này (null = không ghi chú).
+  upNote         String?         @map("up_note") @db.VarChar(500)
   encryptedToken String?         @map("encrypted_token")
   status         AdAccountStatus @default(connected)
   /// Mốc updated_at (giờ Pancake) mới nhất đã xử lý — lần đọc sau chỉ cần tới mốc này.

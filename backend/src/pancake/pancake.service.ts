@@ -46,6 +46,7 @@ type PageRow = {
   name: string;
   ownerId: string;
   mktSourceId: string | null;
+  upNote: string | null;
 };
 
 @Injectable()
@@ -209,6 +210,26 @@ export class PancakeService {
     return { ok: true };
   }
 
+  /** "Ghi chú khi up số" của page — rỗng = bỏ ghi chú. */
+  async setUpNote(id: string, upNote: string, user: AuthenticatedUser) {
+    const page = await this.findPage(id);
+    const value = upNote.trim() || null;
+    await this.prisma.pancakePage.update({
+      where: { id },
+      data: { upNote: value },
+    });
+    await this.audit.log({
+      accountId: user.id,
+      actionType: 'update',
+      entityType: 'pancake_page',
+      entityId: id,
+      fieldChanged: 'up_note',
+      oldValue: page.upNote ?? undefined,
+      newValue: value ?? undefined,
+    });
+    return { ok: true };
+  }
+
   // ── Thống kê theo page ───────────────────────────────────────────────────
 
   /**
@@ -264,6 +285,7 @@ export class PancakeService {
           phone_count: ph,
           phone_rate: m > 0 ? ph / m : null,
           lead_count: leads.get(p.id) ?? 0,
+          up_note: p.upNote,
         };
       }),
     };
@@ -595,6 +617,7 @@ export class PancakeService {
         source_id: sourceId,
         team_id: teamId,
         mkt_source_id: page.mktSourceId ?? undefined,
+        mkt_note: page.upNote ?? undefined,
       },
       { id: owner.id, role: owner.role, sessionId: 'pancake-auto-up' },
     );

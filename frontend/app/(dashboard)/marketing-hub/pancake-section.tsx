@@ -21,6 +21,7 @@ interface PancakePageItem {
   phone_count: number;
   phone_rate: number | null;
   lead_count: number;
+  up_note: string | null;
 }
 type Option = { id: string; name: string };
 
@@ -38,6 +39,7 @@ export function PancakeSection({
   isAdmin,
   canConfig,
   canConnect,
+  canEditNote,
   userId,
   staff,
   mktSources,
@@ -48,6 +50,8 @@ export function PancakeSection({
   /** Gắn Nguồn MKT (quyền mkt.config). */
   canConfig: boolean;
   canConnect: boolean;
+  /** Sửa "Ghi chú khi up số" (quyền Chỉnh sửa Marketing Hub). */
+  canEditNote: boolean;
   userId: string;
   staff: { id: string; full_name: string }[];
   mktSources: Option[];
@@ -131,6 +135,7 @@ export function PancakeSection({
               <th className={td}>Để lại SĐT</th>
               <th className={td}>Tỉ lệ để lại SĐT</th>
               <th className={td}>Data đã up tự động</th>
+              <th className={td}>Ghi chú khi up số</th>
               <th className={td}>Trạng thái</th>
               <th className={td} />
             </tr>
@@ -208,6 +213,25 @@ export function PancakeSection({
                       : `${(i.phone_rate * 100).toFixed(1).replace(".", ",")}%`}
                   </td>
                   <td className={td}>{num(i.lead_count)}</td>
+                  <td className={`${td} min-w-48`}>
+                    {canEditNote ? (
+                      <UpNoteInput
+                        key={i.up_note ?? ""}
+                        value={i.up_note ?? ""}
+                        disabled={busyId === i.id}
+                        onSave={(v) =>
+                          patch(
+                            i.id,
+                            "up-note",
+                            { up_note: v },
+                            v.trim() ? "Đã lưu ghi chú khi up số" : "Đã xoá ghi chú khi up số",
+                          )
+                        }
+                      />
+                    ) : (
+                      (i.up_note ?? <span className="text-slate-400">—</span>)
+                    )}
+                  </td>
                   <td className={td}>
                     <span
                       className={
@@ -270,12 +294,12 @@ export function PancakeSection({
                     : "—"}
                 </td>
                 <td className={td}>{num(total.l)}</td>
-                <td className={td} colSpan={2} />
+                <td className={td} colSpan={3} />
               </tr>
             )}
             {items && shown.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
                   Chưa có page Pancake nào được liên kết
                 </td>
               </tr>
@@ -290,6 +314,38 @@ export function PancakeSection({
         />
       )}
     </div>
+  );
+}
+
+/** Ô "Ghi chú khi up số": gõ rồi bấm ra ngoài hoặc Enter là lưu; xoá trắng = bỏ ghi chú. */
+function UpNoteInput({
+  value,
+  disabled,
+  onSave,
+}: {
+  value: string;
+  disabled: boolean;
+  onSave: (v: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  const commit = () => {
+    if (text.trim() !== value.trim()) onSave(text);
+  };
+  return (
+    <Input
+      uiSize="sm"
+      value={text}
+      maxLength={500}
+      disabled={disabled}
+      placeholder="Không ghi chú"
+      title={text || undefined}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") setText(value);
+      }}
+    />
   );
 }
 

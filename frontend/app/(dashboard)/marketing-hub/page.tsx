@@ -13,7 +13,13 @@ export default async function MarketingHubPage() {
   if (!user) {
     redirect("/login");
   }
-  await requirePageAccess("marketing-hub");
+  const level = await requirePageAccess("marketing-hub");
 
-  return <MarketingHubClient role={user.role} userId={user.id} />;
+  return (
+    <MarketingHubClient
+      role={user.role}
+      userId={user.id}
+      canEdit={level === "edit"}
+    />
+  );
 }
