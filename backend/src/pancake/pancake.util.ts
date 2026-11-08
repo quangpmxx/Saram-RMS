@@ -34,6 +34,25 @@ export function pickPhone(c: PancakeConversation): string | null {
   return null;
 }
 
+/**
+ * Bài + quảng cáo của hội thoại: bình luận → bài được bình luận; inbox qua quảng cáo → quảng cáo
+ * khách bấm GẦN NHẤT (và bài của nó). Inbox tự nhiên → không có.
+ */
+export function pickPost(c: PancakeConversation): {
+  postId: string | null;
+  adId: string | null;
+} {
+  const ads = (c.ads ?? []).filter((a) => a?.post_id || a?.ad_id);
+  const ad = ads.reduce<(typeof ads)[number] | undefined>(
+    (best, a) =>
+      !best || (a.inserted_at ?? '') > (best.inserted_at ?? '') ? a : best,
+    undefined,
+  );
+  const postId = (c.post_id || ad?.post_id || '').slice(0, 128) || null;
+  const adId = (ad?.ad_id || '').slice(0, 64) || null;
+  return { postId, adId };
+}
+
 export function customerName(c: PancakeConversation): string {
   const name = (c.page_customer?.name || c.from?.name || '').trim();
   return (name || 'Khách Pancake').slice(0, 150);

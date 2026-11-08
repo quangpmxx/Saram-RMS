@@ -307,6 +307,7 @@ export function PancakeSection({
           </tbody>
         </table>
       </div>
+      <PancakePostsTable from={from} to={to} canEditNote={canEditNote} />
       {showConnect && (
         <ConnectPancakeModal
           onClose={() => setShowConnect(false)}
@@ -317,15 +318,165 @@ export function PancakeSection({
   );
 }
 
+interface PancakePostItem {
+  post_id: string;
+  page: { id: string; name: string };
+  message_count: number;
+  phone_count: number;
+  lead_count: number;
+  up_note: string | null;
+}
+
+const POSTS_PREVIEW = 10;
+
+/**
+ * Ghi chú theo bài: bài của quảng cáo khách bấm (inbox) hoặc bài khách bình luận. Data up tự động
+ * lấy ghi chú của bài → nếu bài chưa có thì của page → không có thì để trống.
+ */
+function PancakePostsTable({
+  from,
+  to,
+  canEditNote,
+}: {
+  from: string;
+  to: string;
+  canEditNote: boolean;
+}) {
+  const toast = useToast();
+  const [items, setItems] = useState<PancakePostItem[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await clientApi<{ items: PancakePostItem[] }>(
+        `/pancake/posts?${new URLSearchParams({ from, to })}`,
+      );
+      setItems(r.items);
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+  }, [from, to, toast]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(timer);
+  }, [load]);
+
+  async function saveNote(postId: string, value: string) {
+    setBusyId(postId);
+    try {
+      await clientApi(`/pancake/posts/${postId}/up-note`, {
+        method: "PATCH",
+        body: JSON.stringify({ up_note: value }),
+      });
+      toast.success(
+        value.trim() ? "Đã lưu ghi chú cho bài" : "Đã xoá ghi chú của bài",
+      );
+      await load();
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const td = "border border-slate-200 px-3 py-2";
+  const shown = showAll ? (items ?? []) : (items ?? []).slice(0, POSTS_PREVIEW);
+
+  return (
+    <div className="space-y-2 pt-2">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-700">
+          Ghi chú khi up số theo bài
+        </h2>
+        <p className="text-xs text-slate-500">
+          Bài của quảng cáo khách bấm để nhắn tin, hoặc bài khách bình luận. Data up tự động
+          lấy ghi chú của bài; bài chưa có ghi chú thì dùng ghi chú của page.
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
+        <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
+          <thead className="bg-slate-700 text-xs font-semibold text-white">
+            <tr>
+              <th className={td}>Page</th>
+              <th className={td}>Bài</th>
+              <th className={td}>Khách nhắn / bình luận</th>
+              <th className={td}>Để lại SĐT</th>
+              <th className={td}>Data đã up tự động</th>
+              <th className={td}>Ghi chú khi up số</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((p) => (
+              <tr key={p.post_id}>
+                <td className={td}>{p.page.name}</td>
+                <td className={`${td} whitespace-nowrap`}>
+                  <a
+                    href={`https://www.facebook.com/${p.post_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                    title={p.post_id}
+                  >
+                    Xem bài ↗
+                  </a>
+                </td>
+                <td className={td}>{num(p.message_count)}</td>
+                <td className={td}>{num(p.phone_count)}</td>
+                <td className={td}>{num(p.lead_count)}</td>
+                <td className={`${td} min-w-48`}>
+                  {canEditNote ? (
+                    <UpNoteInput
+                      key={p.up_note ?? ""}
+                      value={p.up_note ?? ""}
+                      disabled={busyId === p.post_id}
+                      placeholder="Dùng ghi chú của page"
+                      onSave={(v) => void saveNote(p.post_id, v)}
+                    />
+                  ) : (
+                    (p.up_note ?? (
+                      <span className="text-slate-400">Dùng ghi chú của page</span>
+                    ))
+                  )}
+                </td>
+              </tr>
+            ))}
+            {items && items.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                  Chưa có bài nào có khách nhắn trong kỳ này
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {items && items.length > POSTS_PREVIEW && (
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? "Thu gọn" : `Xem tất cả ${items.length} bài`}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** Ô "Ghi chú khi up số": gõ rồi bấm ra ngoài hoặc Enter là lưu; xoá trắng = bỏ ghi chú. */
 function UpNoteInput({
   value,
   disabled,
   onSave,
+  placeholder = "Không ghi chú",
 }: {
   value: string;
   disabled: boolean;
   onSave: (v: string) => void;
+  placeholder?: string;
 }) {
   const [text, setText] = useState(value);
   const commit = () => {
@@ -337,7 +488,7 @@ function UpNoteInput({
       value={text}
       maxLength={500}
       disabled={disabled}
-      placeholder="Không ghi chú"
+      placeholder={placeholder}
       title={text || undefined}
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}

@@ -1,5 +1,6 @@
 import { RequireCap } from '../common/decorators/require-cap.decorator';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,6 +22,7 @@ import {
   PancakeOwnerDto,
   PancakePagesQueryDto,
   PancakeUpNoteDto,
+  POST_ID_RE,
   SaveAutoUpDto,
 } from './pancake.dto';
 
@@ -75,6 +77,23 @@ export class PancakeController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.setUpNote(id, dto.up_note, user);
+  }
+
+  @Get('posts')
+  listPosts(@Query() q: PancakePagesQueryDto) {
+    return this.service.listPosts(q.from, q.to);
+  }
+
+  /** Ghi chú khi up số theo bài: cùng quyền với ghi chú theo page. */
+  @Patch('posts/:postId/up-note')
+  setPostNote(
+    @Param('postId') postId: string,
+    @Body() dto: PancakeUpNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!POST_ID_RE.test(postId))
+      throw new BadRequestException('Mã bài không hợp lệ');
+    return this.service.setPostNote(postId, dto.up_note, user);
   }
 
   @Delete('pages/:id')

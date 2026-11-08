@@ -4,6 +4,7 @@ import {
   normalizePhone,
   pageIdFromToken,
   pickPhone,
+  pickPost,
 } from './pancake.util';
 import { parsePancakeTime } from './pancake.client';
 
@@ -89,5 +90,33 @@ describe('parsePancakeTime', () => {
     expect(parsePancakeTime('2026-11-04T03:07:51.858000').toISOString()).toBe(
       '2026-11-04T03:07:51.858Z',
     );
+  });
+});
+
+describe('pickPost', () => {
+  const base = { id: 'c', type: 'INBOX', inserted_at: '', updated_at: '' };
+  it('bình luận: lấy bài được bình luận', () => {
+    expect(pickPost({ ...base, type: 'COMMENT', post_id: '1_2' })).toEqual({
+      postId: '1_2',
+      adId: null,
+    });
+  });
+  it('inbox qua quảng cáo: lấy quảng cáo bấm gần nhất và bài của nó', () => {
+    expect(
+      pickPost({
+        ...base,
+        post_id: null,
+        ads: [
+          { ad_id: 'A1', post_id: '1_10', inserted_at: '2026-11-01T00:00:00' },
+          { ad_id: 'A2', post_id: '1_20', inserted_at: '2026-11-05T00:00:00' },
+        ],
+      }),
+    ).toEqual({ postId: '1_20', adId: 'A2' });
+  });
+  it('inbox tự nhiên: không có bài', () => {
+    expect(pickPost({ ...base, post_id: null, ads: [] })).toEqual({
+      postId: null,
+      adId: null,
+    });
   });
 });

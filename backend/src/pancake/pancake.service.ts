@@ -28,6 +28,7 @@ import {
   customerName,
   pageIdFromToken,
   pickPhone,
+  pickPost,
 } from './pancake.util';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -54,6 +55,7 @@ export class PancakeService {
   private readonly logger = new Logger(PancakeService.name);
   private polling = false;
   private readonly syncing = new Set<string>();
+  private readonly postBackfilled = new Set<string>();
   private facebookSourceId: string | null = null;
 
   constructor(
@@ -228,6 +230,105 @@ export class PancakeService {
       newValue: value ?? undefined,
     });
     return { ok: true };
+  }
+
+  /** "Ghi chú khi up số" theo bài — rỗng = bỏ ghi chú (bài sẽ dùng ghi chú của page). */
+  async setPostNote(postId: string, upNote: string, user: AuthenticatedUser) {
+    const conv = await this.prisma.pancakeConversation.findFirst({
+      where: { postId },
+      select: { pancakePageId: true },
+    });
+    if (!conv) throw new NotFoundException('Không tìm thấy bài');
+    const old = await this.prisma.pancakePostNote.findUnique({
+      where: { postId },
+    });
+    const value = upNote.trim();
+    if (value) {
+      await this.prisma.pancakePostNote.upsert({
+        where: { postId },
+        create: { postId, pancakePageId: conv.pancakePageId, upNote: value },
+        update: { upNote: value },
+      });
+    } else if (old) {
+      await this.prisma.pancakePostNote.delete({ where: { postId } });
+    }
+    await this.audit.log({
+      accountId: user.id,
+      actionType: 'update',
+      entityType: 'pancake_post',
+      entityId: conv.pancakePageId,
+      fieldChanged: `up_note:${postId}`,
+      oldValue: old?.upNote,
+      newValue: value || undefined,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Bài có khách nhắn trong kỳ (bài của quảng cáo khách bấm / bài khách bình luận) + bài đã có
+   * ghi chú: số hội thoại, để lại SĐT, data đã up tự động trong kỳ, ghi chú.
+   */
+  async listPosts(from?: string, to?: string) {
+    const t = to ?? vnToday();
+    const f = from ?? vnDaysAgo(29);
+    if (f > t)
+      throw new BadRequestException('Ngày bắt đầu phải trước ngày kết thúc');
+    const range = { gte: vnDayRange(f).start, lt: vnDayRange(t).end };
+    const count = async (where: object) =>
+      new Map(
+        (
+          await this.prisma.pancakeConversation.groupBy({
+            by: ['postId'],
+            where: { postId: { not: null }, ...where },
+            _count: { _all: true },
+          })
+        ).map((r) => [r.postId!, r._count._all]),
+      );
+    const [messages, phones, leads, notes, pages] = await Promise.all([
+      count({ startedAt: range }),
+      count({ startedAt: range, phoneNumber: { not: null } }),
+      count({ leadId: { not: null }, lead: { uploadedAt: range } }),
+      this.prisma.pancakePostNote.findMany(),
+      this.prisma.pancakePage.findMany({
+        where: { status: { not: 'disconnected' } },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const noteMap = new Map(notes.map((n) => [n.postId, n]));
+    const postIds = [
+      ...new Set([...messages.keys(), ...leads.keys(), ...noteMap.keys()]),
+    ];
+    // Page của từng bài: lấy từ ghi chú, nếu chưa có thì từ 1 hội thoại bất kỳ của bài.
+    const missing = postIds.filter((id) => !noteMap.has(id));
+    const convPages = missing.length
+      ? await this.prisma.pancakeConversation.findMany({
+          where: { postId: { in: missing } },
+          distinct: ['postId'],
+          select: { postId: true, pancakePageId: true },
+        })
+      : [];
+    const postPage = new Map<string, string>([
+      ...notes.map((n) => [n.postId, n.pancakePageId] as [string, string]),
+      ...convPages.map((c) => [c.postId!, c.pancakePageId] as [string, string]),
+    ]);
+    const pageName = new Map(pages.map((p) => [p.id, p.name]));
+    const items = postIds
+      .filter((id) => pageName.has(postPage.get(id) ?? ''))
+      .map((id) => ({
+        post_id: id,
+        page: { id: postPage.get(id)!, name: pageName.get(postPage.get(id)!)! },
+        message_count: messages.get(id) ?? 0,
+        phone_count: phones.get(id) ?? 0,
+        lead_count: leads.get(id) ?? 0,
+        up_note: noteMap.get(id)?.upNote ?? null,
+      }))
+      .sort(
+        (a, b) =>
+          b.lead_count - a.lead_count ||
+          b.message_count - a.message_count ||
+          a.page.name.localeCompare(b.page.name),
+      );
+    return { from: f, to: t, items };
   }
 
   // ── Thống kê theo page ───────────────────────────────────────────────────
@@ -425,6 +526,15 @@ export class PancakeService {
       if (!page?.encryptedToken) return;
       try {
         const token = decryptToken(page.encryptedToken, this.tokenKey());
+        // Page ghi nhận trước khi có cột bài: đọc lại 30 ngày 1 lần (không up data) để điền bài.
+        if (page.cursorAt && !this.postBackfilled.has(id)) {
+          this.postBackfilled.add(id);
+          const hasPost = await this.prisma.pancakeConversation.findFirst({
+            where: { pancakePageId: id, postId: { not: null } },
+            select: { id: true },
+          });
+          if (!hasPost) await this.backfillPosts(page, token);
+        }
         const cursorAt = page.cursorAt
           ? await this.pollRecent(page, token, page.cursorAt)
           : await this.baseline(page, token);
@@ -486,6 +596,32 @@ export class PancakeService {
     return cursor.getTime() > 0 ? cursor : new Date();
   }
 
+  /** Chỉ điền bài/quảng cáo cho hội thoại 30 ngày qua đã lưu mà chưa có bài — không đụng SĐT/up data. */
+  private async backfillPosts(page: PageRow, token: string): Promise<void> {
+    const until = Math.floor(Date.now() / 1000);
+    const since = until - BASELINE_DAYS * 86400;
+    let seen = 0;
+    for (let n = 1; n <= MAX_BASELINE_PAGES; n++) {
+      const r = await listConversationsInRange(
+        page.pageId,
+        token,
+        since,
+        until,
+        n,
+      );
+      for (const c of r.conversations) {
+        const { postId, adId } = pickPost(c);
+        if (!postId) continue;
+        await this.prisma.pancakeConversation.updateMany({
+          where: { pancakePageId: page.id, conversationId: c.id, postId: null },
+          data: { postId, adId },
+        });
+      }
+      seen += r.conversations.length;
+      if (r.conversations.length === 0 || seen >= r.total) break;
+    }
+  }
+
   /** Hội thoại cập nhật sau mốc cursor (cũ trước, mới sau). Trả mốc cursor mới. */
   private async pollRecent(
     page: PageRow,
@@ -527,6 +663,7 @@ export class PancakeService {
     allowLead: boolean,
   ): Promise<void> {
     const phone = pickPhone(c);
+    const { postId, adId } = pickPost(c);
     const where = {
       pancakePageId_conversationId: {
         pancakePageId: page.id,
@@ -536,11 +673,24 @@ export class PancakeService {
     const existing = await this.prisma.pancakeConversation.findUnique({
       where,
     });
-    if (existing?.phoneNumber || (existing && !phone)) return;
+    if (existing?.phoneNumber || (existing && !phone)) {
+      // Hội thoại ghi nhận trước khi có cột bài → bổ sung bài khi thấy lại.
+      if (!existing.postId && postId) {
+        await this.prisma.pancakeConversation.update({
+          where: { id: existing.id },
+          data: { postId, adId },
+        });
+      }
+      return;
+    }
     const row = existing
       ? await this.prisma.pancakeConversation.update({
           where: { id: existing.id },
-          data: { phoneNumber: phone, phoneSeenAt: new Date() },
+          data: {
+            phoneNumber: phone,
+            phoneSeenAt: new Date(),
+            ...(postId ? { postId, adId } : {}),
+          },
         })
       : await this.prisma.pancakeConversation.create({
           data: {
@@ -550,11 +700,13 @@ export class PancakeService {
             startedAt: parsePancakeTime(c.inserted_at),
             phoneNumber: phone,
             phoneSeenAt: phone ? new Date() : null,
+            postId,
+            adId,
           },
         });
     if (phone && allowLead) {
       try {
-        await this.autoUp(page, row.id, phone, customerName(c));
+        await this.autoUp(page, row.id, phone, customerName(c), row.postId);
       } catch (e) {
         this.logger.error(
           `Up tự động lỗi (page ${page.name}, hội thoại ${c.id})`,
@@ -579,6 +731,7 @@ export class PancakeService {
     conversationRowId: string,
     phone: string,
     name: string,
+    postId: string | null,
   ): Promise<void> {
     const config = await this.prisma.pancakeAutoUpConfig.findFirst();
     if (!config?.isActive) return;
@@ -610,6 +763,11 @@ export class PancakeService {
       });
       teamId = sequence[(next.position - 1) % sequence.length];
     }
+    // Ghi chú MKT: ghi chú của bài → của page → không có.
+    const postNote = postId
+      ? await this.prisma.pancakePostNote.findUnique({ where: { postId } })
+      : null;
+    const mktNote = postNote?.upNote ?? page.upNote ?? undefined;
     const result = await this.candidates.create(
       {
         full_name: name,
@@ -617,7 +775,7 @@ export class PancakeService {
         source_id: sourceId,
         team_id: teamId,
         mkt_source_id: page.mktSourceId ?? undefined,
-        mkt_note: page.upNote ?? undefined,
+        mkt_note: mktNote,
       },
       { id: owner.id, role: owner.role, sessionId: 'pancake-auto-up' },
     );

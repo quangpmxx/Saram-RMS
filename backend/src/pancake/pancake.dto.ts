@@ -43,6 +43,9 @@ export class PancakeUpNoteDto {
   up_note: string;
 }
 
+/** Mã bài Facebook dạng "<page>_<bài>". */
+export const POST_ID_RE = /^\d{1,40}_\d{1,40}$/;
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export class PancakePagesQueryDto {
   @IsOptional() @Matches(DATE) from?: string;

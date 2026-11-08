@@ -20,6 +20,10 @@ export interface PancakeConversation {
   recent_phone_numbers?: { phone_number?: string }[];
   page_customer?: { name?: string } | null;
   from?: { name?: string } | null;
+  /** Bài khách bình luận (hội thoại COMMENT); inbox thường null. */
+  post_id?: string | null;
+  /** Quảng cáo khách đã bấm để nhắn tin (inbox), kèm bài của quảng cáo. */
+  ads?: { ad_id?: string; post_id?: string; inserted_at?: string }[] | null;
 }
 
 /** Giờ Pancake là UTC nhưng không có hậu tố Z. */
