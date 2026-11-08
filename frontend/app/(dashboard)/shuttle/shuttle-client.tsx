@@ -1433,7 +1433,8 @@ export function ShuttleClient({
       )}
       <div ref={filterBarRef} className="sticky z-20 bg-slate-50" style={{ top: headerHeight }}>
       <Card className="mb-2 flex flex-col gap-1.5 p-1.5">
-      <div className="flex flex-wrap items-end gap-1.5">
+      {/* Màn hình rộng: bộ lọc + nút Tìm kiếm/Xóa bộ lọc luôn 1 hàng (2026-11-08); điện thoại vẫn xuống dòng. */}
+      <div className="flex flex-wrap items-end gap-1.5 xl:flex-nowrap">
         <Field uiSize="xs" label="Tìm theo tên hoặc SĐT" className="min-w-[160px] flex-1">
           <Input
             uiSize="xs"
@@ -1579,7 +1580,7 @@ export function ShuttleClient({
             ))}
           </Select>
         </Field>
-        <div className="ml-auto flex flex-col gap-1">
+        <div className="ml-auto flex shrink-0 items-end gap-1 whitespace-nowrap">
           <Button type="button" size="xs" variant="secondary" onClick={() => void handleSearch()}>
             <Search className="h-3.5 w-3.5" strokeWidth={2} />
             Tìm kiếm
@@ -1589,9 +1590,15 @@ export function ShuttleClient({
             Xóa bộ lọc
           </Button>
           {isAdmin && !isReadOnly && (
-            <Button type="button" size="xs" variant="outline" onClick={() => setShowImport(true)}>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              title="Nhập Excel"
+              aria-label="Nhập Excel"
+              onClick={() => setShowImport(true)}
+            >
               <Upload className="h-3.5 w-3.5" strokeWidth={2} />
-              Nhập Excel
             </Button>
           )}
         </div>
