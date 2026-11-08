@@ -91,8 +91,6 @@ export function ShuttleImportModal({
 
   return (
     <Modal
-      title="Nhập Excel danh sách đưa đón"
-      description="Ô nào không khớp với danh mục trong phần mềm (công ty, Sale, tình trạng…) sẽ để trống để anh/chị tự nhập sau. Dòng đã có (cùng ngày + SĐT) sẽ bỏ qua."
       maxWidth="max-w-3xl"
       footer={
         <>
@@ -120,11 +118,6 @@ export function ShuttleImportModal({
               if (f) void handlePreview(f);
             }}
           />
-          <p className="mt-1 text-xs text-slate-500">
-            Dòng tiêu đề cần có cột <b>Ngày</b> và <b>Họ tên</b> hoặc <b>SĐT</b>. Các cột khác
-            nhận theo tên: Công ty, Khu vực, Loại hình, Sale, NV Đưa đón, Giờ PV, Nhà thầu, Tình
-            trạng, Kết quả, Nguồn, Ghi chú.
-          </p>
         </div>
 
         {busy && <p className="text-slate-500">{busy}</p>}

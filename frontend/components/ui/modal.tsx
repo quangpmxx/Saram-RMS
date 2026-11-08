@@ -9,7 +9,8 @@ export function Modal({
   footer,
   maxWidth = "max-w-md",
 }: {
-  title: string;
+  /** Bỏ trống = không có phần tiêu đề. */
+  title?: string;
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
@@ -43,10 +44,12 @@ export function Modal({
             maxWidth,
           )}
         >
-          <div className="shrink-0 p-4 pb-0 sm:p-6 sm:pb-0">
-            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-            {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
-          </div>
+          {(title || description) && (
+            <div className="shrink-0 p-4 pb-0 sm:p-6 sm:pb-0">
+              {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
+              {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+            </div>
+          )}
           <div className="min-h-0 overflow-y-auto p-4 sm:p-6">{children}</div>
           {footer && (
             <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 p-4 pt-3 sm:p-6 sm:pt-4">
