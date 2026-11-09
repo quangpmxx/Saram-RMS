@@ -910,18 +910,22 @@ export function CandidateDetailClient({
               )}
             </dl>
           </Card>
+        </div>
 
-          <Card className="p-5">
-            <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Tiến trình cuộc gọi</p>
-            <div className="mt-3 flex flex-col gap-3 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="shrink-0 text-slate-500">Tình trạng cuộc gọi</span>
-                {/* UI Polish — Select mặc định có sẵn class "w-full" trong
-                    fieldBaseClass; ghi đè bằng 1 class w-* khác trên chính
-                    Select không đáng tin cậy (cn() không dedup, thứ tự CSS
-                    Tailwind sinh ra quyết định class nào thắng chứ không phải
-                    thứ tự trong chuỗi className) — nên bọc trong 1 div
-                    shrink-0 có độ rộng cố định để cả 3 ô bằng nhau, thẳng hàng. */}
+        <Card
+          className="overflow-hidden"
+          style={{
+            backgroundColor: noteColorBgHex(candidate.note_color),
+          }}
+        >
+          {/* 2026-11-10: các ô của khối "Tiến trình cuộc gọi" cũ (Tình trạng cuộc
+              gọi, Kết quả cuộc gọi, Kết quả, Đánh dấu màu) chuyển xuống đây, nằm
+              cùng hàng với Tình trạng Zalo. Cách lưu không đổi. */}
+          <div className="border-b border-slate-100 p-4">
+            <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-slate-500">Tình trạng cuộc gọi</span>
                 <div className="w-36 shrink-0">
                   <Select
                     uiSize="sm"
@@ -938,8 +942,8 @@ export function CandidateDetailClient({
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="shrink-0 text-slate-500">Kết quả cuộc gọi</span>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-slate-500">Kết quả cuộc gọi</span>
                 <div className="w-36 shrink-0">
                   <Select
                     uiSize="sm"
@@ -956,8 +960,8 @@ export function CandidateDetailClient({
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="shrink-0 text-slate-500">Kết quả</span>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-slate-500">Kết quả</span>
                 <div className="w-36 shrink-0">
                   <Select
                     uiSize="sm"
@@ -978,8 +982,8 @@ export function CandidateDetailClient({
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="shrink-0 text-slate-500">Đánh dấu màu</span>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-slate-500">Đánh dấu màu</span>
                 <div className="flex items-center gap-2">
                   {NOTE_COLORS.map((c) => (
                     <button
@@ -1000,41 +1004,30 @@ export function CandidateDetailClient({
                   ))}
                 </div>
               </div>
-            </div>
-          </Card>
-        </div>
-
-        <Card
-          className="overflow-hidden"
-          style={{
-            backgroundColor: noteColorBgHex(candidate.note_color),
-          }}
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
-            <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-sm text-slate-500">Tình trạng Zalo</span>
-              <Select
-                uiSize="sm"
-                className="w-44"
-                value={zaloFriendStatusId}
-                onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
-                disabled={!canUpdate || isSavingZaloFriendStatus}
-                // Ô + từng dòng lựa chọn tô đúng màu (2026-11-06).
-                style={(() => {
-                  const selected = zaloFriendStatuses.find((s) => s.id === zaloFriendStatusId);
-                  return selected ? zaloFriendStatusStyle(selected.name) : undefined;
-                })()}
-              >
-                <option value="" style={EMPTY_OPTION_STYLE}>
-                  Chưa cập nhật
-                </option>
-                {zaloFriendStatuses.map((status) => (
-                  <option key={status.id} value={status.id} style={zaloFriendStatusStyle(status.name)}>
-                    {status.name}
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-slate-500">Tình trạng Zalo</span>
+                <Select
+                  uiSize="sm"
+                  className="w-44"
+                  value={zaloFriendStatusId}
+                  onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
+                  disabled={!canUpdate || isSavingZaloFriendStatus}
+                  // Ô + từng dòng lựa chọn tô đúng màu (2026-11-06).
+                  style={(() => {
+                    const selected = zaloFriendStatuses.find((s) => s.id === zaloFriendStatusId);
+                    return selected ? zaloFriendStatusStyle(selected.name) : undefined;
+                  })()}
+                >
+                  <option value="" style={EMPTY_OPTION_STYLE}>
+                    Chưa cập nhật
                   </option>
-                ))}
-              </Select>
+                  {zaloFriendStatuses.map((status) => (
+                    <option key={status.id} value={status.id} style={zaloFriendStatusStyle(status.name)}>
+                      {status.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
           </div>
 
