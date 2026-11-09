@@ -185,7 +185,7 @@ export function computeSaleDaily(
 }
 
 export interface SaleMonthlyMetrics {
-  /** Số data từng được giao cho Sale trong tháng (kể cả lượt đã bị thu hồi). */
+  /** Số data được giao cho Sale trong tháng — lượt bị thu hồi/giao lại khi chưa xử lý thì không tính (2026-11-09). */
   assigned: number;
   /** Số data Sale đã chăm sóc (ghi chú sau lúc giao) trong tháng. */
   processed: number;
@@ -212,9 +212,12 @@ export function computeSaleMonthly(
 
   for (const a of assignments) {
     if (a.assignedAt < monthStart || a.assignedAt >= cutoff) continue;
+    const p = assignmentProcessedAt(a, notes);
+    // Lượt bị thu hồi/giao lại mà Sale chưa xử lý → không tính "Được giao"
+    // (yêu cầu người dùng 2026-11-09, cùng quy tắc chỉ số ngày).
+    if (!isCounted(a, p, cutoff)) continue;
     assigned.add(a.leadId);
     assigneeOf.set(a.leadId, a.assigneeId);
-    const p = assignmentProcessedAt(a, notes);
     if (p !== null && p < cutoff) processed.add(a.leadId);
     if (isAssignmentAliveAt(a, new Date(cutoff.getTime() - ONE_MS))) {
       alive.add(a.leadId);

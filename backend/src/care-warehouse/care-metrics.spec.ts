@@ -260,11 +260,13 @@ describe('computeSaleMonthly', () => {
     const assignments = [
       asg('L1', SALE_A, '2026-10-02 08:00'),
       asg('L2', SALE_A, '2026-10-03 08:00'),
-      asg('L3', SALE_A, '2026-10-04 08:00', '2026-10-05 08:00'), // thu hồi
+      asg('L3', SALE_A, '2026-10-04 08:00', '2026-10-05 08:00'), // thu hồi khi chưa xử lý → không tính
+      asg('L4', SALE_A, '2026-10-06 08:00', '2026-10-07 08:00'), // đã xử lý rồi mới thu hồi → vẫn tính
     ];
     const notes = new NoteIndex([
       note('L1', SALE_A, '2026-10-02 09:00'),
       note('L1', SALE_A, '2026-10-20 09:00'),
+      note('L4', SALE_A, '2026-10-06 10:00'),
     ]);
     const m = computeSaleMonthly(
       assignments,
@@ -273,10 +275,10 @@ describe('computeSaleMonthly', () => {
       oct.end,
       vn('2026-10-25 12:00'),
     );
-    expect(m.assigned).toBe(3);
-    expect(m.processed).toBe(1);
+    expect(m.assigned).toBe(3); // L1, L2, L4
+    expect(m.processed).toBe(2);
     expect(m.pending).toBe(1); // L2 (L3 đã bị thu hồi)
-    expect(m.care_turns).toBe(2);
+    expect(m.care_turns).toBe(3);
     expect(m.last_care_at).toEqual(vn('2026-10-20 09:00'));
   });
 

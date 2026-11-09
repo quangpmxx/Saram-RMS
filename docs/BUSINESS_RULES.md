@@ -33,6 +33,7 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 ## Kho chăm sóc
 - Dùng chung theo nhóm; quyền sở hữu gốc của lead **không đổi** khi vào Kho. Một lead chỉ một người xử lý tại một thời điểm (khóa; tự hết sau 15 phút nếu quên, nhả ngay khi thoát). Admin gỡ khỏi Kho.
 - Mốc ngày/tháng tính theo giờ VN (`+07:00`).
+- **Thu hồi / giao lại khi Sale chưa xử lý** → data đó không còn tính "Được giao" cho Sale cũ ở mọi chỉ số (thanh Tiến độ Kho, bảng Tiến độ chăm sóc ngày **và tháng** — tháng đổi 2026-11-09). Đã xử lý rồi mới thu hồi thì vẫn tính.
 - **Chu kỳ chăm sóc = 30 ngày gần nhất tính đến hiện tại** (không theo tháng lịch). Data up <30 ngày và nằm trong Kho tự tính 1 lượt; "Chưa chăm sóc 30 ngày" chỉ khi đã up ≥30 ngày VÀ không có ghi chú nào trong 30 ngày qua. Cột UI: "CS trong 30 ngày". Hàm: `summarizeLeadMonth` (`care-metrics.ts`). Chưa đổi: thống kê theo Sale/tháng và hạn lượt giao (vẫn theo tháng).
 - Mốc "30 phút bỏ quên → tự vào Kho" trong đặc tả gốc, nhưng worker tự động đã gỡ 2026-07-24: **[chưa xác minh cơ chế hiện tại — đối chiếu `care-warehouse.service.ts`]**.
 
