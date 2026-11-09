@@ -255,6 +255,38 @@ export class LeaveRequestsService {
   }
 
   /**
+   * Xoá đơn — CHỈ Admin (yêu cầu người dùng 2026-11-09), mọi trạng thái.
+   * Xoá hẳn (bảng không có cột xoá mềm): xoá kèm thông báo gắn đơn (khoá
+   * ngoại), để lại dấu vết trong Nhật ký (người nộp, khoảng ngày, trạng thái).
+   */
+  async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {
+    if (currentUser.role !== 'admin') {
+      throw new ForbiddenException('Chỉ Admin được xoá đơn xin nghỉ phép');
+    }
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { id },
+      include: { account: { select: { fullName: true } } },
+    });
+    if (!request) {
+      throw new NotFoundException('Không tìm thấy đơn xin nghỉ phép');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.notification.deleteMany({ where: { leaveRequestId: id } }),
+      this.prisma.leaveRequest.delete({ where: { id } }),
+    ]);
+
+    const day = (d: Date) => d.toISOString().slice(0, 10);
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'delete',
+      entityType: 'leave_request',
+      entityId: id,
+      oldValue: `${request.account.fullName}: ${day(request.startDate)} -> ${day(request.endDate)} (${request.daysCount} ngày, ${request.status})`,
+    });
+  }
+
+  /**
    * Bước duyệt cuối — Admin và Quản lý (rà soát phân quyền 2026-10-30).
    * Admin/Quản lý duyệt tắt được cả đơn đang chờ Leader (không cần Leader
    * duyệt trước) — 1 lần duyệt là xong cả 2 bước.

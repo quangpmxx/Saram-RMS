@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -59,6 +60,16 @@ export class LeaveRequestsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.leaveRequestsService.leaderDecide(id, dto, user);
+  }
+
+  /** Xoá đơn — chỉ Admin (kiểm tra trong service), yêu cầu người dùng 2026-11-09. */
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leaveRequestsService.remove(id, user);
   }
 
   @Post(':id/admin-decision')

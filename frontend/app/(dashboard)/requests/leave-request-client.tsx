@@ -3,7 +3,7 @@
 import { useCan } from "@/lib/capability-context";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { FilePlus2, MessageSquareWarning } from "lucide-react";
+import { FilePlus2, MessageSquareWarning, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account, LeaveRequest, LeaveRequestStatus } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -124,6 +124,25 @@ export function LeaveRequestClient({
   // Không có quyền duyệt → chỉ thấy đúng đơn của chính mình (1 người); người
   // duyệt (cấp 1: cả nhóm, cấp 2: toàn công ty) thấy đơn của nhiều người.
   const showEmployeeColumn = isLeader || isAdmin;
+  // Nút xoá đơn — CHỈ Admin (yêu cầu người dùng 2026-11-09), backend kiểm tra lại.
+  const canDeleteRequest = currentUser.role === "admin";
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(request: LeaveRequest) {
+    const question = `Xoá đơn xin nghỉ phép của ${request.account.full_name} (${formatDateOnly(request.start_date)} — ${formatDateOnly(request.end_date)})? Xoá rồi không khôi phục được.`;
+    if (!window.confirm(question)) return;
+    setDeletingId(request.id);
+    try {
+      await clientApi(`/leave-request/${request.id}`, { method: "DELETE" });
+      if (detailId === request.id) setDetailId(null);
+      await refresh();
+      toast.success(`Đã xoá đơn của ${request.account.full_name}`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const introText = isLeader
     ? "Tạo đơn xin nghỉ phép cho bản thân, hoặc duyệt đơn của thành viên trong nhóm bạn."
@@ -251,6 +270,7 @@ export function LeaveRequestClient({
                 <SortableTh sortKey="created_at" sort={sort} onSort={setSort} className="px-4 py-3">
                   Ngày gửi
                 </SortableTh>
+                {canDeleteRequest && <th className="px-4 py-3" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -279,6 +299,24 @@ export function LeaveRequestClient({
                     <Badge variant={STATUS_BADGE[request.status].variant}>{STATUS_BADGE[request.status].label}</Badge>
                   </td>
                   <td className="px-4 py-3 text-slate-500">{new Date(request.created_at).toLocaleDateString("vi-VN")}</td>
+                  {canDeleteRequest && (
+                    <td className="px-2 py-3 text-right">
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="xs"
+                        title="Xoá đơn (chỉ Admin)"
+                        disabled={deletingId === request.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleDelete(request);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                        Xoá
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
