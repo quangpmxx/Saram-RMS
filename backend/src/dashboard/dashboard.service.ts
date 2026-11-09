@@ -316,6 +316,7 @@ export class DashboardService {
       interviewRows,
       employedRows,
       shuttleBySale,
+      processedPairs,
     ] = await Promise.all([
       this.prisma.leadNote.groupBy({
         by: ['createdById'],
@@ -360,7 +361,26 @@ export class DashboardService {
         query.date_to,
         sourceFiltered,
       ),
+      // "Tổng số gọi": mỗi cặp (Sale, data) có ghi chú trong kỳ = 1 số đã xử
+      // lý — data mới lẫn data cũ ở Kho chăm sóc (không lọc ngày nhập data).
+      this.prisma.leadNote.groupBy({
+        by: ['createdById', 'leadId'],
+        where: {
+          createdById: { in: saleIds },
+          isDeleted: false,
+          ...noteDateWhere,
+          lead: { deletedAt: null, ...sourceWhere },
+        },
+      }),
     ]);
+
+    const processedBySale = new Map<string, number>();
+    for (const p of processedPairs) {
+      processedBySale.set(
+        p.createdById,
+        (processedBySale.get(p.createdById) ?? 0) + 1,
+      );
+    }
 
     const countBy = (
       rows: Array<{ _count: { _all: number } }>,
@@ -384,6 +404,7 @@ export class DashboardService {
       avatar_url: sale.avatarUrl,
       team_id: sale.teamId,
       calls: callsBySale.get(sale.id) ?? 0,
+      processed_leads: processedBySale.get(sale.id) ?? 0,
       potential_leads: potentialBySale.get(sale.id) ?? 0,
       interview_count: interviewsBySale.get(sale.id) ?? 0,
       employed_count: employedBySale.get(sale.id) ?? 0,

@@ -531,6 +531,8 @@ export interface SalePerformance {
   avatar_url: string | null;
   team_id: string | null;
   calls: number;
+  /** "Tổng số gọi": số data khác nhau Sale đã xử lý trong kỳ (mới + Kho chăm sóc). */
+  processed_leads: number;
   potential_leads: number;
   interview_count: number;
   employed_count: number;

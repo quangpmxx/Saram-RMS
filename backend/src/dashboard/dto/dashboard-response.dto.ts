@@ -99,6 +99,12 @@ export interface SalePerformanceDto {
   avatar_url: string | null;
   team_id: string | null;
   calls: number;
+  /**
+   * "Tổng số gọi" (yêu cầu người dùng 2026-11-09): số data KHÁC NHAU Sale đã
+   * xử lý (có ghi chú của chính Sale, chưa xoá) trong kỳ — gồm cả data mới
+   * lẫn data cũ ở Kho chăm sóc. Khác `calls` (đếm từng lượt ghi chú).
+   */
+  processed_leads: number;
   potential_leads: number;
   interview_count: number;
   employed_count: number;

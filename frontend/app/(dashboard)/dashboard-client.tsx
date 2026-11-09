@@ -822,6 +822,7 @@ export function DashboardClient({
               <thead>
                 <tr className="border-b border-brand-400 text-xs text-slate-500">
                   <th className="border-r border-slate-100 py-2 pr-3 font-medium">Nhân viên</th>
+                  <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Tổng số gọi</th>
                   <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Data mới</th>
                   <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Hẹn PV</th>
                   <th className="border-r border-slate-100 py-2 pr-3 text-center font-medium">Đến PV</th>
@@ -849,6 +850,7 @@ export function DashboardClient({
                         </div>
                       </div>
                     </td>
+                    <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.processed_leads.toLocaleString("vi-VN")}</td>
                     <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.new_leads.toLocaleString("vi-VN")}</td>
                     <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.interview_scheduled.toLocaleString("vi-VN")}</td>
                     <td className="border-r border-slate-100 py-2.5 pr-3 text-center text-slate-600">{row.kpi.attended.toLocaleString("vi-VN")}</td>
@@ -872,7 +874,7 @@ export function DashboardClient({
                 ))}
                 {sortedPerformance.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-6 text-center text-sm text-slate-400">
+                    <td colSpan={10} className="py-6 text-center text-sm text-slate-400">
                       Không có dữ liệu trong khoảng thời gian đã chọn.
                     </td>
                   </tr>
