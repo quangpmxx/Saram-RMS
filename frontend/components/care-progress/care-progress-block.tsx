@@ -221,7 +221,7 @@ function SaleTable({
         <thead className="sticky top-0 z-10 bg-brand-50/95 text-[10px] tracking-wider text-brand-900 uppercase backdrop-blur">
           <tr>
             <th className={th}>Sale</th>
-            <th className={th}>Nhóm</th>
+            <th className={cn(th, "pl-6")}>Nhóm</th>
             {isDay ? (
               <>
                 <th className={cn(th, "text-right")}>Giao trong ngày</th>
@@ -255,10 +255,11 @@ function SaleTable({
                     avatarUrl={row.account.avatar_url}
                     className="h-6 w-6 shrink-0 text-[10px]"
                   />
-                  <span className="font-medium text-slate-800">{row.account.name}</span>
+                  <span className="font-medium whitespace-nowrap text-slate-800">{row.account.name}</span>
                 </div>
               </td>
-              <td className="px-2 py-2 text-slate-500">{row.team?.name ?? "—"}</td>
+              {/* Điện thoại: tên Sale và tên Nhóm từng dính/chồng nhau → không xuống dòng + cách xa hơn (2026-11-09). */}
+              <td className="py-2 pr-2 pl-6 whitespace-nowrap text-slate-500">{row.team?.name ?? "—"}</td>
               {isDay ? (
                 <>
                   <td className={cn(td, "text-right")}>{row.daily.today.assigned}</td>
