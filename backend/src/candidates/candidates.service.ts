@@ -465,6 +465,14 @@ export class CandidatesService {
     if (dto.source_id) {
       await this.assertSourceExists(dto.source_id);
     }
+    if (
+      dto.mkt_source_id &&
+      !(await this.prisma.mktSource.findUnique({
+        where: { id: dto.mkt_source_id },
+      }))
+    ) {
+      throw new BadRequestException('Nguồn MKT không tồn tại');
+    }
 
     // Sửa SĐT trên trang Chi tiết ứng viên (yêu cầu bổ sung) — chuẩn hóa
     // khoảng trắng và từ chối giá trị rỗng sau khi trim, dù DTO cho phép
@@ -492,6 +500,7 @@ export class CandidatesService {
         address: dto.address,
         sourceId: dto.source_id,
         mktNote: dto.mkt_note,
+        mktSourceId: dto.mkt_source_id,
       },
     });
 
@@ -1710,6 +1719,16 @@ export class CandidatesService {
         field: 'mkt_note',
         oldValue: before.mktNote,
         newValue: dto.mkt_note,
+      });
+    }
+    if (
+      dto.mkt_source_id !== undefined &&
+      dto.mkt_source_id !== before.mktSourceId
+    ) {
+      changes.push({
+        field: 'mkt_source_id',
+        oldValue: before.mktSourceId,
+        newValue: dto.mkt_source_id,
       });
     }
 

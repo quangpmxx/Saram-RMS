@@ -30,4 +30,12 @@ export class UpdateCandidateDto {
   @IsOptional()
   @IsString()
   mkt_note?: string;
+
+  /**
+   * Nguồn MKT (danh mục Marketing Hub) — sửa trong form "Sửa lao động"
+   * (2026-11-10). Không gửi = giữ nguyên; null = bỏ chọn.
+   */
+  @IsOptional()
+  @IsUUID('4', { message: 'mkt_source_id không hợp lệ' })
+  mkt_source_id?: string | null;
 }

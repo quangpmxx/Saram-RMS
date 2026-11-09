@@ -56,6 +56,7 @@ const FIELD_LABELS: Record<string, string> = {
   address: 'Địa chỉ',
   source_id: 'Nguồn',
   mkt_note: 'Ghi chú MKT',
+  mkt_source_id: 'Nguồn MKT',
   call_status_id: 'Tình trạng cuộc gọi',
   call_result_id: 'Kết quả cuộc gọi',
   zalo_status_id: 'Kết quả',
@@ -352,6 +353,7 @@ export class LeadActivityService {
     const statusIds = new Set<string>();
     const accountIds = new Set<string>();
     const sourceIds = new Set<string>();
+    const mktSourceIds = new Set<string>();
     for (const log of logs) {
       const values = [log.oldValue, log.newValue].filter(
         (v): v is string => !!v,
@@ -360,6 +362,8 @@ export class LeadActivityService {
         values.forEach((v) => statusIds.add(v));
       } else if (log.fieldChanged === 'source_id') {
         values.forEach((v) => sourceIds.add(v));
+      } else if (log.fieldChanged === 'mkt_source_id') {
+        values.forEach((v) => mktSourceIds.add(v));
       } else if (
         log.entityType === 'lead' &&
         (log.actionType === 'assign' || log.actionType === 'transfer')
@@ -369,7 +373,7 @@ export class LeadActivityService {
     }
 
     const isUuid = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
-    const [statuses, accounts, sources] = await Promise.all([
+    const [statuses, accounts, sources, mktSources] = await Promise.all([
       this.prisma.statusCatalog.findMany({
         where: { id: { in: [...statusIds].filter(isUuid) } },
         select: { id: true, name: true },
@@ -382,11 +386,18 @@ export class LeadActivityService {
         where: { id: { in: [...sourceIds].filter(isUuid) } },
         select: { id: true, name: true },
       }),
+      mktSourceIds.size
+        ? this.prisma.mktSource.findMany({
+            where: { id: { in: [...mktSourceIds].filter(isUuid) } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve<{ id: string; name: string }[]>([]),
     ]);
 
     const names = new Map<string, string>();
     statuses.forEach((s) => names.set(s.id, s.name));
     sources.forEach((s) => names.set(s.id, s.name));
+    mktSources.forEach((s) => names.set(s.id, s.name));
     accounts.forEach((a) => names.set(a.id, a.fullName));
     return names;
   }
@@ -490,7 +501,11 @@ export function describeLog(
       if (!value) return '(trống)';
       if (fieldChanged === 'note_color')
         return NOTE_COLOR_LABELS[value] ?? value;
-      if (STATUS_FIELDS.has(fieldChanged) || fieldChanged === 'source_id') {
+      if (
+        STATUS_FIELDS.has(fieldChanged) ||
+        fieldChanged === 'source_id' ||
+        fieldChanged === 'mkt_source_id'
+      ) {
         return name(value);
       }
       return value;

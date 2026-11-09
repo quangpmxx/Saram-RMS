@@ -1807,7 +1807,8 @@ interface CandidateFormPayload {
   source_id: string;
   mkt_note?: string;
   team_id?: string;
-  mkt_source_id?: string;
+  /** Sửa: null = bỏ chọn Nguồn MKT. */
+  mkt_source_id?: string | null;
   birth_year?: string;
   address?: string;
 }
@@ -1889,20 +1890,20 @@ function CandidateFormModal({
   const [sourceId, setSourceId] = useState(initialCandidate?.source.id ?? sources[0]?.id ?? "");
   const [teamId, setTeamId] = useState("");
   const [mktSources, setMktSources] = useState<{ id: string; name: string }[]>([]);
-  const [mktSourceId, setMktSourceId] = useState("");
+  const [mktSourceId, setMktSourceId] = useState(initialCandidate?.mkt_source?.id ?? "");
   const [birthYear, setBirthYear] = useState(initialCandidate?.birth_year ?? "");
   const [address, setAddress] = useState(initialCandidate?.address ?? "");
   const [mktNote, setMktNote] = useState(initialCandidate?.mkt_note ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Nguồn MKT: danh mục Admin quản lý ở Marketing Hub (chỉ form thêm mới).
+  // Nguồn MKT: danh mục Admin quản lý ở Marketing Hub — form thêm mới và
+  // form sửa (2026-11-10).
   useEffect(() => {
-    if (isEditing) return;
     clientApi<{ id: string; name: string }[]>("/marketing-hub/mkt-sources")
       .then(setMktSources)
       .catch(() => {});
-  }, [isEditing]);
+  }, []);
 
   async function handleSubmit() {
     setError(null);
@@ -1917,7 +1918,11 @@ function CandidateFormModal({
         source_id: sourceId,
         mkt_note: mktNote || undefined,
         ...(isEditing
-          ? { birth_year: birthYear.trim() || undefined, address: address || undefined }
+          ? {
+              birth_year: birthYear.trim() || undefined,
+              address: address || undefined,
+              mkt_source_id: mktSourceId || null,
+            }
           : { team_id: teamId, mkt_source_id: mktSourceId || undefined }),
       });
     } catch (err) {
@@ -1996,7 +2001,7 @@ function CandidateFormModal({
           </Field>
         )}
 
-        {!isEditing && mktSources.length > 0 && (
+        {mktSources.length > 0 && (
           <Field uiSize="sm" label="Nguồn MKT (không bắt buộc)">
             <div className="grid grid-cols-2 gap-1.5">
               {mktSources.map((item) => (
