@@ -62,6 +62,21 @@ export class CalendarService {
     currentUser: AuthenticatedUser,
   ): Promise<CalendarEventDto[]> {
     const leadWhere = await this.buildLeadScopeWhere(currentUser, query);
+    // Không có quyền xem cả nhóm/toàn công ty: ngoài lịch của data mình
+    // phụ trách, còn thấy lịch DO CHÍNH MÌNH ĐẶT dù data đang thuộc người
+    // khác/Kho chăm sóc (vd lịch gọi lại khi xử lý hộ) — trước đây bị ẩn,
+    // chỉ Sup Leader trở lên mới thấy (yêu cầu người dùng 2026-11-09).
+    const isOwnScope =
+      !can(currentUser, 'calendar.view_all') &&
+      !can(currentUser, 'calendar.view_team');
+    const scopeWhere = isOwnScope
+      ? {
+          OR: [
+            { lead: leadWhere },
+            { createdById: currentUser.id, lead: { deletedAt: null } },
+          ],
+        }
+      : { lead: leadWhere };
     const scheduledAt = {
       gte: query.date_from ? new Date(query.date_from) : undefined,
       lte: query.date_to ? new Date(query.date_to) : undefined,
@@ -80,7 +95,7 @@ export class CalendarService {
         where: {
           scheduledAt,
           deletedAt: null,
-          lead: leadWhere,
+          ...scopeWhere,
           ...createdByWhere,
         },
         include: {
@@ -91,16 +106,21 @@ export class CalendarService {
       this.prisma.callbackSchedule.findMany({
         where: {
           deletedAt: null,
-          lead: leadWhere,
           ...createdByWhere,
-          OR: [
-            { repeatDaily: false, scheduledAt },
+          // AND vì cả phạm vi (scopeWhere) lẫn điều kiện thời gian đều dùng OR.
+          AND: [
+            scopeWhere,
             {
-              repeatDaily: true,
-              isCompleted: false,
-              ...(scheduledAt.lte
-                ? { scheduledAt: { lte: scheduledAt.lte } }
-                : {}),
+              OR: [
+                { repeatDaily: false, scheduledAt },
+                {
+                  repeatDaily: true,
+                  isCompleted: false,
+                  ...(scheduledAt.lte
+                    ? { scheduledAt: { lte: scheduledAt.lte } }
+                    : {}),
+                },
+              ],
             },
           ],
         },
