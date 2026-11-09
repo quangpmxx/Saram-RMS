@@ -67,19 +67,19 @@ export function InlineEditField({
 
   if (readOnly) {
     return (
-      <div className="flex justify-between gap-3">
-        <dt className="text-slate-500">{label}</dt>
-        <dd className="text-right break-words text-slate-800">{displayValue}</dd>
+      <div className="flex min-w-0 flex-col gap-1">
+        <dt className="text-xs text-slate-500">{label}</dt>
+        <dd className="break-words text-slate-800">{displayValue}</dd>
       </div>
     );
   }
 
   if (isEditing) {
     return (
-      <div className="flex flex-col gap-1 py-0.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="shrink-0 text-slate-500">{label}</span>
-          <div className="flex items-center gap-1">
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-xs text-slate-500">{label}</span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             <Input
               uiSize="sm"
               type={inputType}
@@ -92,7 +92,7 @@ export function InlineEditField({
                 if (event.key === "Enter") void handleSave();
                 if (event.key === "Escape" && !alwaysEditable) setIsEditing(false);
               }}
-              className="w-32"
+              className="w-full min-w-0"
               autoFocus={!alwaysEditable}
               disabled={isSaving}
             />
@@ -120,15 +120,15 @@ export function InlineEditField({
             )}
           </div>
         </div>
-        {error && <p className="text-right text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
     );
   }
 
   return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="group flex items-center gap-1 text-right text-slate-800">
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="group flex items-center gap-1 text-slate-800">
         <span className="break-words">{displayValue}</span>
         <button
           type="button"

@@ -806,7 +806,8 @@ export function CandidateDetailClient({
           }
         />
 
-        <div className="mb-4 grid gap-4 sm:grid-cols-2">
+        {/* 2026-11-10: Thông tin lao động chiếm cả hàng, các trường dàn ngang. */}
+        <div className="mb-4">
           <Card className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Thông tin lao động</p>
@@ -840,7 +841,7 @@ export function CandidateDetailClient({
                 </Badge>
               )}
             </div>
-            <dl className="mt-3 flex flex-col gap-2 text-sm">
+            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
               {canEditPhone ? (
                 <InlineEditField
                   label="Số điện thoại"
@@ -864,8 +865,8 @@ export function CandidateDetailClient({
                   }}
                 />
               ) : (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Số điện thoại</dt>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <dt className="text-xs text-slate-500">Số điện thoại</dt>
                   <dd className="text-slate-800">{candidate.phone_number}</dd>
                 </div>
               )}
@@ -896,15 +897,15 @@ export function CandidateDetailClient({
                   toast.success("Đã lưu thay đổi");
                 }}
               />
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Sale phụ trách</dt>
-                <dd className="text-slate-800">
+              <div className="flex min-w-0 flex-col gap-1">
+                <dt className="text-xs text-slate-500">Sale phụ trách</dt>
+                <dd className="truncate text-slate-800">
                   {candidate.assigned_to ? <NameWithRoleHint account={candidate.assigned_to} /> : "Chờ phân chia"}
                 </dd>
               </div>
               {candidate.mkt_note && (
-                <div className="border-t border-slate-100 pt-2">
-                  <dt className="text-slate-500">Ghi chú MKT</dt>
+                <div className="col-span-full border-t border-slate-100 pt-2">
+                  <dt className="text-xs text-slate-500">Ghi chú MKT</dt>
                   <dd className="mt-1 text-slate-800">{candidate.mkt_note}</dd>
                 </div>
               )}
@@ -919,14 +920,14 @@ export function CandidateDetailClient({
           }}
         >
           {/* 2026-11-10: các ô của khối "Tiến trình cuộc gọi" cũ (Tình trạng cuộc
-              gọi, Kết quả cuộc gọi, Kết quả, Đánh dấu màu) chuyển xuống đây, nằm
-              cùng hàng với Tình trạng Zalo. Cách lưu không đổi. */}
+              gọi, Kết quả cuộc gọi, Kết quả, Đánh dấu màu) chuyển xuống đây cùng
+              Tình trạng Zalo — tiêu đề ở trên, ô chọn ở dưới, 1 hàng. Cách lưu không đổi. */}
           <div className="border-b border-slate-100 p-4">
             <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-slate-500">Tình trạng cuộc gọi</span>
-                <div className="w-36 shrink-0">
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Tình trạng cuộc gọi</span>
+                <div className="min-w-0">
                   <Select
                     uiSize="sm"
                     value={callStatusId}
@@ -942,9 +943,9 @@ export function CandidateDetailClient({
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-slate-500">Kết quả cuộc gọi</span>
-                <div className="w-36 shrink-0">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Kết quả cuộc gọi</span>
+                <div className="min-w-0">
                   <Select
                     uiSize="sm"
                     value={callResultId}
@@ -960,9 +961,9 @@ export function CandidateDetailClient({
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-slate-500">Kết quả</span>
-                <div className="w-36 shrink-0">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Kết quả</span>
+                <div className="min-w-0">
                   <Select
                     uiSize="sm"
                     value={zaloStatusId}
@@ -982,9 +983,9 @@ export function CandidateDetailClient({
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-slate-500">Đánh dấu màu</span>
-                <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Đánh dấu màu</span>
+                <div className="flex h-8 items-center gap-2">
                   {NOTE_COLORS.map((c) => (
                     <button
                       key={c.value}
@@ -1004,11 +1005,10 @@ export function CandidateDetailClient({
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-slate-500">Tình trạng Zalo</span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Tình trạng Zalo</span>
                 <Select
                   uiSize="sm"
-                  className="w-44"
                   value={zaloFriendStatusId}
                   onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
                   disabled={!canUpdate || isSavingZaloFriendStatus}
