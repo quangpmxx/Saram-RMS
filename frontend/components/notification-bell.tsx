@@ -181,6 +181,32 @@ function NotificationSenderRow({ n }: { n: AppNotification }) {
   );
 }
 
+/** Thông báo cũ hơn mức này lúc tải bù (sau khi kết nối lại) thì không bật nổi, chỉ vào chuông. */
+const TOAST_MAX_AGE_MS = 2 * 60 * 1000;
+
+/**
+ * Admin xem thêm thông báo của mọi Sale (backend notification.service.ts) —
+ * 1 sự kiện gửi cả nhóm (vd MKT up số → mỗi thành viên 1 thông báo) thành
+ * nhiều dòng giống hệt. Gộp: thông báo của người khác trùng nội dung (cùng
+ * loại + data/đơn + nội dung) với 1 dòng đã có thì bỏ, mỗi nội dung chỉ hiện
+ * 1 lần (yêu cầu người dùng 2026-11-09). Thông báo của chính mình luôn giữ.
+ */
+function dedupeOthersNotifications(items: AppNotification[], userId: string): AppNotification[] {
+  const keyOf = (n: AppNotification) => `${n.type}|${n.lead_id ?? ""}|${n.leave_request_id ?? ""}|${n.content ?? ""}`;
+  const keys = new Set(items.filter((n) => n.account_id === userId).map(keyOf));
+  return items.filter((n) => {
+    if (n.account_id === userId) return true;
+    const key = keyOf(n);
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  });
+}
+
+function isRecentForToast(n: AppNotification): boolean {
+  return Date.now() - new Date(n.scheduled_at).getTime() <= TOAST_MAX_AGE_MS;
+}
+
 function seenStorageKey(userId: string): string {
   return `saram_rms_notif_seen_${userId}`;
 }
@@ -394,7 +420,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   }
 
   async function fetchNotifications() {
-    const items = await loadNotifications();
+    const items = dedupeOthersNotifications(await loadNotifications(), userId);
     setNotifications(items);
 
     if (isFirstFetchRef.current) {
@@ -408,9 +434,18 @@ export function NotificationBell({ userId }: { userId: string }) {
     if (freshOnes.length === 0) return;
 
     markKnown(freshOnes.map((n) => n.id));
+    // Tải lại sau khi mất kết nối (máy ngủ/mất mạng): thông báo đã lỡ quá
+    // TOAST_MAX_AGE_MS chỉ thêm vào chuông (vẫn sáng đỏ chưa xem), KHÔNG bật
+    // nổi — trước đây bật nổi cả loạt cùng lúc (yêu cầu người dùng 2026-11-09).
+    // Chỉ bật nổi thông báo GỬI CHO CHÍNH MÌNH — Admin xem thêm thông báo của
+    // Sale trong chuông, trước đây lúc tải bù bật nổi cả loạt thông báo của
+    // người khác (vd 1 số MKT up = 1 thông báo/thành viên nhóm). Khớp realtime
+    // ở handleAppRealtimeEvent (cũng chỉ nhận thông báo của mình).
+    const toastable = freshOnes.filter((n) => n.account_id === userId && isRecentForToast(n));
+    if (toastable.length === 0) return;
     playNotificationSound();
-    setToasts((prev) => [...prev, ...freshOnes]);
-    for (const n of freshOnes) scheduleToastDismiss(n);
+    setToasts((prev) => [...prev, ...toastable]);
+    for (const n of toastable) scheduleToastDismiss(n);
   }
 
   /**

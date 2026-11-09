@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import {
   SaleReminderService,
-  SALE_NO_SHUTTLE_MESSAGE,
+  saleNoShuttleMessage,
 } from './sale-reminder.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -87,7 +87,7 @@ describe('SaleReminderService', () => {
           accountId: 'sale-1',
           type: 'sale_no_shuttle_reminder',
           channel: 'in_app',
-          content: SALE_NO_SHUTTLE_MESSAGE,
+          content: saleNoShuttleMessage('Sale Demo Test'),
           status: 'sent',
         }),
       ],

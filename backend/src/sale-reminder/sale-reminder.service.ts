@@ -13,8 +13,13 @@ import { toNotificationResponse } from '../notification/dto/notification-respons
  * sang ngày thứ 4 tạo thông báo "Nhắc nhở lần 1..." (yêu cầu trực tiếp
  * người dùng). Dùng đúng nội dung message này — không tự đổi chữ.
  */
-export const SALE_NO_SHUTTLE_MESSAGE =
-  'Nhắc nhở lần 1: đã quá 3 ngày không có người phỏng vấn';
+/**
+ * Kèm tên Sale (2026-11-09): Leader nhận 1 thông báo/Sale vi phạm — trước
+ * đây nội dung giống hệt nhau, không biết của ai (và chuông Admin gộp nhầm).
+ */
+export function saleNoShuttleMessage(saleName: string): string {
+  return `Nhắc nhở lần 1: ${saleName} đã quá 3 ngày không có người phỏng vấn`;
+}
 
 /** "Quá 3 ngày" — vi phạm kể từ ngày thứ 4 liên tiếp không có bản ghi. */
 const VIOLATION_THRESHOLD_DAYS = 3;
@@ -128,7 +133,7 @@ export class SaleReminderService {
           accountId,
           type: 'sale_no_shuttle_reminder' as const,
           channel: 'in_app' as const,
-          content: SALE_NO_SHUTTLE_MESSAGE,
+          content: saleNoShuttleMessage(sale.fullName),
           scheduledAt: now,
           sentAt: now,
           status: 'sent' as const,

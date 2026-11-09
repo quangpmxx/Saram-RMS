@@ -105,8 +105,10 @@ export class PushService implements OnModuleInit {
               keys: { p256dh: sub.p256dh, auth: sub.auth },
             },
             payload,
-            // Giữ tối đa 1 ngày nếu máy đang tắt mạng; thông báo cũ hơn thì bỏ.
-            { TTL: 24 * 60 * 60, urgency: 'high' },
+            // Máy đang ngủ/tắt mạng: giữ tối đa 10 phút rồi bỏ — trước giữ 1
+            // ngày nên bật máy lên nhận cả loạt dồn 1 lúc (2026-11-09). Thông
+            // báo bị bỏ vẫn còn trong chuông trên web.
+            { TTL: 10 * 60, urgency: 'high' },
           );
         } catch (error) {
           const status = (error as { statusCode?: number }).statusCode;
