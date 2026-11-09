@@ -1361,22 +1361,41 @@ export class CareWarehouseService {
     return response;
   }
 
-  /** Báo Leader nhóm của data; nhóm không có Leader (đang hoạt động) thì báo mọi Quản lý/Admin. */
+  /**
+   * Báo Leader + Sup Leader nhóm của data (yêu cầu người dùng 2026-11-09 —
+   * trước chỉ báo Leader ghi trên nhóm, Sup Leader và Leader chưa gắn vào
+   * nhóm không nhận được); không có ai (đang hoạt động) thì báo mọi Quản
+   * lý/Admin. Không tự báo cho chính người gửi đề nghị.
+   */
   private async notifyStopApprovers(
     leadId: string,
     leadName: string,
     teamId: string | null,
     requester: AuthenticatedUser,
   ): Promise<void> {
-    const team = teamId
-      ? await this.prisma.team.findUnique({
-          where: { id: teamId },
-          select: { leader: { select: { id: true, status: true } } },
-        })
-      : null;
+    const recipientIds = new Set<string>();
+    if (teamId) {
+      const team = await this.prisma.team.findUnique({
+        where: { id: teamId },
+        select: { leader: { select: { id: true, status: true } } },
+      });
+      if (team?.leader && team.leader.status === 'active') {
+        recipientIds.add(team.leader.id);
+      }
+      const teamLeads = await this.prisma.account.findMany({
+        where: {
+          teamId,
+          role: { in: ['leader', 'sup_leader'] },
+          status: 'active',
+        },
+        select: { id: true },
+      });
+      for (const a of teamLeads) recipientIds.add(a.id);
+      recipientIds.delete(requester.id);
+    }
     let approverIds: string[];
-    if (team?.leader && team.leader.status === 'active') {
-      approverIds = [team.leader.id];
+    if (recipientIds.size > 0) {
+      approverIds = [...recipientIds];
     } else {
       approverIds = (
         await this.prisma.account.findMany({
@@ -1396,7 +1415,7 @@ export class CareWarehouseService {
       approverIds,
       'care_stop_requested',
       leadId,
-      `${requesterName} đề nghị dừng chăm sóc "${leadName}" — chờ bạn duyệt`,
+      `${requesterName} đề nghị dừng chăm sóc "${leadName}" — chờ duyệt`,
       requester,
     );
   }
