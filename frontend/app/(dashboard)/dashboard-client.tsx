@@ -39,7 +39,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { computeDateRange, type DatePreset, type DateRangeValue } from "@/lib/date-range";
+import { computeDateRange, formatDateRangeLabel, type DatePreset, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { MarketingTodayCard } from "./marketing-today-card";
@@ -285,6 +285,9 @@ export function DashboardClient({
 
   // Tiêu đề khối hiệu suất theo bộ lọc đang chọn (2026-11-06): 1 nhân viên →
   // "Hiệu suất <tên>"; 1 nhóm → "Hiệu suất theo nhóm"; không lọc → toàn công ty.
+  // Chú thích khoảng thời gian đang lọc, gắn sau tiêu đề từng khối (2026-11-09),
+  // vd "Hiệu suất theo nhóm (Tháng này)".
+  const periodLabel = formatDateRangeLabel(dateRange);
   const performanceTitle = accountId
     ? `Hiệu suất ${
         accountId === currentUserId
@@ -665,11 +668,13 @@ export function DashboardClient({
         })}
       </div>
 
-      {can("dashboard.mkt_cost") && <MarketingTodayCard from={dateRange.from} to={dateRange.to} />}
+      {can("dashboard.mkt_cost") && <MarketingTodayCard from={dateRange.from} to={dateRange.to} periodLabel={periodLabel} />}
 
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">
-        <h2 className="text-sm font-semibold text-slate-900">{performanceTitle}</h2>
+        <h2 className="text-sm font-semibold text-slate-900">
+          {performanceTitle} <span className="font-normal text-slate-500">({periodLabel})</span>
+        </h2>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {/* 3 ô tỉ lệ hẹn/đến/đỗ: bấm để xem tách CT/TV (2026-11-04), mặc định ẩn. */}
           {(
@@ -720,7 +725,9 @@ export function DashboardClient({
           <Card className="p-5">
             <div className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-amber-500" strokeWidth={2} />
-              <h2 className="text-sm font-semibold text-slate-900">Top 3 nhân viên hẹn PV nhiều nhất</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Top 3 nhân viên hẹn PV nhiều nhất <span className="font-normal text-slate-500">({periodLabel})</span>
+              </h2>
             </div>
             <div className="mt-3 flex flex-col gap-1">
               {topScheduled.map(({ row, ratio }, index) => (
@@ -742,7 +749,9 @@ export function DashboardClient({
           <Card className="p-5">
             <div className="flex items-center gap-2">
               <Award className="h-4 w-4 text-emerald-600" strokeWidth={2} />
-              <h2 className="text-sm font-semibold text-slate-900">Top 3 nhân viên đỗ PV cao nhất</h2>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Top 3 nhân viên đỗ PV cao nhất <span className="font-normal text-slate-500">({periodLabel})</span>
+              </h2>
             </div>
             <div className="mt-3 flex flex-col gap-1">
               {topPassed.map(({ row, ratio }, index) => (
@@ -767,7 +776,9 @@ export function DashboardClient({
       {canViewByTeam && (
         <Card className="p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Hiệu suất theo nhóm</h2>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Hiệu suất theo nhóm <span className="font-normal text-slate-500">({periodLabel})</span>
+            </h2>
             <Select uiSize="xs" className="w-1/2!" value={teamSort} onChange={(event) => setTeamSort(event.target.value as TeamSort)}>
               <option value="new_leads">Nhiều Data nhất</option>
               <option value="performance">Hiệu suất cao nhất</option>
@@ -808,7 +819,9 @@ export function DashboardClient({
       {canViewPerformance && (
         <Card className="p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Hiệu suất từng nhân viên</h2>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Hiệu suất từng nhân viên <span className="font-normal text-slate-500">({periodLabel})</span>
+            </h2>
             <Select
               uiSize="xs"
               className="w-1/2!"

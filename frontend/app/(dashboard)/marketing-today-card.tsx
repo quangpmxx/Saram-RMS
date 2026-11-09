@@ -21,7 +21,16 @@ const vnd = (n: number | null) => (n === null ? "—" : `${Math.round(n).toLocal
  * Khối Chi phí Marketing trên Dashboard — theo bộ lọc "Khoảng thời gian" chung
  * (2026-11-06; trước chỉ hôm nay). Trống cả 2 mốc = hôm nay. Tự làm mới 5 phút/lần.
  */
-export function MarketingTodayCard({ from, to }: { from: string; to: string }) {
+export function MarketingTodayCard({
+  from,
+  to,
+  periodLabel,
+}: {
+  from: string;
+  to: string;
+  /** Chú thích khoảng thời gian đang lọc, hiện sau tiêu đề. */
+  periodLabel?: string;
+}) {
   const [data, setData] = useState<MarketingToday | null>(null);
 
   useEffect(() => {
@@ -56,7 +65,10 @@ export function MarketingTodayCard({ from, to }: { from: string; to: string }) {
 
   return (
     <Card className="p-4">
-      <h2 className="text-sm font-semibold text-slate-900">Chi phí Marketing</h2>
+      <h2 className="text-sm font-semibold text-slate-900">
+        Chi phí Marketing{" "}
+        {periodLabel && <span className="font-normal text-slate-500">({periodLabel})</span>}
+      </h2>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {tiles.map((t) => (
           <div key={t.label} title={t.title} className={`rounded-xl p-2 text-center ${t.cls}`}>
