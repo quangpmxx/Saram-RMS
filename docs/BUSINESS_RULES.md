@@ -49,6 +49,10 @@ Nguồn: `09-business-specification.md` (đặc tả gốc, một số mục đ�
 - **Nhập Excel Đưa đón** (chỉ Admin, 2026-11-08): xem trước → chọn sheet → nhập. Tự tìm dòng tiêu đề (10 dòng đầu, cần cột Ngày + Họ tên/SĐT). Ô không đối chiếu được (công ty ↔ Quản lý đơn, Sale/NV đưa đón ↔ tài khoản kể cả đã nghỉ, lựa chọn Khu vực/Loại hình/Nhà thầu/Tình trạng/Kết quả/Nguồn, Giờ PV) → để trống. Dòng sai ngày → bỏ qua; dòng trùng VẪN nhập (2026-11-08). Giữ thứ tự sheet trong từng ngày. Quy ước sheet: Tình trạng "Không đón được" = "Chưa đón được"; Kết quả để trống + đã đón = "Đỗ PV"; cột "KV" = Khu vực. NV đưa đón: khớp chính xác (biệt danh/họ tên) thì tự gán, còn lại gợi ý tên giống nhất để Admin xác nhận ở bước xem trước. Không gửi thông báo/realtime từng dòng.
 - Nguồn số PV ở Dashboard = Đưa đón, **đếm NGƯỜI = gộp trùng SĐT + tên** (không phân biệt hoa/thường, dấu; 1 SĐT 3 tên = 3 người; nhập lại nhiều lần = 1; áp cho cả Chi phí/phỏng vấn — 2026-11-08): Hẹn PV = mọi dòng; Đến PV = Tình trạng "Đã đón"; Bùng PV = "Chưa đón được"; Đỗ/Trượt PV = Kết quả "Đỗ PV"/"Trượt PV". Không lọc Nhóm/NV → đếm **mọi dòng** (kể cả chưa chọn Sale); có lọc → chỉ dòng của Sale thuộc phạm vi. Các giá trị trên + `CT`/`TV` là **lựa chọn cố định** (không xoá/đổi tên, chỉ đổi màu).
 
+## Chấm công & nghỉ phép
+- Tick tay NP trừ 1 ngày phép (`remaining_leave_days`), bỏ NP hoàn lại; hết phép không tick được NP.
+- **Đơn nghỉ phép được duyệt** (bước cuối Admin/Quản lý, 2026-11-09) → tự chấm công MỌI ngày trong đơn (kể cả Chủ nhật), ghi đè ô đã có: còn phép → NP (trừ phép), hết phép → N; ô đã là NP giữ nguyên, không trừ lần nữa. Bỏ qua người đã tắt "Chấm công". Cùng transaction với việc duyệt. Ghi chú ô: "Theo đơn nghỉ phép đã duyệt". Xoá đơn sau khi duyệt KHÔNG tự hoàn lại ô/phép. Code: `applyApprovedLeaveToAttendance` (`leave-requests.service.ts`).
+
 ## Bất biến không được phá
 Bảo toàn lịch sử (ghi chú, lịch hẹn, phân công, Nhật ký) · gán/chuyển lead không race · phạm vi dữ liệu theo vai trò ở mọi API (kể cả tìm kiếm/lọc) · Đưa đón và ghi chú xoá mềm · tài khoản bị khoá/đổi nhóm thì mất realtime · mật khẩu mặc định buộc đổi.
 

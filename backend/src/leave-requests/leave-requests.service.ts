@@ -35,6 +35,14 @@ import {
  */
 
 /** "YYYY-MM-DD" -> Date UTC nửa đêm — đủ dùng cho cột @db.Date, không cần theo timezone hệ thống vì đây là NGÀY LỊCH đơn thuần (không phải mốc "hôm nay" như attendance/checkin). */
+/** Kết quả tự chấm công khi duyệt đơn — dùng cho Nhật ký và thông báo. */
+interface LeaveAttendanceChanges {
+  npDays: number;
+  unpaidDays: number;
+  oldBalance: number;
+  newBalance: number;
+}
+
 function dateOnlyToUtcMidnight(dateOnly: string): Date {
   return new Date(`${dateOnly}T00:00:00.000Z`);
 }
@@ -82,7 +90,12 @@ export class LeaveRequestsService {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
 
-    const hasLeader = Boolean(account.team?.leaderId);
+    // Người duyệt bước Leader: Leader ghi trên nhóm; nhóm chưa ghi Leader thì
+    // mọi tài khoản vai trò Leader đang hoạt động trong nhóm (trừ chính người
+    // gửi) — trước đây ô Leader của nhóm trống là bỏ qua Leader, lên thẳng
+    // Admin dù nhóm có Leader (yêu cầu người dùng 2026-11-09).
+    const leaderIds = await this.findTeamLeaderIds(account);
+    const hasLeader = leaderIds.length > 0;
     const status = hasLeader ? 'pending_leader' : 'pending_admin';
 
     const created = await this.prisma.leaveRequest.create({
@@ -107,9 +120,9 @@ export class LeaveRequestsService {
       newValue: `${dto.start_date} -> ${dto.end_date} (${daysCount} ngày)`,
     });
 
-    if (hasLeader && account.team) {
+    if (hasLeader) {
       await this.notify(
-        [account.team.leaderId!],
+        leaderIds,
         'leave_request_pending_leader',
         created.id,
         `${account.fullName} gửi đơn xin nghỉ phép ${daysCount} ngày, cần bạn duyệt`,
@@ -124,6 +137,31 @@ export class LeaveRequestsService {
     }
 
     return toLeaveRequestResponse(created);
+  }
+
+  private async findTeamLeaderIds(account: {
+    id: string;
+    teamId: string | null;
+    team: { leaderId: string | null } | null;
+  }): Promise<string[]> {
+    if (!account.teamId) return [];
+    if (account.team?.leaderId) {
+      const leader = await this.prisma.account.findUnique({
+        where: { id: account.team.leaderId },
+        select: { status: true },
+      });
+      if (leader?.status === 'active') return [account.team.leaderId];
+    }
+    const leaders = await this.prisma.account.findMany({
+      where: {
+        teamId: account.teamId,
+        role: 'leader',
+        status: 'active',
+        id: { not: account.id },
+      },
+      select: { id: true },
+    });
+    return leaders.map((l) => l.id);
   }
 
   /**
@@ -315,17 +353,66 @@ export class LeaveRequestsService {
     }
 
     const nextStatus = dto.decision === 'approved' ? 'approved' : 'rejected';
-    const updated = await this.updateIfStillPending(
-      id,
-      ['pending_admin', 'pending_leader'],
-      {
-        status: nextStatus,
-        adminDecision: dto.decision,
-        adminDecisionById: currentUser.id,
-        adminDecisionAt: new Date(),
-        adminNote: dto.note?.trim() || undefined,
-      },
-    );
+    const decisionData = {
+      status: nextStatus,
+      adminDecision: dto.decision,
+      adminDecisionById: currentUser.id,
+      adminDecisionAt: new Date(),
+      adminNote: dto.note?.trim() || undefined,
+    } as const;
+    let updated: Awaited<ReturnType<typeof this.updateIfStillPending>>;
+    let attendanceChanges: LeaveAttendanceChanges | null = null;
+    if (dto.decision === 'approved') {
+      // Đơn được duyệt → tự chấm công NP cho cả khoảng ngày nghỉ (yêu cầu
+      // người dùng 2026-11-09). Cùng 1 transaction với việc đổi trạng thái:
+      // lỗi giữa chừng thì cả hai cùng huỷ.
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          const u = await this.updateIfStillPending(
+            id,
+            ['pending_admin', 'pending_leader'],
+            decisionData,
+            tx,
+          );
+          const changes = await this.applyApprovedLeaveToAttendance(
+            tx,
+            request,
+            currentUser.id,
+          );
+          return { u, changes };
+        },
+        { timeout: 30000 },
+      );
+      updated = result.u;
+      attendanceChanges = result.changes;
+    } else {
+      updated = await this.updateIfStillPending(
+        id,
+        ['pending_admin', 'pending_leader'],
+        decisionData,
+      );
+    }
+    if (attendanceChanges) {
+      await this.auditLog.log({
+        accountId: currentUser.id,
+        actionType: 'update',
+        entityType: 'attendance_record',
+        entityId: request.accountId,
+        fieldChanged: 'leave_request_auto',
+        newValue: `Đơn nghỉ phép ${id}: ${attendanceChanges.npDays} ngày NP, ${attendanceChanges.unpaidDays} ngày N`,
+      });
+      if (attendanceChanges.oldBalance !== attendanceChanges.newBalance) {
+        await this.auditLog.log({
+          accountId: currentUser.id,
+          actionType: 'update',
+          entityType: 'account',
+          entityId: request.accountId,
+          fieldChanged: 'remaining_leave_days',
+          oldValue: String(attendanceChanges.oldBalance),
+          newValue: String(attendanceChanges.newBalance),
+        });
+      }
+    }
 
     await this.auditLog.log({
       accountId: currentUser.id,
@@ -350,6 +437,89 @@ export class LeaveRequestsService {
   }
 
   /**
+   * Đơn được duyệt → tự chấm công cho MỌI ngày từ ngày bắt đầu đến ngày kết
+   * thúc, kể cả Chủ nhật (yêu cầu người dùng 2026-11-09):
+   * - Ghi đè ô đã có (✓, ½, L...) — đơn đã duyệt là chuẩn.
+   * - Ô đã là NP sẵn → giữ, không trừ phép lần nữa.
+   * - Còn phép → NP (trừ 1 ngày phép, giống tick tay); hết phép → N (nghỉ
+   *   không phép) — khớp quy tắc "hết phép không tick được NP" ở bulkSave().
+   * - Bỏ qua nhân viên Admin đã tắt "Chấm công" (không có dòng trên bảng).
+   * Khoá hàng tài khoản (FOR UPDATE) như bulkSave() để không lệch số phép
+   * khi có người đang lưu bảng chấm công cùng lúc.
+   */
+  private async applyApprovedLeaveToAttendance(
+    tx: Prisma.TransactionClient,
+    request: { accountId: string; startDate: Date; endDate: Date },
+    actorId: string,
+  ): Promise<LeaveAttendanceChanges | null> {
+    await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${request.accountId}::uuid FOR UPDATE`;
+    const account = await tx.account.findUnique({
+      where: { id: request.accountId },
+      select: { remainingLeaveDays: true, attendanceTracked: true },
+    });
+    if (!account || !account.attendanceTracked) return null;
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const days: Date[] = [];
+    for (
+      let t = request.startDate.getTime();
+      t <= request.endDate.getTime();
+      t += DAY_MS
+    ) {
+      days.push(new Date(t));
+    }
+    const existing = await tx.attendanceRecord.findMany({
+      where: { accountId: request.accountId, date: { in: days } },
+      select: { date: true, status: true },
+    });
+    const statusByDay = new Map(
+      existing.map((r) => [r.date.getTime(), r.status]),
+    );
+
+    const oldBalance = account.remainingLeaveDays ?? 0;
+    let balance = oldBalance;
+    let npDays = 0;
+    let unpaidDays = 0;
+    for (const day of days) {
+      const current = statusByDay.get(day.getTime());
+      if (current === 'paid_leave') {
+        npDays += 1;
+        continue;
+      }
+      const status = balance > 0 ? 'paid_leave' : 'unpaid_leave';
+      if (status === 'paid_leave') {
+        balance -= 1;
+        npDays += 1;
+      } else {
+        unpaidDays += 1;
+      }
+      await tx.attendanceRecord.upsert({
+        where: { accountId_date: { accountId: request.accountId, date: day } },
+        create: {
+          accountId: request.accountId,
+          date: day,
+          status,
+          note: 'Theo đơn nghỉ phép đã duyệt',
+          createdById: actorId,
+          updatedById: actorId,
+        },
+        update: {
+          status,
+          note: 'Theo đơn nghỉ phép đã duyệt',
+          updatedById: actorId,
+        },
+      });
+    }
+    if (balance !== oldBalance) {
+      await tx.account.update({
+        where: { id: request.accountId },
+        data: { remainingLeaveDays: balance },
+      });
+    }
+    return { npDays, unpaidDays, oldBalance, newBalance: balance };
+  }
+
+  /**
    * Rà soát 2026-10-30 (M1): kiểm trạng thái rồi mới ghi là hai bước rời nhau —
    * hai người duyệt cùng lúc sẽ ghi đè quyết định của nhau. Đưa điều kiện trạng
    * thái vào chính câu UPDATE; người đến sau (không khớp, Prisma P2025) nhận 409.
@@ -358,9 +528,10 @@ export class LeaveRequestsService {
     id: string,
     allowedStatuses: Array<'pending_leader' | 'pending_admin'>,
     data: Prisma.LeaveRequestUncheckedUpdateInput,
+    db: Prisma.TransactionClient = this.prisma,
   ) {
     try {
-      return await this.prisma.leaveRequest.update({
+      return await db.leaveRequest.update({
         where: { id, status: { in: allowedStatuses } },
         data,
         include: LEAVE_REQUEST_INCLUDE,

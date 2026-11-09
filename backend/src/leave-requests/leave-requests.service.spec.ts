@@ -15,7 +15,10 @@ import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 describe('LeaveRequestsService', () => {
   let service: LeaveRequestsService;
   let prisma: {
-    account: { findUnique: jest.Mock; findMany: jest.Mock };
+    account: { findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock };
+    attendanceRecord: { findMany: jest.Mock; upsert: jest.Mock };
+    $transaction: jest.Mock;
+    $queryRaw: jest.Mock;
     leaveRequest: {
       create: jest.Mock;
       findUnique: jest.Mock;
@@ -60,6 +63,7 @@ describe('LeaveRequestsService', () => {
     avatarUrl: null,
     position: null,
     teamId: 'team-1',
+    status: 'active',
     team: { id: 'team-1', name: 'Nhóm 1', leaderId: 'leader-1' },
   };
 
@@ -100,7 +104,14 @@ describe('LeaveRequestsService', () => {
       account: {
         findUnique: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
       },
+      attendanceRecord: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+      $transaction: jest.fn(),
+      $queryRaw: jest.fn().mockResolvedValue([]),
       leaveRequest: {
         create: jest.fn(),
         findUnique: jest.fn(),
@@ -125,6 +136,10 @@ describe('LeaveRequestsService', () => {
     }).compile();
 
     service = moduleRef.get(LeaveRequestsService);
+    // Transaction giả: chạy thẳng callback với chính bản giả lập prisma.
+    prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(prisma),
+    );
   });
 
   describe('create', () => {
@@ -152,6 +167,7 @@ describe('LeaveRequestsService', () => {
         avatarUrl: null,
         position: null,
         teamId: 'team-1',
+        status: 'active',
         team: { id: 'team-1', name: 'Nhóm 1', leaderId: 'leader-1' },
       };
       prisma.account.findUnique.mockResolvedValue(leaderAccount);
@@ -186,6 +202,48 @@ describe('LeaveRequestsService', () => {
           sale,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('nhóm chưa ghi Leader nhưng có tài khoản vai trò Leader -> vẫn chờ Leader duyệt, báo các Leader đó (2026-11-09)', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        ...baseAccount,
+        team: { id: 'team-1', name: 'Nhóm 1', leaderId: null },
+      });
+      prisma.account.findMany.mockResolvedValue([{ id: 'leader-9' }]);
+      prisma.leaveRequest.create.mockResolvedValue(baseRequest);
+
+      await service.create(
+        {
+          start_date: '2026-08-01',
+          end_date: '2026-08-03',
+          reason: 'Việc gia đình',
+          handover_to: 'Sale B',
+        },
+        sale,
+      );
+
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            teamId: 'team-1',
+            role: 'leader',
+            status: 'active',
+          }),
+        }),
+      );
+      expect(prisma.leaveRequest.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'pending_leader' }),
+        }),
+      );
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            accountId: 'leader-9',
+            type: 'leave_request_pending_leader',
+          }),
+        ],
+      });
     });
 
     it('nhóm có Leader -> status=pending_leader, tính đúng số ngày, báo Leader, ghi audit log', async () => {
@@ -647,6 +705,112 @@ describe('LeaveRequestsService', () => {
         }),
       );
       expect(auditLog.log).not.toHaveBeenCalled();
+    });
+
+    it('duyệt -> tự chấm công: ghi đè ô có sẵn, NP đến hết phép, còn lại N (2026-11-09)', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'pending_admin',
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockResolvedValue({
+        ...baseRequest,
+        status: 'approved',
+      });
+      // Còn 1 ngày phép; đơn 01→03/08 (3 ngày); ngày 01 đang ✓.
+      prisma.account.findUnique.mockResolvedValue({
+        remainingLeaveDays: 1,
+        attendanceTracked: true,
+      });
+      prisma.attendanceRecord.findMany.mockResolvedValue([
+        { date: new Date('2026-08-01T00:00:00.000Z'), status: 'present' },
+      ]);
+
+      await service.adminDecide('req-1', { decision: 'approved' }, admin);
+
+      const statuses = prisma.attendanceRecord.upsert.mock.calls.map(
+        (call: [{ create: { date: Date; status: string } }]) => [
+          call[0].create.date.toISOString().slice(0, 10),
+          call[0].create.status,
+        ],
+      );
+      expect(statuses).toEqual([
+        ['2026-08-01', 'paid_leave'],
+        ['2026-08-02', 'unpaid_leave'],
+        ['2026-08-03', 'unpaid_leave'],
+      ]);
+      expect(prisma.attendanceRecord.upsert.mock.calls[0][0].update).toEqual(
+        expect.objectContaining({ status: 'paid_leave' }),
+      );
+      expect(prisma.account.update).toHaveBeenCalledWith({
+        where: { id: 'sale-1' },
+        data: { remainingLeaveDays: 0 },
+      });
+    });
+
+    it('duyệt -> ô đã là NP sẵn thì giữ, không trừ phép lần nữa', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'pending_admin',
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockResolvedValue({
+        ...baseRequest,
+        status: 'approved',
+      });
+      prisma.account.findUnique.mockResolvedValue({
+        remainingLeaveDays: 5,
+        attendanceTracked: true,
+      });
+      prisma.attendanceRecord.findMany.mockResolvedValue([
+        { date: new Date('2026-08-02T00:00:00.000Z'), status: 'paid_leave' },
+      ]);
+
+      await service.adminDecide('req-1', { decision: 'approved' }, admin);
+
+      expect(prisma.attendanceRecord.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.account.update).toHaveBeenCalledWith({
+        where: { id: 'sale-1' },
+        data: { remainingLeaveDays: 3 },
+      });
+    });
+
+    it('duyệt -> nhân viên đã tắt "Chấm công" thì không chấm', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'pending_admin',
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockResolvedValue({
+        ...baseRequest,
+        status: 'approved',
+      });
+      prisma.account.findUnique.mockResolvedValue({
+        remainingLeaveDays: 5,
+        attendanceTracked: false,
+      });
+
+      await service.adminDecide('req-1', { decision: 'approved' }, admin);
+
+      expect(prisma.attendanceRecord.upsert).not.toHaveBeenCalled();
+      expect(prisma.account.update).not.toHaveBeenCalled();
+    });
+
+    it('từ chối -> không đụng bảng chấm công', async () => {
+      prisma.leaveRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'pending_admin',
+        account: baseAccount,
+      });
+      prisma.leaveRequest.update.mockResolvedValue({
+        ...baseRequest,
+        status: 'rejected',
+      });
+
+      await service.adminDecide('req-1', { decision: 'rejected' }, admin);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.attendanceRecord.upsert).not.toHaveBeenCalled();
     });
 
     it('lỗi khác P2025 được ném lại nguyên vẹn', async () => {
