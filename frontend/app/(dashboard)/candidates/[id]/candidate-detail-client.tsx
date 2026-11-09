@@ -961,6 +961,29 @@ export function CandidateDetailClient({
                 </div>
               </div>
               <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Tình trạng Zalo</span>
+                <Select
+                  uiSize="sm"
+                  value={zaloFriendStatusId}
+                  onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
+                  disabled={!canUpdate || isSavingZaloFriendStatus}
+                  // Ô + từng dòng lựa chọn tô đúng màu (2026-11-06).
+                  style={(() => {
+                    const selected = zaloFriendStatuses.find((s) => s.id === zaloFriendStatusId);
+                    return selected ? zaloFriendStatusStyle(selected.name) : undefined;
+                  })()}
+                >
+                  <option value="" style={EMPTY_OPTION_STYLE}>
+                    Chưa cập nhật
+                  </option>
+                  {zaloFriendStatuses.map((status) => (
+                    <option key={status.id} value={status.id} style={zaloFriendStatusStyle(status.name)}>
+                      {status.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Kết quả</span>
                 <div className="min-w-0">
                   <Select
@@ -984,7 +1007,7 @@ export function CandidateDetailClient({
               </div>
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Đánh dấu màu</span>
-                <div className="flex h-8 items-center gap-2">
+                <div className="flex h-8 items-center gap-1.5">
                   {NOTE_COLORS.map((c) => (
                     <button
                       key={c.value}
@@ -994,7 +1017,7 @@ export function CandidateDetailClient({
                       disabled={!canUpdate || isSavingNoteColor}
                       onClick={() => void handleSetNoteColor(c.value)}
                       className={cn(
-                        "h-5 w-5 rounded-full transition-transform disabled:cursor-not-allowed disabled:opacity-50",
+                        "h-6 min-w-0 flex-1 rounded-md transition-transform disabled:cursor-not-allowed disabled:opacity-50",
                         c.swatch,
                         candidate.note_color === c.value
                           ? "ring-2 ring-slate-500 ring-offset-2"
@@ -1003,29 +1026,6 @@ export function CandidateDetailClient({
                     />
                   ))}
                 </div>
-              </div>
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="truncate text-xs whitespace-nowrap text-slate-500">Tình trạng Zalo</span>
-                <Select
-                  uiSize="sm"
-                  value={zaloFriendStatusId}
-                  onChange={(event) => void handleSetZaloFriendStatus(event.target.value)}
-                  disabled={!canUpdate || isSavingZaloFriendStatus}
-                  // Ô + từng dòng lựa chọn tô đúng màu (2026-11-06).
-                  style={(() => {
-                    const selected = zaloFriendStatuses.find((s) => s.id === zaloFriendStatusId);
-                    return selected ? zaloFriendStatusStyle(selected.name) : undefined;
-                  })()}
-                >
-                  <option value="" style={EMPTY_OPTION_STYLE}>
-                    Chưa cập nhật
-                  </option>
-                  {zaloFriendStatuses.map((status) => (
-                    <option key={status.id} value={status.id} style={zaloFriendStatusStyle(status.name)}>
-                      {status.name}
-                    </option>
-                  ))}
-                </Select>
               </div>
             </div>
           </div>
