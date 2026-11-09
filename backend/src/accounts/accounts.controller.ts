@@ -80,6 +80,21 @@ export class AccountsController {
     return { message: 'Đã xóa vĩnh viễn tài khoản' };
   }
 
+  /**
+   * Xoá tài khoản ĐÃ VÔ HIỆU HOÁ — chỉ Admin (kiểm tra trong service), yêu cầu
+   * người dùng 2026-11-09. Ẩn tài khoản, giữ lịch sử; data đang nhận về Chờ
+   * phân chia, data Kho chăm sóc trả về Kho.
+   */
+  @Delete(':id/remove')
+  @HttpCode(HttpStatus.OK)
+  async removeInactive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const result = await this.accountsService.removeInactive(id, user);
+    return { message: 'Đã xoá tài khoản', ...result };
+  }
+
   @Post(':id/reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(

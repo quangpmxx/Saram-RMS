@@ -122,6 +122,36 @@ export function AccountsClient({
     }
   }
 
+  /**
+   * Admin xoá tài khoản ĐÃ VÔ HIỆU HOÁ (yêu cầu người dùng 2026-11-09) — ẩn
+   * hẳn tài khoản nhưng giữ lịch sử; data đang nhận về "Chờ phân chia", data
+   * Kho chăm sóc trả về Kho. Backend chỉ cho Admin.
+   */
+  async function handleRemoveInactive(account: Account) {
+    if (
+      !window.confirm(
+        `Xóa tài khoản "${account.username}" (${account.full_name})?\n\n- Tài khoản biến mất khỏi danh sách, không kích hoạt lại được.\n- Data người này đang nhận sẽ về "Chờ phân chia"; data Kho chăm sóc trả về Kho.\n- Lịch sử cũ (ghi chú, nhật ký, đưa đón, doanh số) vẫn giữ nguyên.`,
+      )
+    ) {
+      return;
+    }
+    setPendingId(account.id);
+    try {
+      const result = await clientApi<{ released_leads: number; released_care: number }>(
+        `/account/${account.id}/remove`,
+        { method: "DELETE" },
+      );
+      await refresh();
+      toast.success(
+        `Đã xóa tài khoản "${account.username}" — ${result.released_leads} data về Chờ phân chia, ${result.released_care} data về Kho chăm sóc`,
+      );
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function handleResetPassword(account: Account) {
     setPendingId(account.id);
     try {
@@ -257,7 +287,17 @@ export function AccountsClient({
                         size="sm"
                         className="text-red-600 hover:bg-red-50 hover:text-red-700"
                         disabled={pendingId === account.id}
-                        onClick={() => void handleDeletePermanently(account)}
+                        // Admin + tài khoản đã vô hiệu hoá → xoá kiểu ẩn, trả data (2026-11-09); còn lại giữ xoá vĩnh viễn cũ.
+                        title={
+                          isAdmin && account.status === "inactive"
+                            ? "Xóa tài khoản đã vô hiệu hóa (giữ lịch sử, trả data về Chờ phân chia)"
+                            : undefined
+                        }
+                        onClick={() =>
+                          void (isAdmin && account.status === "inactive"
+                            ? handleRemoveInactive(account)
+                            : handleDeletePermanently(account))
+                        }
                       >
                         <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                         Xóa

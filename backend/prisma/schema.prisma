@@ -183,6 +183,9 @@ model Account {
   role               AccountRole
   teamId             String?       @map("team_id") @db.Uuid
   status             AccountStatus @default(active)
+  /// Admin "xoá" tài khoản đã vô hiệu hoá (2026-11-09): ẩn khỏi danh sách tài khoản, không bật lại được;
+  /// lịch sử (ghi chú, nhật ký, đưa đón, doanh số) vẫn giữ và vẫn hiện tên. NULL = chưa xoá.
+  deletedAt          DateTime?     @map("deleted_at")
   // Dự án phụ — nâng cấp toàn diện (ngoài phạm vi Design Freeze docs/09-13):
   // ảnh đại diện tự upload, đường dẫn tương đối phục vụ tĩnh qua
   // useStaticAssets() trong main.ts (vd "/uploads/avatars/xxx.jpg").

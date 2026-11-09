@@ -48,6 +48,8 @@ export interface LeadActivityItem {
 }
 
 const FIELD_LABELS: Record<string, string> = {
+  // Admin xoá tài khoản → data về Chờ phân chia (2026-11-09).
+  assigned_to: 'người phụ trách',
   full_name: 'Họ tên',
   phone_number: 'Số điện thoại',
   birth_year: 'Năm sinh',

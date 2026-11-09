@@ -537,4 +537,100 @@ describe('AccountsService', () => {
       expect(result.items[0]).not.toHaveProperty('passwordHash');
     });
   });
+
+  describe('removeInactive (Admin xoá tài khoản đã vô hiệu hoá, 2026-11-09)', () => {
+    const admin = { id: 'admin-1', role: 'admin' };
+    let tx: Record<string, Record<string, jest.Mock>>;
+
+    beforeEach(() => {
+      tx = {
+        lead: {
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ id: 'lead-1' }, { id: 'lead-2' }]),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+        careAssignment: {
+          findMany: jest.fn().mockResolvedValue([{ id: 'ca-1' }]),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        auditLog: {
+          create: jest.fn().mockResolvedValue({}),
+          createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
+        team: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        account: { update: jest.fn().mockResolvedValue({}) },
+      };
+      prisma.$transaction.mockImplementation((fn: (t: unknown) => unknown) =>
+        fn(tx),
+      );
+    });
+
+    it('chặn người không phải Admin', async () => {
+      await expect(
+        service.removeInactive('acc-1', { id: 'm-1', role: 'manager' }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('chặn tài khoản còn đang hoạt động', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        ...baseAccount,
+        status: 'active',
+      });
+      await expect(service.removeInactive('acc-1', admin)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('tài khoản đã xoá rồi → không tìm thấy', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        ...baseAccount,
+        status: 'inactive',
+        deletedAt: new Date(),
+      });
+      await expect(service.removeInactive('acc-1', admin)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('data đang nhận về Chờ phân chia, Kho chăm sóc trả về Kho, ẩn tài khoản', async () => {
+      prisma.account.findUnique.mockResolvedValue({
+        ...baseAccount,
+        status: 'inactive',
+        deletedAt: null,
+      });
+
+      const result = await service.removeInactive('acc-1', admin);
+
+      expect(result).toEqual({ released_leads: 2, released_care: 1 });
+      expect(tx.lead.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['lead-1', 'lead-2'] } },
+        data: { assignedToId: null },
+      });
+      expect(tx.careAssignment.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: { in: ['ca-1'] } },
+          data: expect.objectContaining({
+            endedById: 'admin-1',
+            endReason: 'revoked',
+          }),
+        }),
+      );
+      expect(tx.lead.updateMany).toHaveBeenCalledWith({
+        where: { heldById: 'acc-1' },
+        data: { isHeld: false, heldById: null, heldAt: null },
+      });
+      expect(tx.team.updateMany).toHaveBeenCalledWith({
+        where: { leaderId: 'acc-1' },
+        data: { leaderId: null },
+      });
+      expect(tx.account.update).toHaveBeenCalledWith({
+        where: { id: 'acc-1' },
+        data: { deletedAt: expect.any(Date) },
+      });
+      expect(realtime.disconnectAccount).toHaveBeenCalledWith('acc-1');
+    });
+  });
 });

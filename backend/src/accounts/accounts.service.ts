@@ -47,6 +47,8 @@ export class AccountsService {
       role: query.role,
       teamId: query.team_id,
       status: query.status,
+      // Tài khoản Admin đã xoá — ẩn hẳn (2026-11-09).
+      deletedAt: null,
     };
 
     const [total, accounts] = await this.prisma.$transaction([
@@ -74,7 +76,7 @@ export class AccountsService {
       include: { team: { select: TEAM_SELECT } },
     });
 
-    if (!account) {
+    if (!account || account.deletedAt) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
 
@@ -139,7 +141,7 @@ export class AccountsService {
     actorId: string,
   ): Promise<AccountResponseDto> {
     const existing = await this.prisma.account.findUnique({ where: { id } });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
     if (id === actorId && dto.status === 'inactive') {
@@ -264,7 +266,7 @@ export class AccountsService {
   /** Xóa mềm — chuyển status = inactive (Mục 5, docs/11-database-design.md). */
   async deactivate(id: string, actorId: string): Promise<void> {
     const existing = await this.prisma.account.findUnique({ where: { id } });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
     if (id === actorId) {
@@ -300,7 +302,7 @@ export class AccountsService {
    */
   async deletePermanently(id: string, actorId: string): Promise<void> {
     const existing = await this.prisma.account.findUnique({ where: { id } });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
     if (id === actorId) {
@@ -332,10 +334,123 @@ export class AccountsService {
     });
   }
 
+  /**
+   * Xoá tài khoản đã vô hiệu hoá — CHỈ Admin (yêu cầu người dùng 2026-11-09).
+   * KHÁC deletePermanently(): không xoá dòng trong DB (lịch sử ghi chú/nhật
+   * ký/đưa đón/doanh số vẫn giữ và vẫn hiện tên) — chỉ đặt deleted_at để ẩn
+   * khỏi danh sách tài khoản, không sửa/bật lại được. Trong 1 transaction:
+   * - Data đang được giao (assigned_to) → bỏ người phụ trách, giữ nhóm →
+   *   về "Chờ phân chia".
+   * - Lượt giao Kho chăm sóc đang mở → đóng (lý do "thu hồi") → data trở về
+   *   Kho, ai trong nhóm cũng nhận lại được.
+   * - Gỡ giữ số / khoá "đang ở trong data" / vị trí Leader nhóm của người đó.
+   */
+  async removeInactive(
+    id: string,
+    actor: { id: string; role: string },
+  ): Promise<{ released_leads: number; released_care: number }> {
+    if (actor.role !== 'admin') {
+      throw new ForbiddenException('Chỉ Admin được xoá tài khoản');
+    }
+    if (id === actor.id) {
+      throw new UnprocessableEntityException(SELF_DELETE_MESSAGE);
+    }
+    const existing = await this.prisma.account.findUnique({ where: { id } });
+    if (!existing || existing.deletedAt) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+    if (existing.status !== 'inactive') {
+      throw new UnprocessableEntityException(
+        'Chỉ xoá được tài khoản đã vô hiệu hoá — hãy vô hiệu hoá trước',
+      );
+    }
+
+    const now = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      const assignedLeads = await tx.lead.findMany({
+        where: { assignedToId: id, deletedAt: null },
+        select: { id: true },
+      });
+      if (assignedLeads.length > 0) {
+        await tx.lead.updateMany({
+          where: { id: { in: assignedLeads.map((l) => l.id) } },
+          data: { assignedToId: null },
+        });
+        await tx.auditLog.createMany({
+          data: assignedLeads.map((l) => ({
+            accountId: actor.id,
+            actionType: 'update' as const,
+            entityType: 'lead',
+            entityId: l.id,
+            fieldChanged: 'assigned_to',
+            oldValue: existing.fullName,
+            newValue: null,
+          })),
+        });
+      }
+
+      const openCare = await tx.careAssignment.findMany({
+        where: { assigneeId: id, endedAt: null },
+        select: { id: true },
+      });
+      if (openCare.length > 0) {
+        await tx.careAssignment.updateMany({
+          where: { id: { in: openCare.map((c) => c.id) } },
+          data: { endedAt: now, endedById: actor.id, endReason: 'revoked' },
+        });
+        await tx.auditLog.createMany({
+          data: openCare.map((c) => ({
+            accountId: actor.id,
+            actionType: 'update' as const,
+            entityType: 'care_assignment',
+            entityId: c.id,
+            fieldChanged: 'end_reason',
+            newValue: 'revoked',
+          })),
+        });
+      }
+
+      await tx.lead.updateMany({
+        where: { heldById: id },
+        data: { isHeld: false, heldById: null, heldAt: null },
+      });
+      await tx.lead.updateMany({
+        where: { carePoolLockedById: id },
+        data: { carePoolLockedById: null, carePoolLockedAt: null },
+      });
+      await tx.team.updateMany({
+        where: { leaderId: id },
+        data: { leaderId: null },
+      });
+      await tx.account.update({
+        where: { id },
+        data: { deletedAt: now },
+      });
+      await tx.auditLog.create({
+        data: {
+          accountId: actor.id,
+          actionType: 'delete',
+          entityType: 'account',
+          entityId: id,
+          fieldChanged: 'deleted_at',
+          oldValue: `${existing.username} (${existing.fullName})`,
+          newValue: `${now.toISOString()} — trả ${assignedLeads.length} data về Chờ phân chia, ${openCare.length} data về Kho chăm sóc`,
+        },
+      });
+      return {
+        released_leads: assignedLeads.length,
+        released_care: openCare.length,
+      };
+    });
+
+    this.realtime.disconnectAccount(id);
+    return result;
+  }
+
   /** Reset mật khẩu về mặc định — chỉ Admin (Mục 8, docs/09-business-specification.md). */
   async resetPassword(id: string, actorId: string): Promise<void> {
     const existing = await this.prisma.account.findUnique({ where: { id } });
-    if (!existing) {
+    if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy tài khoản');
     }
 
