@@ -264,8 +264,9 @@ export function DashboardClient({
   const [employeeOptions] = useState(initialPerformance);
 
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => ({
-    preset: "this_month",
-    ...computeDateRange("this_month"),
+    // Mặc định "Hôm nay" (yêu cầu người dùng 2026-11-10; trước là Tháng này).
+    preset: "today",
+    ...computeDateRange("today"),
   }));
   const [teamId, setTeamId] = useState("");
   const [accountId, setAccountId] = useState("");
