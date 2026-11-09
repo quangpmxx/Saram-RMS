@@ -10,8 +10,8 @@ import { DashboardClient } from "./dashboard-client";
  * nhanh + vài con số) bằng Dashboard thật theo Mục 1, docs/12 + Mục 9,
  * docs/09. Quyền xem GET /dashboard/summary: tất cả vai trò (Mục 8,
  * docs/13); performance = Leader/Quản lý/Admin; by-team = Quản lý/Admin.
- * Mặc định khoảng thời gian "Tháng này" (1 trong 4 preset đã chốt: Hôm nay/
- * Tuần này/Tháng này/Tùy chọn — tài liệu không quy định preset mặc định).
+ * Mặc định khoảng thời gian "Hôm nay" (yêu cầu người dùng 2026-11-10; trước là
+ * "Tháng này"). Phải khớp mặc định trong DashboardClient.
  */
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -29,13 +29,13 @@ export default async function HomePage() {
   const canFilterByTeam = hasCap(user, "dashboard.filter_all");
   const canFilterBySale = hasCap(user, "dashboard.filter_all");
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+  // "Hôm nay" theo giờ Việt Nam, tính GIỐNG HỆT lúc bấm lọc ở DashboardClient
+  // (date_from = ngày dạng YYYY-MM-DD, date_to = 23:59:59.999 giờ VN) để số
+  // liệu lúc mở trang khớp với khi chọn lại "Hôm nay".
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
   const dateQuery = new URLSearchParams({
-    date_from: startOfMonth.toISOString(),
-    date_to: endOfToday.toISOString(),
+    date_from: new Date(today).toISOString(),
+    date_to: new Date(`${today}T23:59:59.999+07:00`).toISOString(),
   });
 
   const [summary, performance, ranking, byTeam, teamsResult, sources] = await Promise.all([
