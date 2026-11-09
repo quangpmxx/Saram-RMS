@@ -73,9 +73,13 @@ export function DateRangePicker({
   allowClear?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<{ top?: number; bottom?: number; left?: number; right?: number } | null>(
-    null,
-  );
+  const [position, setPosition] = useState<{
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+    maxHeight?: number;
+  } | null>(null);
   const [pending, setPending] = useState<DateRangeValue>(value);
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(parseDateOnly(value.from) ?? new Date()));
   const [rangeStage, setRangeStage] = useState<"start" | "end">("start");
@@ -99,6 +103,23 @@ export function DateRangePicker({
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
     const GAP = 4;
+    // Điện thoại (< 640px): bảng xếp dọc, giãn ngang toàn màn hình (cách mép 8px),
+    // tự cuộn nếu cao quá — tránh tràn ra ngoài như bản 2 tháng cạnh nhau.
+    if (window.innerWidth < 640) {
+      const MARGIN = 8;
+      const top = Math.min(rect.bottom + GAP, window.innerHeight - 320);
+      setPosition({
+        top: Math.max(MARGIN, top),
+        left: MARGIN,
+        right: MARGIN,
+        maxHeight: window.innerHeight - Math.max(MARGIN, top) - MARGIN,
+      });
+      setPending(value);
+      setVisibleMonth(startOfMonth(parseDateOnly(value.from) ?? new Date()));
+      setRangeStage("start");
+      setIsOpen(true);
+      return;
+    }
     const panelWidth = 660;
     const panelHeight = 420;
     const spaceBelow = window.innerHeight - rect.bottom - GAP;
@@ -171,10 +192,16 @@ export function DateRangePicker({
         createPortal(
           <div
             ref={panelRef}
-            style={{ top: position.top, bottom: position.bottom, left: position.left, right: position.right }}
-            className="fixed z-40 flex items-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/15"
+            style={{
+              top: position.top,
+              bottom: position.bottom,
+              left: position.left,
+              right: position.right,
+              maxHeight: position.maxHeight,
+            }}
+            className="fixed z-40 flex items-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/15 max-sm:flex-col max-sm:items-stretch max-sm:overflow-y-auto"
           >
-            <div className="w-40 shrink-0 overflow-y-auto border-r border-slate-100 p-1.5">
+            <div className="w-40 shrink-0 overflow-y-auto border-r border-slate-100 p-1.5 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:gap-x-1 max-sm:border-r-0 max-sm:border-b">
               {allowClear && (
                 <button
                   type="button"
@@ -226,7 +253,9 @@ export function DateRangePicker({
                 </button>
                 <div className="flex gap-6">
                   <MonthYearSelect month={leftMonth} onChange={(next) => setVisibleMonth(next)} />
-                  <MonthYearSelect month={rightMonth} onChange={(next) => setVisibleMonth(addMonths(next, -1))} />
+                  <div className="max-sm:hidden">
+                    <MonthYearSelect month={rightMonth} onChange={(next) => setVisibleMonth(addMonths(next, -1))} />
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -238,9 +267,11 @@ export function DateRangePicker({
                 </button>
               </div>
 
-              <div className="mt-2 flex gap-4">
+              <div className="mt-2 flex gap-4 max-sm:justify-center">
                 <MonthGrid month={leftMonth} pending={pending} onPick={pickDay} />
-                <MonthGrid month={rightMonth} pending={pending} onPick={pickDay} />
+                <div className="max-sm:hidden">
+                  <MonthGrid month={rightMonth} pending={pending} onPick={pickDay} />
+                </div>
               </div>
 
               <p className="mt-1 text-[10px] text-slate-400">Ngày hiển thị theo Giờ TP Hồ Chí Minh</p>

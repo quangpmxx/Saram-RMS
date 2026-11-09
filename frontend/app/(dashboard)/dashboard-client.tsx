@@ -640,6 +640,9 @@ export function DashboardClient({
                 "flex min-h-[112px] flex-col justify-between gap-2 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
                 typeKey && "cursor-pointer select-none",
                 isOpen && "ring-2 ring-brand-300",
+                // Điện thoại (2 cột): ô "Đi làm" lẻ cuối hàng → căn giữa hàng.
+                key === "employed" &&
+                  "max-sm:col-span-2 max-sm:w-[calc(50%-0.375rem)] max-sm:justify-self-center",
               )}
             >
               <div className="flex items-start gap-3">
