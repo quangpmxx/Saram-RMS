@@ -939,8 +939,7 @@ function ShuttleRowFormCells({
           options={saleOptions}
           onSelect={(v) => selectCombo("sale_user_id", v)}
           onManageOptions={onManageSaleColors}
-          // Đậm hơn chút (yêu cầu người dùng 2026-11-09) — "!" để thắng font-medium ComboCell tự gắn khi ô có màu.
-          textClassName="text-[11px] font-semibold!"
+          textClassName="text-xs"
           matchBy="id"
         />
       </td>
