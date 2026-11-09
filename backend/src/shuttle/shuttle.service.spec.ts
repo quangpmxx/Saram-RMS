@@ -34,7 +34,7 @@ describe('ShuttleService', () => {
       findMany: jest.Mock;
       findUnique: jest.Mock;
     };
-    account: { findMany: jest.Mock };
+    account: { findMany: jest.Mock; findUnique: jest.Mock };
     notification: { create: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -95,6 +95,10 @@ describe('ShuttleService', () => {
         findUnique: jest.fn().mockResolvedValue({ name: 'Foxconn' }),
       },
       account: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'sale-1',
+          team: { leaderId: 'leader-7' },
+        }),
         findMany: jest.fn().mockResolvedValue([
           { id: 'admin-1', role: 'admin' },
           { id: 'sale-9', role: 'sale' },
@@ -681,7 +685,7 @@ describe('ShuttleService', () => {
         ([arg]: [{ data: Record<string, unknown> }]) => arg.data,
       );
 
-    it('nhập dòng mới → lưu thông báo cho mọi tài khoản có quyền xem Đưa đón', async () => {
+    it('nhập dòng mới → lưu thông báo cho người nhận có quyền xem Đưa đón', async () => {
       prisma.shuttleRecord.create.mockResolvedValue({
         ...record,
         createdBy: { id: 'leader-1', fullName: 'Đỗ Thị Thảo' },
@@ -713,6 +717,52 @@ describe('ShuttleService', () => {
         }),
       );
       expect(realtimeService.emitNotificationCreated).toHaveBeenCalledTimes(2);
+    });
+
+    it('chỉ gửi Sale phụ trách + Leader đội của Sale + Admin/Manager (2026-11-09)', async () => {
+      prisma.shuttleRecord.create.mockResolvedValue({
+        ...record,
+        createdBy: { id: 'leader-1', fullName: 'Đỗ Thị Thảo' },
+      });
+      await service.create(
+        { date: '2026-07-13', full_name: 'A', phone_number: '0901000001' },
+        leader,
+      );
+      expect(prisma.account.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'sale-1' } }),
+      );
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'active',
+            OR: [
+              { role: { in: ['admin', 'manager'] } },
+              { id: { in: ['sale-1', 'leader-7'] } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('dòng chưa gán Sale → chỉ Admin/Manager', async () => {
+      prisma.shuttleRecord.create.mockResolvedValue({
+        ...record,
+        saleUserId: null,
+        createdBy: { id: 'leader-1', fullName: 'Đỗ Thị Thảo' },
+      });
+      await service.create(
+        { date: '2026-07-13', full_name: 'A', phone_number: '0901000001' },
+        leader,
+      );
+      expect(prisma.account.findUnique).not.toHaveBeenCalled();
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'active',
+            OR: [{ role: { in: ['admin', 'manager'] } }],
+          },
+        }),
+      );
     });
 
     it('đổi Tình trạng → nội dung "Lao động … - giá trị" kèm màu đã cài', async () => {

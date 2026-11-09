@@ -385,10 +385,26 @@ export class ShuttleService {
           ? `${actorName} (${ROLE_LABEL[currentUser.role] ?? currentUser.role}) đã nhập đưa đón ${worker}`
           : `Lao động ${worker} - ${value}`;
 
-      // Người nhận: mọi tài khoản đang hoạt động có quyền xem Danh sách đưa
-      // đón (kể cả người vừa thao tác).
+      // Người nhận (yêu cầu người dùng 2026-11-09): chỉ Sale phụ trách dòng
+      // đưa đón + Leader đội của Sale đó; Admin/Manager nhận mọi thông báo.
+      // Vẫn lọc theo quyền xem Danh sách đưa đón bên dưới.
+      const sale = record.saleUserId
+        ? await this.prisma.account.findUnique({
+            where: { id: record.saleUserId },
+            select: { id: true, team: { select: { leaderId: true } } },
+          })
+        : null;
+      const targetIds = [sale?.id, sale?.team?.leaderId].filter(
+        (id): id is string => !!id,
+      );
       const accounts = await this.prisma.account.findMany({
-        where: { status: 'active' },
+        where: {
+          status: 'active',
+          OR: [
+            { role: { in: ['admin', 'manager'] } },
+            ...(targetIds.length ? [{ id: { in: targetIds } }] : []),
+          ],
+        },
         select: { id: true, role: true },
       });
       const now = new Date();
