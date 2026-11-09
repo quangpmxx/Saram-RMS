@@ -841,7 +841,7 @@ export function CandidateDetailClient({
                 </Badge>
               )}
             </div>
-            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-5">
               {canEditPhone ? (
                 <InlineEditField
                   label="Số điện thoại"
@@ -870,6 +870,11 @@ export function CandidateDetailClient({
                   <dd className="text-slate-800">{candidate.phone_number}</dd>
                 </div>
               )}
+              {/* Ghi chú MKT ngay cạnh Số điện thoại, chữ đỏ; không có thì để trống (2026-11-10). */}
+              <div className="flex min-w-0 flex-col gap-1">
+                <dt className="text-xs text-slate-500">Ghi chú MKT</dt>
+                <dd className="break-words text-red-600">{candidate.mkt_note ?? ""}</dd>
+              </div>
               <InlineEditField
                 key={`birth-year-${candidate.birth_year ?? ""}`}
                 label="Năm sinh"
@@ -903,12 +908,6 @@ export function CandidateDetailClient({
                   {candidate.assigned_to ? <NameWithRoleHint account={candidate.assigned_to} /> : "Chờ phân chia"}
                 </dd>
               </div>
-              {candidate.mkt_note && (
-                <div className="col-span-full border-t border-slate-100 pt-2">
-                  <dt className="text-xs text-slate-500">Ghi chú MKT</dt>
-                  <dd className="mt-1 text-slate-800">{candidate.mkt_note}</dd>
-                </div>
-              )}
             </dl>
           </Card>
         </div>
