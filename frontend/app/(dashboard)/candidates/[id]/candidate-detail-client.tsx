@@ -511,11 +511,19 @@ export function CandidateDetailClient({
     return error instanceof Error ? error.message : "Có lỗi xảy ra";
   }
 
-  /** "Lưu thông tin": lưu tất cả rồi quay về danh sách (như cũ). */
+  /**
+   * "Lưu thông tin": lưu tất cả (kể cả ghi chú đang gõ dở) rồi quay về danh
+   * sách. 2026-11-10: làm giống hệt "Lưu ghi chú", chỉ khác là rời trang.
+   */
   async function handleSaveCallInfo() {
     setIsSavingCallInfo(true);
     try {
-      await saveAllChanges();
+      const draft = noteDraftRef.current.trim();
+      if (draft && canUpdate && candidate.assigned_to) {
+        await handleAddNote(draft);
+      } else {
+        await saveAllChanges();
+      }
       // Về đúng màn hình đã mở data này (tab/bộ lọc/vị trí cuộn cũ).
       goBackInApp(router, "/candidates");
     } catch (error) {
@@ -598,7 +606,19 @@ export function CandidateDetailClient({
     };
   }, []);
 
+  /** Nội dung ô ghi chú đang gõ — để "Lưu thông tin" lưu kèm. */
+  const noteDraftRef = useRef("");
+
+  /**
+   * "Lưu ghi chú" (nút gửi/Enter): lưu mọi thay đổi trên trang + ghi chú nếu
+   * có; ô ghi chú trống thì chỉ lưu thay đổi (2026-11-10). Ở lại trang.
+   */
   async function handleAddNote(content: string) {
+    if (!content) {
+      await saveAllChanges();
+      toast.success("Đã lưu thay đổi");
+      return;
+    }
     await saveAllChanges();
     await clientApi(`/candidate/${candidate.id}/note`, {
       method: "POST",
@@ -1032,7 +1052,12 @@ export function CandidateDetailClient({
 
           {canUpdate &&
             (candidate.assigned_to ? (
-              <InlineNoteComposer onSubmit={handleAddNote} />
+              <InlineNoteComposer
+                onSubmit={handleAddNote}
+                onDraftChange={(value) => {
+                  noteDraftRef.current = value;
+                }}
+              />
             ) : (
               // Nguyên tắc: chưa có Sale phụ trách thì không ghi chú được (backend cũng chặn).
               <p className="border-b border-slate-100 px-4 py-3 text-sm text-amber-700">

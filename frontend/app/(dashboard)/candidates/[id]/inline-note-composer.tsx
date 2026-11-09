@@ -7,11 +7,17 @@ import { Loader2, Send } from "lucide-react";
  * Nhập ghi chú trực tiếp ngay trong khu vực lịch sử — không mở popup.
  * Enter để lưu, Shift+Enter xuống dòng. Lưu lỗi thì giữ nguyên nội dung đã
  * gõ; lưu thành công thì tự xóa nội dung và giữ con trỏ để nhập tiếp.
+ * 2026-11-10: ô trống vẫn bấm được — khi đó trang cha chỉ lưu các thay đổi
+ * khác (giống "Lưu thông tin" nhưng không rời trang).
  */
 export function InlineNoteComposer({
   onSubmit,
+  onDraftChange,
 }: {
+  /** content = "" nghĩa là không có ghi chú, chỉ lưu thay đổi khác. */
   onSubmit: (content: string) => Promise<void>;
+  /** Báo nội dung đang gõ cho trang cha (nút "Lưu thông tin" lưu kèm ghi chú). */
+  onDraftChange?: (value: string) => void;
 }) {
   const [content, setContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -20,12 +26,13 @@ export function InlineNoteComposer({
 
   async function handleSubmit() {
     const trimmed = content.trim();
-    if (!trimmed || isSaving) return;
+    if (isSaving) return;
     setIsSaving(true);
     setError(null);
     try {
       await onSubmit(trimmed);
       setContent("");
+      onDraftChange?.("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
@@ -40,7 +47,10 @@ export function InlineNoteComposer({
         <textarea
           ref={textareaRef}
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={(event) => {
+            setContent(event.target.value);
+            onDraftChange?.(event.target.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -54,7 +64,7 @@ export function InlineNoteComposer({
         />
         <button
           type="button"
-          disabled={isSaving || !content.trim()}
+          disabled={isSaving}
           onClick={() => void handleSubmit()}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-700 text-white transition-colors hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
           title="Lưu ghi chú"
