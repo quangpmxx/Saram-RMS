@@ -276,6 +276,54 @@ export function CandidateDetailClient({
     }
   }
 
+  /**
+   * Khoá "đang ở trong data" (yêu cầu người dùng 2026-11-09): mỗi data chỉ
+   * một người ở trong — kể cả Leader/Quản lý/Admin. Giữ khoá bằng nhịp 15
+   * giây (backend tự hết khoá sau 90 giây không có nhịp: đóng tab, mất mạng);
+   * người khác đang ở trong → hiện "<Tên> đang ở trong data" và tự thử lại
+   * theo cùng nhịp. Lỗi khác (mất mạng, quyền Chỉ xem) không chặn trang.
+   */
+  const [openLock, setOpenLock] = useState<{ status: "checking" | "ok" | "blocked"; message?: string }>({
+    status: "checking",
+  });
+  useEffect(() => {
+    const leadId = candidate.id;
+    let stopped = false;
+    let held = false;
+    async function tryLock() {
+      try {
+        await clientApi(`/candidate/${leadId}/open-lock`, { method: "POST" });
+        if (stopped) return;
+        held = true;
+        setOpenLock({ status: "ok" });
+      } catch (error) {
+        if (stopped) return;
+        if (error instanceof ApiError && error.status === 409) {
+          held = false;
+          setOpenLock({ status: "blocked", message: error.message });
+        } else {
+          setOpenLock((prev) => (prev.status === "checking" ? { status: "ok" } : prev));
+        }
+      }
+    }
+    function release() {
+      if (!held) return;
+      held = false;
+      clientApi(`/candidate/${leadId}/open-lock`, { method: "DELETE", keepalive: true }).catch(() => {
+        // Không nhả được thì khoá tự hết sau 90 giây.
+      });
+    }
+    void tryLock();
+    const timer = window.setInterval(() => void tryLock(), 15_000);
+    window.addEventListener("pagehide", release);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", release);
+      release();
+    };
+  }, [candidate.id]);
+
   useLeadRealtime(handleRealtimeEvent);
   useRealtimeReconnect(() => {
     void refreshNotes();
@@ -624,6 +672,25 @@ export function CandidateDetailClient({
     } finally {
       setPendingNoteId(null);
     }
+  }
+
+  if (openLock.status === "checking") {
+    return <p className="py-10 text-center text-sm text-slate-400">Đang mở data...</p>;
+  }
+  if (openLock.status === "blocked") {
+    return (
+      <div className="mx-auto max-w-md py-10">
+        <Card className="p-6 text-center">
+          <p className="text-base font-semibold text-slate-900">{openLock.message}</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Chỉ vào được khi người đó thoát khỏi data. Trang sẽ tự mở khi data trống.
+          </p>
+          <Button className="mt-4" variant="secondary" onClick={() => goBackInApp(router, "/candidates")}>
+            Quay lại
+          </Button>
+        </Card>
+      </div>
+    );
   }
 
   return (

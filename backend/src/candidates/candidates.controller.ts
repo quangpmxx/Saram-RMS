@@ -145,6 +145,29 @@ export class CandidatesController {
     return this.activityService.recordView(id, user);
   }
 
+  /**
+   * Khoá "đang ở trong data" (2026-11-09): trang Chi tiết gọi POST khi mở và
+   * mỗi 15 giây; người khác đang ở trong → 409 "<Tên> đang ở trong data".
+   * DELETE khi rời trang. Phạm vi quyền giống GET /candidate/:id.
+   */
+  @Post(':id/open-lock')
+  @HttpCode(HttpStatus.OK)
+  acquireOpenLock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.activityService.acquireOpenLock(id, user);
+  }
+
+  @Delete(':id/open-lock')
+  @HttpCode(HttpStatus.OK)
+  releaseOpenLock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.activityService.releaseOpenLock(id, user);
+  }
+
   @Get(':id/activity')
   listActivity(
     @Param('id', ParseUUIDPipe) id: string,

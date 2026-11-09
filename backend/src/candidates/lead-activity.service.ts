@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -22,6 +22,12 @@ import { CandidatesService } from './candidates.service';
 
 /** Mở lại cùng 1 data trong khoảng này (F5, quay lại...) không ghi thêm lượt truy cập. */
 export const VIEW_DEDUPE_MS = 5 * 60_000;
+/**
+ * Khoá "đang ở trong data" (yêu cầu người dùng 2026-11-09): trang Chi tiết
+ * gửi nhịp giữ khoá mỗi 15 giây; quá khoảng này không có nhịp (đóng tab, mất
+ * mạng, tắt máy) thì khoá tự hết để người khác vào được.
+ */
+export const OPEN_LOCK_TTL_MS = 90_000;
 /** Giới hạn số dòng nhật ký đọc ra — data bình thường chỉ vài chục dòng. */
 const MAX_LOG_ROWS = 500;
 
@@ -153,6 +159,55 @@ export class LeadActivityService {
       entityId: leadId,
     });
     return { recorded: true };
+  }
+
+  /**
+   * Vào trang Chi tiết data / giữ khoá (gọi lại mỗi 15 giây). Một data chỉ một
+   * người ở trong tại một thời điểm — áp dụng cho MỌI vai trò, kể cả Leader,
+   * Quản lý, Admin (yêu cầu người dùng 2026-11-09). Cùng người mở nhiều tab
+   * vẫn vào được. Dùng lại 2 cột care_pool_locked_by/_at (khoá cũ của Kho
+   * chăm sóc đã gỡ, cột còn trống). SQL thô để không đổi updated_at của lead.
+   */
+  async acquireOpenLock(
+    leadId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ locked: true }> {
+    await this.candidatesService.findOne(leadId, currentUser);
+
+    // Ghi và so thời gian đều bằng now() của DB (giờ UTC như Prisma lưu) —
+    // không phụ thuộc cách truyền tham số ngày giờ / múi giờ phiên DB.
+    const ttlSeconds = OPEN_LOCK_TTL_MS / 1000;
+    const updated = await this.prisma.$executeRaw`
+      UPDATE leads
+         SET care_pool_locked_by = ${currentUser.id}::uuid,
+             care_pool_locked_at = (now() AT TIME ZONE 'UTC')
+       WHERE id = ${leadId}::uuid
+         AND (care_pool_locked_by IS NULL
+              OR care_pool_locked_by = ${currentUser.id}::uuid
+              OR care_pool_locked_at IS NULL
+              OR care_pool_locked_at < (now() AT TIME ZONE 'UTC')
+                   - make_interval(secs => ${ttlSeconds}::float8))`;
+    if (updated > 0) return { locked: true };
+
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { carePoolLockedBy: { select: { fullName: true } } },
+    });
+    const name = lead?.carePoolLockedBy?.fullName ?? 'Người khác';
+    throw new ConflictException(`${name} đang ở trong data`);
+  }
+
+  /** Rời trang Chi tiết: nhả khoá nếu đang là của mình. */
+  async releaseOpenLock(
+    leadId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ released: boolean }> {
+    const updated = await this.prisma.$executeRaw`
+      UPDATE leads
+         SET care_pool_locked_by = NULL, care_pool_locked_at = NULL
+       WHERE id = ${leadId}::uuid
+         AND care_pool_locked_by = ${currentUser.id}::uuid`;
+    return { released: updated > 0 };
   }
 
   async list(
