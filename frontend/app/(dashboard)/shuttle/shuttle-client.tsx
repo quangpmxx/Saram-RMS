@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { cn } from "@/lib/cn";
@@ -46,7 +46,7 @@ type ShuttleSortKey = "date" | "stt" | "interview_time";
 
 /**
  * Dự án phụ — nâng cấp toàn diện: ô "thả ra", không đóng khung (yêu cầu
- * trực tiếp người dùng — riêng cột Ngày/Thông tin lao động/Ghi chú, KHÁC
+ * trực tiếp người dùng — riêng cột Ngày/Tên lao động/SĐT/Ghi chú, KHÁC
  * các ô ComboCell vẫn giữ khung). Không dùng chung <Input> vì fieldBaseClass
  * có sẵn "border border-slate-300 shadow-sm" — ghi đè cùng thuộc tính qua
  * className nối thêm không đáng tin cậy (cn() không dedup, đã gặp lỗi này
@@ -767,6 +767,54 @@ function ShuttleOptionManagerModal({
  * lý thêm/sửa/xóa/màu tại trang Quản lý đơn hàng, không có nút "Chỉnh sửa"
  * ở đây.
  */
+/**
+ * Nút copy SĐT cạnh ô SĐT mỗi dòng — ai vào được trang (kể cả chỉ có quyền
+ * xem) đều dùng được (yêu cầu người dùng 2026-11-09). "pointer-events-auto"
+ * để vẫn bấm được khi <tbody> bị "pointer-events-none" ở chế độ chỉ xem.
+ */
+function CopyPhoneButton({ phone }: { phone: string }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(phone);
+      } else {
+        // Dự phòng khi trang chạy qua http thường (clipboard API bị chặn).
+        const area = document.createElement("textarea");
+        area.value = phone;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      setCopied(true);
+      toast.success(`Đã copy SĐT ${phone}`);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Không copy được SĐT");
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      title="Copy SĐT"
+      onClick={() => void handleCopy()}
+      className="pointer-events-auto shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-brand-700"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2.5} />
+      ) : (
+        <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+      )}
+    </button>
+  );
+}
+
 function ShuttleRowFormCells({
   value,
   stt,
@@ -836,18 +884,21 @@ function ShuttleRowFormCells({
         <DateShortInput value={value.date} onCommit={(iso) => selectCombo("date", iso)} />
       </td>
       <td className="border-r border-slate-100 px-1 py-1 align-middle text-xs text-slate-500 tabular-nums">{stt ?? ""}</td>
+      {/* Tên lao động và SĐT tách 2 cột riêng (yêu cầu người dùng 2026-11-09). */}
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
-        <div className="flex flex-col gap-0">
+        <input
+          className={cn(PLAIN_FIELD_CLASS_LEFT, "font-bold")}
+          placeholder="Họ tên"
+          value={value.full_name}
+          onChange={(event) => set("full_name", event.target.value)}
+          onBlur={onBlurField}
+          onKeyDown={handleEnterToBlur}
+        />
+      </td>
+      <td className="border-r border-slate-100 px-2 py-1 align-middle">
+        <div className="flex items-center gap-0.5">
           <input
-            className={cn(PLAIN_FIELD_CLASS_LEFT, "font-bold")}
-            placeholder="Họ tên"
-            value={value.full_name}
-            onChange={(event) => set("full_name", event.target.value)}
-            onBlur={onBlurField}
-            onKeyDown={handleEnterToBlur}
-          />
-          <input
-            className={cn(PLAIN_FIELD_CLASS_LEFT, "font-bold")}
+            className={cn(PLAIN_FIELD_CLASS_LEFT, "min-w-0 font-bold")}
             style={{ color: "#1e3a8a" }}
             placeholder="SĐT"
             value={value.phone_number}
@@ -855,6 +906,7 @@ function ShuttleRowFormCells({
             onBlur={onBlurField}
             onKeyDown={handleEnterToBlur}
           />
+          {value.phone_number.trim() && <CopyPhoneButton phone={value.phone_number.trim()} />}
         </div>
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
@@ -887,7 +939,8 @@ function ShuttleRowFormCells({
           options={saleOptions}
           onSelect={(v) => selectCombo("sale_user_id", v)}
           onManageOptions={onManageSaleColors}
-          textClassName="text-[10px]"
+          // Đậm hơn chút (yêu cầu người dùng 2026-11-09) — "!" để thắng font-medium ComboCell tự gắn khi ô có màu.
+          textClassName="text-[11px] font-semibold!"
           matchBy="id"
         />
       </td>
@@ -942,7 +995,9 @@ function ShuttleRowFormCells({
       </td>
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <textarea
-          className={cn(PLAIN_FIELD_CLASS, "h-full min-h-[42px]")}
+          // Thấp hơn (30px, trước 42px khi Họ tên/SĐT còn chồng 2 dòng) — dòng bảng gọn hơn (yêu cầu người dùng 2026-11-09).
+          rows={1}
+          className={cn(PLAIN_FIELD_CLASS, "h-full min-h-[30px]")}
           style={{ color: "#7f1d1d" }}
           placeholder="Ghi chú"
           value={value.note}
@@ -1622,10 +1677,14 @@ export function ShuttleClient({
             <colgroup>
               <col className="w-[66px]" />
               <col className="w-[46px]" />
-              <col className="w-[190px]" />
+              {/* Tên lao động + SĐT tách 2 cột (trước gộp 1 cột 190px) — yêu cầu người dùng 2026-11-09. */}
+              <col className="w-[160px]" />
+              {/* SĐT 110→130 cho nút copy, rồi thu 10% còn 117 (2026-11-09). */}
+              <col className="w-[117px]" />
               <col className="w-[130px]" />
-              <col className="w-[120px]" />
-              <col className="w-[110px]" />
+              {/* Khu vực, Loại hình thu vừa tiêu đề (120→84, 110→94) — yêu cầu người dùng 2026-11-09. */}
+              <col className="w-[84px]" />
+              <col className="w-[94px]" />
               <col className="w-[120px]" />
               {/* NV Đưa đón +20% (140→168), Tình trạng +25% (110→138) — yêu cầu người dùng 2026-11-06. */}
               <col className="w-[168px]" />
@@ -1646,7 +1705,8 @@ export function ShuttleClient({
                 <SortableTh sortKey="stt" sort={sort} onSort={handleSort} className="border-r border-slate-100 px-1 py-2.5">
                   STT
                 </SortableTh>
-                <th className="border-r border-slate-100 px-3 py-2.5">Thông tin lao động</th>
+                <th className="border-r border-slate-100 px-3 py-2.5">Tên lao động</th>
+                <th className="border-r border-slate-100 px-3 py-2.5">SĐT</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Công ty</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Khu vực</th>
                 <th className="border-r border-slate-100 px-3 py-2.5">Loại hình</th>
@@ -1683,7 +1743,7 @@ export function ShuttleClient({
                   onManageDriverColors={() => setIsManagingDriverColors(true)}
                 />
                 <td className="px-2 py-1 align-middle">
-                  <Button type="button" size="sm" disabled={isSavingDraft} onClick={() => void handleAddRow()}>
+                  <Button type="button" size="xs" disabled={isSavingDraft} onClick={() => void handleAddRow()}>
                     <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                     Thêm
                   </Button>
@@ -1698,7 +1758,7 @@ export function ShuttleClient({
                 const isNewDay = index > 0 && records[index - 1].date !== record.date;
                 return (
                   <Fragment key={record.id}>
-                  {isNewDay && <DaySeparatorRow colSpan={15} />}
+                  {isNewDay && <DaySeparatorRow colSpan={16} />}
                   <tr
                     className={cn(
                       "align-top transition-colors hover:bg-slate-50",
@@ -1734,7 +1794,7 @@ export function ShuttleClient({
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
+                          size="xs"
                           disabled={pendingId === record.id}
                           onClick={() => void handleDelete(record)}
                         >
