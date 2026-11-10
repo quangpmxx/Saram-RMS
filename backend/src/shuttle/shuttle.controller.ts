@@ -15,12 +15,18 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequireCap } from '../common/decorators/require-cap.decorator';
 import { ShuttleService } from './shuttle.service';
 import {
   ShuttleImportService,
   type DriverMapping,
 } from './shuttle-import.service';
+import { ShuttleSheetService } from './shuttle-sheet.service';
+import {
+  SaveShuttleSheetConfigDto,
+  ShuttleSheetCommitDto,
+  ShuttleSheetPreviewDto,
+} from './dto/shuttle-sheet.dto';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
 import { UpdateShuttleDto } from './dto/update-shuttle.dto';
 import { ReorderShuttleDto } from './dto/reorder-shuttle.dto';
@@ -44,6 +50,7 @@ export class ShuttleController {
   constructor(
     private readonly shuttleService: ShuttleService,
     private readonly importService: ShuttleImportService,
+    private readonly sheetService: ShuttleSheetService,
   ) {}
 
   @Get()
@@ -136,10 +143,10 @@ export class ShuttleController {
     return { message: 'Đã xóa dòng đưa đón' };
   }
 
-  /** Nhập Excel danh sách cũ — bước 1: xem trước, không ghi gì. Chỉ Admin. */
+  /** Nhập Excel danh sách cũ — bước 1: xem trước, không ghi gì. Mặc định chỉ Admin. */
   @Post('import/preview')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin')
+  @RequireCap('shuttle.import')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: IMPORT_MAX_FILE_BYTES } }),
   )
@@ -151,7 +158,7 @@ export class ShuttleController {
   /** Nhập Excel — bước 2: nhập các sheet đã chọn (gửi lại file). Chỉ Admin. */
   @Post('import/commit')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin')
+  @RequireCap('shuttle.import')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: IMPORT_MAX_FILE_BYTES } }),
   )
@@ -189,5 +196,40 @@ export class ShuttleController {
       mapping as DriverMapping,
       user,
     );
+  }
+
+  /** Đồng bộ từ Google Sheet (2026-11-10) — đã cài đặt chưa + email robot để chia sẻ sheet. */
+  @Get('sheet-sync/config')
+  sheetConfig() {
+    return this.sheetService.getConfig();
+  }
+
+  /** Lưu link sheet + chìa khoá robot. Mặc định chỉ Admin. */
+  @Put('sheet-sync/config')
+  @RequireCap('shuttle.sheet_config')
+  saveSheetConfig(
+    @Body() dto: SaveShuttleSheetConfigDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.sheetService.saveConfig(dto, user);
+  }
+
+  /** Bước 1: đọc sheet, xem trước (không ghi gì). Ai sửa được Đưa đón đều dùng được. */
+  @Post('sheet-sync/preview')
+  @HttpCode(HttpStatus.OK)
+  @RequireCap('shuttle.sheet_sync')
+  sheetPreview(@Body() dto: ShuttleSheetPreviewDto) {
+    return this.sheetService.preview(dto.tab);
+  }
+
+  /** Bước 2: thêm dòng mới + cập nhật dòng đã có theo sheet. */
+  @Post('sheet-sync/commit')
+  @HttpCode(HttpStatus.OK)
+  @RequireCap('shuttle.sheet_sync')
+  sheetCommit(
+    @Body() dto: ShuttleSheetCommitDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.sheetService.commit(dto.tab, dto.drivers ?? {}, user);
   }
 }

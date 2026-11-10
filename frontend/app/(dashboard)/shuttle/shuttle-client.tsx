@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Copy, GripVertical, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, GripVertical, Pencil, Plus, RefreshCw, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useRememberedFilters } from "@/lib/remembered-filters";
 import { DaySeparatorRow } from "@/components/day-separator-row";
@@ -32,6 +32,7 @@ import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { SortableTh, applySortParams, type SortState } from "@/components/ui/sortable-th";
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { ShuttleImportModal } from "./shuttle-import-modal";
+import { ShuttleSheetSyncModal } from "./shuttle-sheet-sync-modal";
 
 /**
  * Màu 1 tài khoản Sale/NV đưa đón trong bộ lọc (2026-11-06) — màu lưu ở
@@ -1025,10 +1026,14 @@ export function ShuttleClient({
   initialSaleAccounts,
   initialDriverAccounts,
   initialCompanies,
-  isAdmin,
+  canImport,
+  canSheetSync,
+  canSheetConfig,
 }: {
-  /** Nút "Nhập Excel" danh sách cũ — chỉ Admin (2026-11-08). */
-  isAdmin: boolean;
+  /** Quyền nhỏ (trang Phân quyền): Nhập Excel danh sách cũ / Đồng bộ Google Sheet / Cài đặt đồng bộ. */
+  canImport: boolean;
+  canSheetSync: boolean;
+  canSheetConfig: boolean;
   permissionLevel: ModulePermissionLevel;
   initialResult: ShuttleListResult;
   initialOptions: ShuttleOptions;
@@ -1125,6 +1130,7 @@ export function ShuttleClient({
   const [isManagingDriverColors, setIsManagingDriverColors] = useState(false);
   const [zoomLevel, setZoomLevel] = useState<(typeof ZOOM_LEVELS)[number]>(100);
   const [showImport, setShowImport] = useState(false);
+  const [showSheetSync, setShowSheetSync] = useState(false);
 
   /**
    * Dự án phụ — nâng cấp toàn diện: đo chiều cao THẬT của header hệ thống
@@ -1707,7 +1713,20 @@ export function ShuttleClient({
             <X className="h-3.5 w-3.5" strokeWidth={2} />
             Xóa bộ lọc
           </Button>
-          {isAdmin && !isReadOnly && (
+          {canSheetSync && !isReadOnly && (
+            <Button
+              type="button"
+              size="xs"
+              variant="primary"
+              className="!bg-emerald-600 !shadow-emerald-600/25 hover:!bg-emerald-700 focus-visible:!outline-emerald-600"
+              title="Đồng bộ danh sách từ Google Sheet"
+              onClick={() => setShowSheetSync(true)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
+              Đồng bộ
+            </Button>
+          )}
+          {canImport && !isReadOnly && (
             <Button
               type="button"
               size="xs"
@@ -2003,6 +2022,13 @@ export function ShuttleClient({
         />
       )}
 
+      {showSheetSync && (
+        <ShuttleSheetSyncModal
+          isAdmin={canSheetConfig}
+          onClose={() => setShowSheetSync(false)}
+          onSynced={() => void handleSearch()}
+        />
+      )}
       {showImport && (
         <ShuttleImportModal onClose={() => setShowImport(false)} onImported={() => void handleSearch()} />
       )}

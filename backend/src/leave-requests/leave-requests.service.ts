@@ -293,13 +293,13 @@ export class LeaveRequestsService {
   }
 
   /**
-   * Xoá đơn — CHỈ Admin (yêu cầu người dùng 2026-11-09), mọi trạng thái.
+   * Xoá đơn — mặc định chỉ Admin (2026-11-09; quyền nhỏ leave.delete), mọi trạng thái.
    * Xoá hẳn (bảng không có cột xoá mềm): xoá kèm thông báo gắn đơn (khoá
    * ngoại), để lại dấu vết trong Nhật ký (người nộp, khoảng ngày, trạng thái).
    */
   async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {
-    if (currentUser.role !== 'admin') {
-      throw new ForbiddenException('Chỉ Admin được xoá đơn xin nghỉ phép');
+    if (!can(currentUser, 'leave.delete')) {
+      throw new ForbiddenException('Bạn không có quyền xoá đơn xin nghỉ phép');
     }
     const request = await this.prisma.leaveRequest.findUnique({
       where: { id },

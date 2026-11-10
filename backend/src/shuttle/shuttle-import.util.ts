@@ -182,6 +182,14 @@ export function splitNamePhone(
   return { fullName: fullName.slice(0, 150), phone };
 }
 
+/** Sheet hay ghi NV đưa đón kèm SĐT ("Chuyền 0373791063") → chỉ lấy tên để đối chiếu tài khoản. */
+export function stripTrailingPhone(label: string): string {
+  const name = label
+    .replace(/[\s\-–:,(]*(?:\+?84|0)\d[\d\s.]{7,}\)?\s*$/, '')
+    .trim();
+  return name || label.trim();
+}
+
 /** Đối chiếu tài khoản theo biệt danh hoặc họ tên đầy đủ/tên (không dấu); trùng nhiều người → không khớp. */
 export function matchAccount(
   label: string,
@@ -211,6 +219,7 @@ export function matchAccount(
 /** Cách ghi trong sheet → lựa chọn cố định của phần mềm (so sau khi fold). */
 export const STATUS_ALIASES: Record<string, string> = {
   'khong don duoc': 'Chưa đón được',
+  'ko don duoc': 'Chưa đón được',
 };
 
 /** Độ giống 2 chuỗi đã fold: 1 = y hệt, 0 = khác hẳn (theo khoảng cách sửa chữ Levenshtein). */

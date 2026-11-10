@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Workbook } from 'exceljs';
+import { Workbook, type Worksheet } from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { RECRUITER_ROLES } from '../common/utils/sale-roles';
@@ -15,6 +15,7 @@ import {
   parseShuttleDate,
   parseShuttleTime,
   splitNamePhone,
+  stripTrailingPhone,
   suggestAccount,
 } from './shuttle-import.util';
 import {
@@ -57,7 +58,7 @@ export interface ParsedRow {
   note: string | null;
 }
 
-interface SheetRow {
+export interface SheetRow {
   data: ParsedRow;
   /** Chữ ở cột NV đưa đón — ghép tài khoản lúc nhập theo bảng người dùng đã xác nhận. */
   driverRaw: string;
@@ -87,8 +88,17 @@ export class ShuttleImportService {
   ) {}
 
   async preview(buffer: Buffer) {
-    const { sheets, unmatched, badDates, drivers, driverAccounts } =
-      await this.parse(buffer, null);
+    return this.report(await this.parse(buffer, null));
+  }
+
+  /** Kết quả đọc sheet → bảng xem trước gửi cho giao diện. */
+  report({
+    sheets,
+    unmatched,
+    badDates,
+    drivers,
+    driverAccounts,
+  }: Awaited<ReturnType<ShuttleImportService['parseSheets']>>) {
     return {
       sheets: sheets.map((s) => s.report),
       unmatched: Object.fromEntries(
@@ -187,6 +197,15 @@ export class ShuttleImportService {
     } catch {
       throw new BadRequestException('Không đọc được file — cần file .xlsx');
     }
+    return this.parseSheets(
+      workbook.worksheets
+        .filter((ws) => !onlySheets || onlySheets.has(ws.name))
+        .map((ws) => ({ name: ws.name, ws })),
+    );
+  }
+
+  /** Đọc các sheet đã mở (file Excel hoặc tab Google Sheet) → dòng đã đối chiếu + báo cáo. */
+  async parseSheets(list: { name: string; ws: Worksheet }[]) {
     const [options, companies, saleAccounts, driverAccounts] =
       await Promise.all([
         this.prisma.shuttleOption.findMany({
@@ -223,12 +242,11 @@ export class ShuttleImportService {
     const drivers = new Map<string, number>();
     let total = 0;
 
-    for (const ws of workbook.worksheets) {
+    for (const { name: sheetName, ws } of list) {
       if (ws.rowCount === 0) continue;
-      if (onlySheets && !onlySheets.has(ws.name)) continue;
       const header = detectShuttleHeader(ws);
       const report: SheetReport = {
-        name: ws.name,
+        name: sheetName,
         header_found: !!header,
         columns: header
           ? (Object.keys(header.columns) as ShuttleColumnKey[]).map(
@@ -261,7 +279,7 @@ export class ShuttleImportService {
         const date = parseShuttleDate(dateRaw);
         if (!date) {
           report.bad_date++;
-          badDates.push({ sheet: ws.name, row: r, value: dateRaw });
+          badDates.push({ sheet: sheetName, row: r, value: dateRaw });
           continue;
         }
         const option = (key: OptionColumn): string | null => {
@@ -279,7 +297,7 @@ export class ShuttleImportService {
         const saleRaw = text(r, 'sale');
         const saleUserId = saleRaw ? matchAccount(saleRaw, saleAccounts) : null;
         if (saleRaw && !saleUserId) miss('sale', saleRaw);
-        const driverRaw = text(r, 'driver');
+        const driverRaw = stripTrailingPhone(text(r, 'driver'));
         if (driverRaw)
           drivers.set(driverRaw, (drivers.get(driverRaw) ?? 0) + 1);
         const companyRaw = text(r, 'company');

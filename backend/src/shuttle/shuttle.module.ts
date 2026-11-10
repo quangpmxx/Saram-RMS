@@ -5,10 +5,11 @@ import { ModulePermissionModule } from '../module-permission/module-permission.m
 import { ShuttleController } from './shuttle.controller';
 import { ShuttleService } from './shuttle.service';
 import { ShuttleImportService } from './shuttle-import.service';
+import { ShuttleSheetService } from './shuttle-sheet.service';
 
 @Module({
   imports: [AuditLogModule, RealtimeModule, ModulePermissionModule],
   controllers: [ShuttleController],
-  providers: [ShuttleService, ShuttleImportService],
+  providers: [ShuttleService, ShuttleImportService, ShuttleSheetService],
 })
 export class ShuttleModule {}

@@ -329,10 +329,46 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     defaultRoles: ['manager'],
   },
   {
+    code: 'leave.delete',
+    module: 'attendance',
+    label: 'Xoá đơn nghỉ phép',
+    defaultRoles: [],
+  },
+  {
     code: 'feedback.view',
     module: 'attendance',
     label: 'Xem đơn phản ánh ẩn danh',
     defaultRoles: ['manager'],
+  },
+  // ---------------------------------------------------------------- Danh sách đưa đón
+  {
+    code: 'shuttle.sheet_sync',
+    module: 'shuttle',
+    label: 'Đồng bộ danh sách từ Google Sheet',
+    hint: 'Cần thêm mức Sửa ở trang Danh sách đưa đón',
+    // Như lúc ra mắt (2026-11-10): ai sửa được Đưa đón đều bấm được.
+    defaultRoles: [
+      'manager',
+      'leader',
+      'mkt',
+      'sale',
+      'sup_leader',
+      'accounting',
+      'order_staff',
+      'shuttle_staff',
+    ],
+  },
+  {
+    code: 'shuttle.sheet_config',
+    module: 'shuttle',
+    label: 'Cài đặt đồng bộ Google Sheet (link sheet, chìa khoá robot)',
+    defaultRoles: [],
+  },
+  {
+    code: 'shuttle.import',
+    module: 'shuttle',
+    label: 'Nhập Excel danh sách đưa đón cũ',
+    defaultRoles: [],
   },
   // ---------------------------------------------------------------- Nhập doanh số
   {

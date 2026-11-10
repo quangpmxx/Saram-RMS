@@ -126,7 +126,7 @@ export function LeaveRequestClient({
   // duyệt (cấp 1: cả nhóm, cấp 2: toàn công ty) thấy đơn của nhiều người.
   const showEmployeeColumn = isLeader || isAdmin;
   // Nút xoá đơn — CHỈ Admin (yêu cầu người dùng 2026-11-09), backend kiểm tra lại.
-  const canDeleteRequest = currentUser.role === "admin";
+  const canDeleteRequest = can("leave.delete");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(request: LeaveRequest) {

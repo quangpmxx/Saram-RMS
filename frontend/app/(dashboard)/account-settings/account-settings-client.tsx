@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { BirthdayPreviewPanel } from "@/components/birthday/birthday-preview-panel";
 import { useSetPageTitle } from "@/lib/page-title-context";
+import { useCan } from "@/lib/capability-context";
 import { useToast } from "@/lib/toast-context";
 import { useUiTheme } from "@/lib/ui-theme";
 import { cn } from "@/lib/cn";
@@ -36,6 +37,7 @@ function formatDateOnly(value: string | null): string {
  */
 export function AccountSettingsClient({ user, accounts }: { user: Account; accounts: Account[] }) {
   useSetPageTitle("Cài đặt tài khoản");
+  const canManageCheckin = useCan()("checkin.manage");
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -247,7 +249,7 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
               thêm mục 'Cài đặt Check in'" — CHỈ hiện với Admin, backend
               (checkin.service.ts) kiểm tra quyền lại lần nữa. */}
           {/* Quản lý cũng cấu hình được (rà soát phân quyền 2026-10-30). */}
-          {(user.role === "admin" || user.role === "manager") && (
+          {canManageCheckin && (
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Cài đặt Check in</h3>
               <p className="mt-1 text-xs text-slate-500">Vị trí công ty dùng để xác định nhân viên Check in trong/ngoài phạm vi.</p>

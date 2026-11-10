@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
 import { requirePageAccess } from "@/lib/module-permission";
+import { hasCap } from "@/lib/capabilities";
 import type { AccountOptionItem, ShuttleListResult, ShuttleOptionItem, ShuttleOptions } from "@/lib/types";
 import { ShuttleClient } from "./shuttle-client";
 
@@ -39,7 +40,9 @@ export default async function ShuttlePage() {
       initialSaleAccounts={saleAccounts}
       initialDriverAccounts={driverAccounts}
       initialCompanies={companies}
-      isAdmin={user.role === "admin"}
+      canImport={hasCap(user, "shuttle.import")}
+      canSheetSync={hasCap(user, "shuttle.sheet_sync")}
+      canSheetConfig={hasCap(user, "shuttle.sheet_config")}
     />
   );
 }

@@ -1055,6 +1055,19 @@ model ShuttleRecord {
   @@map("shuttle_records")
 }
 
+/// Đồng bộ Danh sách đưa đón từ Google Sheet (2026-11-10) — 1 dòng duy nhất: sheet nào + chìa
+/// khoá tài khoản robot Google (mã hoá bằng MARKETING_TOKEN_KEY, không bao giờ trả ra ngoài).
+model ShuttleSheetConfig {
+  id            String   @id @default(uuid()) @db.Uuid
+  spreadsheetId String   @map("spreadsheet_id") @db.VarChar(128)
+  clientEmail   String   @map("client_email") @db.VarChar(255)
+  encryptedKey  String   @map("encrypted_key")
+  updatedById   String   @map("updated_by") @db.Uuid
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("shuttle_sheet_config")
+}
+
 /// Dự án phụ — nâng cấp toàn diện: danh sách gợi ý CÓ LƯU LẠI (khác cách cũ
 /// tự suy ra từ giá trị distinct trong shuttle_records) cho các trường
 /// "chọn" của Danh sách đưa đón (Khu vực/Loại hình/Sale/Nhân viên đưa đón/
