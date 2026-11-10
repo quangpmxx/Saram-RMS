@@ -7,7 +7,6 @@ import {
   Briefcase,
   CalendarClock,
   CheckCircle2,
-  ChevronRight,
   Medal,
   RefreshCw,
   Sparkles,
@@ -16,7 +15,6 @@ import {
   Trophy,
   UserCheck,
   UserX,
-  Users,
   XCircle,
 } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
@@ -279,7 +277,6 @@ export function DashboardClient({
   const [teamSort, setTeamSort] = useState<TeamSort>("new_leads");
 
   const can = useCan();
-  const canViewPending = can("lead.view_pending");
   // Phạm vi (2026-11-07 theo quyền): dashboard.filter_team → Toàn công ty / Nhóm mình / NV trong nhóm;
   // không có quyền lọc nào → Tất cả / chính mình.
   const canFilterTeamScope = can("dashboard.filter_team");
@@ -604,16 +601,6 @@ export function DashboardClient({
           </Field>
 
           <div className="ml-auto flex items-center gap-3">
-            {canViewPending && (
-              <Link
-                href="/candidates?view=pending"
-                className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
-              >
-                <Users className="h-3.5 w-3.5" strokeWidth={2} />
-                Chờ phân chia: {summary.pending_count.toLocaleString("vi-VN")}
-                <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
-              </Link>
-            )}
             <Button type="button" variant="outline" size="xs" disabled={loading} onClick={() => void refresh()}>
               <RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} strokeWidth={2} />
               Làm mới
