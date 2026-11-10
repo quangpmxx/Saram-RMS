@@ -62,9 +62,9 @@ export function TeamsClient({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-4 flex justify-end">
-        <Button type="button" onClick={() => setModal({ mode: "create" })}>
-          <Plus className="h-4 w-4" strokeWidth={2.5} />
+      <div className="mb-2 flex justify-end">
+        <Button type="button" size="xs" onClick={() => setModal({ mode: "create" })}>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           Thêm nhóm mới
         </Button>
       </div>

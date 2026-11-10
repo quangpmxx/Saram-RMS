@@ -136,7 +136,7 @@ export function OrderManagementClient({
         </div>
       )}
       <div className="flex justify-end">
-        <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setIsModalOpen(true)}>
+        <Button type="button" size="xs" disabled={isReadOnly} onClick={() => setIsModalOpen(true)}>
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           Thêm đơn hàng mới
         </Button>

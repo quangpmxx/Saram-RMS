@@ -201,9 +201,9 @@ export function AccountsClient({
       )}
 
       <div className={activeTab === "accounts" ? "" : "hidden"}>
-      <div className="mb-4 flex justify-end">
-        <Button type="button" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
-          <Plus className="h-4 w-4" strokeWidth={2.5} />
+      <div className="mb-2 flex justify-end">
+        <Button type="button" size="xs" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           Thêm tài khoản mới
         </Button>
       </div>

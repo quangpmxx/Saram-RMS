@@ -1203,7 +1203,7 @@ export function CandidatesClient({
           nhân) và 2 nút Nhập từ Excel/Thêm lao động mới vào chung 1 hàng
           (song song, 2 đầu trái-phải) để tiết kiệm chiều cao cho phần bảng data. */}
       {(canViewPending || canViewMine || can("lead.import") || can("lead.create")) && (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
           {(canViewPending || canViewMine) && (
             // Điện thoại: hàng tab cuộn ngang, chữ không xuống dòng.
             <div className="inline-flex max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white p-0.5 text-xs whitespace-nowrap">
@@ -1252,64 +1252,64 @@ export function CandidatesClient({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {/* Yêu cầu trực tiếp người dùng (2026-07-15): bỏ "Trùng lặp"
                 khỏi menu sidebar, thay bằng 1 nút ngay trong trang Data lao
                 động — vẫn cùng route /duplicates, cùng phạm vi vai trò như
                 mục nav cũ (mọi vai trò đều xem được). */}
-            <Button type="button" size="sm" variant="outline" onClick={() => router.push("/duplicates")}>
-              <Copy className="h-4 w-4" strokeWidth={2} />
+            <Button type="button" size="xs" variant="outline" onClick={() => router.push("/duplicates")}>
+              <Copy className="h-3.5 w-3.5" strokeWidth={2} />
               Trùng lặp
             </Button>
             {/* Leader: Chia tự động của nhóm mình — đặt cạnh Trùng lặp, cam nhấp nháy khi đang bật (yêu cầu người dùng 2026-11-10). */}
             {!can("distribution.config_all") && can("distribution.config_team") && currentUserTeamId && (
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
                 className={isAutoAssignOn ? "auto-on-glow" : undefined}
                 title={isAutoAssignOn ? "Chia tự động đang bật" : undefined}
                 onClick={() => setIsDistributionModalOpen(true)}
               >
-                <Shuffle className="h-4 w-4" strokeWidth={2} />
+                <Shuffle className="h-3.5 w-3.5" strokeWidth={2} />
                 Chia tự động
               </Button>
             )}
             {can("lead.import") && (
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
                 disabled={isReadOnly}
                 onClick={() => setModal({ mode: "import" })}
               >
-                <Upload className="h-4 w-4" strokeWidth={2} />
+                <Upload className="h-3.5 w-3.5" strokeWidth={2} />
                 Nhập từ Excel
               </Button>
             )}
             {can("lead.pancake_auto_up") && (
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
                 disabled={isReadOnly}
                 className={isAutoUpOn ? "auto-on-glow" : undefined}
                 title={isAutoUpOn ? "Up tự động đang bật" : undefined}
                 onClick={() => setIsAutoUpOpen(true)}
               >
-                <Zap className="h-4 w-4" strokeWidth={2} />
+                <Zap className="h-3.5 w-3.5" strokeWidth={2} />
                 Up tự động
               </Button>
             )}
             {can("lead.import_legacy") && (
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
                 disabled={isReadOnly}
                 onClick={() => setModal({ mode: "legacy-import" })}
               >
-                <History className="h-4 w-4" strokeWidth={2} />
+                <History className="h-3.5 w-3.5" strokeWidth={2} />
                 Tải data cũ
               </Button>
             )}
@@ -1317,21 +1317,21 @@ export function CandidatesClient({
             {can("distribution.config_all") && teams.length > 0 && (
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
                 disabled={isReadOnly}
                 className={isAutoAssignOn ? "auto-on-glow" : undefined}
                 title={isAutoAssignOn ? "Chia tự động đang bật" : undefined}
                 onClick={() => setIsDistributionModalOpen(true)}
               >
-                <Shuffle className="h-4 w-4" strokeWidth={2} />
+                <Shuffle className="h-3.5 w-3.5" strokeWidth={2} />
                 Chia tự động
               </Button>
             )}
             {/* Thêm data thủ công: MKT, Quản lý, Admin (rà soát phân quyền 2026-10-30). */}
             {can("lead.create") && (
-              <Button type="button" size="sm" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
-                <Plus className="h-4 w-4" strokeWidth={2.5} />
+              <Button type="button" size="xs" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
+                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                 Thêm lao động mới
               </Button>
             )}
@@ -1360,10 +1360,11 @@ export function CandidatesClient({
 
       {viewMode !== "care" && (
       <>
-      {/* UI Polish — tinh chỉnh mật độ hiển thị: giảm padding/khoảng cách khung bộ lọc (~15-20%), giữ nguyên chức năng. */}
-      <Card className="mb-2 flex flex-wrap items-end gap-1.5 p-2">
+      {/* Thanh lọc một hàng mỏng (2026-11-11): bỏ dòng nhãn phía trên, tên bộ lọc nằm ngay trong ô
+          ("Nguồn: tất cả"...) để dành chiều cao cho bảng data. */}
+      <Card className="mb-1.5 flex flex-wrap items-center gap-1.5 p-1.5">
         {(viewMode === "all" || viewMode === "mine") && (
-          <Field uiSize="xs" label="Tìm kiếm" className="min-w-[200px] flex-1">
+          <Field uiSize="xs" hideLabel label="Tìm kiếm" className="min-w-[200px] flex-1">
             <Input
               uiSize="xs"
               value={filters.keyword}
@@ -1373,7 +1374,7 @@ export function CandidatesClient({
             />
           </Field>
         )}
-        <Field uiSize="xs" label="Thu phóng">
+        <Field uiSize="xs" hideLabel label="Thu phóng" title="Thu phóng">
           <Select
             uiSize="xs"
             className="w-16"
@@ -1387,17 +1388,14 @@ export function CandidatesClient({
             ))}
           </Select>
         </Field>
-        <div className="hidden flex-col gap-0.5 text-xs md:flex">
-          <span className="font-medium text-slate-700">Kiểu xem</span>
-          <LeadLayoutToggle value={chosenLayout} onChange={setLayout} />
-        </div>
-        <Field uiSize="xs" label="Nguồn">
+        <LeadLayoutToggle value={chosenLayout} onChange={setLayout} />
+        <Field uiSize="xs" hideLabel label="Nguồn">
           <Select
             uiSize="xs"
             value={filters.source_id}
             onChange={(event) => applyFiltersNow({ ...filters, source_id: event.target.value })}
           >
-            <option value="">Tất cả</option>
+            <option value="">Nguồn: tất cả</option>
             {sources.map((source) => (
               <option key={source.id} value={source.id}>
                 {source.name}
@@ -1416,7 +1414,7 @@ export function CandidatesClient({
         </Field>
         {(viewMode === "all" || viewMode === "mine") && (
           <>
-            <Field uiSize="xs" label="Trạng thái" className="w-28">
+            <Field uiSize="xs" hideLabel label="Trạng thái" className="w-36">
               <Select
                 uiSize="xs"
                 value={filters.lead_state ?? ""}
@@ -1424,7 +1422,7 @@ export function CandidatesClient({
                   applyFiltersNow({ ...filters, lead_state: event.target.value as LeadStateFilter })
                 }
               >
-                <option value="">Tất cả</option>
+                <option value="">Trạng thái: tất cả</option>
                 {LEAD_STATE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -1432,23 +1430,25 @@ export function CandidatesClient({
                 ))}
               </Select>
             </Field>
-            <Field uiSize="xs" label="Đánh giá">
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="font-medium text-slate-600">Đánh giá</span>
               <NoteColorFilter
                 value={filters.note_color}
                 onChange={(next) => applyFiltersNow({ ...filters, note_color: next })}
               />
-            </Field>
-            <Field uiSize="xs" label="Ngày lên số" className="w-40">
+            </div>
+            <Field uiSize="xs" hideLabel label="Ngày lên số" title="Ngày lên số" className="w-40">
               <DateRangePicker
                 value={filters.date}
                 onChange={(next) => applyFiltersNow({ ...filters, date: next })}
-                placeholder="Tất cả"
+                placeholder="Ngày lên số: tất cả"
                 allowClear
               />
             </Field>
             {(canManageAllTeams || can("lead.edit_team") || can("lead.assign")) && (
-              <Field uiSize="xs" label="Nhóm / Nhân viên" className="w-40">
+              <Field uiSize="xs" hideLabel label="Nhóm / Nhân viên" title="Nhóm / Nhân viên" className="w-40">
                 <TeamSaleFilter
+                  allLabel="Nhóm / NV: tất cả"
                   teams={teams}
                   saleMembers={allSaleMembers}
                   value={filters.team_sale}

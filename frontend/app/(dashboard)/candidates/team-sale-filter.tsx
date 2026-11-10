@@ -22,9 +22,12 @@ export function TeamSaleFilter({
   saleMembers,
   value,
   onChange,
+  allLabel = "Tất cả",
 }: {
   teams: Team[];
   saleMembers: TeamMember[];
+  /** Chữ hiện trên ô khi chưa lọc (mặc định "Tất cả"). */
+  allLabel?: string;
   value: TeamSaleValue | null;
   onChange: (value: TeamSaleValue | null) => void;
 }) {
@@ -49,7 +52,7 @@ export function TeamSaleFilter({
   const filteredSales = saleMembers.filter((member) => member.full_name.toLowerCase().includes(normalizedSearch));
 
   const selectedLabel = (() => {
-    if (!value) return "Tất cả";
+    if (!value) return allLabel;
     if (value.type === "team") return teams.find((team) => team.id === value.id)?.name ?? "Nhóm";
     return saleMembers.find((member) => member.id === value.id)?.full_name ?? "Sale";
   })();

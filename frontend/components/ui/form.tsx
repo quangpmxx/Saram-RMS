@@ -25,11 +25,14 @@ export function Field({
   hint,
   children,
   uiSize = "md",
+  hideLabel = false,
   className,
   ...props
 }: {
   label: string;
   hint?: string;
+  /** Ẩn dòng nhãn (vẫn đọc được bằng trình đọc màn hình) — cho thanh lọc cần mỏng. */
+  hideLabel?: boolean;
   children: ReactNode;
   uiSize?: FieldSize;
 } & LabelHTMLAttributes<HTMLLabelElement>) {
@@ -43,7 +46,7 @@ export function Field({
       )}
       {...props}
     >
-      <span className={cn("font-medium text-slate-700", isCompact && "text-xs")}>{label}</span>
+      <span className={hideLabel ? "sr-only" : cn("font-medium text-slate-700", isCompact && "text-xs")}>{label}</span>
       {children}
       {hint && <span className="text-xs text-slate-400">{hint}</span>}
     </label>

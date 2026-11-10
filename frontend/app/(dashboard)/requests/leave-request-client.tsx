@@ -200,13 +200,13 @@ export function LeaveRequestClient({
         )}
         <div className="flex flex-wrap gap-2">
           {canSendFeedback && (
-            <Button type="button" variant="outline" onClick={() => setShowFeedbackCreate(true)}>
+            <Button type="button" size="sm" variant="outline" onClick={() => setShowFeedbackCreate(true)}>
               <MessageSquareWarning className="h-4 w-4" strokeWidth={2} />
               Gửi phản ánh ẩn danh
             </Button>
           )}
           {canCreate && (
-            <Button type="button" onClick={() => setShowCreate(true)}>
+            <Button type="button" size="sm" onClick={() => setShowCreate(true)}>
               <FilePlus2 className="h-4 w-4" strokeWidth={2.5} />
               Tạo đơn xin nghỉ phép
             </Button>

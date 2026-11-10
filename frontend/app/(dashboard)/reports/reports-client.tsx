@@ -503,7 +503,7 @@ export function ReportsClient({
           )}
           <div className="ml-auto flex items-center gap-2">
             {canSubmitReport && (
-              <Button type="button" disabled={isReadOnly} onClick={() => void openEntryModal()}>
+              <Button type="button" size="sm" disabled={isReadOnly} onClick={() => void openEntryModal()}>
                 {myTodayRow?.report_id ? <ClipboardEdit className="h-4 w-4" strokeWidth={2} /> : <ClipboardPlus className="h-4 w-4" strokeWidth={2} />}
                 {myTodayRow?.report_id ? "Sửa báo cáo hôm nay" : "Nhập báo cáo hằng ngày"}
               </Button>
