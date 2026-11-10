@@ -24,6 +24,7 @@ import { callStatusVariant } from "@/lib/call-status-variant";
 import { NOTE_COLORS, noteColorBgHex } from "@/lib/note-colors";
 import { useToast } from "@/lib/toast-context";
 import { goBackInApp } from "@/lib/navigation-history";
+import { CandidateDetailModalFrame } from "@/components/candidate-detail-modal-frame";
 import { EMPTY_OPTION_STYLE, resultStatusStyle, zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
 import type { AccountRole, Candidate, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
@@ -91,6 +92,7 @@ export function CandidateDetailClient({
   currentUserId,
   currentUserRole,
   currentUserTeamId,
+  inModal = false,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialCandidate: Candidate;
@@ -102,6 +104,8 @@ export function CandidateDetailClient({
   currentUserId: string;
   currentUserRole: AccountRole;
   currentUserTeamId: string | null;
+  /** Mở dạng popup (bấm từ trong app) thay vì trang riêng — 2026-11-10. */
+  inModal?: boolean;
 }) {
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): trang Chi tiết ứng viên có RẤT NHIỀU điểm chỉnh sửa rải
@@ -694,11 +698,15 @@ export function CandidateDetailClient({
     }
   }
 
+  // Popup: bọc nội dung trong khung popup; đóng popup = "Quay lại" (lưu trước rồi đóng).
+  const frame = (node: React.ReactNode) =>
+    inModal ? <CandidateDetailModalFrame>{node}</CandidateDetailModalFrame> : node;
+
   if (openLock.status === "checking") {
-    return <p className="py-10 text-center text-sm text-slate-400">Đang mở data...</p>;
+    return frame(<p className="py-10 text-center text-sm text-slate-400">Đang mở data...</p>);
   }
   if (openLock.status === "blocked") {
-    return (
+    return frame(
       <div className="mx-auto max-w-md py-10">
         <Card className="p-6 text-center">
           <p className="text-base font-semibold text-slate-900">{openLock.message}</p>
@@ -709,11 +717,11 @@ export function CandidateDetailClient({
             Quay lại
           </Button>
         </Card>
-      </div>
+      </div>,
     );
   }
 
-  return (
+  const content = (
     // Màn rộng: dữ liệu bên trái, lịch sử truy cập/thao tác cố định bên phải
     // (yêu cầu người dùng 2026-10-29); màn hẹp: lịch sử xuống dưới.
     // Khi ẩn lịch sử: cột phải thu còn dải hẹp chỉ có nút "Hiện".
@@ -1186,6 +1194,8 @@ export function CandidateDetailClient({
       />
     </div>
   );
+  if (!inModal) return content;
+  return <CandidateDetailModalFrame onClose={() => void handleBack()}>{content}</CandidateDetailModalFrame>;
 }
 
 type CallbackRepeat = "once" | "daily";

@@ -41,7 +41,14 @@ async function getBirthdayToday(): Promise<BirthdayToday | null> {
   }
 }
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  /** Slot @modal — popup Chi tiết lao động (2026-11-10), xem @modal/(.)candidates/[id]. */
+  modal: React.ReactNode;
+}) {
   const [user, birthdayToday] = await Promise.all([getCurrentUser(), getBirthdayToday()]);
 
   if (!user) {
@@ -161,6 +168,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
 
           </BirthdayLayoutBackground>
+          {/* Ngoài khung cuộn/nội dung để popup đè được cả header (z-50). */}
+          {modal}
           </UiThemeProvider>
         </BirthdayThemeProvider>
       </ToastProvider>

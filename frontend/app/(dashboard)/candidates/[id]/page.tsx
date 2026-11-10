@@ -1,9 +1,4 @@
-import { notFound, redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/session";
-import { serverApi, ApiError } from "@/lib/api-server";
-import { requirePageAccess } from "@/lib/module-permission";
-import type { Candidate, Note, StatusCatalogItem } from "@/lib/types";
-import { CandidateDetailClient } from "./candidate-detail-client";
+import { CandidateDetailContent } from "./detail-content";
 
 /**
  * S5 (phần cuộc gọi/ghi chú), Mục 2.2, docs/12-ui-design.md — Phase 3.
@@ -17,45 +12,5 @@ export default async function CandidateDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
-  const permissionLevel = await requirePageAccess("candidates");
-
-  let candidate: Candidate;
-  let notes: Note[];
-  try {
-    [candidate, notes] = await Promise.all([
-      serverApi<Candidate>(`/candidate/${id}`),
-      serverApi<Note[]>(`/candidate/${id}/note`),
-    ]);
-  } catch (error) {
-    if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
-      notFound();
-    }
-    throw error;
-  }
-
-  const [callStatuses, callResults, zaloStatuses, zaloFriendStatuses] = await Promise.all([
-    serverApi<StatusCatalogItem[]>("/status?category=call_status"),
-    serverApi<StatusCatalogItem[]>("/status?category=call_result"),
-    serverApi<StatusCatalogItem[]>("/status?category=zalo_status"),
-    serverApi<StatusCatalogItem[]>("/status?category=zalo_friend_status"),
-  ]);
-
-  return (
-    <CandidateDetailClient
-      permissionLevel={permissionLevel}
-      initialCandidate={candidate}
-      initialNotes={notes}
-      callStatuses={callStatuses}
-      callResults={callResults}
-      zaloStatuses={zaloStatuses}
-      zaloFriendStatuses={zaloFriendStatuses}
-      currentUserId={user.id}
-      currentUserRole={user.role}
-      currentUserTeamId={user.team_id}
-    />
-  );
+  return <CandidateDetailContent id={id} />;
 }
