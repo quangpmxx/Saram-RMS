@@ -489,6 +489,8 @@ export interface FunnelStep {
  */
 export interface KpiBreakdown {
   new_leads: number;
+  /** Mẫu số Tỷ lệ hẹn PV (Data lùi 1 ngày so với khoảng lọc) — 2026-11-10. */
+  schedule_base?: number;
   interview_scheduled: number;
   attended: number;
   no_show: number;

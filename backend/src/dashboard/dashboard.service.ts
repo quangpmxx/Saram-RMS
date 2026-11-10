@@ -622,17 +622,38 @@ export class DashboardService {
     dateTo: string | undefined,
     sourceFiltered: boolean,
   ): Promise<KpiBreakdown> {
-    const [newLeads, shuttle] = await Promise.all([
+    // Tỷ lệ hẹn PV / Data: Data lấy LÙI 1 NGÀY so với khoảng đang lọc — data
+    // lên hôm trước thì hôm nay mới hẹn PV (yêu cầu người dùng 2026-11-10,
+    // vd lọc Hôm nay = hẹn PV hôm nay ÷ data hôm qua). Không lọc ngày = như cũ.
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const shiftedWhere: Prisma.LeadWhereInput | null =
+      dateFrom || dateTo
+        ? {
+            ...leadWhere,
+            uploadedAt: {
+              gte: dateFrom
+                ? new Date(new Date(dateFrom).getTime() - DAY_MS)
+                : undefined,
+              lte: dateTo
+                ? new Date(new Date(dateTo).getTime() - DAY_MS)
+                : undefined,
+            },
+          }
+        : null;
+    const [newLeads, shuttle, scheduleBase] = await Promise.all([
       this.prisma.lead.count({ where: leadWhere }),
       this.computeShuttleKpi(saleAccountIds, dateFrom, dateTo, sourceFiltered),
+      shiftedWhere ? this.prisma.lead.count({ where: shiftedWhere }) : null,
     ]);
 
-    return this.buildKpiBreakdown(newLeads, shuttle);
+    return this.buildKpiBreakdown(newLeads, shuttle, scheduleBase ?? newLeads);
   }
 
   private buildKpiBreakdown(
     newLeads: number,
     shuttle: ShuttleKpi,
+    /** Mẫu số của Tỷ lệ hẹn PV — mặc định = Data mới cùng khoảng. */
+    scheduleBase: number = newLeads,
   ): KpiBreakdown {
     // Tỷ lệ theo phễu (yêu cầu người dùng 2026-11-06): hẹn PV / Data mới;
     // đến PV / hẹn PV; đỗ PV / đến PV. Mẫu số 0 → 0%.
@@ -641,13 +662,14 @@ export class DashboardService {
 
     return {
       new_leads: newLeads,
+      schedule_base: scheduleBase,
       interview_scheduled: shuttle.interview_scheduled,
       attended: shuttle.attended,
       no_show: shuttle.no_show,
       passed: shuttle.passed,
       failed: shuttle.failed,
       employed: null,
-      schedule_rate: pct(shuttle.interview_scheduled, newLeads),
+      schedule_rate: pct(shuttle.interview_scheduled, scheduleBase),
       attend_rate: pct(shuttle.attended, shuttle.interview_scheduled),
       pass_rate: pct(shuttle.passed, shuttle.attended),
       employed_rate: null,
@@ -660,7 +682,7 @@ export class DashboardService {
     function withRates(c: ShuttleCounts) {
       return {
         ...c,
-        schedule_rate: pct(c.interview_scheduled, newLeads),
+        schedule_rate: pct(c.interview_scheduled, scheduleBase),
         attend_rate: pct(c.attended, c.interview_scheduled),
         pass_rate: pct(c.passed, c.attended),
       };

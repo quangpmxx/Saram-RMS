@@ -691,7 +691,8 @@ export function DashboardClient({
           {(
             [
               // Tỷ lệ theo phễu (2026-11-06): hẹn/Data, đến/hẹn, đỗ/đến — dòng dưới ghi cách chia + số thật.
-              { key: "schedule_rate", label: "Tỷ lệ hẹn PV", formula: "Tỉ lệ hẹn PV / Data", num: summary.kpi.interview_scheduled, den: summary.kpi.new_leads, box: "bg-brand-50", value: "text-brand-700", sub: "text-brand-600/70" },
+              // Data lùi 1 ngày so với khoảng lọc (2026-11-10): data hôm trước → hẹn PV hôm nay.
+              { key: "schedule_rate", label: "Tỷ lệ hẹn PV — Data lấy lùi 1 ngày so với khoảng lọc", formula: "Tỉ lệ hẹn PV / Data hôm trước", num: summary.kpi.interview_scheduled, den: summary.kpi.schedule_base ?? summary.kpi.new_leads, box: "bg-brand-50", value: "text-brand-700", sub: "text-brand-600/70" },
               { key: "attend_rate", label: "Tỷ lệ đến PV", formula: "Tỉ lệ đến PV / Hẹn PV", num: summary.kpi.attended, den: summary.kpi.interview_scheduled, box: "bg-emerald-50", value: "text-emerald-600", sub: "text-emerald-600/70" },
               { key: "pass_rate", label: "Tỷ lệ đỗ PV", formula: "Tỉ lệ đỗ PV / Đến PV", num: summary.kpi.passed, den: summary.kpi.attended, box: "bg-emerald-100", value: "text-emerald-700", sub: "text-emerald-700/70" },
             ] as const

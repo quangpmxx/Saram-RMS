@@ -270,6 +270,33 @@ describe('DashboardService', () => {
       }),
     ];
 
+    it('lọc ngày → Tỷ lệ hẹn PV chia cho Data lùi 1 ngày (2026-11-10)', async () => {
+      // count lần 1 = Data cùng kỳ (20), lần 2 = Data lùi 1 ngày (24).
+      prisma.lead.count.mockImplementation(
+        (args: { where: { uploadedAt?: { gte?: Date } } }) =>
+          Promise.resolve(
+            args.where.uploadedAt?.gte?.toISOString() ===
+              '2026-11-09T00:00:00.000Z'
+              ? 24
+              : 20,
+          ),
+      );
+      prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]);
+      mockShuttle(SHUTTLE_ROWS);
+
+      const result = await service.getSummary(
+        {
+          date_from: '2026-11-10T00:00:00.000Z',
+          date_to: '2026-11-10T23:59:59.999Z',
+        },
+        adminUser,
+      );
+
+      expect(result.kpi.new_leads).toBe(20);
+      expect(result.kpi.schedule_base).toBe(24);
+      expect(result.kpi.schedule_rate).toBe(50); // 12 hẹn / 24 data hôm trước
+    });
+
     it('tách riêng no_show (Bùng PV)/failed (Trượt PV), employed=null (chưa có nguồn dữ liệu)', async () => {
       prisma.lead.count.mockResolvedValue(20); // new_leads
       prisma.account.findMany.mockResolvedValue([{ id: 'sale-a' }]); // resolveSaleAccountIdsInScope (admin)
@@ -279,6 +306,7 @@ describe('DashboardService', () => {
 
       expect(result.kpi).toEqual({
         new_leads: 20,
+        schedule_base: 20, // không lọc ngày → mẫu số = Data mới
         interview_scheduled: 12,
         attended: 9,
         no_show: 3,

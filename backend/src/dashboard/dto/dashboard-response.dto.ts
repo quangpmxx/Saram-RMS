@@ -45,6 +45,11 @@ export interface FunnelStep {
  */
 export interface KpiBreakdown {
   new_leads: number;
+  /**
+   * Mẫu số Tỷ lệ hẹn PV: Data lên LÙI 1 NGÀY so với khoảng lọc (ô Hiệu suất ở
+   * Dashboard, 2026-11-10); Hiệu suất từng NV / theo nhóm = new_leads.
+   */
+  schedule_base: number;
   interview_scheduled: number;
   attended: number;
   no_show: number;
