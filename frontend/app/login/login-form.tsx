@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, LogIn, User } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import type { Account } from "@/lib/types";
+import { clearRememberedFilters } from "@/lib/remembered-filters";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 
@@ -26,6 +27,8 @@ export function LoginForm() {
         method: "POST",
         body: JSON.stringify({ username, password }),
       });
+      // Đăng nhập mới → bỏ bộ lọc đã nhớ của phiên trước trong tab này.
+      clearRememberedFilters();
       router.replace("/");
       router.refresh();
     } catch (err) {

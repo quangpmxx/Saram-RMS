@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { cn } from "@/lib/cn";
 import type {
   AccountRole,
@@ -311,6 +312,14 @@ export function ReportsClient({
       setLoading(false);
     }
   }
+
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10).
+  useRememberedFilters("reports", { dateRange, teamId, accountId }, (saved) => {
+    setDateRange(saved.dateRange);
+    setTeamId(saved.teamId);
+    setAccountId(saved.accountId);
+    void refresh(saved);
+  });
 
   /** Mở popup nhập/sửa cho đúng "hôm nay của mình" — nếu đang không xem đúng hôm nay thì tải riêng 1 lần trước khi mở. */
   async function openEntryModal() {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCan } from "@/lib/capability-context";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -672,6 +673,11 @@ export function AttendanceClient({
       setLoading(false);
     }
   }
+
+  // Ghi nhớ bộ lọc (tháng/nhóm/nhân viên) khi rời trang rồi quay lại (2026-11-10).
+  useRememberedFilters("attendance", { year, month, teamId, accountId, includeInactive }, (saved) => {
+    void loadGrid(saved);
+  });
 
   /**
    * Dự án phụ — nâng cấp toàn diện (2026-07-15, yêu cầu trực tiếp người

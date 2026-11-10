@@ -1,6 +1,7 @@
 "use client";
 
 import { useCan } from "@/lib/capability-context";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FilePlus2, MessageSquareWarning, Trash2 } from "lucide-react";
@@ -166,6 +167,13 @@ export function LeaveRequestClient({
       toast.error(apiErrorMessage(err));
     }
   }
+
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10).
+  useRememberedFilters("leave-requests", { statusFilter, dateFilter }, (saved) => {
+    setStatusFilter(saved.statusFilter);
+    setDateFilter(saved.dateFilter);
+    void refresh(saved.statusFilter, saved.dateFilter);
+  });
 
   const detailRequest = requests.find((r) => r.id === detailId) ?? null;
 

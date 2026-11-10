@@ -41,6 +41,7 @@ import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { computeDateRange, formatDateRangeLabel, type DatePreset, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { useToast } from "@/lib/toast-context";
 import { MarketingTodayCard } from "./marketing-today-card";
 import { useCan } from "@/lib/capability-context";
@@ -353,6 +354,15 @@ export function DashboardClient({
       setLoading(false);
     }
   }
+
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10).
+  useRememberedFilters(`dashboard:${currentUserId}`, { dateRange, teamId, accountId, sourceId }, (saved) => {
+    setDateRange(saved.dateRange);
+    setTeamId(saved.teamId);
+    setAccountId(saved.accountId);
+    setSourceId(saved.sourceId);
+    void refresh(saved);
+  });
 
   /**
    * Yêu cầu người dùng (Mục 4, mở rộng realtime — Dashboard) — refetch NỀN,

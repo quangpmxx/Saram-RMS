@@ -1,6 +1,7 @@
 "use client";
 
 import { useCan } from "@/lib/capability-context";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useSetPageTitle } from "@/lib/page-title-context";
@@ -96,6 +97,13 @@ export function MarketingHubClient({
   const [platform, setPlatform] = useState("");
   const [accountId, setAccountId] = useState("");
   const [ownerId, setOwnerId] = useState("");
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10); đổi state là tự tải lại.
+  useRememberedFilters("marketing-hub", { date, platform, accountId, ownerId }, (saved) => {
+    setDate(saved.date);
+    setPlatform(saved.platform);
+    setAccountId(saved.accountId);
+    setOwnerId(saved.ownerId);
+  });
   const [data, setData] = useState<Overview | null>(null);
   const [allItems, setAllItems] = useState<AdItem[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);

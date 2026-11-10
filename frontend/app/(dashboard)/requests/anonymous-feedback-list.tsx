@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { MessageSquareWarning, Paperclip } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import type { AnonymousFeedback, AppRealtimeEvent } from "@/lib/types";
 import { useAppRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,9 @@ export function AnonymousFeedbackList() {
   useEffect(() => {
     void load(dateFilter);
   }, [load, dateFilter]);
+
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10); đổi state là tự tải lại.
+  useRememberedFilters("anonymous-feedback", dateFilter, setDateFilter);
 
   useAppRealtime((event: AppRealtimeEvent) => {
     const payload = event.payload as { type?: string } | undefined;

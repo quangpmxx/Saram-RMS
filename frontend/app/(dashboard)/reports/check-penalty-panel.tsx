@@ -1,6 +1,7 @@
 "use client";
 
 import { useCan } from "@/lib/capability-context";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, RotateCcw, Search, Settings2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -120,6 +121,22 @@ export function CheckPenaltyPanel({
     setSort(next);
     setPage(1);
   }
+
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10); đổi state là tự tải lại.
+  useRememberedFilters(
+    "check-penalty",
+    { dateRange, teamId, accountId, violationType, status, keyword, page },
+    (saved) => {
+      setDateRange(saved.dateRange);
+      setTeamId(saved.teamId);
+      setAccountId(saved.accountId);
+      setViolationType(saved.violationType);
+      setStatus(saved.status);
+      setKeyword(saved.keyword);
+      setKeywordInput(saved.keyword);
+      setPage(saved.page);
+    },
+  );
 
   const [data, setData] = useState<PaginatedResult<ReportViolation> | null>(null);
   const [loading, setLoading] = useState(true);

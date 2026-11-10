@@ -1,6 +1,7 @@
 "use client";
 
 import { useCan } from "@/lib/capability-context";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, CalendarDays, Search, Trash2 } from "lucide-react";
@@ -115,6 +116,13 @@ export function CalendarClient({
     refresh().catch((error) => toast.error(error instanceof ApiError ? error.message : "Không tải được lịch hẹn"));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi bộ lọc đổi
   }, [dateRange, createdById, eventType]);
+
+  // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10); đổi state là tự tải lại ở effect trên.
+  useRememberedFilters("calendar", { dateRange, createdById, eventType }, (saved) => {
+    setDateRange(saved.dateRange);
+    setCreatedById(saved.createdById);
+    setEventType(saved.eventType);
+  });
 
   const isReadOnly = permissionLevel === "view";
   const [deletingKey, setDeletingKey] = useState<string | null>(null);

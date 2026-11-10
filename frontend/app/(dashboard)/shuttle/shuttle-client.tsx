@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Copy, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
+import { useRememberedFilters } from "@/lib/remembered-filters";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { cn } from "@/lib/cn";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
@@ -1190,6 +1191,12 @@ export function ShuttleClient({
     setPage(result.page);
     setPageSize(result.page_size);
   }
+
+  // Ghi nhớ bộ lọc + trang đang xem khi rời trang rồi quay lại (2026-11-10).
+  useRememberedFilters("shuttle", { filters, page, pageSize }, (saved) => {
+    setFilters(saved.filters);
+    refresh(saved.page, saved.pageSize, saved.filters).catch(() => {});
+  });
 
   /**
    * Yêu cầu người dùng (Mục 1, 7) — refetch nền cho realtime khi có dòng
