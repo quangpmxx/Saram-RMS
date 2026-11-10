@@ -31,7 +31,13 @@ import {
   type CareWarehouseItem,
   type CareWarehouseListResult,
 } from "@/lib/care-warehouse";
-import { EMPTY_DATE_RANGE, computeDateRange, toDateOnly, type DateRangeValue } from "@/lib/date-range";
+import {
+  EMPTY_DATE_RANGE,
+  computeDateRange,
+  formatDateRangeLabel,
+  toDateOnly,
+  type DateRangeValue,
+} from "@/lib/date-range";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { useToast } from "@/lib/toast-context";
 import { cn } from "@/lib/cn";
@@ -1105,7 +1111,12 @@ export function CareWarehousePanel({
       )}
 
       {modal.mode === "random" && (
-        <RandomAssignModal saleOptions={saleOptions} onClose={() => setModal({ mode: "none" })} onDone={reloadNow} />
+        <RandomAssignModal
+          saleOptions={saleOptions}
+          uploaded={applied.uploaded}
+          onClose={() => setModal({ mode: "none" })}
+          onDone={reloadNow}
+        />
       )}
 
       {modal.mode === "history" && (
@@ -1325,12 +1336,23 @@ function SalePickerModal({
 }
 
 /** Giao ngẫu nhiên: chọn Sale + số lượng → xem trước → xác nhận đúng danh sách đã xem. */
+/** "Tháng này (01/11/2026 – 10/11/2026)"; không lọc = "Tất cả (toàn bộ Kho)". */
+function uploadedRangeText(range: DateRangeValue): string {
+  if (!range.from && !range.to) return "Tất cả (toàn bộ Kho)";
+  const dmy = (iso: string) => (iso ? iso.split("-").reverse().join("/") : "…");
+  const dates = `${dmy(range.from)} – ${dmy(range.to)}`;
+  return range.preset === "custom" ? dates : `${formatDateRangeLabel(range)} (${dates})`;
+}
+
 function RandomAssignModal({
   saleOptions,
+  uploaded,
   onClose,
   onDone,
 }: {
   saleOptions: CareSaleOption[];
+  /** Bộ lọc "Ngày lên số" đang áp dụng ở Kho — chỉ chia data trong khoảng này (2026-11-10). */
+  uploaded: DateRangeValue;
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
@@ -1358,6 +1380,8 @@ function RandomAssignModal({
             assignee_ids: [...chosen],
             [mode]: amountNumber,
             ...(careCounts.size ? { care_counts: [...careCounts] } : {}),
+            ...(uploaded.from ? { uploaded_from: uploaded.from } : {}),
+            ...(uploaded.to ? { uploaded_to: uploaded.to } : {}),
           }),
         }),
       );
@@ -1428,6 +1452,7 @@ function RandomAssignModal({
   return (
     <Modal
       title="Giao ngẫu nhiên"
+      description={`Chỉ chia data có Ngày lên số: ${uploadedRangeText(uploaded)} — theo bộ lọc đang chọn.`}
       maxWidth="max-w-2xl"
       footer={footer}
     >

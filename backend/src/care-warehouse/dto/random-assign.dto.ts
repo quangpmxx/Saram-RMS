@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsUUID,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -47,6 +48,18 @@ export class RandomPreviewDto {
   @ArrayMaxSize(5)
   @IsIn([0, 1, 2, 3, 4], { each: true })
   care_counts?: number[];
+
+  /**
+   * Chỉ chia data có Ngày lên số trong khoảng này — theo bộ lọc "Ngày lên số"
+   * đang chọn ở Kho (2026-11-10). Bỏ trống = toàn bộ Kho.
+   */
+  @IsOptional()
+  @Matches(/^d{4}-d{2}-d{2}$/)
+  uploaded_from?: string;
+
+  @IsOptional()
+  @Matches(/^d{4}-d{2}-d{2}$/)
+  uploaded_to?: string;
 }
 
 export class RandomPairDto {

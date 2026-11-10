@@ -742,6 +742,17 @@ export class CareWarehouseService {
       ...this.eligibleWhere(now),
       assignedTeamId: { in: teamIds },
       isHeld: false,
+      // Theo bộ lọc "Ngày lên số" đang chọn ở Kho (2026-11-10).
+      ...(dto.uploaded_from || dto.uploaded_to
+        ? {
+            uploadedAt: {
+              gte: dto.uploaded_from
+                ? vnDayRange(dto.uploaded_from).start
+                : undefined,
+              lt: dto.uploaded_to ? vnDayRange(dto.uploaded_to).end : undefined,
+            },
+          }
+        : {}),
     };
     const leads = await this.prisma.lead.findMany({
       where: leadWhere,
