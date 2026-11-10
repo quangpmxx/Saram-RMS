@@ -42,6 +42,7 @@ describe('ShuttleService', () => {
   let realtimeService: {
     emitTransportationChange: jest.Mock;
     emitTransportationDeleted: jest.Mock;
+    emitTransportationReordered: jest.Mock;
     emitNotificationCreated: jest.Mock;
   };
   let modulePermission: { getEffective: jest.Mock };
@@ -132,6 +133,7 @@ describe('ShuttleService', () => {
     realtimeService = {
       emitTransportationChange: jest.fn(),
       emitTransportationDeleted: jest.fn(),
+      emitTransportationReordered: jest.fn(),
       emitNotificationCreated: jest.fn(),
     };
 
@@ -188,6 +190,56 @@ describe('ShuttleService', () => {
     });
   });
 
+  describe('reorder (kéo thả trong ngày, 2026-11-10)', () => {
+    function useTx(rows: Array<{ id: string; sortOrder: number | null }>) {
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        shuttleRecord: {
+          findMany: jest.fn().mockResolvedValue(rows),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      prisma.$transaction.mockImplementation((fn: (t: typeof tx) => unknown) =>
+        fn(tx),
+      );
+      return tx;
+    }
+
+    it('đổi chỗ các dòng gửi lên trong đúng vị trí của chúng, dòng ẩn giữ chỗ, đánh lại 1..n', async () => {
+      // Ngày có a,b,c,d; đang lọc chỉ thấy a,c,d → kéo d lên đầu: d,a,c.
+      const tx = useTx([
+        { id: 'a', sortOrder: null },
+        { id: 'b', sortOrder: null },
+        { id: 'c', sortOrder: null },
+        { id: 'd', sortOrder: null },
+      ]);
+      await service.reorder(
+        { date: '2026-11-10', ids: ['d', 'a', 'c'] },
+        currentUser,
+      );
+      const calls = tx.shuttleRecord.update.mock.calls.map(
+        (c: [{ where: { id: string }; data: { sortOrder: number } }]) => [
+          c[0].where.id,
+          c[0].data.sortOrder,
+        ],
+      );
+      expect(calls).toEqual([
+        ['d', 1],
+        ['b', 2],
+        ['a', 3],
+        ['c', 4],
+      ]);
+      expect(realtimeService.emitTransportationReordered).toHaveBeenCalled();
+    });
+
+    it('dòng gửi lên không còn thuộc ngày đó -> báo tải lại', async () => {
+      useTx([{ id: 'a', sortOrder: 1 }]);
+      await expect(
+        service.reorder({ date: '2026-11-10', ids: ['a', 'x'] }, currentUser),
+      ).rejects.toThrow('tải lại');
+    });
+  });
+
   describe('list', () => {
     it('phân trang đúng, trả về total/page/page_size/items', async () => {
       prisma.$transaction.mockResolvedValue([1, [record]]);
@@ -235,7 +287,12 @@ describe('ShuttleService', () => {
       });
       expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          orderBy: [{ date: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }],
+          orderBy: [
+            { date: 'asc' },
+            { sortOrder: { sort: 'asc', nulls: 'first' } },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ],
         }),
       );
     });
@@ -256,7 +313,12 @@ describe('ShuttleService', () => {
       expect(result.day_counts).toEqual({ '2026-07-13': 7 });
       expect(prisma.shuttleRecord.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          orderBy: [{ date: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [
+            { date: 'desc' },
+            { sortOrder: { sort: 'desc', nulls: 'last' } },
+            { createdAt: 'asc' },
+            { id: 'asc' },
+          ],
         }),
       );
     });

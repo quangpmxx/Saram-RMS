@@ -153,6 +153,20 @@ export class RealtimeService {
     this.emitDashboardInvalidate(actor);
   }
 
+  /** Kéo thả đổi thứ tự dòng trong 1 ngày (2026-11-10) — máy khác tải lại danh sách. */
+  emitTransportationReordered(actor: AuthenticatedUser | null): void {
+    this.gateway.broadcastAppEvent(
+      { broadcastAll: true },
+      this.buildAppEvent(
+        'transportation',
+        'transportation',
+        'invalidate',
+        null,
+        actor,
+      ),
+    );
+  }
+
   emitTransportationDeleted(id: string, actor: AuthenticatedUser | null): void {
     this.emitDashboardInvalidate(actor);
     this.gateway.broadcastAppEvent(

@@ -1026,6 +1026,8 @@ model ShuttleRecord {
   /// "Nguồn" (Data / GT) — giá trị chọn từ shuttle_options field 'lead_source' (2026-11-04).
   leadSource      String?  @map("lead_source") @db.VarChar(50)
   note            String?
+  /// Thứ tự trong ngày do người dùng kéo thả (2026-11-10). NULL = chưa sắp → đứng đầu ngày, mới nhất trước.
+  sortOrder       Int?     @map("sort_order")
   createdById     String   @map("created_by") @db.Uuid
   updatedById     String   @map("updated_by") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")

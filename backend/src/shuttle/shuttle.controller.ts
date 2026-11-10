@@ -23,6 +23,7 @@ import {
 } from './shuttle-import.service';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
 import { UpdateShuttleDto } from './dto/update-shuttle.dto';
+import { ReorderShuttleDto } from './dto/reorder-shuttle.dto';
 import { ListShuttleQueryDto } from './dto/list-shuttle-query.dto';
 import { CreateShuttleOptionDto } from './dto/create-shuttle-option.dto';
 import { UpdateShuttleOptionDto } from './dto/update-shuttle-option.dto';
@@ -105,6 +106,15 @@ export class ShuttleController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.shuttleService.create(dto, user);
+  }
+
+  /** Kéo thả sắp xếp dòng trong 1 ngày (2026-11-10). Đặt TRƯỚC ':id'. */
+  @Put('reorder')
+  reorder(
+    @Body() dto: ReorderShuttleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shuttleService.reorder(dto, user);
   }
 
   @Put(':id')

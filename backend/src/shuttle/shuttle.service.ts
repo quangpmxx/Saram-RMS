@@ -26,6 +26,7 @@ import { PaginatedResult } from '../common/interfaces/paginated-result.interface
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CreateShuttleDto } from './dto/create-shuttle.dto';
 import { UpdateShuttleDto } from './dto/update-shuttle.dto';
+import { ReorderShuttleDto } from './dto/reorder-shuttle.dto';
 import {
   ListShuttleQueryDto,
   type ShuttleSort,
@@ -95,7 +96,10 @@ function shuttleOrderBy(
   sort: ShuttleSort | undefined,
   order: SortOrder = 'asc',
 ): Prisma.ShuttleRecordOrderByWithRelationInput[] {
+  // Trong 1 ngày: thứ tự kéo thả (sortOrder) trước; dòng chưa sắp (NULL) đứng
+  // đầu ngày, mới nhất trước — như trước khi có kéo thả (2026-11-10).
   const newestInDay: Prisma.ShuttleRecordOrderByWithRelationInput[] = [
+    { sortOrder: { sort: 'asc', nulls: 'first' } },
     { createdAt: 'desc' },
     { id: 'desc' },
   ];
@@ -108,7 +112,12 @@ function shuttleOrderBy(
     ];
   }
   if (sort === 'stt' && order === 'desc') {
-    return [{ date: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }];
+    return [
+      { date: 'desc' },
+      { sortOrder: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'asc' },
+      { id: 'asc' },
+    ];
   }
   return [{ date: 'desc' }, ...newestInDay];
 }
@@ -268,6 +277,59 @@ export class ShuttleService {
     return response;
   }
 
+  /**
+   * Kéo thả sắp xếp dòng trong 1 ngày (yêu cầu người dùng 2026-11-10, giống
+   * Excel). Các dòng gửi lên đổi chỗ cho nhau trong đúng các vị trí chúng đang
+   * chiếm; dòng khác của ngày (đang bị lọc ẩn) giữ nguyên chỗ. Sau đó đánh lại
+   * sortOrder 1..n cho cả ngày.
+   */
+  async reorder(dto: ReorderShuttleDto, currentUser: AuthenticatedUser) {
+    const date = new Date(dto.date);
+    const ids = [...new Set(dto.ids)];
+    await this.prisma.$transaction(async (tx) => {
+      // Khoá các dòng của ngày để 2 người kéo cùng lúc không lệch thứ tự.
+      await tx.$queryRaw`SELECT id FROM shuttle_records WHERE date = ${dto.date}::date AND deleted_at IS NULL FOR UPDATE`;
+      const rows = await tx.shuttleRecord.findMany({
+        where: { date, deletedAt: null },
+        orderBy: shuttleOrderBy(undefined),
+        select: { id: true, sortOrder: true },
+      });
+      const moving = new Set(ids);
+      const slots: number[] = [];
+      rows.forEach((row, index) => {
+        if (moving.has(row.id)) slots.push(index);
+      });
+      if (slots.length !== ids.length) {
+        throw new BadRequestException(
+          'Danh sách đã thay đổi, vui lòng tải lại trang rồi thử lại',
+        );
+      }
+      const order = rows.map((row) => row.id);
+      slots.forEach((slot, k) => {
+        order[slot] = ids[k];
+      });
+      const current = new Map(rows.map((row) => [row.id, row.sortOrder]));
+      for (let i = 0; i < order.length; i++) {
+        if (current.get(order[i]) === i + 1) continue;
+        await tx.shuttleRecord.update({
+          where: { id: order[i] },
+          data: { sortOrder: i + 1 },
+        });
+      }
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'shuttle_record',
+      entityId: ids[0],
+      fieldChanged: 'sort_order',
+      newValue: `Sắp xếp lại ${ids.length} dòng ngày ${dto.date}`,
+    });
+    this.realtime.emitTransportationReordered(currentUser);
+    return { ok: true };
+  }
+
   async update(
     id: string,
     dto: UpdateShuttleDto,
@@ -286,6 +348,12 @@ export class ShuttleService {
         where: { id },
         data: {
           date: dto.date === undefined ? undefined : new Date(dto.date),
+          // Đổi sang ngày khác → bỏ thứ tự cũ, lên đầu ngày mới.
+          sortOrder:
+            dto.date !== undefined &&
+            new Date(dto.date).getTime() !== existing.date.getTime()
+              ? null
+              : undefined,
           fullName: dto.full_name,
           phoneNumber: dto.phone_number,
           companyId: dto.company_id === undefined ? undefined : dto.company_id,

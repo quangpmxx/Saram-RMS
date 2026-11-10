@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Copy, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, GripVertical, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useRememberedFilters } from "@/lib/remembered-filters";
 import { DaySeparatorRow } from "@/components/day-separator-row";
@@ -819,6 +819,7 @@ function CopyPhoneButton({ phone }: { phone: string }) {
 function ShuttleRowFormCells({
   value,
   stt,
+  dragHandle,
   onChange,
   onBlurField,
   onCommitField,
@@ -833,6 +834,8 @@ function ShuttleRowFormCells({
   value: ShuttleFormValue;
   /** STT trong ngày — undefined ở dòng nháp thêm mới (ô để trống). */
   stt?: number;
+  /** Tay nắm kéo thả đổi thứ tự trong ngày (2026-11-10) — không có ở dòng nháp. */
+  dragHandle?: React.ReactNode;
   onChange: (next: ShuttleFormValue) => void;
   /** Gọi khi rời khỏi 1 ô nhập tay — undefined ở dòng nháp thêm mới (chỉ lưu khi bấm "Thêm"). */
   onBlurField?: () => void;
@@ -884,7 +887,12 @@ function ShuttleRowFormCells({
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <DateShortInput value={value.date} onCommit={(iso) => selectCombo("date", iso)} />
       </td>
-      <td className="border-r border-slate-100 px-1 py-1 align-middle text-xs text-slate-500 tabular-nums">{stt ?? ""}</td>
+      <td className="border-r border-slate-100 px-1 py-1 align-middle text-xs text-slate-500 tabular-nums">
+        <span className="flex items-center gap-0.5">
+          {dragHandle}
+          {stt ?? ""}
+        </span>
+      </td>
       {/* Tên lao động và SĐT tách 2 cột riêng (yêu cầu người dùng 2026-11-09). */}
       <td className="border-r border-slate-100 px-2 py-1 align-middle">
         <input
@@ -1238,6 +1246,51 @@ export function ShuttleClient({
    */
   const [conflictRowIds, setConflictRowIds] = useState<Set<string>>(new Set());
 
+  /**
+   * Kéo thả đổi thứ tự dòng trong CÙNG 1 ngày, giống Excel (yêu cầu người
+   * dùng 2026-11-10). Nắm biểu tượng ⋮⋮ ở ô STT kéo lên/xuống. Không kéo sang
+   * ngày khác (đổi ngày thì sửa ô Ngày). Tắt khi đang sắp theo Giờ PV.
+   */
+  const canReorder = !isReadOnly && sort.key !== "interview_time";
+  const dragIdRef = useRef<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
+
+  function endDrag() {
+    dragIdRef.current = null;
+    setDraggingId(null);
+    setDropTarget(null);
+  }
+
+  async function handleReorderDrop(targetId: string, after: boolean) {
+    const sourceId = dragIdRef.current;
+    endDrag();
+    const source = records.find((r) => r.id === sourceId);
+    if (!source || source.id === targetId) return;
+    const date = source.date;
+    const dayIds = records.filter((r) => r.date === date).map((r) => r.id);
+    const without = dayIds.filter((id) => id !== source.id);
+    const targetIndex = without.indexOf(targetId);
+    if (targetIndex < 0) return;
+    const nextDayIds = [...without];
+    nextDayIds.splice(after ? targetIndex + 1 : targetIndex, 0, source.id);
+    if (nextDayIds.every((id, i) => id === dayIds[i])) return;
+
+    // Hiện ngay thứ tự mới (các dòng của 1 ngày luôn liền nhau trên trang).
+    const byId = new Map(records.map((r) => [r.id, r]));
+    let k = 0;
+    setRecords(records.map((r) => (r.date === date ? byId.get(nextDayIds[k++])! : r)));
+
+    // Máy chủ nhận thứ tự "STT tăng"; đang xem STT giảm thì đảo lại.
+    const ids = sort.key === "stt" && sort.order === "desc" ? [...nextDayIds].reverse() : nextDayIds;
+    try {
+      await clientApi("/shuttle/reorder", { method: "PUT", body: JSON.stringify({ date, ids }) });
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Không lưu được thứ tự mới");
+      await refresh(page, pageSize, filters).catch(() => {});
+    }
+  }
+
   function handleReloadConflictedRow(record: ShuttleRecord) {
     setRowDrafts((prev) => ({ ...prev, [record.id]: formValueFromRecord(record) }));
     setConflictRowIds((prev) => {
@@ -1256,6 +1309,10 @@ export function ShuttleClient({
    */
   function handleAppRealtimeEvent(event: AppRealtimeEvent) {
     if (event.module !== "transportation") return;
+    if (event.action === "invalidate") {
+      void silentRefreshPreservingDrafts();
+      return;
+    }
 
     if (event.action === "deleted") {
       const id = event.entity_id;
@@ -1769,11 +1826,52 @@ export function ShuttleClient({
                     className={cn(
                       "align-top transition-colors hover:bg-slate-50",
                       hasConflict && "bg-amber-50 hover:bg-amber-100",
+                      draggingId === record.id && "opacity-40",
+                      dropTarget?.id === record.id &&
+                        (dropTarget.after
+                          ? "shadow-[inset_0_-3px_0_0_#2563eb]"
+                          : "shadow-[inset_0_3px_0_0_#2563eb]"),
                     )}
+                    onDragOver={(event) => {
+                      const source = records.find((r) => r.id === dragIdRef.current);
+                      if (!source || source.date !== record.date || source.id === record.id) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const after = event.clientY > rect.top + rect.height / 2;
+                      if (dropTarget?.id !== record.id || dropTarget.after !== after) {
+                        setDropTarget({ id: record.id, after });
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (dropTarget?.id === record.id) void handleReorderDrop(record.id, dropTarget.after);
+                      else endDrag();
+                    }}
                   >
                     <ShuttleRowFormCells
                       value={value}
                       stt={sttByRecordId.get(record.id)}
+                      dragHandle={
+                        canReorder ? (
+                          <span
+                            draggable
+                            title="Kéo lên/xuống để đổi thứ tự trong ngày"
+                            onDragStart={(event) => {
+                              dragIdRef.current = record.id;
+                              setDraggingId(record.id);
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData("text/plain", record.id);
+                              const row = event.currentTarget.closest("tr");
+                              if (row) event.dataTransfer.setDragImage(row, 16, 12);
+                            }}
+                            onDragEnd={endDrag}
+                            className="cursor-grab text-slate-300 hover:text-slate-600 active:cursor-grabbing"
+                          >
+                            <GripVertical className="h-3.5 w-3.5" strokeWidth={2} />
+                          </span>
+                        ) : undefined
+                      }
                       onChange={(next) => setRowDrafts((prev) => ({ ...prev, [record.id]: next }))}
                       onBlurField={() => void handleBlurRow(record)}
                       onCommitField={(next) => void saveRowIfChanged(record, next)}
