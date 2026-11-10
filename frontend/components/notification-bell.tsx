@@ -405,6 +405,14 @@ export function NotificationBell({ userId }: { userId: string }) {
     dismissToast(n.id, false);
     const target = notificationTarget(n);
     if (!target) return;
+    // Bấm để mở data/đơn → xoá luôn khỏi chuông (yêu cầu người dùng 2026-11-10).
+    // Giống "Xóa tất cả": chỉ ẩn trên trình duyệt này, không xoá dữ liệu máy chủ.
+    setDismissedIds((prev) => {
+      const next = new Set(prev);
+      next.add(n.id);
+      saveIdSet(dismissedStorageKey(userId), next);
+      return next;
+    });
     setIsOpen(false);
     router.push(target);
   }
