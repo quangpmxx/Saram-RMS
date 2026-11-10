@@ -249,6 +249,9 @@ export function CandidatesClient({
   // Leader: ẩn/hiện khối "Khối lượng công việc nhóm" (mặc định ẩn cho thoáng).
   const [isTeamWorkloadOpen, setIsTeamWorkloadOpen] = useState(false);
   const [isAutoUpOpen, setIsAutoUpOpen] = useState(false);
+  /** Up tự động / Chia tự động đang bật → nút đổi màu cam nhấp nháy để biết chế độ đang chạy (yêu cầu người dùng 2026-11-10). */
+  const [isAutoUpOn, setIsAutoUpOn] = useState(false);
+  const [isAutoAssignOn, setIsAutoAssignOn] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   /** Người dùng đã tự bấm chọn tab — khôi phục trạng thái cũ (sessionStorage) không được đè lên. */
   const userPickedViewRef = useRef(false);
@@ -490,6 +493,30 @@ export function CandidatesClient({
         // Không khôi phục được (trang/bộ lọc đã lưu không còn hợp lệ...) — giữ nguyên dữ liệu SSR trang 1 mặc định.
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Hỏi máy chủ xem Chia tự động có đang bật ở nhóm nào không (Admin: mọi nhóm; Leader: nhóm mình). */
+  async function fetchAutoAssignOn(): Promise<boolean> {
+    const teamIds = can("distribution.config_all")
+      ? teams.map((team) => team.id)
+      : can("distribution.config_team") && currentUserTeamId
+        ? [currentUserTeamId]
+        : [];
+    if (teamIds.length === 0) return false;
+    const rules = await Promise.all(
+      teamIds.map((id) => clientApi<{ is_active: boolean }>(`/distribution-rule/${id}`).catch(() => null)),
+    );
+    return rules.some((rule) => rule?.is_active === true);
+  }
+
+  useEffect(() => {
+    if (can("lead.pancake_auto_up")) {
+      clientApi<{ is_active: boolean }>("/pancake/auto-up")
+        .then((config) => setIsAutoUpOn(config.is_active))
+        .catch(() => undefined);
+    }
+    void fetchAutoAssignOn().then(setIsAutoAssignOn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1164,6 +1191,8 @@ export function CandidatesClient({
                 type="button"
                 size="sm"
                 variant="outline"
+                className={isAutoAssignOn ? "auto-on-glow" : undefined}
+                title={isAutoAssignOn ? "Chia tự động đang bật" : undefined}
                 onClick={() => setIsDistributionModalOpen(true)}
               >
                 <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
@@ -1264,6 +1293,8 @@ export function CandidatesClient({
                 size="sm"
                 variant="outline"
                 disabled={isReadOnly}
+                className={isAutoUpOn ? "auto-on-glow" : undefined}
+                title={isAutoUpOn ? "Up tự động đang bật" : undefined}
                 onClick={() => setIsAutoUpOpen(true)}
               >
                 <Zap className="h-4 w-4" strokeWidth={2} />
@@ -1289,6 +1320,8 @@ export function CandidatesClient({
                 size="sm"
                 variant="outline"
                 disabled={isReadOnly}
+                className={isAutoAssignOn ? "auto-on-glow" : undefined}
+                title={isAutoAssignOn ? "Chia tự động đang bật" : undefined}
                 onClick={() => setIsDistributionModalOpen(true)}
               >
                 <Shuffle className="h-4 w-4" strokeWidth={2} />
@@ -1781,7 +1814,10 @@ export function CandidatesClient({
       {isAutoUpOpen && (
         <PancakeAutoUpModal
           onClose={() => setIsAutoUpOpen(false)}
-          onSaved={(c) => toast.success(c.is_active ? "Up tự động đang bật" : "Đã lưu, Up tự động đang tắt")}
+          onSaved={(c) => {
+            setIsAutoUpOn(c.is_active);
+            toast.success(c.is_active ? "Up tự động đang bật" : "Đã lưu, Up tự động đang tắt");
+          }}
         />
       )}
 
@@ -1790,7 +1826,10 @@ export function CandidatesClient({
           teamId={teams[0].id}
           teams={teams}
           onClose={() => setIsDistributionModalOpen(false)}
-          onChanged={() => toast.success("Đã cập nhật cấu hình tự động phân chia")}
+          onChanged={() => {
+            void fetchAutoAssignOn().then(setIsAutoAssignOn);
+            toast.success("Đã cập nhật cấu hình tự động phân chia");
+          }}
         />
       )}
       {isDistributionModalOpen && !can("distribution.config_all") && currentUserTeamId && (
@@ -1798,7 +1837,10 @@ export function CandidatesClient({
           teamId={currentUserTeamId}
           teamMembers={teamMembers}
           onClose={() => setIsDistributionModalOpen(false)}
-          onChanged={() => toast.success("Đã cập nhật cấu hình tự động phân chia")}
+          onChanged={() => {
+            void fetchAutoAssignOn().then(setIsAutoAssignOn);
+            toast.success("Đã cập nhật cấu hình tự động phân chia");
+          }}
         />
       )}
     </div>
