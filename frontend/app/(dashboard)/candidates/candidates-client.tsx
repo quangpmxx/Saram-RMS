@@ -24,7 +24,6 @@ import {
   Phone,
   PhoneCall,
   Plus,
-  RefreshCw,
   Search,
   Shuffle,
   StickyNote,
@@ -1186,19 +1185,6 @@ export function CandidatesClient({
                 strokeWidth={2}
               />
             </button>
-            {isTeamWorkloadOpen && currentUserTeamId && can("distribution.config_team") && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={isAutoAssignOn ? "auto-on-glow" : undefined}
-                title={isAutoAssignOn ? "Chia tự động đang bật" : undefined}
-                onClick={() => setIsDistributionModalOpen(true)}
-              >
-                <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
-                Cấu hình phân chia tự động
-              </Button>
-            )}
           </div>
           {isTeamWorkloadOpen && (
           <div className="flex flex-wrap gap-2">
@@ -1275,6 +1261,20 @@ export function CandidatesClient({
               <Copy className="h-4 w-4" strokeWidth={2} />
               Trùng lặp
             </Button>
+            {/* Leader: Chia tự động của nhóm mình — đặt cạnh Trùng lặp, cam nhấp nháy khi đang bật (yêu cầu người dùng 2026-11-10). */}
+            {!can("distribution.config_all") && can("distribution.config_team") && currentUserTeamId && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={isAutoAssignOn ? "auto-on-glow" : undefined}
+                title={isAutoAssignOn ? "Chia tự động đang bật" : undefined}
+                onClick={() => setIsDistributionModalOpen(true)}
+              >
+                <Shuffle className="h-4 w-4" strokeWidth={2} />
+                Chia tự động
+              </Button>
+            )}
             {can("lead.import") && (
               <Button
                 type="button"
