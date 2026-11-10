@@ -903,6 +903,9 @@ export function CareWarehousePanel({
                     <div className="mx-3 mb-2 rounded-lg px-2 py-1 ring-1 ring-slate-100" style={callStatusCellStyle(item)}>
                       {p.notes}
                     </div>
+                    {item.quick_note && (
+                      <p className="mx-3 mb-2 text-xs font-medium break-words text-red-600">Note: {item.quick_note}</p>
+                    )}
                     {p.actions && <div className="mt-auto border-t border-slate-100 px-3 py-2">{p.actions}</div>}
                   </div>
                 );
@@ -934,6 +937,8 @@ export function CareWarehousePanel({
                 <th className="w-px border-r border-slate-600 px-2 py-2 text-center whitespace-nowrap">Trạng thái</th>
                 <th className="border-r border-slate-600 px-2 py-2 text-center">Sale được giao</th>
                 <th className="min-w-[300px] border-r border-slate-600 px-2 py-2 text-center">Nội dung ghi chú</th>
+                {/* Note (2026-11-10). */}
+                <th className="w-[90px] border-r border-slate-600 px-1.5 py-2 text-center">Note</th>
                 {/* Tách "Lần CS tháng / tổng" thành 2 cột hẹp vừa dữ liệu (yêu cầu người dùng 2026-10-30). */}
                 <th className="w-px border-r border-slate-600 px-1.5 py-2 text-center leading-tight">
                   <span className="whitespace-nowrap">CS trong</span>
@@ -974,6 +979,9 @@ export function CareWarehousePanel({
                     <td className="border-r border-slate-100 px-2 py-2">{p.assignee}</td>
                     <td className="min-w-[300px] border-r border-slate-100 px-2 py-1" style={callStatusCellStyle(item)}>
                       {p.notes}
+                    </td>
+                    <td className="w-[90px] max-w-[90px] border-r border-slate-100 px-1.5 py-2 text-[11px] font-medium break-words text-red-600">
+                      {item.quick_note}
                     </td>
                     <td className="w-px border-r border-slate-100 px-1.5 py-2 text-center font-medium text-slate-700 tabular-nums">
                       {p.monthCount}

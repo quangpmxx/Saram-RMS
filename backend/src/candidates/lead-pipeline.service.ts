@@ -22,6 +22,7 @@ import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
 import { UpdateZaloFriendStatusDto } from './dto/update-zalo-friend-status.dto';
 import { UpdateNoteColorDto } from './dto/update-note-color.dto';
+import { UpdateQuickNoteDto } from './dto/update-quick-note.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
@@ -230,6 +231,34 @@ export class LeadPipelineService {
       fieldChanged: 'note_color',
       oldValue: lead.noteColor ?? undefined,
       newValue: dto.note_color ?? undefined,
+    });
+
+    return this.reloadCandidate(id, currentUser);
+  }
+
+  /** Ô "Note" ngắn của data (2026-11-10) — cùng quyền với Đánh dấu màu. */
+  async updateQuickNote(
+    id: string,
+    dto: UpdateQuickNoteDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const lead = await this.loadLeadForUpdate(id, currentUser);
+    const value = dto.quick_note?.trim() || null;
+    if (value === lead.quickNote) return this.reloadCandidateSilently(id);
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: { quickNote: value, lastActivityAt: new Date() },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'lead',
+      entityId: id,
+      fieldChanged: 'quick_note',
+      oldValue: lead.quickNote ?? undefined,
+      newValue: value ?? undefined,
     });
 
     return this.reloadCandidate(id, currentUser);

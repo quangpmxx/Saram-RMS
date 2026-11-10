@@ -30,6 +30,7 @@ import { UpdateCallResultDto } from './dto/update-call-result.dto';
 import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
 import { UpdateZaloFriendStatusDto } from './dto/update-zalo-friend-status.dto';
 import { UpdateNoteColorDto } from './dto/update-note-color.dto';
+import { UpdateQuickNoteDto } from './dto/update-quick-note.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
@@ -319,6 +320,15 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pipelineService.updateNoteColor(id, dto, user);
+  }
+
+  @Put(':id/quick-note')
+  updateQuickNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateQuickNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateQuickNote(id, dto, user);
   }
 
   @Get(':id/note')

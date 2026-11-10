@@ -33,6 +33,8 @@ export interface CandidateResponseDto {
   source: { id: string; name: string };
   mkt_source: { id: string; name: string } | null;
   mkt_note: string | null;
+  /** Ô "Note" ngắn — 2026-11-10. */
+  quick_note: string | null;
   data_quality_score: number | null;
   uploaded_by: NamedRefWithRole;
   uploaded_at: string;
@@ -103,6 +105,7 @@ export function toCandidateResponse(
     source: { id: lead.source.id, name: lead.source.name },
     mkt_source: lead.mktSource ?? null,
     mkt_note: lead.mktNote,
+    quick_note: lead.quickNote,
     data_quality_score: lead.dataQualityScore,
     uploaded_by: {
       id: lead.uploadedBy.id,

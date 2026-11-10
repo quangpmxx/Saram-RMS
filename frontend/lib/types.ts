@@ -191,6 +191,8 @@ export interface Candidate {
   source: NamedRef;
   mkt_source?: NamedRef | null;
   mkt_note: string | null;
+  /** Ô "Note" ngắn — chữ đỏ ở danh sách (2026-11-10). */
+  quick_note?: string | null;
   data_quality_score: number | null;
   uploaded_by: NamedRefWithRole;
   uploaded_at: string;

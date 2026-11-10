@@ -175,6 +175,8 @@ export function CandidateDetailClient({
    */
   const [birthYearDraft, setBirthYearDraft] = useState(candidate.birth_year ?? "");
   const [addressDraft, setAddressDraft] = useState(candidate.address ?? "");
+  /** Ô "Note" ngắn (2026-11-10) — Enter/rời ô là lưu; 2 nút Lưu cũng lưu kèm. */
+  const [quickNoteDraft, setQuickNoteDraft] = useState(candidate.quick_note ?? "");
   // "Điều chỉnh state khi render" (khớp mẫu DateShortInput ở shuttle-client.tsx)
   // — đồng bộ lại 2 ô nháp trên nếu candidate.birth_year/address đổi từ BÊN
   // NGOÀI (Enter đã lưu xong, hoặc cập nhật realtime từ người khác), tránh
@@ -508,6 +510,12 @@ export function CandidateDetailClient({
       });
     }
     savedCallInfoRef.current = { callStatusId, callResultId, zaloStatusId };
+    if (quickNoteDraft.trim() !== (candidate.quick_note ?? "")) {
+      latest = await clientApi<Candidate>(`/candidate/${candidate.id}/quick-note`, {
+        method: "PUT",
+        body: JSON.stringify({ quick_note: quickNoteDraft.trim() || null }),
+      });
+    }
     if (latest) setCandidate(latest);
   }
 
@@ -951,7 +959,7 @@ export function CandidateDetailClient({
               Tình trạng Zalo — tiêu đề ở trên, ô chọn ở dưới, 1 hàng. Cách lưu không đổi. */}
           <div className="border-b border-slate-100 p-4">
             <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
-            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Tình trạng cuộc gọi</span>
                 <div className="min-w-0">
@@ -1054,6 +1062,28 @@ export function CandidateDetailClient({
                     />
                   ))}
                 </div>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Note</span>
+                <Input
+                  uiSize="sm"
+                  value={quickNoteDraft}
+                  maxLength={255}
+                  placeholder="Nhập note…"
+                  disabled={!canUpdate}
+                  title={quickNoteDraft}
+                  className="text-red-600!"
+                  onChange={(event) => setQuickNoteDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                  onBlur={() => {
+                    if (quickNoteDraft.trim() === (candidate.quick_note ?? "")) return;
+                    saveAllChanges().catch((error: unknown) =>
+                      toast.error(error instanceof Error ? error.message : "Có lỗi xảy ra"),
+                    );
+                  }}
+                />
               </div>
             </div>
           </div>

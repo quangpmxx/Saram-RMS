@@ -62,6 +62,7 @@ const FIELD_LABELS: Record<string, string> = {
   zalo_status_id: 'Kết quả',
   zalo_friend_status_id: 'Tình trạng Zalo',
   note_color: 'Đánh dấu màu',
+  quick_note: 'Note',
 };
 
 const STATUS_FIELDS = new Set([

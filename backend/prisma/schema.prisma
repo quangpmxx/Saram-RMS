@@ -491,6 +491,9 @@ model Lead {
   // trên trang Chi tiết ứng viên (không liên quan StatusCatalog — chỉ 3 màu cố định).
   noteColor NoteColor? @map("note_color")
 
+  /// Ô "Note" ngắn (chữ đỏ ở danh sách Tất cả / Kho chăm sóc) — 2026-11-10.
+  quickNote String? @map("quick_note") @db.VarChar(255)
+
   // Phase 4 — chưa có logic ghi ở Phase 1, luôn NULL
   currentInterviewStatusId  String? @map("current_interview_status_id") @db.Uuid
   currentEmploymentStatusId String? @map("current_employment_status_id") @db.Uuid

@@ -1495,6 +1495,9 @@ export function CandidatesClient({
                       <div className="mx-3 mb-2 rounded-lg px-2 py-1 ring-1 ring-slate-100" style={callStatusCellStyle(candidate)}>
                         {p.call}
                       </div>
+                      {candidate.quick_note && (
+                        <p className="mx-3 mb-2 text-xs font-medium break-words text-red-600">Note: {candidate.quick_note}</p>
+                      )}
                       <div className="mt-auto flex items-end gap-2 border-t border-slate-100 px-3 py-2">
                         <div className="w-24">
                           <p className="mb-0.5 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Zalo</p>
@@ -1526,6 +1529,8 @@ export function CandidatesClient({
               <col className="w-[10%]" />
               {/* Tình trạng cuộc gọi — tự động (phần còn lại). */}
               <col />
+              {/* Note (2026-11-10) — rộng bằng cột "Kết quả". */}
+              <col className="w-[6%]" />
               {/* Cột "Zalo" (2026-10-29) rộng bằng cột "Kết quả". */}
               <col className="w-[6%]" />
               <col className="w-[6%]" />
@@ -1554,6 +1559,7 @@ export function CandidatesClient({
                 <th className="border-r border-slate-600 px-1 py-2 text-center">Nguồn</th>
                 <th className="border-r border-slate-600 px-1 py-2 text-center">Nhân viên</th>
                 <th className="border-r border-slate-600 px-4 py-2 text-center">Tình trạng cuộc gọi</th>
+                <th className="border-r border-slate-600 px-1 py-2 text-center">Note</th>
                 <th className="border-r border-slate-600 px-1 py-2 text-center">Zalo</th>
                 <th className="border-r border-slate-600 px-1 py-2 text-center">Kết quả</th>
                 <th className="px-1 py-2 text-center">HĐ</th>
@@ -1571,7 +1577,7 @@ export function CandidatesClient({
                 const p = leadParts(candidate, index, false);
                 return (
                   <Fragment key={candidate.id}>
-                  {p.isNewDay && <DaySeparatorRow colSpan={canSelect ? 10 : 9} />}
+                  {p.isNewDay && <DaySeparatorRow colSpan={canSelect ? 11 : 10} />}
                   <tr
                     // h-28: đủ chỗ cho 4 dòng cố định (tên + SĐT + năm sinh + địa chỉ), mọi hàng cao bằng nhau.
                     className={`h-28 cursor-pointer align-top transition-colors hover:bg-brand-50/50 ${index % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}
@@ -1596,6 +1602,9 @@ export function CandidatesClient({
                     <td className="border-r border-slate-100 px-1 py-2">{p.staff}</td>
                     <td className="border-r border-slate-100 px-3 py-1" style={callStatusCellStyle(candidate)}>
                       {p.call}
+                    </td>
+                    <td className="border-r border-slate-100 px-1 py-2 align-middle text-[11px] font-medium break-words text-red-600">
+                      {candidate.quick_note}
                     </td>
                     <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">{p.zalo}</td>
                     <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">{p.result}</td>

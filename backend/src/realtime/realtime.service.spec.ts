@@ -26,6 +26,7 @@ describe('RealtimeService', () => {
     source: { id: 'source-1', name: 'Facebook' },
     mkt_source: null,
     mkt_note: null,
+    quick_note: null,
     data_quality_score: null,
     uploaded_by: { id: 'mkt-1', name: 'MKT A', role: 'mkt', avatar_url: null },
     uploaded_at: '2026-01-01T00:00:00.000Z',
