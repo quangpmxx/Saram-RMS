@@ -46,8 +46,8 @@ export function PageTitleSlot() {
   // Tiêu đề trang trong header dùng chung — phóng to text-sm → text-lg/xl theo yêu cầu người dùng (2026-10-29).
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-lg font-bold text-brand-900 md:text-xl">{value.title}</h1>
-      {value.description && <p className="truncate text-xs text-slate-500">{value.description}</p>}
+      <h1 className="truncate text-lg font-bold text-brand-900 md:text-base md:leading-tight">{value.title}</h1>
+      {value.description && <p className="truncate text-xs text-slate-500 md:text-[11px] md:leading-tight">{value.description}</p>}
     </div>
   );
 }

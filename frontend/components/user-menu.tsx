@@ -100,7 +100,7 @@ export function UserMenu({ user }: { user: Account }) {
             </p>
           </div>
           {/* UI Polish — thu nhỏ avatar ~11% (h-9/w-9 mặc định → h-8/w-8). */}
-          <Avatar fullName={user.full_name} avatarUrl={user.avatar_url} className="h-8 w-8" />
+          <Avatar fullName={user.full_name} avatarUrl={user.avatar_url} className="h-8 w-8 md:h-7 md:w-7" />
           <ChevronDown
             className={cn(
               "hidden h-4 w-4 shrink-0 text-slate-400 transition-transform sm:block",

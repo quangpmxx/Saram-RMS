@@ -703,7 +703,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       */}
       {toasts.length > 0 &&
         createPortal(
-          <div className="fixed top-14 right-3 z-40 flex w-[calc(100%-1.5rem)] max-w-80 flex-col gap-2 sm:right-6">
+          <div className="fixed top-14 right-3 z-40 md:top-12 flex w-[calc(100%-1.5rem)] max-w-80 flex-col gap-2 sm:right-6">
             {toasts.map((n) => (
               <div
                 key={n.id}

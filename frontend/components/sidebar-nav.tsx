@@ -87,7 +87,7 @@ export function SidebarNav({
   }
 
   return (
-    <nav className={cn("flex flex-col px-3", collapsed ? "gap-2" : "gap-0.5")}>
+    <nav className={cn("flex flex-col px-2.5", collapsed ? "gap-1" : "gap-0.5")}>
       {items.map((item) => {
         const active = isNavActive(pathname, item.href);
         const Icon = ICONS[item.icon];
@@ -96,15 +96,15 @@ export function SidebarNav({
             key={item.href}
             href={item.href}
             className={cn(
-              "group relative flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors",
-              collapsed ? "justify-center px-0" : "gap-3 px-3",
+              "group relative flex items-center rounded-lg py-2 text-[13px] font-medium transition-colors",
+              collapsed ? "justify-center px-0" : "gap-2.5 px-3",
               active ? "bg-accent-500/20 text-white" : "text-brand-100/75 hover:bg-white/5 hover:text-white",
             )}
           >
             <Icon
               className={cn(
                 "shrink-0 transition-[width,height]",
-                collapsed ? "h-[22px] w-[22px]" : "h-[18px] w-[18px]",
+                collapsed ? "h-5 w-5" : "h-[17px] w-[17px]",
                 active ? "text-accent-400" : "text-brand-200/60",
               )}
               strokeWidth={2}
@@ -112,7 +112,7 @@ export function SidebarNav({
             <span
               className={cn(
                 "overflow-hidden whitespace-nowrap transition-[opacity,max-width]",
-                collapsed ? "max-w-0 opacity-0 duration-100" : "max-w-[160px] opacity-100 delay-150 duration-200",
+                collapsed ? "max-w-0 opacity-0 duration-100" : "max-w-[150px] opacity-100 delay-150 duration-200",
               )}
             >
               {item.label}

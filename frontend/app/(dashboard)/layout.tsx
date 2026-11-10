@@ -112,7 +112,7 @@ export default async function DashboardLayout({
                 <BirthdayHeaderStrip />
                 {/* UI Polish — tinh chỉnh mật độ hiển thị: py-2.5 → py-1.5 (giảm ~28% chiều
                     cao header khi cộng với avatar/font thu nhỏ trong UserMenu). */}
-                <div className="flex items-center justify-between gap-2 px-3 py-1.5 md:gap-3 md:px-6">
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 md:gap-3 md:px-5 md:py-1">
                   <div className="flex shrink-0 items-center gap-1 md:hidden">
                     <MobileMenuButton navItems={navItems} />
                     <Logo size="sm" showWordmark={false} href="/" />

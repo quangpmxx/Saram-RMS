@@ -3,6 +3,7 @@ import Image from "next/image";
 import { cn } from "@/lib/cn";
 
 const MARK_PX = {
+  xs: 28,
   sm: 34,
   md: 40,
 } as const;
@@ -21,7 +22,7 @@ export function Logo({
   href,
   className,
 }: {
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   variant?: "dark" | "light";
   showWordmark?: boolean;
   /** Dòng chữ nhỏ hiện dưới tên "Saram Vina" — yêu cầu trực tiếp người dùng (2026-07-24). Chỉ hiện khi showWordmark=true. */
@@ -54,7 +55,7 @@ export function Logo({
           <span
             className={cn(
               "font-bold tracking-tight",
-              size === "md" ? "text-base" : "text-sm",
+              size === "md" ? "text-base" : size === "xs" ? "text-[13px]" : "text-sm",
               variant === "light" ? "text-white" : "text-brand-900",
             )}
           >
