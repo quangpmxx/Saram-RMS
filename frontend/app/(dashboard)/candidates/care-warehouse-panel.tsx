@@ -409,7 +409,24 @@ export function CareWarehousePanel({
   });
   useRealtimeReconnect(scheduleReload);
 
+  /**
+   * Người dùng đổi bộ lọc → sửa luôn bản trạng thái đã lưu (nếu có), kẻo
+   * F5/quay lại trang bị lọc theo từ khoá cũ dù đã xoá (lỗi báo 2026-11-10).
+   */
+  function syncSavedFilters(patch: Partial<CareFilters>) {
+    try {
+      const raw = sessionStorage.getItem(careStateKey(currentUserId));
+      if (!raw) return;
+      const saved = JSON.parse(raw) as SavedCareState;
+      const next: SavedCareState = { ...saved, filters: { ...saved.filters, ...patch }, page: 1, scrollTop: 0 };
+      sessionStorage.setItem(careStateKey(currentUserId), JSON.stringify(next));
+    } catch {
+      // sessionStorage không khả dụng / bản lưu hỏng — bỏ qua.
+    }
+  }
+
   function applyFilters(next: CareFilters = filters) {
+    syncSavedFilters(next);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setFilters(next);
     setApplied(next);
@@ -432,6 +449,7 @@ export function CareWarehousePanel({
    */
   function applyTypedFilter(patch: Partial<CareFilters>) {
     setFilters((p) => ({ ...p, ...patch }));
+    syncSavedFilters(patch);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       setApplied((p) => ({ ...p, ...patch }));

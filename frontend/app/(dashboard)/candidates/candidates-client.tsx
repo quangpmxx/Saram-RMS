@@ -678,6 +678,19 @@ export function CandidatesClient({
    */
   function applyFiltersNow(nextFilters: Filters, delayMs = 0) {
     setFilters(nextFilters);
+    // Sửa luôn bản trạng thái đã lưu (nếu có) — kẻo F5/quay lại trang bị lọc
+    // theo từ khoá cũ dù người dùng đã xoá (lỗi người dùng báo 2026-11-10).
+    try {
+      const key = `${LIST_STATE_SESSION_KEY}:${currentUserId}`;
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const saved = JSON.parse(raw) as SavedListState;
+        const next: SavedListState = { ...saved, viewMode, filters: nextFilters, page: 1, scrollTop: 0 };
+        sessionStorage.setItem(key, JSON.stringify(next));
+      }
+    } catch {
+      // sessionStorage không khả dụng / bản lưu hỏng — bỏ qua.
+    }
     if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
     keywordTimerRef.current = setTimeout(async () => {
       const seq = ++listRequestSeqRef.current;
