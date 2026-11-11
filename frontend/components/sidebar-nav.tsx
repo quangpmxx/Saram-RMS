@@ -9,6 +9,7 @@ import {
   Calculator,
   CalendarCheck,
   CalendarDays,
+  ClipboardList,
   Copy,
   Handshake,
   History,
@@ -39,6 +40,7 @@ const ICONS = {
   attendance: CalendarCheck,
   salesEntry: TrendingUp,
   orderManagement: Handshake,
+  recruitment: ClipboardList,
   marketingHub: Megaphone,
   permissions: ShieldCheck,
 } satisfies Record<string, LucideIcon>;

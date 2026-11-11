@@ -34,6 +34,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { SalesEntryModule } from './sales-entry/sales-entry.module';
 import { OrderManagementModule } from './order-management/order-management.module';
+import { RecruitmentScheduleModule } from './recruitment-schedule/recruitment-schedule.module';
 import { ModulePermissionModule } from './module-permission/module-permission.module';
 import { ModulePermissionGuard } from './module-permission/module-permission.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -75,6 +76,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     BirthdayModule,
     SalesEntryModule,
     OrderManagementModule,
+    RecruitmentScheduleModule,
     ModulePermissionModule,
   ],
   controllers: [AppController],

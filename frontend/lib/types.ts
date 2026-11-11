@@ -88,6 +88,8 @@ export interface Account {
   attendance_tracked: boolean;
   team_id: string | null;
   team_name: string | null;
+  /** Lịch tuyển dụng: nhóm được Admin chọn riêng để xem lịch tuyển (null = theo nhóm của tài khoản). */
+  recruitment_team_id: string | null;
   status: AccountStatus;
   /** Dự án phụ — nâng cấp toàn diện: đường dẫn tương đối ảnh đại diện tự upload, null nếu chưa có. */
   avatar_url: string | null;
@@ -1066,4 +1068,50 @@ export interface OrderRecord {
   color_key: string | null;
   text_color_key: string | null;
   created_at: string;
+}
+
+/** Lịch tuyển dụng (2026-11-11) — 1 "thẻ tuyển dụng" của 1 công ty. Các mục chữ tự do: mỗi dòng 1 ý. */
+export type RecruitmentKind = "official" | "seasonal";
+export type RecruitmentStatus = "open" | "limited" | "paused";
+export interface RecruitmentPosting {
+  id: string;
+  company_name: string;
+  /** Nhóm sở hữu thẻ (mỗi nhóm một lịch riêng); null = chưa gán nhóm. */
+  team_id: string | null;
+  team_name: string | null;
+  order_record_id: string | null;
+  kind: RecruitmentKind;
+  status: RecruitmentStatus;
+  area: string | null;
+  accept_male: boolean;
+  accept_female: boolean;
+  age_min: number | null;
+  age_max: number | null;
+  requirement: string | null;
+  /** Đồng. */
+  base_salary: number | null;
+  allowance: number | null;
+  salary_note: string | null;
+  bonus_summary: string | null;
+  bonus: string | null;
+  tags: string[];
+  interview_slot: string | null;
+  work: string | null;
+  documents: string | null;
+  housing: string | null;
+  pros: string | null;
+  cons: string | null;
+  notes: string | null;
+  /** Tin Zalo tự viết; null = phần mềm tự soạn. */
+  zalo_message: string | null;
+  updated_by_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /recruitment-schedule/teams — phạm vi lịch tuyển của người đang đăng nhập. */
+export interface RecruitmentTeamScope {
+  /** true = thấy/sửa lịch mọi nhóm (Admin, Quản lý chưa được chọn nhóm). */
+  can_see_all: boolean;
+  teams: { id: string; name: string }[];
 }

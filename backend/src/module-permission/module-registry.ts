@@ -17,6 +17,7 @@ import { CalendarController } from '../calendar/calendar.controller';
 import { AuditLogController } from '../audit-log/audit-log.controller';
 import { AccountsController } from '../accounts/accounts.controller';
 import { OrderManagementController } from '../order-management/order-management.controller';
+import { RecruitmentScheduleController } from '../recruitment-schedule/recruitment-schedule.controller';
 import {
   PancakeAutoUpController,
   PancakeController,
@@ -192,6 +193,15 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     label: 'Quản lý đơn hàng',
     defaultRoles: ['admin'],
     controllers: [OrderManagementController],
+  },
+  {
+    // Lịch tuyển dụng (2026-11-11, yêu cầu người dùng): Admin/Quản lý/Leader/
+    // Sup Leader sửa lịch; Sale chỉ xem để tư vấn lao động.
+    code: 'recruitment-schedule',
+    label: 'Lịch tuyển dụng',
+    defaultRoles: ['admin', 'manager', 'leader', 'sup_leader'],
+    viewRoles: ['sale'],
+    controllers: [RecruitmentScheduleController],
   },
 ];
 

@@ -343,6 +343,7 @@ export function AccountsClient({
                 username: payload.username,
                 ...(isAdmin && modal.account.id !== currentUserId ? { role: payload.role } : {}),
                 team_id: payload.team_id ?? null,
+                recruitment_team_id: payload.recruitment_team_id ?? null,
                 date_of_birth: payload.date_of_birth ?? null,
                 hire_date: payload.hire_date ?? null,
                 personal_phone: payload.personal_phone ?? null,
@@ -389,6 +390,8 @@ interface AccountFormPayload {
   nickname?: string | null;
   /** Ô "Chấm công" — chỉ khi sửa tài khoản. */
   attendance_tracked?: boolean;
+  /** Lịch tuyển dụng: xem lịch tuyển của nhóm này (null = theo nhóm của tài khoản) — chỉ khi sửa tài khoản. */
+  recruitment_team_id?: string | null;
 }
 
 function AccountModal({
@@ -425,6 +428,7 @@ function AccountModal({
   const [bankAccountNumber, setBankAccountNumber] = useState(initialAccount?.bank_account_number ?? "");
   const [nickname, setNickname] = useState(initialAccount?.nickname ?? "");
   const [attendanceTracked, setAttendanceTracked] = useState(initialAccount?.attendance_tracked ?? true);
+  const [recruitmentTeamId, setRecruitmentTeamId] = useState(initialAccount?.recruitment_team_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -466,6 +470,7 @@ function AccountModal({
           bank_account_number: bankAccountNumber.trim() || null,
           nickname: nickname.trim() || null,
           attendance_tracked: attendanceTracked,
+          recruitment_team_id: recruitmentTeamId || null,
         }),
       });
     } catch (err) {
@@ -530,6 +535,20 @@ function AccountModal({
           <Field label={`Nhóm ${requiresTeam && !isEdit ? "(bắt buộc)" : "(không bắt buộc)"}`}>
             <Select value={teamId} onChange={(event) => setTeamId(event.target.value)}>
               <option value="">— Không thuộc nhóm nào —</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+
+        {/* Lịch tuyển dụng (2026-11-11, yêu cầu người dùng): cho tài khoản xem lịch tuyển của 1 nhóm nhất định, vd Quản lý nhận lịch nhóm 2. */}
+        {isEdit && (
+          <Field label="Lịch tuyển dụng của nhóm">
+            <Select value={recruitmentTeamId} onChange={(event) => setRecruitmentTeamId(event.target.value)}>
+              <option value="">— Theo nhóm của tài khoản —</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name}

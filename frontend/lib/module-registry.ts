@@ -28,6 +28,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "candidates",
     defaultRoles: ["admin", "manager", "mkt", "leader", "sale", "sup_leader"],
   },
+  // Lịch tuyển dụng (2026-11-11): Admin/Quản lý/Leader/Sup Leader sửa, Sale chỉ xem. Khớp backend module-registry.ts.
+  {
+    code: "recruitment-schedule",
+    href: "/recruitment-schedule",
+    label: "Lịch tuyển dụng",
+    icon: "recruitment",
+    defaultRoles: ["admin", "manager", "leader", "sup_leader", "sale"],
+  },
   // Marketing Hub — khung sườn, chưa có nghiệp vụ (2026-11-01). Khớp backend/src/module-permission/module-registry.ts.
   {
     code: "marketing-hub",

@@ -52,6 +52,11 @@ export class UpdateAccountDto {
   @IsUUID('4', { message: 'team_id không hợp lệ' })
   team_id?: string | null;
 
+  /** Lịch tuyển dụng (2026-11-11): tài khoản xem/sửa lịch tuyển của nhóm này; null = theo nhóm của tài khoản. */
+  @IsOptional()
+  @IsUUID('4', { message: 'recruitment_team_id không hợp lệ' })
+  recruitment_team_id?: string | null;
+
   @IsOptional()
   @IsEnum(AccountStatus)
   status?: AccountStatus;

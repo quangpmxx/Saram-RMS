@@ -17,6 +17,7 @@ Trình duyệt ─► frontend (Next.js, :3000) ─► /api proxy ─► backend
 ## Backend theo domain
 - **Data/Lead:** `candidates` (CRUD, ghi chú, lịch PV/gọi lại), `imports` (Excel, `ImportJob`), `distribution` (round-robin), `catalog` (nguồn, trạng thái), `calendar`, `sale-reminder`.
 - **Kho chăm sóc:** `care-warehouse` (service, `care-metrics.ts`, `care-time.util.ts` — mốc ngày/tháng giờ VN), báo cáo tiến độ `care-progress`.
+- **Lịch tuyển dụng:** `recruitment-schedule` (bảng `recruitment_postings`; màn `frontend/app/(dashboard)/recruitment-schedule/` — logic lọc/tin Zalo ở `recruitment-shared.ts`).
 - **Số liệu:** `dashboard`, `daily-reports`, `report-penalty`, `sales-entry`, `order-management`.
 - **Nhân sự:** `accounts`, `teams`, `attendance`, `checkin`, `leave-requests`, `leave-accrual`, `birthday`, `anonymous-feedback`.
 - **Marketing:** `marketing-hub` (client Graph API `facebook-ads.client.ts`, mã hoá token `token-crypto.ts`, bảng `ad_accounts`, `ad_spend_daily`); `pancake` (client `pancake.client.ts`, đọc 10 giây/lần `PancakeService.pollAll`, up qua `CandidatesService.create`; bảng `pancake_pages`, `pancake_conversations`, `pancake_auto_up_config`, `pancake_auto_up_teams`; `PancakeController` thuộc module quyền marketing-hub, `PancakeAutoUpController` thuộc candidates).

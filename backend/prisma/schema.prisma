@@ -156,6 +156,10 @@ model Team {
   // Phase 6 — quan hệ ngược tới cấu hình tự động phân chia
   distributionRule DistributionRule?
 
+  // Lịch tuyển dụng riêng từng nhóm (2026-11-11)
+  recruitmentPostings RecruitmentPosting[]
+  recruitmentViewers  Account[]            @relation("RecruitmentTeamViewers")
+
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ DailyReport (Báo cáo hằng ngày)
   dailyReports DailyReport[]
 
@@ -295,6 +299,12 @@ model Account {
   voidedCheckinRecords          CheckinRecord[]         @relation("CheckinRecordVoidedBy")
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ CompanyLocationConfig (Check in GPS, Phase 2)
   updatedCompanyLocationConfigs CompanyLocationConfig[]
+  /// Lịch tuyển dụng (2026-11-11): Admin chọn cho tài khoản xem/sửa lịch tuyển của 1 nhóm nhất định
+  /// (vd Quản lý nhận lịch nhóm 2). Null = theo nhóm của tài khoản (team_id).
+  recruitmentTeamId             String?                 @map("recruitment_team_id") @db.Uuid
+  recruitmentTeam               Team?                   @relation("RecruitmentTeamViewers", fields: [recruitmentTeamId], references: [id], onDelete: SetNull)
+  // Lịch tuyển dụng (2026-11-11): người sửa gần nhất của từng thẻ tuyển dụng.
+  updatedRecruitmentPostings    RecruitmentPosting[]
 
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ ReportViolation (Check phạt)
   reportViolations             ReportViolation[]      @relation("ReportViolationAccount")
@@ -316,11 +326,11 @@ model Account {
   updatedSalesEntries SalesEntryRecord[] @relation("SalesEntryUpdatedBy")
 
   // Dự án phụ — nâng cấp toàn diện (2026-07-24): quan hệ ngược từ UserModulePermission (Phân quyền)
-  modulePermissions        UserModulePermission[] @relation("UserModulePermissionAccount")
-  updatedModulePermissions UserModulePermission[] @relation("UserModulePermissionUpdatedBy")
+  modulePermissions          UserModulePermission[] @relation("UserModulePermissionAccount")
+  updatedModulePermissions   UserModulePermission[] @relation("UserModulePermissionUpdatedBy")
   // Phân quyền chi tiết (2026-11-07)
-  capabilityOverrides        UserCapability[] @relation("UserCapabilityAccount")
-  updatedCapabilityOverrides UserCapability[] @relation("UserCapabilityUpdatedBy")
+  capabilityOverrides        UserCapability[]       @relation("UserCapabilityAccount")
+  updatedCapabilityOverrides UserCapability[]       @relation("UserCapabilityUpdatedBy")
 
   // Kho chăm sóc (2026-10-28): quan hệ ngược từ Lead.careStoppedBy/CareAssignment/CareAssignmentBatch
   careStoppedLeads        Lead[]                @relation("LeadCareStoppedBy")
@@ -1486,10 +1496,79 @@ model OrderRecord {
   textColorKey String?  @map("text_color_key") @db.VarChar(20)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  shuttleRecords    ShuttleRecord[]
-  salesEntryRecords SalesEntryRecord[]
+  shuttleRecords      ShuttleRecord[]
+  salesEntryRecords   SalesEntryRecord[]
+  recruitmentPostings RecruitmentPosting[]
 
   @@map("order_records")
+}
+
+/// Lịch tuyển dụng (2026-11-11) — loại tuyển: chính thức / thời vụ.
+enum RecruitmentKind {
+  official
+  seasonal
+
+  @@map("recruitment_kind")
+}
+
+/// Lịch tuyển dụng — trạng thái tuyển: đang tuyển / hạn chế / tạm dừng.
+enum RecruitmentStatus {
+  open
+  limited
+  paused
+
+  @@map("recruitment_status")
+}
+
+/// Lịch tuyển dụng (2026-11-11, yêu cầu người dùng: chuyển sheet "Lịch tuyển dụng" vào phần
+/// mềm) — "thẻ tuyển dụng" của 1 công ty. Có tên riêng; trùng tên với 1 Đơn hàng (OrderRecord)
+/// thì tự liên kết, KHÔNG tự thêm công ty vào Đơn hàng (tránh làm rối ô chọn công ty của Đưa
+/// đón/Doanh số). Chỉ giới tính/tuổi/khu vực/nhãn là có cấu trúc (để lọc); các mục còn lại là
+/// chữ tự do, mỗi dòng 1 ý — khớp cách ghi của sheet gốc. Tiền lưu bằng đồng.
+model RecruitmentPosting {
+  id            String            @id @default(uuid()) @db.Uuid
+  companyName   String            @map("company_name") @db.VarChar(255)
+  /// Mỗi nhóm một lịch tuyển riêng (2026-11-11): Sale/Leader chỉ thấy thẻ của nhóm mình. Null = chưa gán nhóm (chỉ Admin/Quản lý thấy).
+  teamId        String?           @map("team_id") @db.Uuid
+  orderRecordId String?           @map("order_record_id") @db.Uuid
+  kind          RecruitmentKind   @default(official)
+  status        RecruitmentStatus @default(open)
+  area          String?           @db.VarChar(100)
+  acceptMale    Boolean           @default(true) @map("accept_male")
+  acceptFemale  Boolean           @default(true) @map("accept_female")
+  /// Tuổi nhận (từ … đến …) — lọc theo năm sinh lao động; trống = không giới hạn.
+  ageMin        Int?              @map("age_min")
+  ageMax        Int?              @map("age_max")
+  requirement   String?
+  baseSalary    Int?              @map("base_salary")
+  allowance     Int?
+  salaryNote    String?           @map("salary_note")
+  /// Tóm tắt thưởng, vd "14 triệu / 4 tháng".
+  bonusSummary  String?           @map("bonus_summary") @db.VarChar(255)
+  /// Các mốc thưởng, mỗi dòng 1 mốc (vd "T1: 2.000.000 (CTY)").
+  bonus         String?
+  /// Nhãn nhanh để lọc: sitting, no_gate, dorm, bus, tattoo_ok, phone_ok, bonus.
+  tags          String[]          @default([])
+  interviewSlot String?           @map("interview_slot")
+  work          String?
+  documents     String?
+  housing       String?
+  pros          String?
+  cons          String?
+  notes         String?
+  /// Tin Zalo tự viết cho nút "Sao chép tin Zalo"; trống = phần mềm tự soạn từ các mục trên.
+  zaloMessage   String?           @map("zalo_message")
+  updatedById   String            @map("updated_by") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  orderRecord OrderRecord? @relation(fields: [orderRecordId], references: [id], onDelete: SetNull)
+  updatedBy   Account      @relation(fields: [updatedById], references: [id])
+  team        Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([kind])
+  @@index([teamId])
+  @@map("recruitment_postings")
 }
 
 /// Marketing Hub — nền tảng quảng cáo (hiện chỉ dùng facebook; tiktok để mở rộng).

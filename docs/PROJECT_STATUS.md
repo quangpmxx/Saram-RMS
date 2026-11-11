@@ -3,11 +3,12 @@
 Nguồn: README, `docs/14-roadmap.md`, `docs/15-tong-ra-soat-2026-10.md`, `git log`, `MODULE_REGISTRY`. Cập nhật khi xong tính năng lớn.
 
 ## Module trên sidebar (`frontend/lib/module-registry.ts`)
-dashboard · candidates (Data lao động) · marketing-hub · shuttle (Đưa đón) · reports · attendance (Chấm công) · accounting (Kế toán) · sales-entry (Nhập doanh số) · calendar · audit-log · accounts · order-management (+ trang permissions, teams, requests, duplicates, account-settings).
+dashboard · candidates (Data lao động) · recruitment-schedule (Lịch tuyển dụng) · marketing-hub · shuttle (Đưa đón) · reports · attendance (Chấm công) · accounting (Kế toán) · sales-entry (Nhập doanh số) · calendar · audit-log · accounts · order-management (+ trang permissions, teams, requests, duplicates, account-settings).
 
 ## Tình trạng
 - **Hoàn thành & đang dùng:** 10 Phase gốc (tài khoản/nhóm, nhập Data + Excel, chia thủ công/tự động round-robin, ghi chú & trạng thái cuộc gọi, lịch PV/gọi lại, Kho chăm sóc, Dashboard/Báo cáo, Nhật ký, Trùng lặp, phân quyền module + quyền chi tiết từng người), cùng các module mở rộng: Đưa đón, Chấm công/Check-in, Báo cáo ngày + phạt, Nghỉ phép, Nhập doanh số, Quản lý đơn, Sinh nhật, Phản ánh ẩn danh, Thông báo (chuông tách Data / Khác).
 - **Marketing Hub (giai đoạn 1, 2026-11-02):** liên kết Facebook Ads bằng access token dán tay (không OAuth), đồng bộ chi tiêu theo ngày (tự động 30 phút/lần + nút Đồng bộ), bảng tài khoản quảng cáo + bộ lọc, gán nhân viên phụ trách. **2026-11-03:** Nguồn MKT (Admin) + bảng Hiệu quả Marketing (số data theo Nguồn MKT gắn TKQC, giá số tô màu theo ngưỡng, trạng thái camp/TK từ Facebook). **Chưa làm:** chi phí/người đi làm toàn công ty trên Dashboard, biểu đồ xu hướng/so sánh kỳ, cảnh báo bất thường, Fanpage, TikTok, OAuth. Chưa kiểm với token Facebook thật.
+- **Lịch tuyển dụng (2026-11-11):** thay sheet "Lịch tuyển dụng" — thẻ tuyển dụng từng công ty (chính thức/thời vụ), lọc theo lao động đang tư vấn (giới tính, năm sinh, nhãn nhanh), "tờ tư vấn" + sao chép tin Zalo. Dữ liệu sheet (94 thẻ, dòng ẩn = Tạm dừng) nhập sẵn bằng migration `20261111120100`. Chưa làm: thông báo cho Sale khi lịch đổi, nút "Công ty phù hợp" từ hồ sơ lao động.
 - **Đã gỡ:** worker Care-pool tự động + màn "Cấu hình vận hành", thông báo Zalo (2026-07-24), một số endpoint chết (xem doc 15).
 - **Tổng rà soát 30-10-2026** (nhánh `refactor/tong-ra-soat`, chi tiết trong `docs/15-…`): B1–B3, B5–B8 xong; 577 test backend + 135 e2e đạt (01-11).
 

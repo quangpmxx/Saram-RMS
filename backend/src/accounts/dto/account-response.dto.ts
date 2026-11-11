@@ -14,6 +14,8 @@ export interface AccountResponseDto {
   attendance_tracked: boolean;
   team_id: string | null;
   team_name: string | null;
+  /** Lịch tuyển dụng: nhóm được chọn riêng để xem lịch tuyển (null = theo nhóm của tài khoản). */
+  recruitment_team_id: string | null;
   status: string;
   /** Dự án phụ — nâng cấp toàn diện: đường dẫn tương đối ảnh đại diện tự upload (vd "/uploads/avatars/xxx.jpg"), null nếu chưa có. */
   avatar_url: string | null;
@@ -55,6 +57,7 @@ export function toAccountResponse(
     attendance_tracked: account.attendanceTracked,
     team_id: account.teamId,
     team_name: account.team?.name ?? null,
+    recruitment_team_id: account.recruitmentTeamId,
     status: account.status,
     avatar_url: account.avatarUrl,
     position: account.position,

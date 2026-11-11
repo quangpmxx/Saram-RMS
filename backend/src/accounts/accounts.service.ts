@@ -151,6 +151,9 @@ export class AccountsService {
     if (dto.team_id) {
       await this.assertTeamExists(dto.team_id);
     }
+    if (dto.recruitment_team_id) {
+      await this.assertTeamExists(dto.recruitment_team_id);
+    }
 
     // Đổi vai trò (yêu cầu người dùng 2026-11-07): chỉ Admin (người được cấp
     // trang Quản lý tài khoản không tự nâng mình/người khác lên Admin được),
@@ -204,6 +207,7 @@ export class AccountsService {
               : dto.team_id === undefined
                 ? undefined
                 : dto.team_id,
+          recruitmentTeamId: dto.recruitment_team_id,
           status: dto.status,
           attendanceTracked: dto.attendance_tracked,
           role: roleChanged ? dto.role : undefined,
@@ -491,6 +495,7 @@ export class AccountsService {
       nickname: string | null;
       username: string;
       teamId: string | null;
+      recruitmentTeamId: string | null;
       status: string;
       attendanceTracked: boolean;
       dateOfBirth: Date | null;
@@ -535,6 +540,16 @@ export class AccountsService {
         field: 'team_id',
         oldValue: before.teamId,
         newValue: dto.team_id,
+      });
+    }
+    if (
+      dto.recruitment_team_id !== undefined &&
+      dto.recruitment_team_id !== before.recruitmentTeamId
+    ) {
+      changes.push({
+        field: 'recruitment_team_id',
+        oldValue: before.recruitmentTeamId,
+        newValue: dto.recruitment_team_id,
       });
     }
     if (
