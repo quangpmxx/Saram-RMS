@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type LeadCompanyOption } from "@/lib/types";
+import { CompanyPicker } from "./company-picker";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import { cn } from "@/lib/cn";
 import {
@@ -1445,19 +1446,14 @@ export function CandidatesClient({
               value={filters.note_color}
               onChange={(next) => applyFiltersNow({ ...filters, note_color: next })}
             />
-            <Field uiSize="xs" hideLabel label="Công ty" className="w-36">
-              <Select
-                uiSize="xs"
+            <Field uiSize="xs" hideLabel label="Công ty" title="Công ty" className="w-36">
+              <CompanyPicker
+                size="xs"
+                options={companyOptions}
                 value={filters.company_id ?? ""}
-                onChange={(event) => applyFiltersNow({ ...filters, company_id: event.target.value })}
-              >
-                <option value="">Công ty: tất cả</option>
-                {companyOptions.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={(companyId) => applyFiltersNow({ ...filters, company_id: companyId })}
+                emptyLabel="Công ty: tất cả"
+              />
             </Field>
             <Field uiSize="xs" hideLabel label="Ngày lên số" title="Ngày lên số" className="w-40">
               <DateRangePicker

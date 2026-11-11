@@ -26,7 +26,6 @@ import { useToast } from "@/lib/toast-context";
 import { goBackInApp } from "@/lib/navigation-history";
 import { CandidateDetailModalFrame } from "@/components/candidate-detail-modal-frame";
 import { EMPTY_OPTION_STYLE, resultStatusStyle, zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
-import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import type { AccountRole, Candidate, LeadCompanyOption, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
@@ -51,6 +50,7 @@ import {
   type LeadViewer,
 } from "@/lib/lead-permissions";
 import { useCapabilities } from "@/lib/capability-context";
+import { CompanyPicker } from "../company-picker";
 import { InlineNoteComposer } from "./inline-note-composer";
 import { NoteTimeline } from "../note-timeline";
 import { ActivityPanel } from "./activity-panel";
@@ -1089,30 +1089,14 @@ export function CandidateDetailClient({
               </div>
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Công ty</span>
-                <Select
-                  uiSize="sm"
+                <CompanyPicker
+                  options={companyOptions}
                   value={candidate.company?.id ?? ""}
-                  onChange={(event) => void handleSetCompany(event.target.value)}
+                  selected={candidate.company}
+                  onChange={(companyId) => void handleSetCompany(companyId)}
+                  emptyLabel="Chưa chọn"
                   disabled={!canUpdate || isSavingCompany}
-                  style={shuttleColorStyle(candidate.company?.color_key, candidate.company?.text_color_key)}
-                >
-                  <option value="" style={EMPTY_OPTION_STYLE}>
-                    Chưa chọn
-                  </option>
-                  {/* Công ty đang chọn không còn trong danh sách tải về (chưa tải xong) vẫn hiện đúng tên. */}
-                  {candidate.company && !companyOptions.some((c) => c.id === candidate.company?.id) && (
-                    <option value={candidate.company.id}>{candidate.company.name}</option>
-                  )}
-                  {companyOptions.map((company) => (
-                    <option
-                      key={company.id}
-                      value={company.id}
-                      style={shuttleColorStyle(company.color_key, company.text_color_key) ?? EMPTY_OPTION_STYLE}
-                    >
-                      {company.name}
-                    </option>
-                  ))}
-                </Select>
+                />
               </div>
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Note</span>
