@@ -26,7 +26,8 @@ import { useToast } from "@/lib/toast-context";
 import { goBackInApp } from "@/lib/navigation-history";
 import { CandidateDetailModalFrame } from "@/components/candidate-detail-modal-frame";
 import { EMPTY_OPTION_STYLE, resultStatusStyle, zaloFriendStatusStyle } from "@/lib/zalo-friend-status";
-import type { AccountRole, Candidate, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
+import { shuttleColorStyle } from "@/lib/shuttle-colors";
+import type { AccountRole, Candidate, LeadCompanyOption, LeadRealtimeEvent, ModulePermissionLevel, Note, StatusCatalogItem } from "@/lib/types";
 import { useLeadRealtime, useRealtimeReconnect } from "@/lib/realtime";
 import { Avatar } from "@/components/ui/avatar";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
@@ -200,6 +201,14 @@ export function CandidateDetailClient({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingNoteColor, setIsSavingNoteColor] = useState(false);
+  /** Dòng "Công ty" (2026-11-11) — danh sách + màu lấy từ Đơn hàng; đổi là lưu ngay. */
+  const [companyOptions, setCompanyOptions] = useState<LeadCompanyOption[]>([]);
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
+  useEffect(() => {
+    clientApi<LeadCompanyOption[]>("/candidate/company-options")
+      .then(setCompanyOptions)
+      .catch(() => {});
+  }, []);
   /**
    * Yêu cầu người dùng (Mục 5) — "không tự ghi đè nội dung người dùng đang
    * nhập dở trong ô note; nếu record đang được chỉnh sửa và có người khác
@@ -411,6 +420,21 @@ export function CandidateDetailClient({
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
     } finally {
       setIsHoldSubmitting(false);
+    }
+  }
+
+  async function handleSetCompany(companyId: string) {
+    setIsSavingCompany(true);
+    try {
+      const updated = await clientApi<Candidate>(`/candidate/${candidate.id}/company`, {
+        method: "PUT",
+        body: JSON.stringify({ company_id: companyId || null }),
+      });
+      setCandidate(updated);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra");
+    } finally {
+      setIsSavingCompany(false);
     }
   }
 
@@ -959,7 +983,7 @@ export function CandidateDetailClient({
               Tình trạng Zalo — tiêu đề ở trên, ô chọn ở dưới, 1 hàng. Cách lưu không đổi. */}
           <div className="border-b border-slate-100 p-4">
             <p className="text-sm font-semibold text-slate-800">Lịch sử ghi chú/cuộc gọi</p>
-            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-7">
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Tình trạng cuộc gọi</span>
                 <div className="min-w-0">
@@ -1062,6 +1086,33 @@ export function CandidateDetailClient({
                     />
                   ))}
                 </div>
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-xs whitespace-nowrap text-slate-500">Công ty</span>
+                <Select
+                  uiSize="sm"
+                  value={candidate.company?.id ?? ""}
+                  onChange={(event) => void handleSetCompany(event.target.value)}
+                  disabled={!canUpdate || isSavingCompany}
+                  style={shuttleColorStyle(candidate.company?.color_key, candidate.company?.text_color_key)}
+                >
+                  <option value="" style={EMPTY_OPTION_STYLE}>
+                    Chưa chọn
+                  </option>
+                  {/* Công ty đang chọn không còn trong danh sách tải về (chưa tải xong) vẫn hiện đúng tên. */}
+                  {candidate.company && !companyOptions.some((c) => c.id === candidate.company?.id) && (
+                    <option value={candidate.company.id}>{candidate.company.name}</option>
+                  )}
+                  {companyOptions.map((company) => (
+                    <option
+                      key={company.id}
+                      value={company.id}
+                      style={shuttleColorStyle(company.color_key, company.text_color_key) ?? EMPTY_OPTION_STYLE}
+                    >
+                      {company.name}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-xs whitespace-nowrap text-slate-500">Note</span>

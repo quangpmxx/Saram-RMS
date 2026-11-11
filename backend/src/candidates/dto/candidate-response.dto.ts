@@ -35,6 +35,13 @@ export interface CandidateResponseDto {
   mkt_note: string | null;
   /** Ô "Note" ngắn — 2026-11-10. */
   quick_note: string | null;
+  /** Dòng "Công ty" — tên + màu lấy từ danh sách Đơn hàng (2026-11-11). */
+  company: {
+    id: string;
+    name: string;
+    color_key: string | null;
+    text_color_key: string | null;
+  } | null;
   data_quality_score: number | null;
   uploaded_by: NamedRefWithRole;
   uploaded_at: string;
@@ -70,6 +77,12 @@ export interface CandidateResponseDto {
 type LeadWithRelations = Lead & {
   source: Pick<LeadSource, 'id' | 'name'>;
   mktSource?: { id: string; name: string } | null;
+  company?: {
+    id: string;
+    name: string;
+    colorKey: string | null;
+    textColorKey: string | null;
+  } | null;
   uploadedBy: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'>;
   assignedTo?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
   heldBy?: Pick<Account, 'id' | 'fullName' | 'role' | 'avatarUrl'> | null;
@@ -106,6 +119,14 @@ export function toCandidateResponse(
     mkt_source: lead.mktSource ?? null,
     mkt_note: lead.mktNote,
     quick_note: lead.quickNote,
+    company: lead.company
+      ? {
+          id: lead.company.id,
+          name: lead.company.name,
+          color_key: lead.company.colorKey,
+          text_color_key: lead.company.textColorKey,
+        }
+      : null,
     data_quality_score: lead.dataQualityScore,
     uploaded_by: {
       id: lead.uploadedBy.id,
@@ -199,6 +220,9 @@ export function toCandidateResponse(
 export const CANDIDATE_INCLUDE = {
   source: { select: { id: true, name: true } },
   mktSource: { select: { id: true, name: true } },
+  company: {
+    select: { id: true, name: true, colorKey: true, textColorKey: true },
+  },
   uploadedBy: {
     select: { id: true, fullName: true, role: true, avatarUrl: true },
   },

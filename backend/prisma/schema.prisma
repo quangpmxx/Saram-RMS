@@ -504,6 +504,9 @@ model Lead {
   /// Ô "Note" ngắn (chữ đỏ ở danh sách Tất cả / Kho chăm sóc) — 2026-11-10.
   quickNote String? @map("quick_note") @db.VarChar(255)
 
+  /// Dòng "Công ty" ở trang Chi tiết — chọn từ danh sách Đơn hàng (2026-11-11).
+  companyId String? @map("company_id") @db.Uuid
+
   // Phase 4 — chưa có logic ghi ở Phase 1, luôn NULL
   currentInterviewStatusId  String? @map("current_interview_status_id") @db.Uuid
   currentEmploymentStatusId String? @map("current_employment_status_id") @db.Uuid
@@ -564,7 +567,9 @@ model Lead {
   careStopRequestedBy     Account?               @relation("LeadCareStopRequestedBy", fields: [careStopRequestedById], references: [id])
   careAssignments         CareAssignment[]
   pancakeConversations    PancakeConversation[]
+  company                 OrderRecord?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
+  @@index([companyId])
   @@index([phoneNumber])
   @@index([uploadedAt])
   @@index([deletedAt])
@@ -1499,6 +1504,7 @@ model OrderRecord {
   shuttleRecords      ShuttleRecord[]
   salesEntryRecords   SalesEntryRecord[]
   recruitmentPostings RecruitmentPosting[]
+  leads               Lead[]
 
   @@map("order_records")
 }

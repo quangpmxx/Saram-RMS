@@ -23,6 +23,7 @@ import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
 import { UpdateZaloFriendStatusDto } from './dto/update-zalo-friend-status.dto';
 import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { UpdateQuickNoteDto } from './dto/update-quick-note.dto';
+import { UpdateLeadCompanyDto } from './dto/update-lead-company.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
@@ -258,6 +259,60 @@ export class LeadPipelineService {
       entityId: id,
       fieldChanged: 'quick_note',
       oldValue: lead.quickNote ?? undefined,
+      newValue: value ?? undefined,
+    });
+
+    return this.reloadCandidate(id, currentUser);
+  }
+
+  /** Danh sách công ty (= Đơn hàng) cho dòng "Công ty" và ô lọc Công ty ở Data lao động. */
+  async listCompanyOptions(): Promise<
+    {
+      id: string;
+      name: string;
+      color_key: string | null;
+      text_color_key: string | null;
+    }[]
+  > {
+    const records = await this.prisma.orderRecord.findMany({
+      orderBy: { name: 'asc' },
+    });
+    return records.map((record) => ({
+      id: record.id,
+      name: record.name,
+      color_key: record.colorKey,
+      text_color_key: record.textColorKey,
+    }));
+  }
+
+  /** Dòng "Công ty" của data (2026-11-11) — cùng quyền với Đánh dấu màu / Note. */
+  async updateCompany(
+    id: string,
+    dto: UpdateLeadCompanyDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    const lead = await this.loadLeadForUpdate(id, currentUser);
+    const value = dto.company_id ?? null;
+    if (value === lead.companyId) return this.reloadCandidateSilently(id);
+    if (
+      value &&
+      !(await this.prisma.orderRecord.findUnique({ where: { id: value } }))
+    ) {
+      throw new UnprocessableEntityException('Công ty không tồn tại');
+    }
+
+    await this.prisma.lead.update({
+      where: { id },
+      data: { companyId: value, lastActivityAt: new Date() },
+    });
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'update',
+      entityType: 'lead',
+      entityId: id,
+      fieldChanged: 'company_id',
+      oldValue: lead.companyId ?? undefined,
       newValue: value ?? undefined,
     });
 

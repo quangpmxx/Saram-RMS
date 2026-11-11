@@ -25,6 +25,7 @@ import {
   parseServiceAccount,
   readTab,
 } from './google-sheets.client';
+import { ShuttleService } from './shuttle.service';
 import type { SaveShuttleSheetConfigDto } from './dto/shuttle-sheet.dto';
 
 /**
@@ -76,6 +77,7 @@ export class ShuttleSheetService {
     private readonly importService: ShuttleImportService,
     private readonly auditLog: AuditLogService,
     private readonly realtime: RealtimeService,
+    private readonly shuttleService: ShuttleService,
   ) {}
 
   private tokenKey(): string {
@@ -222,6 +224,10 @@ export class ShuttleSheetService {
       newValue: `Đồng bộ Google Sheet tab "${tab}": thêm ${plan.creates.length}, cập nhật ${plan.updates.length} dòng`,
     });
     this.realtime.emitTransportationReordered(user);
+    // Có dòng mới → báo cho mọi người xem được Danh sách đưa đón (không chờ gửi xong).
+    if (plan.creates.length) {
+      void this.shuttleService.notifyBulkImported(plan.creates.length, user);
+    }
     return { created: plan.creates.length, updated: plan.updates.length };
   }
 

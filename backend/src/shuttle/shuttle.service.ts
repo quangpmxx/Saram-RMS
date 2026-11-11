@@ -519,6 +519,69 @@ export class ShuttleService {
     }
   }
 
+  /**
+   * Đồng bộ Google Sheet thêm được dòng mới (yêu cầu người dùng 2026-11-11): 1 thông báo gộp
+   * "<tên> đã nhập đưa đón: N lao động" cho MỌI tài khoản đang xem được Danh sách đưa đón.
+   * Lỗi gửi thông báo không làm hỏng lần đồng bộ.
+   */
+  async notifyBulkImported(
+    count: number,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    try {
+      const [actor, accounts] = await Promise.all([
+        this.prisma.account.findUnique({
+          where: { id: currentUser.id },
+          select: { fullName: true },
+        }),
+        this.prisma.account.findMany({
+          where: { status: 'active' },
+          select: { id: true, role: true },
+        }),
+      ]);
+      const content = `${actor?.fullName ?? 'Quản lý'} đã nhập đưa đón: ${count} lao động`;
+      const now = new Date();
+      await Promise.all(
+        accounts.map(async (account) => {
+          const level = await this.modulePermission.getEffective(
+            account.id,
+            account.role,
+            'shuttle',
+          );
+          if (level === 'none') return;
+          const notification = await this.prisma.notification.create({
+            data: {
+              accountId: account.id,
+              type: 'shuttle_update',
+              channel: 'in_app',
+              content,
+              senderId: currentUser.id,
+              scheduledAt: now,
+              sentAt: now,
+              status: 'sent',
+            },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  role: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          });
+          this.realtime.emitNotificationCreated(
+            toNotificationResponse(notification),
+            currentUser,
+          );
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(`Không gửi được thông báo đưa đón: ${String(error)}`);
+    }
+  }
+
   async remove(id: string, currentUser: AuthenticatedUser): Promise<void> {
     const existing = await this.prisma.shuttleRecord.findUnique({
       where: { id },

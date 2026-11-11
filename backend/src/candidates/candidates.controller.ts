@@ -31,6 +31,7 @@ import { UpdateZaloStatusDto } from './dto/update-zalo-status.dto';
 import { UpdateZaloFriendStatusDto } from './dto/update-zalo-friend-status.dto';
 import { UpdateNoteColorDto } from './dto/update-note-color.dto';
 import { UpdateQuickNoteDto } from './dto/update-quick-note.dto';
+import { UpdateLeadCompanyDto } from './dto/update-lead-company.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { ListNotesQueryDto } from './dto/list-notes-query.dto';
@@ -94,6 +95,12 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pipelineService.listNotesBatch(query.ids, user);
+  }
+
+  /** Danh sách công ty (= Đơn hàng) cho dòng "Công ty" + ô lọc — khai báo TRƯỚC ":id". */
+  @Get('company-options')
+  listCompanyOptions() {
+    return this.pipelineService.listCompanyOptions();
   }
 
   @Post()
@@ -329,6 +336,15 @@ export class CandidatesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pipelineService.updateQuickNote(id, dto, user);
+  }
+
+  @Put(':id/company')
+  updateCompany(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLeadCompanyDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.updateCompany(id, dto, user);
   }
 
   @Get(':id/note')

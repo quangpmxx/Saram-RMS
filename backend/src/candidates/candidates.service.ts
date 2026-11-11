@@ -118,6 +118,9 @@ export class CandidatesService {
     if (query.mkt_source_id) {
       where.mktSourceId = query.mkt_source_id;
     }
+    if (query.company_id) {
+      where.companyId = query.company_id;
+    }
     if (query.is_duplicate_flagged !== undefined) {
       where.isDuplicateFlagged = query.is_duplicate_flagged === 'true';
     }

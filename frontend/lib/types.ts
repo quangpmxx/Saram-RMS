@@ -183,6 +183,14 @@ export interface NamedRefWithRole extends NamedRef {
 }
 
 /** Đối tượng "Candidate" — Mục 0.1, docs/13-api-design.md. */
+/** Công ty (= Đơn hàng) gắn cho data lao động — GET /candidate/company-options. */
+export interface LeadCompanyOption {
+  id: string;
+  name: string;
+  color_key: string | null;
+  text_color_key: string | null;
+}
+
 export interface Candidate {
   id: string;
   full_name: string;
@@ -195,6 +203,8 @@ export interface Candidate {
   mkt_note: string | null;
   /** Ô "Note" ngắn — chữ đỏ ở danh sách (2026-11-10). */
   quick_note?: string | null;
+  /** Dòng "Công ty" — tên + màu lấy từ danh sách Đơn hàng (2026-11-11). */
+  company?: LeadCompanyOption | null;
   data_quality_score: number | null;
   uploaded_by: NamedRefWithRole;
   uploaded_at: string;

@@ -63,6 +63,7 @@ const FIELD_LABELS: Record<string, string> = {
   zalo_friend_status_id: 'Tình trạng Zalo',
   note_color: 'Đánh dấu màu',
   quick_note: 'Note',
+  company_id: 'Công ty',
 };
 
 const STATUS_FIELDS = new Set([
@@ -355,6 +356,7 @@ export class LeadActivityService {
     const accountIds = new Set<string>();
     const sourceIds = new Set<string>();
     const mktSourceIds = new Set<string>();
+    const companyIds = new Set<string>();
     for (const log of logs) {
       const values = [log.oldValue, log.newValue].filter(
         (v): v is string => !!v,
@@ -365,6 +367,8 @@ export class LeadActivityService {
         values.forEach((v) => sourceIds.add(v));
       } else if (log.fieldChanged === 'mkt_source_id') {
         values.forEach((v) => mktSourceIds.add(v));
+      } else if (log.fieldChanged === 'company_id') {
+        values.forEach((v) => companyIds.add(v));
       } else if (
         log.entityType === 'lead' &&
         (log.actionType === 'assign' || log.actionType === 'transfer')
@@ -374,31 +378,39 @@ export class LeadActivityService {
     }
 
     const isUuid = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
-    const [statuses, accounts, sources, mktSources] = await Promise.all([
-      this.prisma.statusCatalog.findMany({
-        where: { id: { in: [...statusIds].filter(isUuid) } },
-        select: { id: true, name: true },
-      }),
-      this.prisma.account.findMany({
-        where: { id: { in: [...accountIds].filter(isUuid) } },
-        select: { id: true, fullName: true },
-      }),
-      this.prisma.leadSource.findMany({
-        where: { id: { in: [...sourceIds].filter(isUuid) } },
-        select: { id: true, name: true },
-      }),
-      mktSourceIds.size
-        ? this.prisma.mktSource.findMany({
-            where: { id: { in: [...mktSourceIds].filter(isUuid) } },
-            select: { id: true, name: true },
-          })
-        : Promise.resolve<{ id: string; name: string }[]>([]),
-    ]);
+    const [statuses, accounts, sources, mktSources, companies] =
+      await Promise.all([
+        this.prisma.statusCatalog.findMany({
+          where: { id: { in: [...statusIds].filter(isUuid) } },
+          select: { id: true, name: true },
+        }),
+        this.prisma.account.findMany({
+          where: { id: { in: [...accountIds].filter(isUuid) } },
+          select: { id: true, fullName: true },
+        }),
+        this.prisma.leadSource.findMany({
+          where: { id: { in: [...sourceIds].filter(isUuid) } },
+          select: { id: true, name: true },
+        }),
+        mktSourceIds.size
+          ? this.prisma.mktSource.findMany({
+              where: { id: { in: [...mktSourceIds].filter(isUuid) } },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve<{ id: string; name: string }[]>([]),
+        companyIds.size
+          ? this.prisma.orderRecord.findMany({
+              where: { id: { in: [...companyIds].filter(isUuid) } },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve<{ id: string; name: string }[]>([]),
+      ]);
 
     const names = new Map<string, string>();
     statuses.forEach((s) => names.set(s.id, s.name));
     sources.forEach((s) => names.set(s.id, s.name));
     mktSources.forEach((s) => names.set(s.id, s.name));
+    companies.forEach((c) => names.set(c.id, c.name));
     accounts.forEach((a) => names.set(a.id, a.fullName));
     return names;
   }
@@ -505,7 +517,8 @@ export function describeLog(
       if (
         STATUS_FIELDS.has(fieldChanged) ||
         fieldChanged === 'source_id' ||
-        fieldChanged === 'mkt_source_id'
+        fieldChanged === 'mkt_source_id' ||
+        fieldChanged === 'company_id'
       ) {
         return name(value);
       }

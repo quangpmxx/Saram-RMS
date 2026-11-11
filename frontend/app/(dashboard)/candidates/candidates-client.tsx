@@ -35,7 +35,8 @@ import {
   Zap,
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
-import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
+import { ACCOUNT_ROLE_LABEL, type LeadCompanyOption } from "@/lib/types";
+import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import { cn } from "@/lib/cn";
 import {
   canDecideStop,
@@ -133,6 +134,8 @@ interface Filters {
   lead_state?: LeadStateFilter;
   /** Bộ lọc "Đánh giá" — màu đánh dấu: "" = tất cả. Có thể thiếu ở trạng thái đã lưu từ bản cũ. */
   note_color?: NoteColorValue | "";
+  /** Bộ lọc "Công ty" (danh sách Đơn hàng): "" = tất cả. Có thể thiếu ở trạng thái đã lưu từ bản cũ. */
+  company_id?: string;
   team_sale: TeamSaleValue | null;
   /** Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng chung (xem components/ui/date-range-picker.tsx). */
   date: DateRangeValue;
@@ -222,6 +225,13 @@ export function CandidatesClient({
   useEffect(() => {
     clientApi<{ id: string; name: string }[]>("/marketing-hub/mkt-sources")
       .then(setMktSourceOptions)
+      .catch(() => {});
+  }, []);
+  // Công ty (= Đơn hàng) cho ô lọc "Công ty" và nhãn màu ở cột Note (2026-11-11).
+  const [companyOptions, setCompanyOptions] = useState<LeadCompanyOption[]>([]);
+  useEffect(() => {
+    clientApi<LeadCompanyOption[]>("/candidate/company-options")
+      .then(setCompanyOptions)
       .catch(() => {});
   }, []);
   const [page, setPage] = useState(1);
@@ -388,6 +398,7 @@ export function CandidatesClient({
     if (activeFilters.keyword) query.set("keyword", activeFilters.keyword);
     if (activeFilters.lead_state) query.set("lead_state", activeFilters.lead_state);
     if (activeFilters.note_color) query.set("note_color", activeFilters.note_color);
+    if (activeFilters.company_id) query.set("company_id", activeFilters.company_id);
     if (activeFilters.team_sale?.type === "team") query.set("team_id", activeFilters.team_sale.id);
     if (activeFilters.team_sale?.type === "sale") query.set("assigned_to", activeFilters.team_sale.id);
     // DateRangePicker đã tự quy đổi preset ("7 ngày qua"...) thành from/to cụ
@@ -1430,13 +1441,24 @@ export function CandidatesClient({
                 ))}
               </Select>
             </Field>
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-medium text-slate-600">Đánh giá</span>
-              <NoteColorFilter
-                value={filters.note_color}
-                onChange={(next) => applyFiltersNow({ ...filters, note_color: next })}
-              />
-            </div>
+            <NoteColorFilter
+              value={filters.note_color}
+              onChange={(next) => applyFiltersNow({ ...filters, note_color: next })}
+            />
+            <Field uiSize="xs" hideLabel label="Công ty" className="w-36">
+              <Select
+                uiSize="xs"
+                value={filters.company_id ?? ""}
+                onChange={(event) => applyFiltersNow({ ...filters, company_id: event.target.value })}
+              >
+                <option value="">Công ty: tất cả</option>
+                {companyOptions.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field uiSize="xs" hideLabel label="Ngày lên số" title="Ngày lên số" className="w-40">
               <DateRangePicker
                 value={filters.date}
@@ -1541,6 +1563,11 @@ export function CandidatesClient({
                       <div className="mx-3 mb-2 rounded-lg px-2 py-1 ring-1 ring-slate-100" style={callStatusCellStyle(candidate)}>
                         {p.call}
                       </div>
+                      {candidate.company && (
+                        <p className="mx-3 mb-2 text-xs">
+                          <CompanyChip company={candidate.company} />
+                        </p>
+                      )}
                       {candidate.quick_note && (
                         <p className="mx-3 mb-2 text-xs font-medium break-words text-red-600">Note: {candidate.quick_note}</p>
                       )}
@@ -1650,6 +1677,11 @@ export function CandidatesClient({
                       {p.call}
                     </td>
                     <td className="border-r border-slate-100 px-1 py-2 align-middle text-[11px] font-medium break-words text-red-600">
+                      {candidate.company && (
+                        <div className={candidate.quick_note ? "mb-1" : undefined}>
+                          <CompanyChip company={candidate.company} />
+                        </div>
+                      )}
                       {candidate.quick_note}
                     </td>
                     <td className="border-r border-slate-100 px-1 py-2 text-center align-middle">{p.zalo}</td>
@@ -1898,6 +1930,19 @@ function sourceRank(name: string): number {
 }
 
 /** Màu nền "ngẫu nhiên" nhưng cố định theo từng nguồn MKT (băm từ id), đủ đậm cho chữ trắng. */
+/** Nhãn công ty của data — tô đúng màu đã chọn ở Quản lý đơn hàng. */
+function CompanyChip({ company }: { company: LeadCompanyOption }) {
+  return (
+    <span
+      className="inline-block max-w-full rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium break-words text-slate-700"
+      style={shuttleColorStyle(company.color_key, company.text_color_key)}
+      title={`Công ty: ${company.name}`}
+    >
+      {company.name}
+    </span>
+  );
+}
+
 function mktSourceColor(id: string): string {
   let hash = 0;
   for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;

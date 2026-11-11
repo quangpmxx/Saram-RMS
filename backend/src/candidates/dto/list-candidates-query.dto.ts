@@ -65,6 +65,11 @@ export class ListCandidatesQueryDto {
   @IsUUID('4')
   mkt_source_id?: string;
 
+  /** Lọc theo Công ty (danh sách Đơn hàng) — 2026-11-11. */
+  @IsOptional()
+  @IsUUID('4')
+  company_id?: string;
+
   @IsOptional()
   @IsDateString()
   date_from?: string;
