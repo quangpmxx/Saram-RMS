@@ -54,11 +54,11 @@ export class RandomPreviewDto {
    * đang chọn ở Kho (2026-11-10). Bỏ trống = toàn bộ Kho.
    */
   @IsOptional()
-  @Matches(/^d{4}-d{2}-d{2}$/)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   uploaded_from?: string;
 
   @IsOptional()
-  @Matches(/^d{4}-d{2}-d{2}$/)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   uploaded_to?: string;
 }
 
