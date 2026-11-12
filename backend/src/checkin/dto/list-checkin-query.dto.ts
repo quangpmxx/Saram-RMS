@@ -1,4 +1,12 @@
 import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
+import { OFFICES, type Office } from '../../common/constants/office';
+
+/** GET/PUT /checkin/company-location?office=… — không gửi = VP Hà Nội (như trước). */
+export class OfficeQueryDto {
+  @IsOptional()
+  @IsIn(OFFICES)
+  office?: Office;
+}
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-15, ngoài phạm vi Design Freeze
@@ -30,6 +38,11 @@ export class ListCheckinQueryDto {
   @IsOptional()
   @IsUUID('4')
   account_id?: string;
+
+  /** Tab văn phòng đang xem (2026-11-12) — không gửi = mọi văn phòng. */
+  @IsOptional()
+  @IsIn(OFFICES)
+  office?: Office;
 
   @IsOptional()
   @IsIn(CHECKIN_STATUS_FILTER_VALUES)

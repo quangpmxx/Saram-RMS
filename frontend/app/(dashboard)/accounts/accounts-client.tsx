@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import { KeyRound, Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { roleAccentBadgeStyle } from "@/lib/role-accent";
-import { ACCOUNT_ROLE_LABEL, type Account, type AccountRole, type ModulePermissionLevel, type Team } from "@/lib/types";
+import {
+  ACCOUNT_ROLE_LABEL,
+  OFFICES,
+  OFFICE_LABEL,
+  type Account,
+  type AccountRole,
+  type ModulePermissionLevel,
+  type Office,
+  type Team,
+} from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -353,6 +362,7 @@ export function AccountsClient({
                 bank_account_number: payload.bank_account_number ?? null,
                 nickname: payload.nickname ?? null,
                 attendance_tracked: payload.attendance_tracked,
+                office: payload.office,
               }),
             });
             setModal({ mode: "none" });
@@ -390,6 +400,8 @@ interface AccountFormPayload {
   nickname?: string | null;
   /** Ô "Chấm công" — chỉ khi sửa tài khoản. */
   attendance_tracked?: boolean;
+  /** Văn phòng — chỉ khi sửa tài khoản. */
+  office?: Office;
   /** Lịch tuyển dụng: xem lịch tuyển của nhóm này (null = theo nhóm của tài khoản) — chỉ khi sửa tài khoản. */
   recruitment_team_id?: string | null;
 }
@@ -428,6 +440,7 @@ function AccountModal({
   const [bankAccountNumber, setBankAccountNumber] = useState(initialAccount?.bank_account_number ?? "");
   const [nickname, setNickname] = useState(initialAccount?.nickname ?? "");
   const [attendanceTracked, setAttendanceTracked] = useState(initialAccount?.attendance_tracked ?? true);
+  const [office, setOffice] = useState<Office>(initialAccount?.office ?? "hanoi");
   const [recruitmentTeamId, setRecruitmentTeamId] = useState(initialAccount?.recruitment_team_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -470,6 +483,7 @@ function AccountModal({
           bank_account_number: bankAccountNumber.trim() || null,
           nickname: nickname.trim() || null,
           attendance_tracked: attendanceTracked,
+          office,
           recruitment_team_id: recruitmentTeamId || null,
         }),
       });
@@ -574,6 +588,23 @@ function AccountModal({
               </span>
             </span>
           </label>
+        )}
+
+        {/* Văn phòng (2026-11-12): quyết định nhân viên nằm ở bảng Chấm công / Check in GPS /
+            Đơn nghỉ phép của văn phòng nào, và check in theo vị trí văn phòng nào. */}
+        {isEdit && (
+          <Field
+            label="Văn phòng"
+            hint="Nhân viên sẽ nằm ở bảng chấm công, check in và đơn nghỉ phép của văn phòng này."
+          >
+            <Select value={office} onChange={(event) => setOffice(event.target.value as Office)}>
+              {OFFICES.map((value) => (
+                <option key={value} value={value}>
+                  {OFFICE_LABEL[value]}
+                </option>
+              ))}
+            </Select>
+          </Field>
         )}
 
         {/* 5 field hồ sơ nhân sự (yêu cầu trực tiếp người dùng, 2026-07-15)

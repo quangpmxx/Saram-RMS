@@ -1,12 +1,14 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsUUID,
   Max,
   Min,
 } from 'class-validator';
+import { OFFICES, type Office } from '../../common/constants/office';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-14, ngoài phạm vi Design Freeze
@@ -33,6 +35,11 @@ export class ListAttendanceQueryDto {
   @IsOptional()
   @IsUUID('4')
   account_id?: string;
+
+  /** Tab văn phòng đang xem (2026-11-12) — không gửi = mọi văn phòng trong phạm vi được xem. */
+  @IsOptional()
+  @IsIn(OFFICES)
+  office?: Office;
 
   /** Mục 6, yêu cầu người dùng: mặc định ẩn tài khoản đã ngừng hoạt động. */
   @IsOptional()

@@ -187,6 +187,10 @@ model Account {
   mustChangePassword Boolean       @default(false) @map("must_change_password")
   /// Có dòng trong bảng chấm công + được cộng phép hằng tháng (2026-11-07) — Admin bỏ tick cho người không cần chấm công.
   attendanceTracked  Boolean       @default(true) @map("attendance_tracked")
+  /// Văn phòng (2026-11-12): hanoi | bac_ninh | bac_giang — quyết định nhân viên nằm ở
+  /// bảng Chấm công / Check in GPS / Đơn nghỉ phép của văn phòng nào, và check in
+  /// theo vị trí văn phòng nào. Tài khoản cũ mặc định Hà Nội.
+  office             String        @default("hanoi") @db.VarChar(20)
   role               AccountRole
   teamId             String?       @map("team_id") @db.Uuid
   status             AccountStatus @default(active)
@@ -346,6 +350,7 @@ model Account {
   // Đơn phản ánh ẩn danh (2026-10-28): quan hệ ngược — CHỈ dùng nội bộ DB, không bao giờ trả ra API.
   anonymousFeedbacks AnonymousFeedback[] @relation("AnonymousFeedbackSender")
 
+  @@index([office])
   @@map("accounts")
 }
 
@@ -1374,11 +1379,14 @@ model CompanyLocationConfig {
   latitude      Float
   longitude     Float
   allowedRadius Int      @default(100) @map("allowed_radius_meters")
+  /// Mỗi văn phòng một vị trí (2026-11-12) — bản ghi cũ là của VP Hà Nội.
+  office        String   @default("hanoi") @db.VarChar(20)
   updatedById   String   @map("updated_by") @db.Uuid
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   updatedBy Account @relation(fields: [updatedById], references: [id])
 
+  @@index([office])
   @@map("company_location_configs")
 }
 

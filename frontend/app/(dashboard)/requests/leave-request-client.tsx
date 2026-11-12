@@ -2,11 +2,11 @@
 
 import { useCan } from "@/lib/capability-context";
 import { useRememberedFilters } from "@/lib/remembered-filters";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FilePlus2, MessageSquareWarning, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { Account, LeaveRequest, LeaveRequestStatus } from "@/lib/types";
+import type { Account, LeaveRequest, LeaveRequestStatus, Office } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,9 +81,12 @@ export function formatDateOnly(value: string): string {
 export function LeaveRequestClient({
   currentUser,
   initialRequests,
+  office,
 }: {
   currentUser: Account;
   initialRequests: LeaveRequest[];
+  /** Tab văn phòng đang xem ở trang Chấm công (undefined = không lọc theo văn phòng). */
+  office?: Office;
 }) {
   const searchParams = useSearchParams();
   const toast = useToast();
@@ -153,20 +156,42 @@ export function LeaveRequestClient({
         ? "Duyệt đơn xin nghỉ phép (bước cuối cùng)."
         : "Xem toàn bộ đơn xin nghỉ phép trong hệ thống.";
 
-  async function refresh(nextStatus = statusFilter, nextDate = dateFilter) {
+  /** Danh sách đơn đã tải theo từng bộ lọc (văn phòng/trạng thái/ngày). */
+  const listCacheRef = useRef(new Map<string, LeaveRequest[]>());
+  const latestListKeyRef = useRef("");
+
+  async function refresh(nextStatus = statusFilter, nextDate = dateFilter, nextOffice = office) {
     try {
       const query = new URLSearchParams();
+      if (nextOffice) query.set("office", nextOffice);
       if (nextStatus !== "all") query.set("status_filter", nextStatus);
       if (nextDate.from) query.set("date_from", new Date(nextDate.from).toISOString());
       if (nextDate.to) query.set("date_to", new Date(`${nextDate.to}T23:59:59.999`).toISOString());
-      const result = await clientApi<LeaveRequest[]>(`/leave-request?${query.toString()}`);
-      setRequests(result);
+      const key = query.toString();
+      latestListKeyRef.current = key;
+      // Đã tải danh sách này rồi (vd đổi qua lại tab văn phòng): hiện ngay, rồi tải lại ngầm.
+      const cached = listCacheRef.current.get(key);
+      if (cached) setRequests(cached);
+      const result = await clientApi<LeaveRequest[]>(`/leave-request?${key}`);
+      listCacheRef.current.set(key, result);
+      // Đã chuyển sang danh sách khác trong lúc chờ — không ghi đè danh sách đang xem.
+      if (latestListKeyRef.current === key) setRequests(result);
     } catch (err) {
       // Báo lỗi thay vì im lặng — đổi bộ lọc mà tải lỗi thì danh sách cũ vẫn
       // hiện như đã lọc xong (rà soát 2026-10-30).
       toast.error(apiErrorMessage(err));
     }
   }
+
+  // Đổi tab văn phòng ở trang Chấm công → tải lại danh sách đơn của văn phòng đó
+  // (lần đầu bỏ qua: danh sách ban đầu đã do server tải đúng văn phòng).
+  const loadedOfficeRef = useRef(office);
+  useEffect(() => {
+    if (loadedOfficeRef.current === office) return;
+    loadedOfficeRef.current = office;
+    void refresh(statusFilter, dateFilter, office);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi đổi văn phòng; bộ lọc khác tự gọi refresh() riêng
+  }, [office]);
 
   // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10).
   useRememberedFilters("leave-requests", { statusFilter, dateFilter }, (saved) => {

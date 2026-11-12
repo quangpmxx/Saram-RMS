@@ -55,6 +55,8 @@ export interface CheckinStatusResponseDto {
 }
 
 export interface CompanyLocationResponseDto {
+  /** Văn phòng của vị trí này: hanoi | bac_ninh | bac_giang. */
+  office: string;
   address: string;
   latitude: number;
   longitude: number;

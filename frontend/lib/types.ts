@@ -60,6 +60,18 @@ export interface CapabilitySummary {
   default_roles: AccountRole[];
 }
 
+/**
+ * Văn phòng (2026-11-12): mỗi nhân viên thuộc 1 văn phòng — quyết định họ nằm ở
+ * bảng Chấm công / Check in GPS / Đơn nghỉ phép nào. Khớp backend common/constants/office.ts.
+ */
+export type Office = "hanoi" | "bac_ninh" | "bac_giang";
+export const OFFICES: Office[] = ["hanoi", "bac_ninh", "bac_giang"];
+export const OFFICE_LABEL: Record<Office, string> = {
+  hanoi: "VP Hà Nội",
+  bac_ninh: "VP Bắc Ninh",
+  bac_giang: "VP Bắc Giang",
+};
+
 export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   admin: "Admin",
   manager: "Manager",
@@ -90,6 +102,8 @@ export interface Account {
   must_change_password: boolean;
   /** Có chấm công (dòng trong bảng chấm công + cộng phép hằng tháng) — Admin bỏ tick ở Sửa tài khoản (2026-11-07). */
   attendance_tracked: boolean;
+  /** Văn phòng của nhân viên (tài khoản cũ mặc định VP Hà Nội). */
+  office: Office;
   team_id: string | null;
   team_name: string | null;
   /** Lịch tuyển dụng: nhóm được Admin chọn riêng để xem lịch tuyển (null = theo nhóm của tài khoản). */

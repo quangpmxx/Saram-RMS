@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { LocateFixed, MapPinned, Search } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { CompanyLocation } from "@/lib/types";
+import { OFFICES, OFFICE_LABEL, type CompanyLocation, type Office } from "@/lib/types";
 import { forwardGeocode, reverseGeocode } from "@/lib/geocode";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { useToast } from "@/lib/toast-context";
 
 /**
@@ -20,6 +20,8 @@ import { useToast } from "@/lib/toast-context";
 export function CheckinLocationSettings() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  // Mỗi văn phòng một vị trí check in riêng (2026-11-12).
+  const [office, setOffice] = useState<Office>("hanoi");
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -33,18 +35,35 @@ export function CheckinLocationSettings() {
   const [lastUpdated, setLastUpdated] = useState<{ at: string; by: string } | null>(null);
 
   useEffect(() => {
-    clientApi<CompanyLocation | null>("/checkin/company-location")
+    let cancelled = false;
+    clientApi<CompanyLocation | null>(`/checkin/company-location?office=${office}`)
       .then((config) => {
-        if (!config) return;
+        if (cancelled) return;
+        if (!config) {
+          // Văn phòng này chưa cài vị trí — để trống form.
+          setAddress("");
+          setLatitude("");
+          setLongitude("");
+          setRadius("100");
+          setLastUpdated(null);
+          return;
+        }
         setAddress(config.address);
         setLatitude(String(config.latitude));
         setLongitude(String(config.longitude));
         setRadius(String(config.allowed_radius_meters));
         setLastUpdated({ at: config.updated_at, by: config.updated_by_name });
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Không tải được cấu hình"))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Không tải được cấu hình");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [office]);
 
   useEffect(() => {
     const lat = Number(latitude);
@@ -130,7 +149,7 @@ export function CheckinLocationSettings() {
 
     setSaving(true);
     try {
-      const saved = await clientApi<CompanyLocation>("/checkin/company-location", {
+      const saved = await clientApi<CompanyLocation>(`/checkin/company-location?office=${office}`, {
         method: "PUT",
         body: JSON.stringify({
           address: address.trim(),
@@ -140,7 +159,7 @@ export function CheckinLocationSettings() {
         }),
       });
       setLastUpdated({ at: saved.updated_at, by: saved.updated_by_name });
-      toast.success("Đã lưu cấu hình vị trí công ty");
+      toast.success(`Đã lưu vị trí ${OFFICE_LABEL[office]}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại");
     } finally {
@@ -154,7 +173,23 @@ export function CheckinLocationSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label="Địa chỉ công ty">
+      <Field label="Văn phòng" hint="Mỗi văn phòng có vị trí check in riêng — nhân viên check in theo văn phòng của mình.">
+        <Select
+          value={office}
+          onChange={(event) => {
+            setError(null);
+            setLoading(true);
+            setOffice(event.target.value as Office);
+          }}
+        >
+          {OFFICES.map((value) => (
+            <option key={value} value={value}>
+              {OFFICE_LABEL[value]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Địa chỉ văn phòng">
         <div className="flex gap-2">
           <Input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành" />
           <Button type="button" variant="outline" size="sm" disabled={searching} onClick={() => void handleSearchAddress()}>

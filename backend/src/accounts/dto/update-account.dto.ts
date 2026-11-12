@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -12,6 +13,7 @@ import {
   Min,
 } from 'class-validator';
 import { AccountRole, AccountStatus } from '../../../generated/prisma/enums';
+import { OFFICES, type Office } from '../../common/constants/office';
 
 /**
  * Mục 2, docs/13-api-design.md — PUT /account/:id (full_name, team_id,
@@ -65,6 +67,11 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsBoolean()
   attendance_tracked?: boolean;
+
+  /** Văn phòng (2026-11-12): nhân viên nằm ở bảng chấm công / check in / đơn nghỉ của văn phòng nào. */
+  @IsOptional()
+  @IsIn(OFFICES)
+  office?: Office;
 
   /** Đổi vai trò (yêu cầu người dùng 2026-11-07) — CHỈ Admin, không đổi được vai trò của chính mình. */
   @IsOptional()

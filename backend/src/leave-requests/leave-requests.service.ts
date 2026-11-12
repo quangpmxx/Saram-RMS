@@ -185,18 +185,22 @@ export class LeaveRequestsService {
       };
     }
 
+    const accountWhere: Prisma.AccountWhereInput = {};
     const scope = leaveScope(currentUser);
     if (scope === 'team') {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
-      where.account = { teamId: account?.teamId ?? NO_MATCH_UUID };
+      accountWhere.teamId = account?.teamId ?? NO_MATCH_UUID;
     } else if (scope === 'own') {
       // Sale/MKT và vai trò khác (NV Đưa đón, Kế toán...) được cấp trang: chỉ
       // đơn của chính mình — trước đây vai trò khác bị 403 làm sập trang Chấm
       // công (2026-11-06).
       where.accountId = currentUser.id;
     }
+    // Tab văn phòng đang xem (2026-11-12) — gộp với điều kiện nhóm, không ghi đè.
+    if (query.office) accountWhere.office = query.office;
+    if (Object.keys(accountWhere).length > 0) where.account = accountWhere;
 
     const requests = await this.prisma.leaveRequest.findMany({
       where,

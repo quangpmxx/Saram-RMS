@@ -10,6 +10,9 @@ import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
   ACCOUNT_ROLE_LABEL,
+  OFFICES,
+  OFFICE_LABEL,
+  type Office,
   type Account,
   type AccountRole,
   type AttendanceBulkSavePayload,
@@ -443,6 +446,8 @@ export function AttendanceClient({
   initialMonth,
   initialGrid,
   initialRequests,
+  showOfficeTabs,
+  initialOffice,
 }: {
   permissionLevel: ModulePermissionLevel;
   currentUserId: string;
@@ -456,6 +461,10 @@ export function AttendanceClient({
   initialMonth: number;
   initialGrid: AttendanceGrid;
   initialRequests: LeaveRequest[];
+  /** Có hiện 3 tab văn phòng không — chỉ người xem được cả nhóm/toàn công ty. */
+  showOfficeTabs: boolean;
+  /** Văn phòng mở sẵn (= văn phòng của người đang xem). */
+  initialOffice: Office;
 }) {
   useSetPageTitle("Chấm công nhân viên");
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
@@ -503,6 +512,9 @@ export function AttendanceClient({
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
+  // Tab văn phòng (2026-11-12): dùng chung cho cả 3 trang con (Chấm công thủ công,
+  // Check in GPS, Đơn xin nghỉ phép) — mỗi văn phòng một bảng riêng.
+  const [office, setOffice] = useState<Office>(initialOffice);
   const [teamId, setTeamId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -576,7 +588,9 @@ export function AttendanceClient({
   }, []);
 
   /** Margin/border tự viết trong module này (space-y-4 x2, border Card) — hằng số nhỏ ổn định, không phụ thuộc hệ thống. */
-  const FIXED_SPACING = 16 + 16 + 2;
+  /** Hàng tab văn phòng (~29px) + khoảng cách space-y-4 (16px) — chỉ khi có hàng tab này. */
+  const OFFICE_TABS_SPACING = showOfficeTabs ? 45 : 0;
+  const FIXED_SPACING = 16 + 16 + 2 + OFFICE_TABS_SPACING;
   const tableBoxHeight = `calc(100vh - ${headerHeight + filterHeight + legendHeight + FIXED_SPACING}px)`;
 
   const isDirty = pending.size > 0;
@@ -641,7 +655,68 @@ export function AttendanceClient({
     return (effectiveLeaveBalanceByAccount.get(accountId) ?? 0) > 0;
   }
 
-  async function loadGrid(overrides?: { year?: number; month?: number; teamId?: string; accountId?: string; includeInactive?: boolean }) {
+  /** Chuỗi tham số của 1 bảng chấm công — cũng là khoá nhớ tạm bảng đã tải. */
+  function buildGridQuery(params: {
+    year: number;
+    month: number;
+    office: Office;
+    teamId: string;
+    accountId: string;
+    includeInactive: boolean;
+  }): string {
+    const query = new URLSearchParams({ year: String(params.year), month: String(params.month) });
+    if (showOfficeTabs) query.set("office", params.office);
+    if (canFilterByTeam && params.teamId) query.set("team_id", params.teamId);
+    if (canFilterByAccount && params.accountId) query.set("account_id", params.accountId);
+    if (params.includeInactive) query.set("include_inactive", "true");
+    return query.toString();
+  }
+
+  // Bảng đã tải theo từng bộ tham số (văn phòng/tháng/nhóm...) — đổi tab văn phòng hiện ngay.
+  const gridCacheRef = useRef(new Map<string, AttendanceGrid>());
+  const currentGridKeyRef = useRef("");
+
+  // Tải ngầm sẵn bảng của 2 văn phòng còn lại ngay khi vào trang (lần lượt từng
+  // cái, không dồn một lúc) để lần bấm tab đầu tiên cũng không phải chờ.
+  useEffect(() => {
+    const baseParams = {
+      year: initialYear,
+      month: initialMonth,
+      teamId: "",
+      accountId: "",
+      includeInactive: false,
+    };
+    const firstKey = buildGridQuery({ ...baseParams, office: initialOffice });
+    gridCacheRef.current.set(firstKey, initialGrid);
+    if (!currentGridKeyRef.current) currentGridKeyRef.current = firstKey;
+    if (!showOfficeTabs) return;
+    let cancelled = false;
+    void (async () => {
+      for (const value of OFFICES) {
+        if (cancelled || value === initialOffice) continue;
+        const key = buildGridQuery({ ...baseParams, office: value });
+        try {
+          const prefetched = await clientApi<AttendanceGrid>(`/attendance?${key}`);
+          if (!gridCacheRef.current.has(key)) gridCacheRef.current.set(key, prefetched);
+        } catch {
+          // Tải sẵn hỏng thì thôi — lúc bấm tab sẽ tải lại như bình thường.
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy 1 lần khi vào trang
+  }, []);
+
+  async function loadGrid(overrides?: {
+    year?: number;
+    month?: number;
+    teamId?: string;
+    accountId?: string;
+    includeInactive?: boolean;
+    office?: Office;
+  }) {
     if (isDirty) {
       const proceed = window.confirm("Bạn có thay đổi chưa lưu. Chuyển bộ lọc sẽ mất các thay đổi này — tiếp tục?");
       if (!proceed) return;
@@ -651,26 +726,56 @@ export function AttendanceClient({
     const nextTeamId = overrides?.teamId ?? teamId;
     const nextAccountId = overrides?.accountId ?? accountId;
     const nextIncludeInactive = overrides?.includeInactive ?? includeInactive;
+    const nextOffice = overrides?.office ?? office;
 
-    const query = new URLSearchParams({ year: String(nextYear), month: String(nextMonth) });
-    if (canFilterByTeam && nextTeamId) query.set("team_id", nextTeamId);
-    if (canFilterByAccount && nextAccountId) query.set("account_id", nextAccountId);
-    if (nextIncludeInactive) query.set("include_inactive", "true");
+    const key = buildGridQuery({
+      year: nextYear,
+      month: nextMonth,
+      office: nextOffice,
+      teamId: nextTeamId,
+      accountId: nextAccountId,
+      includeInactive: nextIncludeInactive,
+    });
+    const previousKey = currentGridKeyRef.current;
+    currentGridKeyRef.current = key;
 
-    setLoading(true);
-    try {
-      const nextGrid = await clientApi<AttendanceGrid>(`/attendance?${query.toString()}`);
-      setGrid(nextGrid);
-      setPending(new Map());
+    const applyFilters = () => {
       setYear(nextYear);
       setMonth(nextMonth);
       setTeamId(nextTeamId);
       setAccountId(nextAccountId);
       setIncludeInactive(nextIncludeInactive);
+      setOffice(nextOffice);
+    };
+
+    // Đã từng tải bảng này (vd đổi qua lại tab văn phòng): hiện ngay bản đã có,
+    // rồi tải lại ngầm để lấy số mới nhất — không bắt người dùng chờ (2026-11-12).
+    const cached = gridCacheRef.current.get(key);
+    if (cached) {
+      setGrid(cached);
+      setPending(new Map());
+      applyFilters();
+    } else {
+      setLoading(true);
+    }
+    try {
+      const nextGrid = await clientApi<AttendanceGrid>(`/attendance?${key}`);
+      gridCacheRef.current.set(key, nextGrid);
+      // Người dùng đã chuyển sang bảng khác trong lúc chờ — không ghi đè bảng đang xem.
+      if (currentGridKeyRef.current !== key) return;
+      setGrid(nextGrid);
+      if (!cached) {
+        setPending(new Map());
+        applyFilters();
+      }
     } catch {
-      toast.error("Không tải được dữ liệu chấm công, vui lòng thử lại.");
+      if (!cached) {
+        // Bảng trên màn hình vẫn là bảng cũ — trả khoá về đúng bảng đó.
+        if (currentGridKeyRef.current === key) currentGridKeyRef.current = previousKey;
+        toast.error("Không tải được dữ liệu chấm công, vui lòng thử lại.");
+      }
     } finally {
-      setLoading(false);
+      if (!cached) setLoading(false);
     }
   }
 
@@ -691,6 +796,7 @@ export function AttendanceClient({
   function buildExportUrl(): string {
     const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
     const query = new URLSearchParams({ year: String(year), month: String(month) });
+    if (showOfficeTabs) query.set("office", office);
     if (canFilterByTeam && teamId) query.set("team_id", teamId);
     if (canFilterByAccount && accountId) query.set("account_id", accountId);
     if (includeInactive) query.set("include_inactive", "true");
@@ -859,12 +965,16 @@ export function AttendanceClient({
         `/attendance?${new URLSearchParams({
           year: String(year),
           month: String(month),
+          ...(showOfficeTabs ? { office } : {}),
           ...(canFilterByTeam && teamId ? { team_id: teamId } : {}),
           ...(canFilterByAccount && accountId ? { account_id: accountId } : {}),
           ...(includeInactive ? { include_inactive: "true" } : {}),
         }).toString()}`,
       );
       setGrid(nextGrid);
+      // Số liệu vừa đổi — bỏ các bảng đã nhớ tạm, chỉ giữ bảng vừa tải lại.
+      gridCacheRef.current.clear();
+      if (currentGridKeyRef.current) gridCacheRef.current.set(currentGridKeyRef.current, nextGrid);
       setPending(new Map());
       setLastSavedAt(new Date());
       toast.success("Đã lưu chấm công thành công.");
@@ -979,16 +1089,51 @@ export function AttendanceClient({
         </button>
       </div>
 
-      {activeTab === "checkin" && canViewCheckin && (
-        <CheckinManagementPanel
-          canFilterByTeam={canFilterByTeam}
-          teams={teams}
-          accountOptions={accountOptions}
-          currentUserRole={currentUserRole}
-        />
+      {/* Mỗi trang con có 3 bảng theo văn phòng (yêu cầu người dùng 2026-11-12). Nhân viên thuộc
+          văn phòng nào do ô "Văn phòng" ở Sửa tài khoản quyết định. */}
+      {showOfficeTabs && (
+        <div className="flex gap-4 border-b border-slate-200">
+          {OFFICES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                if (value !== office) void loadGrid({ office: value });
+              }}
+              className={cn(
+                "-mb-px border-b-2 px-1 pb-1.5 text-sm font-semibold transition-colors",
+                office === value
+                  ? "border-brand-600 text-brand-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700",
+              )}
+            >
+              {OFFICE_LABEL[value]}
+            </button>
+          ))}
+        </div>
       )}
 
-      {activeTab === "requests" && <LeaveRequestClient currentUser={currentUser} initialRequests={initialRequests} />}
+      {/* Hai trang con này được tải ngầm ngay khi vào trang và chỉ ẩn/hiện khi chuyển
+          (không gỡ ra rồi tải lại mỗi lần bấm) — bấm sang là có ngay (2026-11-12). */}
+      {canViewCheckin && (
+        <div className={activeTab === "checkin" ? undefined : "hidden"}>
+          <CheckinManagementPanel
+            canFilterByTeam={canFilterByTeam}
+            teams={teams}
+            accountOptions={accountOptions}
+            currentUserRole={currentUserRole}
+            office={showOfficeTabs ? office : undefined}
+          />
+        </div>
+      )}
+
+      <div className={activeTab === "requests" ? undefined : "hidden"}>
+        <LeaveRequestClient
+          currentUser={currentUser}
+          initialRequests={initialRequests}
+          office={showOfficeTabs ? office : undefined}
+        />
+      </div>
 
       {activeTab === "manual" && isReadOnly && <ViewOnlyBadge />}
       <div

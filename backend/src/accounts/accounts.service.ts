@@ -210,6 +210,7 @@ export class AccountsService {
           recruitmentTeamId: dto.recruitment_team_id,
           status: dto.status,
           attendanceTracked: dto.attendance_tracked,
+          office: dto.office,
           role: roleChanged ? dto.role : undefined,
           dateOfBirth:
             dto.date_of_birth === undefined
@@ -498,6 +499,7 @@ export class AccountsService {
       recruitmentTeamId: string | null;
       status: string;
       attendanceTracked: boolean;
+      office: string;
       dateOfBirth: Date | null;
       hireDate: Date | null;
       personalPhone: string | null;
@@ -560,6 +562,13 @@ export class AccountsService {
         field: 'attendance_tracked',
         oldValue: String(before.attendanceTracked),
         newValue: String(dto.attendance_tracked),
+      });
+    }
+    if (dto.office !== undefined && dto.office !== before.office) {
+      changes.push({
+        field: 'office',
+        oldValue: before.office,
+        newValue: dto.office,
       });
     }
     if (dto.status !== undefined && dto.status !== before.status) {

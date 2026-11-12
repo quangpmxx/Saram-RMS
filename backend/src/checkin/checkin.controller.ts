@@ -16,7 +16,10 @@ import type { Request } from 'express';
 import { CheckinService } from './checkin.service';
 import { CreateCheckinDto } from './dto/create-checkin.dto';
 import { UpdateCompanyLocationDto } from './dto/update-company-location.dto';
-import { ListCheckinQueryDto } from './dto/list-checkin-query.dto';
+import {
+  ListCheckinQueryDto,
+  OfficeQueryDto,
+} from './dto/list-checkin-query.dto';
 import { ResetCheckinDto } from './dto/reset-checkin.dto';
 import { UpdateCheckinNoteDto } from './dto/update-checkin-note.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -69,16 +72,20 @@ export class CheckinController {
 
   /** Mục 7: "Chỉ Admin được xem và thay đổi cấu hình này." */
   @Get('company-location')
-  getCompanyLocation(@CurrentUser() user: AuthenticatedUser) {
-    return this.checkinService.getCompanyLocation(user);
+  getCompanyLocation(
+    @Query() query: OfficeQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.checkinService.getCompanyLocation(user, query.office);
   }
 
   @Put('company-location')
   updateCompanyLocation(
+    @Query() query: OfficeQueryDto,
     @Body() dto: UpdateCompanyLocationDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.checkinService.updateCompanyLocation(dto, user);
+    return this.checkinService.updateCompanyLocation(dto, user, query.office);
   }
 
   /** Mục 8, yêu cầu người dùng: "Admin được Reset bản ghi Check in... Bắt buộc nhập lý do." */

@@ -4,7 +4,15 @@ import { useCan } from "@/lib/capability-context";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, ShieldCheck, RotateCcw } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import type { AccountRole, CheckinListResult, CheckinRecordStatus, CheckinStatusFilter, Team, TeamMember } from "@/lib/types";
+import type {
+  AccountRole,
+  CheckinListResult,
+  CheckinRecordStatus,
+  CheckinStatusFilter,
+  Office,
+  Team,
+  TeamMember,
+} from "@/lib/types";
 import { ACCOUNT_ROLE_LABEL } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -60,13 +68,18 @@ export function CheckinManagementPanel({
   canFilterByTeam,
   teams,
   accountOptions,
+  office,
 }: {
   canFilterByTeam: boolean;
   teams: Team[];
   accountOptions: TeamMember[];
   currentUserRole: AccountRole;
+  /** Tab văn phòng đang xem ở trang Chấm công (undefined = không lọc theo văn phòng). */
+  office?: Office;
 }) {
   const toast = useToast();
+  /** Danh sách đã tải theo từng bộ lọc (ngày/văn phòng/nhóm...) — đổi tab văn phòng hiện ngay. */
+  const listCacheRef = useRef(new Map<string, CheckinListResult>());
   const [date, setDate] = useState(todayDateOnly);
   const [teamId, setTeamId] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -130,23 +143,30 @@ export function CheckinManagementPanel({
   }, []);
 
   /** Tab "Chấm công thủ công/Check in GPS" (~36px) + margin/border tự viết trong module này — hằng số nhỏ, ổn định. */
-  const FIXED_SPACING = 36 + 8 + 12 + 2;
+  const FIXED_SPACING = 36 + 8 + 12 + 2 + (office ? 45 : 0);
   const tableBoxHeight = `calc(100vh - ${headerHeight + filterHeight + FIXED_SPACING}px)`;
 
   useEffect(() => {
     let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setLoading(true);
-      setError(null);
-    });
     const params = new URLSearchParams({ date });
+    if (office) params.set("office", office);
     if (teamId) params.set("team_id", teamId);
     if (accountId) params.set("account_id", accountId);
     if (statusFilter !== "all") params.set("status_filter", statusFilter);
+    const key = params.toString();
+    // Đã tải danh sách này rồi (vd đổi qua lại tab văn phòng): hiện ngay bản đã có,
+    // rồi tải lại ngầm lấy số mới nhất — không hiện "đang tải" (2026-11-12).
+    const cached = listCacheRef.current.get(key);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (cached) setData(cached);
+      else setLoading(true);
+      setError(null);
+    });
 
-    clientApi<CheckinListResult>(`/checkin/records?${params.toString()}`)
+    clientApi<CheckinListResult>(`/checkin/records?${key}`)
       .then((result) => {
+        listCacheRef.current.set(key, result);
         if (!cancelled) setData(result);
       })
       .catch((err) => {
@@ -159,7 +179,7 @@ export function CheckinManagementPanel({
     return () => {
       cancelled = true;
     };
-  }, [date, teamId, accountId, statusFilter, refreshKey]);
+  }, [date, teamId, accountId, statusFilter, refreshKey, office]);
 
   async function handleConfirmReset() {
     if (!resetTarget) return;

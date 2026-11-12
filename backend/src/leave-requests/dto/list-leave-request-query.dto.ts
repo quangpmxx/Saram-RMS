@@ -1,4 +1,5 @@
 import { IsDateString, IsIn, IsOptional } from 'class-validator';
+import { OFFICES, type Office } from '../../common/constants/office';
 
 const STATUS_FILTER_VALUES = [
   'all',
@@ -17,6 +18,11 @@ const STATUS_FILTER_VALUES = [
  * ước mới cho bộ lọc ngày.
  */
 export class ListLeaveRequestQueryDto {
+  /** Tab văn phòng đang xem (2026-11-12): chỉ đơn của nhân viên thuộc văn phòng đó; không gửi = mọi văn phòng. */
+  @IsOptional()
+  @IsIn(OFFICES)
+  office?: Office;
+
   @IsOptional()
   @IsIn(STATUS_FILTER_VALUES)
   status_filter?: (typeof STATUS_FILTER_VALUES)[number];

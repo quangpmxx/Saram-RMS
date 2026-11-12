@@ -35,15 +35,22 @@ export default async function AttendancePage() {
   const year = Number(nowParts[0]);
   const month = Number(nowParts[1]);
 
+  // Tab văn phòng (2026-11-12): chỉ người xem được cả nhóm/toàn công ty mới có tab —
+  // mở sẵn văn phòng của chính họ. Người chỉ xem của mình thì không lọc theo văn phòng.
+  const showOfficeTabs = canFilterByAccount;
+  // Dự phòng: backend bản cũ chưa trả `office` (vd đang deploy dở) thì coi như VP Hà Nội.
+  const userOffice = user.office ?? "hanoi";
+  const officeQuery = showOfficeTabs ? `office=${userOffice}` : "";
+
   const [initialGrid, teamsResult, initialRequests] = await Promise.all([
-    serverApi<AttendanceGrid>(`/attendance?year=${year}&month=${month}`),
+    serverApi<AttendanceGrid>(`/attendance?year=${year}&month=${month}${officeQuery ? `&${officeQuery}` : ""}`),
     canFilterByTeam
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
     // Yêu cầu trực tiếp người dùng (2026-07-16): "Đơn xin nghỉ phép" không
     // còn là trang riêng trên menu — chuyển thành 1 tab trong Chấm công,
     // y hệt cách "Check in GPS" đã làm. Tải sẵn dữ liệu ban đầu ở đây.
-    serverApi<LeaveRequest[]>("/leave-request"),
+    serverApi<LeaveRequest[]>(`/leave-request${officeQuery ? `?${officeQuery}` : ""}`),
   ]);
 
   const teamsForMembers = canFilterByTeam ? teamsResult.items : user.team_id ? [{ id: user.team_id }] : [];
@@ -65,6 +72,8 @@ export default async function AttendancePage() {
       initialMonth={month}
       initialGrid={initialGrid}
       initialRequests={initialRequests}
+      showOfficeTabs={showOfficeTabs}
+      initialOffice={userOffice}
     />
   );
 }

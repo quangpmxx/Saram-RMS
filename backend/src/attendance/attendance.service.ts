@@ -573,7 +573,12 @@ export class AttendanceService {
     const employees = sortForAttendance(
       await this.prisma.account.findMany({
         // Bỏ người Admin đã bỏ tick "Chấm công" ở Sửa tài khoản (2026-11-07).
-        where: { ...employeeWhere, attendanceTracked: true },
+        where: {
+          ...employeeWhere,
+          attendanceTracked: true,
+          // Tab văn phòng đang xem (2026-11-12).
+          ...(query.office ? { office: query.office } : {}),
+        },
         select: ACCOUNT_SELECT,
       }),
     );

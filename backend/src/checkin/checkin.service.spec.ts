@@ -188,7 +188,31 @@ describe('CheckinService (Phase 1+2+3+4)', () => {
 
     await expect(
       service.checkin(createDto(), sale, '1.2.3.4', CHROME_WINDOWS_UA),
-    ).rejects.toThrow('Quản trị viên chưa thiết lập vị trí công ty');
+    ).rejects.toThrow('Quản trị viên chưa thiết lập vị trí văn phòng của bạn');
+  });
+
+  it('5b) Check in so với vị trí của ĐÚNG văn phòng mà tài khoản thuộc về', async () => {
+    prisma.account.findUnique.mockResolvedValue({ office: 'bac_ninh' });
+    prisma.companyLocationConfig.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.checkin(createDto(), sale, '1.2.3.4', CHROME_WINDOWS_UA),
+    ).rejects.toThrow('Quản trị viên chưa thiết lập vị trí văn phòng của bạn');
+    expect(prisma.companyLocationConfig.findFirst).toHaveBeenCalledWith({
+      where: { office: 'bac_ninh' },
+    });
+  });
+
+  it('5c) Tài khoản cũ (chưa có văn phòng) dùng vị trí VP Hà Nội', async () => {
+    prisma.account.findUnique.mockResolvedValue(null);
+    prisma.companyLocationConfig.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.checkin(createDto(), sale, '1.2.3.4', CHROME_WINDOWS_UA),
+    ).rejects.toThrow();
+    expect(prisma.companyLocationConfig.findFirst).toHaveBeenCalledWith({
+      where: { office: 'hanoi' },
+    });
   });
 
   it('6) Admin không được Check in', async () => {

@@ -15,6 +15,7 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CreateCheckinDto } from './dto/create-checkin.dto';
 import { UpdateCompanyLocationDto } from './dto/update-company-location.dto';
+import { DEFAULT_OFFICE, type Office } from '../common/constants/office';
 import { ListCheckinQueryDto } from './dto/list-checkin-query.dto';
 import {
   CheckinListResponseDto,
@@ -211,12 +212,10 @@ export class CheckinService {
       dateOnlyInTimezone(now, TIMEZONE),
     );
 
-    const [existing, companyLocation] = await Promise.all([
-      this.prisma.checkinRecord.findFirst({
-        where: { accountId: currentUser.id, attendanceDate, isVoided: false },
-      }),
-      this.prisma.companyLocationConfig.findFirst(),
-    ]);
+    const existing = await this.prisma.checkinRecord.findFirst({
+      where: { accountId: currentUser.id, attendanceDate, isVoided: false },
+    });
+    const companyLocation = await this.findOwnOfficeLocation(currentUser.id);
 
     const parsedUa = parseUserAgent(userAgent);
 
@@ -252,10 +251,11 @@ export class CheckinService {
       );
     }
 
-    const companyLocation = await this.prisma.companyLocationConfig.findFirst();
+    // Mỗi văn phòng một vị trí (2026-11-12): so với vị trí văn phòng của chính người check in.
+    const companyLocation = await this.findOwnOfficeLocation(currentUser.id);
     if (!companyLocation) {
       throw new ForbiddenException(
-        'Quản trị viên chưa thiết lập vị trí công ty',
+        'Quản trị viên chưa thiết lập vị trí văn phòng của bạn',
       );
     }
 
@@ -367,9 +367,21 @@ export class CheckinService {
     return { distance, status };
   }
 
+  /** Vị trí văn phòng mà tài khoản này thuộc về (tài khoản cũ = VP Hà Nội). */
+  private async findOwnOfficeLocation(accountId: string) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { office: true },
+    });
+    return this.prisma.companyLocationConfig.findFirst({
+      where: { office: account?.office ?? DEFAULT_OFFICE },
+    });
+  }
+
   /** Mục 7: "Chỉ Admin được xem và thay đổi cấu hình này." */
   async getCompanyLocation(
     currentUser: AuthenticatedUser,
+    office: Office = DEFAULT_OFFICE,
   ): Promise<CompanyLocationResponseDto | null> {
     if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException(
@@ -377,10 +389,12 @@ export class CheckinService {
       );
     }
     const config = await this.prisma.companyLocationConfig.findFirst({
+      where: { office },
       include: { updatedBy: { select: { fullName: true } } },
     });
     if (!config) return null;
     return {
+      office: config.office,
       address: config.address,
       latitude: config.latitude,
       longitude: config.longitude,
@@ -397,6 +411,7 @@ export class CheckinService {
   async updateCompanyLocation(
     dto: UpdateCompanyLocationDto,
     currentUser: AuthenticatedUser,
+    office: Office = DEFAULT_OFFICE,
   ): Promise<CompanyLocationResponseDto> {
     if (!can(currentUser, 'checkin.manage')) {
       throw new ForbiddenException(
@@ -404,8 +419,12 @@ export class CheckinService {
       );
     }
 
-    const existing = await this.prisma.companyLocationConfig.findFirst();
+    // Mỗi văn phòng đúng 1 bản ghi: sửa bản ghi của văn phòng đó nếu đã có, chưa có thì tạo.
+    const existing = await this.prisma.companyLocationConfig.findFirst({
+      where: { office },
+    });
     const data = {
+      office,
       address: dto.address.trim(),
       latitude: dto.latitude,
       longitude: dto.longitude,
@@ -430,6 +449,7 @@ export class CheckinService {
       actionType: 'update',
       entityType: 'company_location_config',
       entityId: saved.id,
+      fieldChanged: office,
       oldValue: existing
         ? `${existing.address} (${existing.latitude}, ${existing.longitude}, bán kính ${existing.allowedRadius}m)`
         : undefined,
@@ -437,6 +457,7 @@ export class CheckinService {
     });
 
     return {
+      office: saved.office,
       address: saved.address,
       latitude: saved.latitude,
       longitude: saved.longitude,
@@ -463,7 +484,11 @@ export class CheckinService {
 
     const employeeWhere = await this.resolveEmployeeWhere(query, currentUser);
     const employees = await this.prisma.account.findMany({
-      where: employeeWhere,
+      where: {
+        ...employeeWhere,
+        // Tab văn phòng đang xem (2026-11-12).
+        ...(query.office ? { office: query.office } : {}),
+      },
       select: ACCOUNT_SELECT,
       orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
     });
