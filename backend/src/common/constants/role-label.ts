@@ -15,4 +15,6 @@ export const ROLE_LABEL: Record<AccountRole, string> = {
   accounting: 'Kế toán',
   order_staff: 'NV QL Đơn hàng',
   shuttle_staff: 'NV Đưa đón',
+  media_staff: 'NV Media',
+  recruitment_staff: 'NV Tuyển dụng',
 };

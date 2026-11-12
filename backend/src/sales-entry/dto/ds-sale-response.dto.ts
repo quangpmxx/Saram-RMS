@@ -3,6 +3,22 @@ import { Account, SalesEntryRecord } from '../../../generated/prisma/client';
 /** Đối tượng "DS Sale" (module con của Nhập doanh số) — dự án phụ, nâng cấp toàn diện. */
 export interface DsSaleRowResponseDto {
   id: string;
+  /** sale | media | recruitment | shuttle — tab nhỏ chứa dòng này. */
+  kind: string;
+  /** Kỳ (tháng/năm) của dòng. */
+  period_year: number;
+  period_month: number;
+  work_status: string | null;
+  check: DsSaleAccountOptionDto | null;
+  total_days: number | null;
+  total_hours: number | null;
+  /** Các cột của tab Nhập thưởng. */
+  amount: number | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
+  bank_name: string | null;
+  referrer_name: string | null;
+  paid_date: string | null;
   employee_code: string | null;
   full_name: string | null;
   date_of_birth: string | null;
@@ -78,6 +94,7 @@ export type DsSaleRowWithRelations = SalesEntryRecord & {
   updatedBy: Pick<Account, 'id' | 'fullName'>;
   saleUser: AccountPick | null;
   pickupUser: AccountPick | null;
+  checkUser: AccountPick | null;
   company: { id: string; name: string } | null;
 };
 
@@ -86,6 +103,19 @@ export function toDsSaleRowResponse(
 ): DsSaleRowResponseDto {
   return {
     id: record.id,
+    kind: record.kind,
+    period_year: record.periodYear,
+    period_month: record.periodMonth,
+    work_status: record.workStatus,
+    check: toAccountOption(record.checkUser),
+    total_days: record.totalDays === null ? null : Number(record.totalDays),
+    total_hours: record.totalHours === null ? null : Number(record.totalHours),
+    amount: record.amount === null ? null : Number(record.amount),
+    bank_account_number: record.bankAccountNumber,
+    bank_account_name: record.bankAccountName,
+    bank_name: record.bankName,
+    referrer_name: record.referrerName,
+    paid_date: toDateOnly(record.paidDate),
     employee_code: record.employeeCode,
     full_name: record.fullName,
     date_of_birth: toDateOnly(record.dateOfBirth),
@@ -119,6 +149,15 @@ export const DS_SALE_INCLUDE = {
     },
   },
   pickupUser: {
+    select: {
+      id: true,
+      fullName: true,
+      nickname: true,
+      avatarUrl: true,
+      team: { select: { name: true } },
+    },
+  },
+  checkUser: {
     select: {
       id: true,
       fullName: true,

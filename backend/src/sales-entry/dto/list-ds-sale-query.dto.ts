@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer';
 import {
-  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -18,8 +17,40 @@ import {
 export const DS_SALE_SORTS = ['stt', 'date_of_birth', 'join_date'] as const;
 export type DsSaleSort = (typeof DS_SALE_SORTS)[number];
 
+/**
+ * 4 tab nhỏ của "Nhập doanh số" (2026-11-12) dùng chung bảng/API này:
+ * DS Sale, DS Media, DS Tuyển dụng, DS Đưa đón.
+ */
+export const DS_KINDS = [
+  'sale',
+  'media',
+  'recruitment',
+  'shuttle',
+  // Tab lớn "Nhập thưởng" — danh sách thưởng để Kế toán chi.
+  'bonus',
+] as const;
+export type DsKind = (typeof DS_KINDS)[number];
+
+/** Chỉ cần biết đang ở tab nào (vd lấy danh sách người chọn được). */
+/** Tháng/năm hiện tại theo giờ Việt Nam (UTC+7) — kỳ mặc định của trang Nhập DS/Thưởng. */
+export function currentVnPeriod(): { year: number; month: number } {
+  const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return { year: vnNow.getUTCFullYear(), month: vnNow.getUTCMonth() + 1 };
+}
+
+export class DsKindQueryDto {
+  @IsOptional()
+  @IsIn(DS_KINDS)
+  kind?: DsKind;
+}
+
 /** GET /sales-entry/ds-sale — query lọc + phân trang (Mục 10/11, yêu cầu người dùng). */
 export class ListDsSaleQueryDto {
+  /** Tab đang xem — không gửi = DS Sale (như trước). */
+  @IsOptional()
+  @IsIn(DS_KINDS)
+  kind?: DsKind;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -39,13 +70,20 @@ export class ListDsSaleQueryDto {
   @IsString()
   keyword?: string;
 
+  /** Kỳ đang xem (như Chấm công) — không gửi = tháng hiện tại theo giờ Việt Nam. */
   @IsOptional()
-  @IsDateString()
-  join_date_from?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  year?: number;
 
   @IsOptional()
-  @IsDateString()
-  join_date_to?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month?: number;
 
   @IsOptional()
   @IsUUID()
@@ -58,6 +96,11 @@ export class ListDsSaleQueryDto {
   @IsOptional()
   @IsUUID()
   pickup_user_id?: string;
+
+  /** Chỉ tab Nhập thưởng: yes = đã có Ngày chi, no = chưa chi. */
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  paid?: 'yes' | 'no';
 
   @IsOptional()
   @IsIn(DS_SALE_SORTS)

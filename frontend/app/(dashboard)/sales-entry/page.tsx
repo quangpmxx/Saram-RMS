@@ -24,8 +24,22 @@ export default async function SalesEntryPage() {
   }
   const permissionLevel = await requirePageAccess("sales-entry");
 
+  // Kỳ mặc định = tháng hiện tại theo giờ Việt Nam (bộ lọc Tháng/Năm như Chấm công).
+  // Cách tính khớp trang Chấm công (attendance/page.tsx).
+  const nowParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+  })
+    .format(new Date())
+    .split("-");
+  const initialYear = Number(nowParts[0]);
+  const initialMonth = Number(nowParts[1]);
+
   const [initialRows, saleAccounts, pickupAccounts, companies] = await Promise.all([
-    serverApi<PaginatedResult<DsSaleRow>>(`/sales-entry/ds-sale?page=1&page_size=${DEFAULT_PAGE_SIZE}`),
+    serverApi<PaginatedResult<DsSaleRow>>(
+      `/sales-entry/ds-sale?page=1&page_size=${DEFAULT_PAGE_SIZE}&year=${initialYear}&month=${initialMonth}`,
+    ),
     serverApi<DsSaleAccountOption[]>("/sales-entry/ds-sale/sale-accounts"),
     serverApi<DsSaleAccountOption[]>("/sales-entry/ds-sale/pickup-accounts"),
     serverApi<DsSaleCompanyOption[]>("/sales-entry/ds-sale/companies"),
@@ -42,6 +56,8 @@ export default async function SalesEntryPage() {
       initialSaleAccounts={saleAccounts}
       initialPickupAccounts={pickupAccounts}
       initialCompanies={companies}
+      initialYear={initialYear}
+      initialMonth={initialMonth}
     />
   );
 }

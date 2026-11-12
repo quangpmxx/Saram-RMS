@@ -78,6 +78,9 @@ enum AccountRole {
   accounting
   order_staff
   shuttle_staff
+  /// NV Media, NV Tuyển dụng (2026-11-12): chưa gắn sẵn trang nào — Admin cấp ở trang Phân quyền.
+  media_staff
+  recruitment_staff
 
   @@map("account_role")
 }
@@ -322,6 +325,7 @@ model Account {
   // Dự án phụ — nâng cấp toàn diện (2026-07-17): quan hệ ngược từ SalesEntryRecord (DS Sale)
   salesEntrySaleFor   SalesEntryRecord[] @relation("SalesEntrySaleUser")
   salesEntryPickupFor SalesEntryRecord[] @relation("SalesEntryPickupUser")
+  salesEntryCheckFor  SalesEntryRecord[] @relation("SalesEntryCheckUser")
   createdSalesEntries SalesEntryRecord[] @relation("SalesEntryCreatedBy")
   updatedSalesEntries SalesEntryRecord[] @relation("SalesEntryUpdatedBy")
 
@@ -1388,28 +1392,49 @@ model CompanyLocationConfig {
 /// nghiệp vụ đều nullable — dòng nháp chưa nhập gì vẫn tạo được ở phía
 /// client, nhưng service tầng ngoài chặn lưu bản ghi hoàn toàn rỗng.
 model SalesEntryRecord {
-  id             String    @id @default(uuid()) @db.Uuid
-  employeeCode   String?   @map("employee_code") @db.VarChar(50)
-  fullName       String?   @map("full_name") @db.VarChar(150)
-  dateOfBirth    DateTime? @map("date_of_birth") @db.Date
-  identityNumber String?   @map("identity_number") @db.VarChar(20)
-  hometown       String?   @db.VarChar(255)
-  phone          String?   @db.VarChar(20)
-  joinDate       DateTime? @map("join_date") @db.Date
-  companyId      String?   @map("company_id") @db.Uuid
-  saleUserId     String?   @map("sale_user_id") @db.Uuid
-  pickupUserId   String?   @map("pickup_user_id") @db.Uuid
-  note           String?
-  createdById    String    @map("created_by") @db.Uuid
-  updatedById    String    @map("updated_by") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  /// Loại bảng doanh số (2026-11-12): sale | media | recruitment | shuttle — 4 tab nhỏ
+  /// của "Nhập doanh số" dùng chung bảng này. Với 3 loại sau, `saleUserId` là cột
+  /// "Người tuyển"; `workStatus`/`checkUserId`/`totalDays`/`totalHours` chỉ 3 loại sau dùng.
+  kind              String    @default("sale") @db.VarChar(20)
+  workStatus        String?   @map("work_status") @db.VarChar(255)
+  checkUserId       String?   @map("check_user_id") @db.Uuid
+  totalDays         Decimal?  @map("total_days") @db.Decimal(6, 1)
+  totalHours        Decimal?  @map("total_hours") @db.Decimal(7, 1)
+  /// Tab "Nhập thưởng" (kind = bonus, 2026-11-12): danh sách thưởng để Kế toán chi.
+  /// Dùng lại employeeCode (ID), fullName, companyId, joinDate, saleUserId (Sale), note.
+  amount            Decimal?  @db.Decimal(14, 0)
+  bankAccountNumber String?   @map("bank_account_number") @db.VarChar(50)
+  bankAccountName   String?   @map("bank_account_name") @db.VarChar(150)
+  bankName          String?   @map("bank_name") @db.VarChar(100)
+  referrerName      String?   @map("referrer_name") @db.VarChar(150)
+  paidDate          DateTime? @map("paid_date") @db.Date
+  /// Kỳ (tháng/năm) của dòng — bộ lọc Tháng/Năm của trang, như Chấm công (2026-11-12).
+  /// Dòng tạo ở tháng nào đang xem thì thuộc tháng đó; dòng cũ lấy theo ngày tạo.
+  periodYear        Int       @map("period_year")
+  periodMonth       Int       @map("period_month") @db.SmallInt
+  employeeCode      String?   @map("employee_code") @db.VarChar(50)
+  fullName          String?   @map("full_name") @db.VarChar(150)
+  dateOfBirth       DateTime? @map("date_of_birth") @db.Date
+  identityNumber    String?   @map("identity_number") @db.VarChar(20)
+  hometown          String?   @db.VarChar(255)
+  phone             String?   @db.VarChar(20)
+  joinDate          DateTime? @map("join_date") @db.Date
+  companyId         String?   @map("company_id") @db.Uuid
+  saleUserId        String?   @map("sale_user_id") @db.Uuid
+  pickupUserId      String?   @map("pickup_user_id") @db.Uuid
+  note              String?
+  createdById       String    @map("created_by") @db.Uuid
+  updatedById       String    @map("updated_by") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
   /// Xoá mềm (rà soát 2026-10-30) — trước đây xoá vĩnh viễn; mọi truy vấn bỏ qua dòng có deleted_at.
-  deletedAt      DateTime? @map("deleted_at")
-  deletedById    String?   @map("deleted_by") @db.Uuid
+  deletedAt         DateTime? @map("deleted_at")
+  deletedById       String?   @map("deleted_by") @db.Uuid
 
   saleUser   Account?     @relation("SalesEntrySaleUser", fields: [saleUserId], references: [id])
   pickupUser Account?     @relation("SalesEntryPickupUser", fields: [pickupUserId], references: [id])
+  checkUser  Account?     @relation("SalesEntryCheckUser", fields: [checkUserId], references: [id])
   createdBy  Account      @relation("SalesEntryCreatedBy", fields: [createdById], references: [id])
   updatedBy  Account      @relation("SalesEntryUpdatedBy", fields: [updatedById], references: [id])
   company    OrderRecord? @relation(fields: [companyId], references: [id])
@@ -1421,6 +1446,9 @@ model SalesEntryRecord {
   @@index([companyId])
   @@index([saleUserId])
   @@index([pickupUserId])
+  @@index([kind])
+  @@index([checkUserId])
+  @@index([kind, periodYear, periodMonth])
   @@map("sales_entry_records")
 }
 

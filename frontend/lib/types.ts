@@ -14,7 +14,9 @@ export type AccountRole =
   | "sup_leader"
   | "accounting"
   | "order_staff"
-  | "shuttle_staff";
+  | "shuttle_staff"
+  | "media_staff"
+  | "recruitment_staff";
 export type AccountStatus = "active" | "inactive";
 
 /**
@@ -68,6 +70,8 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   accounting: "Kế toán",
   order_staff: "NV QL Đơn hàng",
   shuttle_staff: "NV Đưa đón",
+  media_staff: "NV Media",
+  recruitment_staff: "NV Tuyển dụng",
 };
 
 /** Giao diện Sáng (mặc định) / Tối — riêng từng tài khoản (xem lib/ui-theme.tsx). */
@@ -1034,8 +1038,27 @@ export interface DsSaleCompanyOption {
   name: string;
 }
 
+/** 4 tab nhỏ của "Nhập doanh số" (2026-11-12) dùng chung bảng/API DS Sale. */
+export type DsKind = "sale" | "media" | "recruitment" | "shuttle" | "bonus";
+
 export interface DsSaleRow {
   id: string;
+  kind: DsKind;
+  /** Kỳ (tháng/năm) của dòng — khớp bộ lọc Tháng/Năm của trang. */
+  period_year: number;
+  period_month: number;
+  /** Các cột chỉ DS Media / DS Tuyển dụng / DS Đưa đón dùng; ở các tab này `sale` là "Người tuyển". */
+  work_status: string | null;
+  check: DsSaleAccountOption | null;
+  total_days: number | null;
+  total_hours: number | null;
+  /** Các cột của tab Nhập thưởng (kind = bonus). */
+  amount: number | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
+  bank_name: string | null;
+  referrer_name: string | null;
+  paid_date: string | null;
   employee_code: string | null;
   full_name: string | null;
   date_of_birth: string | null;
@@ -1066,7 +1089,25 @@ export interface DsSaleRowInput {
   sale_user_id?: string | null;
   pickup_user_id?: string | null;
   note?: string;
+  /** Chỉ dùng khi tạo dòng; không gửi = DS Sale. */
+  kind?: DsKind;
+  /** Kỳ đang xem — chỉ dùng khi tạo dòng. */
+  period_year?: number;
+  period_month?: number;
+  work_status?: string;
+  check_user_id?: string | null;
+  total_days?: number | null;
+  total_hours?: number | null;
+  amount?: number | null;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  bank_name?: string;
+  referrer_name?: string;
+  paid_date?: string | null;
 }
+
+/** Trang danh sách DS — tab Nhập thưởng có thêm tổng số tiền theo bộ lọc đang xem. */
+export type DsSalePage = PaginatedResult<DsSaleRow> & { total_amount?: number };
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-26, yêu cầu trực tiếp người dùng):

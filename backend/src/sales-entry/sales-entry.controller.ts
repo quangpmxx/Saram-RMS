@@ -13,7 +13,10 @@ import {
 import type { Response } from 'express';
 import { SalesEntryService } from './sales-entry.service';
 import { SalesEntryExportService } from './sales-entry-export.service';
-import { ListDsSaleQueryDto } from './dto/list-ds-sale-query.dto';
+import {
+  DsKindQueryDto,
+  ListDsSaleQueryDto,
+} from './dto/list-ds-sale-query.dto';
 import { UpsertDsSaleRowDto } from './dto/upsert-ds-sale-row.dto';
 import { BulkDeleteDsSaleDto } from './dto/bulk-delete-ds-sale.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -72,8 +75,17 @@ export class SalesEntryController {
   }
 
   @Get('sale-accounts')
-  listSaleAccounts(@CurrentUser() user: AuthenticatedUser) {
-    return this.salesEntryService.listSaleAccounts(user);
+  listSaleAccounts(
+    @Query() query: DsKindQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesEntryService.listSaleAccounts(user, query.kind);
+  }
+
+  /** Người chọn được ở cột "Check" (DS Media/Tuyển dụng/Đưa đón, 2026-11-12). */
+  @Get('check-accounts')
+  listCheckAccounts() {
+    return this.salesEntryService.listCheckAccounts();
   }
 
   @Get('pickup-accounts')

@@ -1,5 +1,5 @@
 import { clientApi } from "./api-client";
-import type { DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, DsSaleRowInput, PaginatedResult } from "./types";
+import type { DsKind, DsSaleAccountOption, DsSaleCompanyOption, DsSalePage, DsSaleRow, DsSaleRowInput } from "./types";
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-17, yêu cầu trực tiếp người
@@ -12,14 +12,19 @@ import type { DsSaleAccountOption, DsSaleCompanyOption, DsSaleRow, DsSaleRowInpu
  */
 
 export interface ListDsSaleParams {
+  /** Tab nhỏ đang xem; không gửi = DS Sale. */
+  kind?: DsKind;
   page: number;
   page_size: number;
   keyword?: string;
-  join_date_from?: string;
-  join_date_to?: string;
+  /** Kỳ đang xem (như Chấm công); không gửi = tháng hiện tại. */
+  year?: number;
+  month?: number;
   company_id?: string;
   sale_user_id?: string;
   pickup_user_id?: string;
+  /** Chỉ tab Nhập thưởng: yes = đã chi, no = chưa chi. */
+  paid?: "yes" | "no";
   /** Cột đang sắp xếp (bấm tiêu đề STT/Ngày sinh/Ngày vào). */
   sort?: "stt" | "date_of_birth" | "join_date";
   order?: "asc" | "desc";
@@ -34,8 +39,8 @@ function toQueryString(params: Record<string, string | number | undefined>): str
   return qs ? `?${qs}` : "";
 }
 
-export function listDsSaleRows(params: ListDsSaleParams): Promise<PaginatedResult<DsSaleRow>> {
-  return clientApi<PaginatedResult<DsSaleRow>>(`/sales-entry/ds-sale${toQueryString({ ...params })}`);
+export function listDsSaleRows(params: ListDsSaleParams): Promise<DsSalePage> {
+  return clientApi<DsSalePage>(`/sales-entry/ds-sale${toQueryString({ ...params })}`);
 }
 
 export function createDsSaleRow(input: DsSaleRowInput): Promise<DsSaleRow> {
@@ -54,8 +59,13 @@ export function deleteDsSaleRows(ids: string[]): Promise<{ deleted: number }> {
 }
 
 /** Mục 5: nguồn Sale = tài khoản role 'sale' đang active. */
-export function listDsSaleAccounts(): Promise<DsSaleAccountOption[]> {
-  return clientApi<DsSaleAccountOption[]>("/sales-entry/ds-sale/sale-accounts");
+export function listDsSaleAccounts(kind: DsKind = "sale"): Promise<DsSaleAccountOption[]> {
+  return clientApi<DsSaleAccountOption[]>(`/sales-entry/ds-sale/sale-accounts?kind=${kind}`);
+}
+
+/** Người chọn được ở cột "Check" (DS Media/Tuyển dụng/Đưa đón) — mọi tài khoản đang hoạt động. */
+export function listDsCheckAccounts(): Promise<DsSaleAccountOption[]> {
+  return clientApi<DsSaleAccountOption[]>("/sales-entry/ds-sale/check-accounts");
 }
 
 /** Mục 6: nguồn Đưa đón = tài khoản role 'shuttle_staff' đang active. */

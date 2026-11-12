@@ -22,7 +22,7 @@ export class CreateAccountDto {
 
   @IsEnum(AccountRole, {
     message:
-      'Vai trò phải là admin, manager, leader, mkt, sale, sup_leader, accounting, order_staff hoặc shuttle_staff',
+      'Vai trò phải là admin, manager, leader, mkt, sale, sup_leader, accounting, order_staff, shuttle_staff, media_staff hoặc recruitment_staff',
   })
   role: AccountRole;
 

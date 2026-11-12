@@ -15,6 +15,8 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
 import type { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import {
   ListDsSaleQueryDto,
+  currentVnPeriod,
+  type DsKind,
   type DsSaleSort,
 } from './dto/list-ds-sale-query.dto';
 import { flipOrder, type SortOrder } from '../common/utils/sort-order.util';
@@ -68,8 +70,23 @@ export class SalesEntryService {
   async list(
     query: ListDsSaleQueryDto,
     currentUser: AuthenticatedUser,
-  ): Promise<PaginatedResult<DsSaleRowResponseDto>> {
+  ): Promise<
+    PaginatedResult<DsSaleRowResponseDto> & { total_amount?: number }
+  > {
     const where = await this.buildWhere(query, currentUser);
+
+    // Tab Nhập thưởng: dòng "Tổng" số tiền theo đúng bộ lọc đang xem (mọi trang).
+    const totalAmount =
+      query.kind === 'bonus'
+        ? Number(
+            (
+              await this.prisma.salesEntryRecord.aggregate({
+                where,
+                _sum: { amount: true },
+              })
+            )._sum.amount ?? 0,
+          )
+        : undefined;
 
     const [total, records] = await this.prisma.$transaction([
       this.prisma.salesEntryRecord.count({ where }),
@@ -89,6 +106,7 @@ export class SalesEntryService {
       page: query.page,
       page_size: query.page_size,
       items: records.map(toDsSaleRowResponse),
+      ...(totalAmount === undefined ? {} : { total_amount: totalAmount }),
     };
   }
 
@@ -107,7 +125,14 @@ export class SalesEntryService {
     query: ListDsSaleQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<Prisma.SalesEntryRecordWhereInput> {
-    const where: Prisma.SalesEntryRecordWhereInput = { deletedAt: null };
+    // Mỗi tab nhỏ (DS Sale/Media/Tuyển dụng/Đưa đón) chỉ thấy dòng của tab đó.
+    const where: Prisma.SalesEntryRecordWhereInput = {
+      deletedAt: null,
+      kind: query.kind ?? 'sale',
+      // Bộ lọc Tháng/Năm như Chấm công (2026-11-12) — luôn xem đúng 1 kỳ.
+      periodYear: query.year ?? currentVnPeriod().year,
+      periodMonth: query.month ?? currentVnPeriod().month,
+    };
 
     if (query.keyword) {
       where.OR = [
@@ -116,14 +141,16 @@ export class SalesEntryService {
         { identityNumber: { contains: query.keyword, mode: 'insensitive' } },
         { hometown: { contains: query.keyword, mode: 'insensitive' } },
         { phone: { contains: query.keyword, mode: 'insensitive' } },
+        // Tab Nhập thưởng: tìm theo STK / tên tài khoản / người giới thiệu.
+        {
+          bankAccountNumber: { contains: query.keyword, mode: 'insensitive' },
+        },
+        { bankAccountName: { contains: query.keyword, mode: 'insensitive' } },
+        { referrerName: { contains: query.keyword, mode: 'insensitive' } },
       ];
     }
-    if (query.join_date_from || query.join_date_to) {
-      where.joinDate = {
-        gte: query.join_date_from ? new Date(query.join_date_from) : undefined,
-        lte: query.join_date_to ? new Date(query.join_date_to) : undefined,
-      };
-    }
+    if (query.paid === 'yes') where.paidDate = { not: null };
+    if (query.paid === 'no') where.paidDate = null;
     if (query.company_id) where.companyId = query.company_id;
     if (query.sale_user_id) where.saleUserId = query.sale_user_id;
     if (query.pickup_user_id) where.pickupUserId = query.pickup_user_id;
@@ -186,7 +213,17 @@ export class SalesEntryService {
       !dto.company_id &&
       saleFieldBlank &&
       !dto.pickup_user_id &&
-      isBlank(dto.note)
+      isBlank(dto.note) &&
+      isBlank(dto.work_status) &&
+      !dto.check_user_id &&
+      (dto.total_days === null || dto.total_days === undefined) &&
+      (dto.total_hours === null || dto.total_hours === undefined) &&
+      (dto.amount === null || dto.amount === undefined) &&
+      isBlank(dto.bank_account_number) &&
+      isBlank(dto.bank_account_name) &&
+      isBlank(dto.bank_name) &&
+      isBlank(dto.referrer_name) &&
+      !dto.paid_date
     );
   }
 
@@ -208,6 +245,9 @@ export class SalesEntryService {
       record = await this.prisma.salesEntryRecord.create({
         data: {
           ...this.toWriteData(dto),
+          kind: dto.kind ?? 'sale',
+          periodYear: dto.period_year ?? currentVnPeriod().year,
+          periodMonth: dto.period_month ?? currentVnPeriod().month,
           saleUserId,
           createdById: currentUser.id,
           updatedById: currentUser.id,
@@ -349,7 +389,7 @@ export class SalesEntryService {
       error.code === 'P2003'
     ) {
       return new BadRequestException(
-        'Công ty/Sale/Đưa đón đã chọn không tồn tại hoặc đã bị xóa — vui lòng chọn lại',
+        'Công ty/người đã chọn không tồn tại hoặc đã bị xóa — vui lòng chọn lại',
       );
     }
     return error as Error;
@@ -422,6 +462,20 @@ export class SalesEntryService {
       companyId: dto.company_id ?? null,
       pickupUserId: dto.pickup_user_id ?? null,
       note: isBlank(dto.note) ? null : dto.note,
+      workStatus: isBlank(dto.work_status) ? null : dto.work_status,
+      checkUserId: dto.check_user_id ?? null,
+      totalDays: dto.total_days ?? null,
+      totalHours: dto.total_hours ?? null,
+      amount: dto.amount ?? null,
+      bankAccountNumber: isBlank(dto.bank_account_number)
+        ? null
+        : dto.bank_account_number,
+      bankAccountName: isBlank(dto.bank_account_name)
+        ? null
+        : dto.bank_account_name,
+      bankName: isBlank(dto.bank_name) ? null : dto.bank_name,
+      referrerName: isBlank(dto.referrer_name) ? null : dto.referrer_name,
+      paidDate: dto.paid_date ? new Date(dto.paid_date) : null,
     };
   }
 
@@ -436,12 +490,24 @@ export class SalesEntryService {
    */
   async listSaleAccounts(
     currentUser: AuthenticatedUser,
+    kind: DsKind = 'sale',
   ): Promise<DsSaleAccountOptionDto[]> {
     const teamId =
       salesScope(currentUser) === 'team'
         ? await findOwnTeamId(this.prisma, currentUser.id)
         : undefined;
-    return this.listAccountOptions(RECRUITER_ROLES, teamId);
+    // DS Media/Tuyển dụng/Đưa đón (2026-11-12): cột "Người tuyển" chọn được
+    // mọi tài khoản đang hoạt động (MKT, NV đưa đón, Sale...), không riêng Sale.
+    return this.listAccountOptions(
+      // Cột "Sale" của DS Sale và Nhập thưởng: Sale/Sup Leader/Leader.
+      kind === 'sale' || kind === 'bonus' ? RECRUITER_ROLES : null,
+      teamId,
+    );
+  }
+
+  /** Cột "Check" (người kiểm tra) của DS Media/Tuyển dụng/Đưa đón — mọi tài khoản đang hoạt động. */
+  async listCheckAccounts(): Promise<DsSaleAccountOptionDto[]> {
+    return this.listAccountOptions(null);
   }
 
   /**
@@ -455,14 +521,15 @@ export class SalesEntryService {
   }
 
   private async listAccountOptions(
-    roles: AccountRole[],
+    /** null = mọi vai trò. */
+    roles: AccountRole[] | null,
     /** undefined = không lọc theo nhóm; null = có nhóm nhưng KHÔNG lọc được (an toàn: trả rỗng) — chỉ dùng cho Leader. */
     teamId?: string | null,
   ): Promise<DsSaleAccountOptionDto[]> {
     if (teamId === null) return [];
     const accounts = await this.prisma.account.findMany({
       where: {
-        role: { in: roles },
+        ...(roles ? { role: { in: roles } } : {}),
         status: 'active',
         ...(teamId ? { teamId } : {}),
       },

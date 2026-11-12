@@ -1,11 +1,17 @@
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
+  IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
+import { DS_KINDS, type DsKind } from './list-ds-sale-query.dto';
 
 /** Ô ngày trên bảng gửi "" khi người dùng xóa trắng — coi như null, không phải lỗi định dạng. */
 const emptyToNull = ({ value }: { value: unknown }) =>
@@ -71,4 +77,76 @@ export class UpsertDsSaleRowDto {
   @IsString()
   @MaxLength(2000)
   note?: string;
+
+  /** Tab đang nhập — chỉ dùng khi TẠO dòng (sửa không đổi được loại); không gửi = DS Sale. */
+  @IsOptional()
+  @IsIn(DS_KINDS)
+  kind?: DsKind;
+
+  /** Kỳ (tháng/năm đang xem) — chỉ dùng khi TẠO dòng; không gửi = tháng hiện tại. */
+  @IsOptional()
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  period_year?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  period_month?: number;
+
+  // ── Chỉ DS Media / DS Tuyển dụng / DS Đưa đón dùng (2026-11-12) ──
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  work_status?: string;
+
+  @IsOptional()
+  @IsUUID()
+  check_user_id?: string | null;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0)
+  @Max(9999)
+  total_days?: number | null;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0)
+  @Max(99999)
+  total_hours?: number | null;
+
+  // ── Chỉ tab Nhập thưởng dùng (2026-11-12) ──
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(99_999_999_999)
+  amount?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  bank_account_number?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  bank_account_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  bank_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  referrer_name?: string;
+
+  @IsOptional()
+  @Transform(emptyToNull)
+  @IsDateString()
+  paid_date?: string | null;
 }
