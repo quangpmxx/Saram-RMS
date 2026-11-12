@@ -22,7 +22,8 @@ import { Modal } from "@/components/ui/modal";
 import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-th";
 import { useToast } from "@/lib/toast-context";
 
-const EMPLOYEE_ROLES = ["leader", "mkt", "sale", "sup_leader"];
+/** Admin và Quản lý không phải Check in; mọi vị trí khác đều phải (yêu cầu người dùng 2026-11-12). */
+const NO_CHECKIN_ROLES = ["admin", "manager"];
 
 function todayDateOnly(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -115,7 +116,7 @@ export function CheckinManagementPanel({
 
   // Reset / duyệt / ghi chú Check in: Admin và Quản lý (rà soát phân quyền 2026-10-30).
   const isAdmin = useCan()("checkin.manage");
-  const filteredAccountOptions = accountOptions.filter((a) => EMPLOYEE_ROLES.includes(a.role));
+  const filteredAccountOptions = accountOptions.filter((a) => !NO_CHECKIN_ROLES.includes(a.role));
 
   // Đo chiều cao thật của header hệ thống + thanh bộ lọc bằng ResizeObserver
   // (kỹ thuật đã chứng minh hoạt động ở shuttle-client.tsx) để khối cuộn

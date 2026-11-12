@@ -106,8 +106,6 @@ const WORK_UNITS: Record<AttendanceStatus, number> = {
   compensatory_leave: 0,
 };
 
-// Quản lý cũng có dòng trong bảng chấm công (2026-11-07), chỉ không Check in hằng ngày.
-const EMPLOYEE_ROLES: AccountRole[] = ["manager", "leader", "mkt", "sale", "sup_leader"];
 
 /** Y hệt danh sách mức thu phóng của trang Đưa đón (shuttle-client.tsx) — yêu cầu trực tiếp người dùng. */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
@@ -1001,7 +999,8 @@ export function AttendanceClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid.employees, grid.days, savedByKey, pending]);
 
-  const filteredAccountOptions = accountOptions.filter((a) => EMPLOYEE_ROLES.includes(a.role));
+  // Mọi tài khoản được tick "Chấm công" đều có dòng, bất kể vị trí (2026-11-12) — không lọc theo vị trí nữa.
+  const filteredAccountOptions = accountOptions;
 
   // Sửa lỗi khe hở/lộ nền ở 3 cột sticky đầu (yêu cầu trực tiếp người dùng,
   // 2026-07-14) — NGUYÊN NHÂN GỐC: header/body trước đây khai báo width rời

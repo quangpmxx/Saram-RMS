@@ -16,18 +16,12 @@ import {
 import { ROLE_LABEL } from '../common/constants/role-label';
 
 /**
- * Vai trò xuất hiện dưới dạng 1 DÒNG trong bảng chấm công. Quản lý cũng là
- * đối tượng chấm công (yêu cầu người dùng 2026-11-07) — chỉ không phải Check
- * in hằng ngày (CHECKIN_ROLES ở checkin.service.ts không có 'manager').
- * Admin không có dòng (người quản lý bảng).
+ * Ai có DÒNG trong bảng chấm công (yêu cầu người dùng 2026-11-12): MỌI tài khoản
+ * được tick "Chấm công" ở Sửa tài khoản (`attendanceTracked`), bất kể vị trí —
+ * nằm ở bảng của văn phòng đã chọn cho tài khoản đó. Trước đây còn giới hạn theo
+ * vị trí (Manager/Leader/MKT/Sale/Sup Leader) nên NV Media, NV Đưa đón, Kế toán...
+ * dù được tick vẫn không hiện.
  */
-const EMPLOYEE_ROLES: AccountRole[] = [
-  'manager',
-  'leader',
-  'mkt',
-  'sale',
-  'sup_leader',
-];
 
 /**
  * Chỉ Admin/Quản lý chấm công & sửa vị trí (rà soát phân quyền 2026-10-30);
@@ -614,14 +608,13 @@ export class AttendanceService {
     // Không có quyền xem cả nhóm/toàn công ty: chỉ chính mình.
     const viewAll = can(currentUser, 'attendance.view_all');
     if (!viewAll && !can(currentUser, 'attendance.view_team')) {
-      return { id: currentUser.id, role: { in: EMPLOYEE_ROLES } };
+      return { id: currentUser.id };
     }
     if (!viewAll) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
       return {
-        role: { in: EMPLOYEE_ROLES },
         teamId: account?.teamId ?? NO_MATCH_UUID,
         ...(query.account_id ? { id: query.account_id } : {}),
         ...statusFilter,
@@ -629,7 +622,6 @@ export class AttendanceService {
     }
     // admin/manager
     return {
-      role: { in: EMPLOYEE_ROLES },
       ...(query.team_id ? { teamId: query.team_id } : {}),
       ...(query.account_id ? { id: query.account_id } : {}),
       ...statusFilter,
@@ -647,7 +639,6 @@ export class AttendanceService {
   ): Promise<void> {
     let where: Prisma.AccountWhereInput = {
       id: { in: accountIds },
-      role: { in: EMPLOYEE_ROLES },
     };
     if (!can(currentUser, 'attendance.view_all')) {
       const account = await this.prisma.account.findUnique({

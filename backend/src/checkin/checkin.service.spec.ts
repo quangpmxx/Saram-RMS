@@ -221,6 +221,38 @@ describe('CheckinService (Phase 1+2+3+4)', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+  it('6b) Quản lý không được Check in', async () => {
+    await expect(
+      service.checkin(
+        createDto(),
+        { id: 'mgr-1', role: 'manager', sessionId: 's' },
+        '1.2.3.4',
+        CHROME_WINDOWS_UA,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('6c) Mọi vị trí khác Admin/Quản lý đều qua được bước kiểm tra vị trí (vd NV Media, Kế toán)', async () => {
+    // Chặn ở bước SAU (chưa cài vị trí văn phòng) — chứng tỏ không còn bị chặn vì vị trí.
+    prisma.companyLocationConfig.findFirst.mockResolvedValue(null);
+    for (const role of [
+      'media_staff',
+      'accounting',
+      'shuttle_staff',
+    ] as const) {
+      await expect(
+        service.checkin(
+          createDto(),
+          { id: `${role}-1`, role, sessionId: 's' },
+          '1.2.3.4',
+          CHROME_WINDOWS_UA,
+        ),
+      ).rejects.toThrow(
+        'Quản trị viên chưa thiết lập vị trí văn phòng của bạn',
+      );
+    }
+  });
+
   it('7) Check-in lần 2 trong ngày bị từ chối, ghi audit log "reject" (Mục 9)', async () => {
     prisma.checkinRecord.findFirst.mockResolvedValue({
       id: 'rec-existing',

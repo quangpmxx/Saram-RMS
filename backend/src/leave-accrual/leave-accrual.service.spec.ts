@@ -1,5 +1,8 @@
 import { Test } from '@nestjs/testing';
-import { LeaveAccrualService } from './leave-accrual.service';
+import {
+  LeaveAccrualService,
+  hasCompletedProbation,
+} from './leave-accrual.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('LeaveAccrualService', () => {
@@ -134,12 +137,11 @@ describe('LeaveAccrualService', () => {
     expect(result).toEqual({ checked: 2, accrued: ['Chưa cộng'] });
   });
 
-  it('5) Chỉ truy vấn account có role leader/mkt/sale + status active (đúng nhóm hiện trên bảng chấm công)', async () => {
+  it('5) Truy vấn MỌI account đang hoạt động được tick "Chấm công", không lọc theo vị trí (2026-11-12)', async () => {
     await service.runAccrual();
 
     expect(prisma.account.findMany).toHaveBeenCalledWith({
       where: {
-        role: { in: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'] },
         status: 'active',
         attendanceTracked: true,
       },
@@ -188,5 +190,58 @@ describe('LeaveAccrualService', () => {
         lastLeaveAccrualAt: NOW,
       });
     }
+  });
+
+  describe('Quy tắc đủ 30 ngày mới cộng phép (2026-11-12)', () => {
+    // Giờ Việt Nam = UTC+7: 2026-08-10T02:00Z là ngày 10/08 ở Việt Nam.
+    const today = new Date('2026-08-10T02:00:00.000Z');
+    const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
+
+    it('vào làm 11/07 → 10/08 là ngày thứ 31: ĐƯỢC cộng', () => {
+      expect(hasCompletedProbation(day('2026-07-11'), today)).toBe(true);
+    });
+
+    it('vào làm 12/07 → 10/08 mới là ngày thứ 30: CHƯA được cộng', () => {
+      expect(hasCompletedProbation(day('2026-07-12'), today)).toBe(false);
+    });
+
+    it('vào làm hôm nay: CHƯA được cộng', () => {
+      expect(hasCompletedProbation(day('2026-08-10'), today)).toBe(false);
+    });
+
+    it('chưa nhập Ngày vào làm: coi như nhân viên cũ, cộng như trước', () => {
+      expect(hasCompletedProbation(null, today)).toBe(true);
+    });
+
+    it('runAccrual bỏ qua người chưa đủ 30 ngày, vẫn cộng người đã đủ', async () => {
+      const now = new Date();
+      const daysAgo = (n: number) =>
+        new Date(
+          Date.parse(
+            `${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(now)}T00:00:00.000Z`,
+          ) -
+            n * 24 * 60 * 60 * 1000,
+        );
+      prisma.account.findMany.mockResolvedValue([
+        {
+          id: 'new-1',
+          fullName: 'Mới vào 10 ngày',
+          remainingLeaveDays: null,
+          lastLeaveAccrualAt: null,
+          hireDate: daysAgo(10),
+        },
+        {
+          id: 'old-1',
+          fullName: 'Đã làm 30 ngày',
+          remainingLeaveDays: null,
+          lastLeaveAccrualAt: null,
+          hireDate: daysAgo(30),
+        },
+      ]);
+
+      const result = await service.runAccrual();
+
+      expect(result).toEqual({ checked: 2, accrued: ['Đã làm 30 ngày'] });
+    });
   });
 });

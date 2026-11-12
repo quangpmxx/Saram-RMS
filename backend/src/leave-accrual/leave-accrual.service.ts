@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { AccountRole } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -12,14 +11,8 @@ import { PrismaService } from '../prisma/prisma.service';
  * số nhỏ theo từng module đã có sẵn trong dự án, ví dụ TIMEZONE lặp lại ở
  * cả sale-reminder.service.ts và daily-reports.service.ts).
  */
-// 2026-11-07: thêm Quản lý — cũng được cộng phép hằng tháng như nhân viên.
-const EMPLOYEE_ROLES: AccountRole[] = [
-  'manager',
-  'leader',
-  'mkt',
-  'sale',
-  'sup_leader',
-];
+// 2026-11-12 (yêu cầu người dùng): cộng phép cho MỌI tài khoản đang hoạt động được
+// tick "Chấm công", bất kể vị trí — khớp bảng chấm công (attendance.service.ts).
 
 /** Múi giờ hệ thống — công ty vận hành tại Việt Nam, cố định để job/độ lệch ngày luôn nhất quán bất kể server chạy ở múi giờ nào. */
 const TIMEZONE = 'Asia/Ho_Chi_Minh';
@@ -36,6 +29,34 @@ function monthKeyInTimezone(date: Date, timeZone: string): string {
     year: 'numeric',
     month: '2-digit',
   }).format(date); // en-CA -> "YYYY-MM" khi chỉ truyền year+month
+}
+
+/** Số ngày phải làm đủ trước khi bắt đầu được cộng phép (ngày vào làm tính là ngày 1). */
+const DAYS_BEFORE_FIRST_ACCRUAL = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Đã sang ngày thứ 31 kể từ ngày vào làm chưa (tính theo ngày Việt Nam).
+ * Tài khoản CHƯA nhập "Ngày vào làm" coi như nhân viên cũ — cộng phép như trước,
+ * để không làm ngừng cộng phép của những người đang được cộng.
+ */
+export function hasCompletedProbation(
+  hireDate: Date | null,
+  now: Date,
+): boolean {
+  if (!hireDate) return true;
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now); // "YYYY-MM-DD"
+  const todayUtc = Date.parse(`${today}T00:00:00.000Z`);
+  // hire_date là cột DATE — Prisma trả về 00:00 UTC của đúng ngày đó.
+  const daysSinceHire = Math.floor(
+    (todayUtc - hireDate.getTime()) / MS_PER_DAY,
+  );
+  return daysSinceHire >= DAYS_BEFORE_FIRST_ACCRUAL;
 }
 
 @Injectable()
@@ -72,7 +93,6 @@ export class LeaveAccrualService {
     const employees = await this.prisma.account.findMany({
       // Bỏ người không chấm công (ô "Chấm công" ở Sửa tài khoản, 2026-11-07).
       where: {
-        role: { in: EMPLOYEE_ROLES },
         status: 'active',
         attendanceTracked: true,
       },
@@ -81,10 +101,13 @@ export class LeaveAccrualService {
         fullName: true,
         remainingLeaveDays: true,
         lastLeaveAccrualAt: true,
+        hireDate: true,
       },
     });
 
     const toAccrue = employees.filter((e) => {
+      // Quy tắc người dùng (2026-11-12): làm đủ 30 ngày, từ ngày thứ 31 mới được cộng phép.
+      if (!hasCompletedProbation(e.hireDate, now)) return false;
       if (!e.lastLeaveAccrualAt) return true;
       return (
         monthKeyInTimezone(e.lastLeaveAccrualAt, TIMEZONE) !== currentMonth

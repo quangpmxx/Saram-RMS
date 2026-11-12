@@ -28,11 +28,12 @@ import { parseUserAgent } from './user-agent.util';
 const TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 /**
- * Mục 1, yêu cầu người dùng: "Nhân viên/Sale, MKT và Leader" tự Check in —
- * Admin/Quản lý không dùng. Khớp đúng EMPLOYEE_ROLES ở attendance.service.ts
- * (module Chấm công) — không phát minh danh sách vai trò riêng.
+ * Ai phải Check in (yêu cầu người dùng 2026-11-12): "Hễ không phải là admin
+ * hoặc manager thì đều phải check in" — MỌI vị trí khác (Leader, Sale, MKT, NV
+ * Media, NV Tuyển dụng, NV Đưa đón, Kế toán...). Trước đây chỉ Leader/MKT/Sale/
+ * Sup Leader.
  */
-const CHECKIN_ROLES: AccountRole[] = ['leader', 'mkt', 'sale', 'sup_leader'];
+const NO_CHECKIN_ROLES: AccountRole[] = ['admin', 'manager'];
 
 /**
  * Yêu cầu trực tiếp người dùng (2026-07-24): "Trang chấm công GPS chỉ có
@@ -40,7 +41,7 @@ const CHECKIN_ROLES: AccountRole[] = ['leader', 'mkt', 'sale', 'sup_leader'];
  * Mục 10 gốc (từng cho cả Leader/Nhân viên xem, chỉ khác phạm vi chi
  * tiết). Chỉ ảnh hưởng "trang quản lý Check in" (GET /checkin/records) —
  * KHÔNG đụng tới việc Leader/Nhân viên/Sale/MKT tự Check in cho chính
- * mình (CHECKIN_ROLES, GET /checkin/status, GET /checkin/preview,
+ * mình (mọi vị trí trừ NO_CHECKIN_ROLES, GET /checkin/status, GET /checkin/preview,
  * POST /checkin — vẫn giữ nguyên, đó là hành động tự phục vụ khác hẳn
  * "xem trang quản lý").
  */
@@ -245,7 +246,7 @@ export class CheckinService {
     requestIp: string | undefined,
     userAgent: string | undefined,
   ): Promise<CheckinRecordResponseDto> {
-    if (!CHECKIN_ROLES.includes(currentUser.role)) {
+    if (NO_CHECKIN_ROLES.includes(currentUser.role)) {
       throw new ForbiddenException(
         'Vai trò của bạn không sử dụng tính năng Check in',
       );
@@ -550,14 +551,14 @@ export class CheckinService {
   ): Promise<Prisma.AccountWhereInput> {
     const viewAll = can(currentUser, 'attendance.view_all');
     if (!viewAll && !can(currentUser, 'attendance.view_team')) {
-      return { id: currentUser.id, role: { in: CHECKIN_ROLES } };
+      return { id: currentUser.id, role: { notIn: NO_CHECKIN_ROLES } };
     }
     if (!viewAll) {
       const account = await this.prisma.account.findUnique({
         where: { id: currentUser.id },
       });
       return {
-        role: { in: CHECKIN_ROLES },
+        role: { notIn: NO_CHECKIN_ROLES },
         teamId: account?.teamId ?? NO_MATCH_UUID,
         ...(query.account_id ? { id: query.account_id } : {}),
         status: 'active',
@@ -565,7 +566,7 @@ export class CheckinService {
     }
     // admin/manager
     return {
-      role: { in: CHECKIN_ROLES },
+      role: { notIn: NO_CHECKIN_ROLES },
       ...(query.team_id ? { teamId: query.team_id } : {}),
       ...(query.account_id ? { id: query.account_id } : {}),
       status: 'active',
