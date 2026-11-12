@@ -18,6 +18,7 @@ const COLUMNS: Array<{ header: string; width: number }> = [
   { header: 'Ngày sinh', width: 14 },
   { header: 'Số CMT/CCCD', width: 18 },
   { header: 'Quê quán', width: 32 },
+  { header: 'SĐT', width: 16 },
   { header: 'Ngày vào', width: 14 },
   { header: 'Công ty làm', width: 24 },
   { header: 'Sale', width: 22 },
@@ -82,6 +83,7 @@ export class SalesEntryExportService {
         toDdMmYyyy(row.date_of_birth),
         row.identity_number ?? '',
         row.hometown ?? '',
+        row.phone ?? '',
         toDdMmYyyy(row.join_date),
         row.company?.name ?? '',
         row.sale?.full_name ?? '',
@@ -95,8 +97,8 @@ export class SalesEntryExportService {
           bottom: THIN_BORDER,
           right: THIN_BORDER,
         };
-        // Cột "Quê quán" (6) và "Ghi chú" (11) — wrap text (Mục 12).
-        if (colNumber === 6 || colNumber === 11) {
+        // Cột "Quê quán" (6) và "Ghi chú" (12) — wrap text (Mục 12).
+        if (colNumber === 6 || colNumber === 12) {
           cell.alignment = { wrapText: true, vertical: 'top' };
         }
       });

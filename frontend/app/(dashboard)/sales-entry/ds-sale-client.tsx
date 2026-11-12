@@ -43,6 +43,7 @@ interface SheetRow {
   date_of_birth: string;
   identity_number: string;
   hometown: string;
+  phone: string;
   join_date: string;
   company: DsSaleSelectOption | null;
   sale: DsSaleSelectOption | null;
@@ -66,6 +67,7 @@ const NAME_COL_WIDTH = 200;
 const DOB_COL_WIDTH = 120;
 const IDENTITY_COL_WIDTH = 160;
 const HOMETOWN_COL_WIDTH = 260;
+const PHONE_COL_WIDTH = 120;
 const JOIN_COL_WIDTH = 120;
 const COMPANY_COL_WIDTH = 170;
 const SALE_COL_WIDTH = 160;
@@ -85,6 +87,7 @@ const TABLE_TOTAL_WIDTH =
   DOB_COL_WIDTH +
   IDENTITY_COL_WIDTH +
   HOMETOWN_COL_WIDTH +
+  PHONE_COL_WIDTH +
   JOIN_COL_WIDTH +
   COMPANY_COL_WIDTH +
   SALE_COL_WIDTH +
@@ -97,7 +100,7 @@ const Z_HEADER = "z-20";
 const Z_HEADER_CORNER = "z-30";
 
 /** Thứ tự cột có thể focus/điều hướng bằng Enter — khớp đúng thứ tự hiển thị trên bảng (Mục 2). */
-const TEXT_FIELDS = ["employee_code", "full_name", "date_of_birth", "identity_number", "hometown", "join_date"] as const;
+const TEXT_FIELDS = ["employee_code", "full_name", "date_of_birth", "identity_number", "hometown", "phone", "join_date"] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 
 function toOption(account: DsSaleAccountOption): DsSaleSelectOption {
@@ -124,6 +127,7 @@ function makeDraftRow(defaultSale: DsSaleSelectOption | null = null): SheetRow {
     date_of_birth: "",
     identity_number: "",
     hometown: "",
+    phone: "",
     join_date: "",
     company: null,
     sale: defaultSale,
@@ -142,6 +146,7 @@ function toSheetRow(row: DsSaleRow): SheetRow {
     date_of_birth: row.date_of_birth ?? "",
     identity_number: row.identity_number ?? "",
     hometown: row.hometown ?? "",
+    phone: row.phone ?? "",
     join_date: row.join_date ?? "",
     company: row.company ? { id: row.company.id, label: row.company.name } : null,
     sale: row.sale ? toOption(row.sale) : null,
@@ -165,6 +170,7 @@ function isRowBlank(row: SheetRow, ignoreSale = false): boolean {
     !row.date_of_birth &&
     !row.identity_number.trim() &&
     !row.hometown.trim() &&
+    !row.phone.trim() &&
     !row.join_date &&
     !row.company &&
     (ignoreSale || !row.sale) &&
@@ -180,6 +186,7 @@ function toInput(row: SheetRow): DsSaleRowInput {
     date_of_birth: row.date_of_birth || null,
     identity_number: row.identity_number.trim(),
     hometown: row.hometown.trim(),
+    phone: row.phone.trim(),
     join_date: row.join_date || null,
     company_id: row.company?.id ?? null,
     sale_user_id: row.sale?.id ?? null,
@@ -661,7 +668,7 @@ export function DsSaleClient({
             uiSize="xs"
             value={keyword}
             onChange={(e) => handleKeywordChange(e.target.value)}
-            placeholder="Mã NV, họ tên, CCCD, quê quán..."
+            placeholder="Mã NV, họ tên, CCCD, quê quán, SĐT..."
           />
         </Field>
         <Field label="Thu phóng" uiSize="xs">
@@ -793,6 +800,7 @@ export function DsSaleClient({
             <col style={{ width: DOB_COL_WIDTH }} />
             <col style={{ width: IDENTITY_COL_WIDTH }} />
             <col style={{ width: HOMETOWN_COL_WIDTH }} />
+            <col style={{ width: PHONE_COL_WIDTH }} />
             <col style={{ width: JOIN_COL_WIDTH }} />
             <col style={{ width: COMPANY_COL_WIDTH }} />
             <col style={{ width: SALE_COL_WIDTH }} />
@@ -852,6 +860,9 @@ export function DsSaleClient({
               </th>
               <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
                 Quê quán
+              </th>
+              <th className={cn("sticky top-0 border-r border-b border-slate-200 bg-brand-800 px-2 py-2 text-center font-semibold text-white", Z_HEADER)}>
+                SĐT
               </th>
               <SortableTh
                 sortKey="join_date"
@@ -958,6 +969,16 @@ export function DsSaleClient({
                       onBlur={() => flushSave(row.localId)}
                       onEnter={() => focusNextRow(rowIndex, "hometown")}
                       onPaste={(e) => handlePaste(rowIndex, "hometown", e)}
+                    />
+                  </td>
+                  <td className={cn("border-r border-b border-slate-100 p-0.5", zebra)}>
+                    <CellInput
+                      innerRef={(el) => cellRefs.current.set(`${rowIndex}:phone`, el)}
+                      value={row.phone}
+                      onChange={(v) => updateField(row.localId, "phone", v)}
+                      onBlur={() => flushSave(row.localId)}
+                      onEnter={() => focusNextRow(rowIndex, "phone")}
+                      onPaste={(e) => handlePaste(rowIndex, "phone", e)}
                     />
                   </td>
                   <td className={cn("border-r border-b border-slate-100 p-0.5", zebra)}>

@@ -1041,6 +1041,7 @@ export interface DsSaleRow {
   date_of_birth: string | null;
   identity_number: string | null;
   hometown: string | null;
+  phone: string | null;
   join_date: string | null;
   company: DsSaleCompanyOption | null;
   sale: DsSaleAccountOption | null;
@@ -1059,6 +1060,7 @@ export interface DsSaleRowInput {
   date_of_birth?: string | null;
   identity_number?: string;
   hometown?: string;
+  phone?: string;
   join_date?: string | null;
   company_id?: string | null;
   sale_user_id?: string | null;

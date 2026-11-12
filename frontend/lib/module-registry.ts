@@ -63,7 +63,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   {
     code: "sales-entry",
     href: "/sales-entry",
-    label: "Nhập doanh số",
+    label: "Nhập DS/Thưởng",
     icon: "salesEntry",
     // Yêu cầu trực tiếp người dùng (2026-07-27): Sale tự nhập doanh số cho
     // chính mình; Leader/Quản lý/Admin/Kế toán giữ nguyên như trước. Phạm

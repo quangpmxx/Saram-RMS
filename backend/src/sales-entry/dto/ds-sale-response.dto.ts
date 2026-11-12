@@ -8,6 +8,7 @@ export interface DsSaleRowResponseDto {
   date_of_birth: string | null;
   identity_number: string | null;
   hometown: string | null;
+  phone: string | null;
   join_date: string | null;
   company: DsSaleCompanyOptionDto | null;
   sale: DsSaleAccountOptionDto | null;
@@ -90,6 +91,7 @@ export function toDsSaleRowResponse(
     date_of_birth: toDateOnly(record.dateOfBirth),
     identity_number: record.identityNumber,
     hometown: record.hometown,
+    phone: record.phone,
     join_date: toDateOnly(record.joinDate),
     company: record.company
       ? { id: record.company.id, name: record.company.name }

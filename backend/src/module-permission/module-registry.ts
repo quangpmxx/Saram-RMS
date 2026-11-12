@@ -131,7 +131,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   },
   {
     code: 'sales-entry',
-    label: 'Nhập doanh số',
+    label: 'Nhập DS/Thưởng',
     // Yêu cầu trực tiếp người dùng (2026-07-27): "Sale sẽ tự nhập doanh số
     // cho chính mình... leader, quản lý, admin là được chọn sale như hiện
     // tại". Mở rộng từ chỉ Admin sang cả 4 vai trò còn lại — phạm vi

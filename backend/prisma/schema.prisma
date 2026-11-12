@@ -1394,6 +1394,7 @@ model SalesEntryRecord {
   dateOfBirth    DateTime? @map("date_of_birth") @db.Date
   identityNumber String?   @map("identity_number") @db.VarChar(20)
   hometown       String?   @db.VarChar(255)
+  phone          String?   @db.VarChar(20)
   joinDate       DateTime? @map("join_date") @db.Date
   companyId      String?   @map("company_id") @db.Uuid
   saleUserId     String?   @map("sale_user_id") @db.Uuid

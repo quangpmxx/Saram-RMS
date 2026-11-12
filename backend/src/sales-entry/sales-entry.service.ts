@@ -115,6 +115,7 @@ export class SalesEntryService {
         { fullName: { contains: query.keyword, mode: 'insensitive' } },
         { identityNumber: { contains: query.keyword, mode: 'insensitive' } },
         { hometown: { contains: query.keyword, mode: 'insensitive' } },
+        { phone: { contains: query.keyword, mode: 'insensitive' } },
       ];
     }
     if (query.join_date_from || query.join_date_to) {
@@ -180,6 +181,7 @@ export class SalesEntryService {
       !dto.date_of_birth &&
       isBlank(dto.identity_number) &&
       isBlank(dto.hometown) &&
+      isBlank(dto.phone) &&
       !dto.join_date &&
       !dto.company_id &&
       saleFieldBlank &&
@@ -415,6 +417,7 @@ export class SalesEntryService {
       dateOfBirth: dto.date_of_birth ? new Date(dto.date_of_birth) : null,
       identityNumber: isBlank(dto.identity_number) ? null : dto.identity_number,
       hometown: isBlank(dto.hometown) ? null : dto.hometown,
+      phone: isBlank(dto.phone) ? null : dto.phone,
       joinDate: dto.join_date ? new Date(dto.join_date) : null,
       companyId: dto.company_id ?? null,
       pickupUserId: dto.pickup_user_id ?? null,

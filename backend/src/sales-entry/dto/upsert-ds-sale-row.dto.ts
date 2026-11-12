@@ -46,6 +46,11 @@ export class UpsertDsSaleRowDto {
   hometown?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  phone?: string;
+
+  @IsOptional()
   @Transform(emptyToNull)
   @IsDateString()
   join_date?: string | null;
