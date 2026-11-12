@@ -13,7 +13,7 @@ const beVietnamPro = Be_Vietnam_Pro({
 
 export const metadata: Metadata = {
   title: "CRM Tuyển dụng — Saram CRM",
-  description: "Hệ thống quản lý tuyển dụng nội bộ",
+  description: "Hệ thống quản lý vận hành và tuyển dụng lao động",
   // Thêm vào màn hình chính (iPhone): logo nền trắng + tên ngắn.
   icons: { apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "Saram CRM", statusBarStyle: "default" },

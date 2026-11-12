@@ -34,7 +34,7 @@ export default async function LoginPage() {
                 Công Ty TNHH Thương Mại Dịch Vụ Saram Vina
               </p>
               <p className="relative z-10 mt-1 whitespace-nowrap text-[clamp(10px,calc((100vw-96px)/28),13px)] text-slate-500">
-                Hệ thống quản lý tuyển dụng lao động nội bộ
+                Hệ thống quản lý vận hành và tuyển dụng lao động
               </p>
             </div>
 

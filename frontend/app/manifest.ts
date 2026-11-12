@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Saram CRM",
     short_name: "Saram CRM",
-    description: "Hệ thống quản lý tuyển dụng nội bộ",
+    description: "Hệ thống quản lý vận hành và tuyển dụng lao động",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
