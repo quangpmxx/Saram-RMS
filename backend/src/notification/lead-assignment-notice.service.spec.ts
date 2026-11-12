@@ -67,7 +67,7 @@ describe('LeadAssignmentNoticeService', () => {
       channel: 'in_app',
       senderId: 'leader-1',
       status: 'sent',
-      content: 'Bạn được chia data "Nguyễn A" (0900000001)',
+      content: 'Leader đã phân cho bạn 1 số mới: "Nguyễn A" (0900000001)',
     });
     expect(realtime.emitNotificationCreated).toHaveBeenCalledTimes(1);
     expect(realtime.emitNotificationCreated).toHaveBeenCalledWith(
@@ -87,7 +87,7 @@ describe('LeadAssignmentNoticeService', () => {
     await service.notifyAssignedBulk(5, 'sale-1', leader);
     expect(createdData()).toMatchObject({
       leadId: null,
-      content: 'Bạn được chia 5 data mới',
+      content: 'Leader đã phân cho bạn 5 số mới',
       senderId: 'leader-1',
     });
   });
@@ -97,7 +97,7 @@ describe('LeadAssignmentNoticeService', () => {
     expect(createdData()).toMatchObject({
       leadId: 'lead-1',
       senderId: null,
-      content: 'Hệ thống tự động chia cho bạn data "Nguyễn A" (0900000001)',
+      content: 'Leader đã phân cho bạn 1 số mới: "Nguyễn A" (0900000001)',
     });
     expect(realtime.emitNotificationCreated).toHaveBeenCalledWith(
       expect.anything(),
@@ -110,7 +110,7 @@ describe('LeadAssignmentNoticeService', () => {
     expect(createdData()).toMatchObject({
       leadId: null,
       senderId: null,
-      content: 'Hệ thống tự động chia cho bạn 12 data mới',
+      content: 'Leader đã phân cho bạn 12 số mới',
     });
   });
 

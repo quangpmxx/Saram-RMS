@@ -32,11 +32,12 @@ export class LeadAssignmentNoticeService {
     actor: AuthenticatedUser,
     kind: 'assign' | 'transfer' = 'assign',
   ): Promise<void> {
-    const verb = kind === 'transfer' ? 'chuyển' : 'chia';
     return this.send(
       assigneeId,
       lead.id,
-      `Bạn được ${verb} data "${lead.fullName}" (${lead.phoneNumber})`,
+      kind === 'transfer'
+        ? `Bạn được chuyển data "${lead.fullName}" (${lead.phoneNumber})`
+        : `Leader đã phân cho bạn 1 số mới: "${lead.fullName}" (${lead.phoneNumber})`,
       actor,
     );
   }
@@ -50,7 +51,7 @@ export class LeadAssignmentNoticeService {
     return this.send(
       assigneeId,
       null,
-      `Bạn được chia ${count} data mới`,
+      `Leader đã phân cho bạn ${count} số mới`,
       actor,
     );
   }
@@ -60,7 +61,7 @@ export class LeadAssignmentNoticeService {
     return this.send(
       assigneeId,
       lead.id,
-      `Hệ thống tự động chia cho bạn data "${lead.fullName}" (${lead.phoneNumber})`,
+      `Leader đã phân cho bạn 1 số mới: "${lead.fullName}" (${lead.phoneNumber})`,
       null,
     );
   }
@@ -70,7 +71,7 @@ export class LeadAssignmentNoticeService {
     return this.send(
       assigneeId,
       null,
-      `Hệ thống tự động chia cho bạn ${count} data mới`,
+      `Leader đã phân cho bạn ${count} số mới`,
       null,
     );
   }
