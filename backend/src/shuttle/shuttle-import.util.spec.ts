@@ -1,4 +1,5 @@
 import {
+  autoMatchDriver,
   matchAccount,
   suggestAccount,
   parseShuttleDate,
@@ -77,6 +78,30 @@ describe('matchAccount', () => {
     expect(matchAccount('Thu Hà', accounts)).toBe('2');
     expect(matchAccount('Hà', accounts)).toBeNull();
     expect(matchAccount('Không ai', accounts)).toBeNull();
+  });
+});
+
+describe('autoMatchDriver (đồng bộ sheet tự nhận NV đưa đón)', () => {
+  const drivers = [
+    { id: 'd1', fullName: 'Nguyễn Văn Chuyền', nickname: null },
+    { id: 'd2', fullName: 'Trần Thị Thu Hương', nickname: 'Hương ĐĐ' },
+    { id: 'd3', fullName: 'Lê Văn Hùng', nickname: null },
+    { id: 'd4', fullName: 'Phạm Văn Hùng', nickname: null },
+  ];
+  it('tên gọi kèm SĐT, không dấu, biệt danh, họ tên đầy đủ', () => {
+    expect(autoMatchDriver('Chuyền 0373791063', drivers)).toBe('d1');
+    expect(autoMatchDriver('chuyen', drivers)).toBe('d1');
+    expect(autoMatchDriver('Hương ĐĐ', drivers)).toBe('d2');
+    expect(autoMatchDriver('thu huong', drivers)).toBe('d2');
+    expect(autoMatchDriver('Nguyễn Văn Chuyền', drivers)).toBe('d1');
+  });
+  it('gõ sai nhẹ vẫn nhận', () => {
+    expect(autoMatchDriver('Nguyen Van Chuyn', drivers)).toBe('d1');
+  });
+  it('không chắc là ai → để trống', () => {
+    expect(autoMatchDriver('Hùng', drivers)).toBeNull(); // 2 người tên Hùng
+    expect(autoMatchDriver('Tuấn', drivers)).toBeNull();
+    expect(autoMatchDriver('', drivers)).toBeNull();
   });
 });
 

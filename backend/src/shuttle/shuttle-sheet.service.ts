@@ -16,7 +16,7 @@ import {
   type SheetRow,
   ShuttleImportService,
 } from './shuttle-import.service';
-import { fold, suggestAccount } from './shuttle-import.util';
+import { autoMatchDriver, fold } from './shuttle-import.util';
 import {
   GoogleSheetError,
   extractSpreadsheetId,
@@ -153,11 +153,10 @@ export class ShuttleSheetService {
       return { tabs: loaded.tabs, tab: null };
     }
     const { parsed } = loaded;
-    // NV đưa đón chỉ nhận khi khớp chính xác; không khớp → để trống, không hỏi (người dùng 2026-11-10).
-    const plan = await this.plan(parsed.sheets[0]?.rows ?? [], (raw) => {
-      const s = raw ? suggestAccount(raw, parsed.driverAccounts) : null;
-      return s?.exact ? s.id : null;
-    });
+    // NV đưa đón tự nhận (biệt danh / họ tên / tên gọi / gõ sai nhẹ); không chắc → để trống, không hỏi.
+    const plan = await this.plan(parsed.sheets[0]?.rows ?? [], (raw) =>
+      raw ? autoMatchDriver(raw, parsed.driverAccounts) : null,
+    );
     return {
       tabs: loaded.tabs,
       tab: loaded.tab,
@@ -186,8 +185,7 @@ export class ShuttleSheetService {
       if (Object.prototype.hasOwnProperty.call(driverMapping, raw)) {
         return driverMapping[raw];
       }
-      const s = suggestAccount(raw, parsed.driverAccounts);
-      return s?.exact ? s.id : null;
+      return autoMatchDriver(raw, parsed.driverAccounts);
     });
     if (!plan.creates.length && !plan.updates.length) {
       return { created: 0, updated: 0 };

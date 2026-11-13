@@ -216,6 +216,41 @@ export function matchAccount(
   );
 }
 
+/**
+ * Đồng bộ Google Sheet tự gán NV đưa đón (người dùng 2026-11-13: "tự đồng bộ, sai thì mới bỏ
+ * trống"): bỏ SĐT đi kèm → khớp biệt danh / họ tên / tên gọi (đúng 1 người) → nếu không, nhận
+ * tên gõ sai nhẹ (giống ≥ 85% và hơn hẳn người giống thứ hai). Không chắc → null (để trống).
+ */
+export function autoMatchDriver(
+  label: string,
+  accounts: { id: string; fullName: string; nickname: string | null }[],
+): string | null {
+  const name = stripTrailingPhone(label);
+  const hit = matchAccount(name, accounts);
+  if (hit) return hit;
+  const l = fold(name);
+  if (!l) return null;
+  const lWords = l.split(' ').length;
+  const scores = accounts
+    .map((a) => {
+      const full = fold(a.fullName);
+      const candidates = [
+        full,
+        a.nickname ? fold(a.nickname) : '',
+        full.split(' ').slice(-lWords).join(' '),
+      ];
+      return {
+        id: a.id,
+        score: Math.max(...candidates.map((c) => similarity(l, c))),
+      };
+    })
+    .sort((x, y) => y.score - x.score);
+  const [best, second] = scores;
+  if (!best || best.score < 0.85) return null;
+  if (second && second.score > best.score - 0.1) return null;
+  return best.id;
+}
+
 /** Cách ghi trong sheet → lựa chọn cố định của phần mềm (so sau khi fold). */
 export const STATUS_ALIASES: Record<string, string> = {
   'khong don duoc': 'Chưa đón được',
