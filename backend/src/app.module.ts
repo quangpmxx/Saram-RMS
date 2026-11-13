@@ -33,6 +33,7 @@ import { AnonymousFeedbackModule } from './anonymous-feedback/anonymous-feedback
 import { RealtimeModule } from './realtime/realtime.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { SalesEntryModule } from './sales-entry/sales-entry.module';
+import { PayrollModule } from './payroll/payroll.module';
 import { OrderManagementModule } from './order-management/order-management.module';
 import { RecruitmentScheduleModule } from './recruitment-schedule/recruitment-schedule.module';
 import { ModulePermissionModule } from './module-permission/module-permission.module';
@@ -75,6 +76,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     RealtimeModule,
     BirthdayModule,
     SalesEntryModule,
+    PayrollModule,
     OrderManagementModule,
     RecruitmentScheduleModule,
     ModulePermissionModule,

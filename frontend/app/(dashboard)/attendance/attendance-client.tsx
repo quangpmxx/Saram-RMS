@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Download, Loader2, Pencil, RotateCcw, Save, StickyNote } from "lucide-react";
+import { PayslipButton } from "@/components/payroll/payslip-button";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
@@ -1086,6 +1087,7 @@ export function AttendanceClient({
         >
           Đơn xin nghỉ phép
         </button>
+        <PayslipButton />
       </div>
 
       {/* Mỗi trang con có 3 bảng theo văn phòng (yêu cầu người dùng 2026-11-12). Nhân viên thuộc

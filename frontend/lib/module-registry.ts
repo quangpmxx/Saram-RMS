@@ -17,6 +17,8 @@ export interface ModuleRegistryEntry {
   label: string;
   icon: NavIconKey;
   defaultRoles: AccountRole[];
+  /** Không hiện trên menu trái (vẫn có trong trang Phân quyền). */
+  hideInNav?: boolean;
 }
 
 export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
@@ -59,7 +61,16 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "attendance",
     defaultRoles: ["admin", "manager", "leader", "mkt", "sale", "sup_leader"],
   },
-  { code: "accounting", href: "/accounting", label: "Kế toán", icon: "accounting", defaultRoles: ["admin"] },
+  { code: "accounting", href: "/accounting", label: "Kế toán", icon: "accounting", defaultRoles: ["admin", "accounting", "manager"] },
+  {
+    code: "payslip",
+    href: "/attendance",
+    label: "Phiếu lương",
+    icon: "payslip",
+    // Mở từ nút "Phiếu lương" ở trang Chấm công (user 2026-11-14), không đặt trên menu trái.
+    hideInNav: true,
+    defaultRoles: ["admin", "manager", "leader", "mkt", "sale", "sup_leader", "accounting", "order_staff", "shuttle_staff", "media_staff", "recruitment_staff"],
+  },
   {
     code: "sales-entry",
     href: "/sales-entry",

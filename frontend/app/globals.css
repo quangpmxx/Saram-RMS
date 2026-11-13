@@ -182,3 +182,26 @@ body {
     animation: none !important;
   }
 }
+
+/* Biểu đồ trang Kế toán — Tiền lương (2026-11-13): màu chuỗi đã kiểm bằng bộ kiểm
+   mù màu/tương phản cho cả nền sáng và nền tối; thứ tự cố định, không xoay vòng. */
+.payroll-viz {
+  --pv-1: #2a78d6;
+  --pv-2: #eb6834;
+  --pv-3: #1baf7a;
+  --pv-4: #eda100;
+  --pv-5: #e87ba4;
+  --pv-6: #6250d6;
+  --pv-other: #94a3b8;
+  --pv-track: #eef2f7;
+}
+html.dark .payroll-viz {
+  --pv-1: #3987e5;
+  --pv-2: #d95926;
+  --pv-3: #199e70;
+  --pv-4: #c98500;
+  --pv-5: #d55181;
+  --pv-6: #9085e9;
+  --pv-other: #64748b;
+  --pv-track: #1c2740;
+}

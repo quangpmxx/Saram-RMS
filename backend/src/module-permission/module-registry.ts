@@ -22,6 +22,10 @@ import {
   PancakeAutoUpController,
   PancakeController,
 } from '../pancake/pancake.controller';
+import {
+  MyPayslipController,
+  PayrollController,
+} from '../payroll/payroll.controller';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, ngoài phạm vi Design Freeze
@@ -178,15 +182,32 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     // POST/PUT/DELETE /team vẫn @Roles('admin') riêng, không bị ảnh hưởng.
     controllers: [AccountsController],
   },
-  // "Kế toán" — CHỈ khung sườn, chưa có controller backend (trang tĩnh "sắp
-  // ra mắt") — không có gì để Guard kiểm tra, nhưng vẫn liệt kê ở đây
-  // (controllers: []) để hiện trong trang Admin "Phân quyền" và gate được
-  // Ở TẦNG FRONTEND (ẩn menu/chặn route).
+  // Kế toán = Tiền lương (2026-11-13): Kế toán/Admin làm toàn bộ, Quản lý chỉ xem.
   {
     code: 'accounting',
     label: 'Kế toán',
-    defaultRoles: ['admin'],
-    controllers: [],
+    defaultRoles: ['admin', 'accounting'],
+    viewRoles: ['manager'],
+    controllers: [PayrollController],
+  },
+  // Phiếu lương của chính mình (2026-11-13): mọi vai trò xem + xác nhận / thắc mắc.
+  {
+    code: 'payslip',
+    label: 'Phiếu lương',
+    defaultRoles: [
+      'admin',
+      'manager',
+      'leader',
+      'mkt',
+      'sale',
+      'sup_leader',
+      'accounting',
+      'order_staff',
+      'shuttle_staff',
+      'media_staff',
+      'recruitment_staff',
+    ],
+    controllers: [MyPayslipController],
   },
   {
     code: 'order-management',

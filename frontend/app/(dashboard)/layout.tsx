@@ -63,7 +63,7 @@ export default async function DashboardLayout({
   // với mọi tài khoản; bấm vào trang không có quyền → trang tự chuyển sang
   // /access-denied (requirePageAccess / kiểm tra vai trò ở page.tsx) báo
   // "Bạn không có quyền thao tác với trang này".
-  const navItems: NavItem[] = MODULE_REGISTRY.map((item) => ({ href: item.href, label: item.label, icon: item.icon }));
+  const navItems: NavItem[] = MODULE_REGISTRY.filter((item) => !item.hideInNav).map((item) => ({ href: item.href, label: item.label, icon: item.icon }));
 
   return (
     <CapabilityProvider capabilities={user.capabilities ?? []}>

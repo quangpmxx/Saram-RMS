@@ -350,6 +350,10 @@ model Account {
   // Đơn phản ánh ẩn danh (2026-10-28): quan hệ ngược — CHỈ dùng nội bộ DB, không bao giờ trả ra API.
   anonymousFeedbacks AnonymousFeedback[] @relation("AnonymousFeedbackSender")
 
+  // Tiền lương (2026-11-13)
+  payrollSetting PayrollAccountSetting?
+  payrollSlips   PayrollSlip[]
+
   @@index([office])
   @@map("accounts")
 }
@@ -1542,6 +1546,7 @@ model OrderRecord {
   salesEntryRecords   SalesEntryRecord[]
   recruitmentPostings RecruitmentPosting[]
   leads               Lead[]
+  commissionRate      PayrollCommissionRate?
 
   @@map("order_records")
 }
@@ -1814,4 +1819,120 @@ model PushSubscription {
 
   @@index([accountId])
   @@map("push_subscriptions")
+}
+
+/// ── Tiền lương (2026-11-13, module Kế toán) ──────────────────────────────────
+/// Thành phần lương: 1 khoản thu nhập / khấu trừ / chỉ để xem, giá trị là công thức
+/// kiểu Excel (xem payroll/formula.ts). `code` dùng làm tên biến trong công thức khác.
+model PayrollComponent {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique @db.VarChar(50)
+  name          String   @db.VarChar(150)
+  /// income | deduction | info
+  nature        String   @default("income") @db.VarChar(20)
+  formula       String?
+  showOnPayslip Boolean  @default(true) @map("show_on_payslip")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("payroll_components")
+}
+
+/// Mẫu bảng lương theo vị trí: `roles` = các vai trò dùng mẫu này; `items` = danh sách
+/// [{ code, formula? }] theo thứ tự tính (formula bỏ trống = dùng công thức của thành phần).
+/// `isDefault` = mẫu cho vị trí chưa có mẫu riêng.
+model PayrollTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(150)
+  roles     String[]
+  isDefault Boolean  @default(false) @map("is_default")
+  items     Json     @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("payroll_templates")
+}
+
+/// Mức lương riêng từng người: lương cơ bản, mức hoa hồng riêng, mẫu riêng (đè mẫu của
+/// vị trí) và công thức riêng từng khoản (`overrides` = { CODE: "công thức" }).
+model PayrollAccountSetting {
+  accountId      String   @id @map("account_id") @db.Uuid
+  baseSalary     Decimal  @default(0) @map("base_salary") @db.Decimal(14, 0)
+  commissionRate Decimal  @default(0) @map("commission_rate") @db.Decimal(14, 0)
+  templateId     String?  @map("template_id") @db.Uuid
+  overrides      Json     @default("{}")
+  /// Phiếu lương Saram (2026-11-13): ngày chính thức (trước ngày này hưởng lương thử việc),
+  /// ngân hàng + chủ tài khoản nhận lương (số tài khoản lấy từ hồ sơ tài khoản).
+  officialDate      DateTime? @map("official_date") @db.Date
+  bankName          String?   @map("bank_name") @db.VarChar(100)
+  bankAccountHolder String?   @map("bank_account_holder") @db.VarChar(150)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@map("payroll_account_settings")
+}
+
+/// Mức hoa hồng theo giờ của từng công ty (công ty = OrderRecord).
+model PayrollCommissionRate {
+  companyId   String   @id @map("company_id") @db.Uuid
+  ratePerHour Decimal  @default(0) @map("rate_per_hour") @db.Decimal(14, 0)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company OrderRecord @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("payroll_commission_rates")
+}
+
+/// Bảng lương 1 tháng. status: draft (nháp) → locked (đã chốt) → sent (đã gửi nhân viên)
+/// → completed (đã chi xong).
+model Payroll {
+  id          String    @id @default(uuid()) @db.Uuid
+  year        Int
+  month       Int       @db.SmallInt
+  status      String    @default("draft") @db.VarChar(20)
+  lockedAt    DateTime? @map("locked_at")
+  sentAt      DateTime? @map("sent_at")
+  completedAt DateTime? @map("completed_at")
+  createdById String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  slips PayrollSlip[]
+
+  @@unique([year, month])
+  @@map("payrolls")
+}
+
+/// Phiếu lương 1 người trong 1 bảng lương. `inputs` = số liệu đầu vào đã chụp lại (công,
+/// giờ, hoa hồng…); `lines` = [{ code, name, nature, formula, value, show, error? }].
+/// confirmStatus: pending | confirmed | question.
+model PayrollSlip {
+  id             String    @id @default(uuid()) @db.Uuid
+  payrollId      String    @map("payroll_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  templateName   String?   @map("template_name") @db.VarChar(150)
+  otherIncome    Decimal   @default(0) @map("other_income") @db.Decimal(14, 0)
+  otherDeduction Decimal   @default(0) @map("other_deduction") @db.Decimal(14, 0)
+  advance        Decimal   @default(0) @db.Decimal(14, 0)
+  /// Số tiền kế toán nhập tay cho các khoản không có công thức: { MÃ_KHOẢN: số tiền }.
+  /// (3 cột other_income/other_deduction/advance phía trên không còn dùng.)
+  manualValues   Json      @default("{}") @map("manual_values")
+  note           String?   @db.VarChar(500)
+  inputs         Json      @default("{}")
+  lines          Json      @default("[]")
+  netPay         Decimal   @default(0) @map("net_pay") @db.Decimal(14, 0)
+  confirmStatus  String    @default("pending") @map("confirm_status") @db.VarChar(20)
+  question       String?   @db.VarChar(1000)
+  respondedAt    DateTime? @map("responded_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@unique([payrollId, accountId])
+  @@index([accountId])
+  @@map("payroll_slips")
 }
