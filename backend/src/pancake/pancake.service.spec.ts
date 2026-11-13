@@ -106,7 +106,7 @@ describe('PancakeService — Up tự động', () => {
     expect(user.id).toBe('owner-1'); // người up = người phụ trách page
   });
 
-  it('số trùng 30 ngày về nhóm giữ số gốc, không tính lượt', async () => {
+  it('số trùng 7 ngày về nhóm giữ số gốc, không tính lượt', async () => {
     const { prisma, candidates, record } = setup({
       origin: { id: 'C', name: 'Nhóm C' },
     });

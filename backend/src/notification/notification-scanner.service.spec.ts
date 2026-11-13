@@ -21,7 +21,7 @@ describe('NotificationScannerService', () => {
   /** Khớp đủ field toNotificationResponse() cần — mặc định cho notification.create(), tránh crash lúc phát realtime (Mục 3, mở rộng realtime — Thông báo). */
   const fullNotification = {
     id: 'notification-1',
-    accountId: 'sale-1',
+    accountId: 'creator-1',
     leadId: 'lead-1',
     leaveRequestId: null,
     type: 'callback_reminder',
@@ -63,6 +63,7 @@ describe('NotificationScannerService', () => {
       prisma.callbackSchedule.findMany.mockResolvedValue([
         {
           id: 'cb-1',
+          createdById: 'creator-1',
           scheduledAt,
           lead: {
             id: 'lead-1',
@@ -78,7 +79,7 @@ describe('NotificationScannerService', () => {
       expect(sent).toBe(1);
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          accountId: 'sale-1',
+          accountId: 'creator-1',
           leadId: 'lead-1',
           type: 'callback_reminder',
           channel: 'in_app',
@@ -120,6 +121,7 @@ describe('NotificationScannerService', () => {
       prisma.callbackSchedule.findMany.mockResolvedValue([
         {
           id: 'cb-2',
+          createdById: 'creator-2',
           scheduledAt,
           lead: {
             id: 'lead-2',
@@ -144,6 +146,7 @@ describe('NotificationScannerService', () => {
       prisma.callbackSchedule.findMany.mockResolvedValue([
         {
           id: 'cb-daily',
+          createdById: 'creator-daily',
           scheduledAt: start,
           repeatDaily: true,
           lead: {
@@ -163,7 +166,7 @@ describe('NotificationScannerService', () => {
       });
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          accountId: 'sale-9',
+          accountId: 'creator-daily',
           scheduledAt: todayAt,
         }),
       });
@@ -175,6 +178,7 @@ describe('NotificationScannerService', () => {
       prisma.callbackSchedule.findMany.mockResolvedValue([
         {
           id: 'cb-daily-late',
+          createdById: 'creator-daily-late',
           scheduledAt: start,
           repeatDaily: true,
           lead: {
@@ -192,10 +196,11 @@ describe('NotificationScannerService', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('lịch gọi lại chưa gán Sale (assignedToId null) — không tạo thông báo', async () => {
+    it('số chưa gán Sale (assignedToId null) — vẫn nhắc cho người đặt lịch', async () => {
       prisma.callbackSchedule.findMany.mockResolvedValue([
         {
           id: 'cb-3',
+          createdById: 'creator-3',
           scheduledAt: new Date(Date.now() - 30 * 1000),
           lead: {
             id: 'lead-3',
@@ -208,8 +213,10 @@ describe('NotificationScannerService', () => {
 
       const sent = await service.runInAppCallbackTick();
 
-      expect(sent).toBe(0);
-      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(sent).toBe(1);
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ accountId: 'creator-3' }),
+      });
     });
 
     it('tickInAppCallback() (wrapper định kỳ) không throw ra ngoài kể cả khi lỗi toàn bộ', async () => {

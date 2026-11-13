@@ -322,7 +322,7 @@ describe('ImportsService', () => {
                 { id: 'a', uploadedAt: now },
                 { id: `lead-${phone}`, uploadedAt: now },
               ]
-            : // 0900000001: trùng nhưng cách >30 ngày → không tính trùng
+            : // 0900000001: trùng nhưng cách >7 ngày → không tính trùng
               [
                 { id: 'a', uploadedAt: old },
                 { id: `lead-${phone}`, uploadedAt: now },

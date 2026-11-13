@@ -65,7 +65,7 @@ export class NotificationScannerService {
           },
           { repeatDaily: true, scheduledAt: { lte: now } },
         ],
-        lead: { deletedAt: null, assignedToId: { not: null } },
+        lead: { deletedAt: null },
       },
       include: {
         lead: {
@@ -73,7 +73,6 @@ export class NotificationScannerService {
             id: true,
             fullName: true,
             phoneNumber: true,
-            assignedToId: true,
           },
         },
       },
@@ -81,7 +80,7 @@ export class NotificationScannerService {
 
     let sentCount = 0;
     for (const callback of dueCallbacks) {
-      if (!callback.lead.assignedToId) continue;
+      // Nhắc cho đúng người đặt lịch hẹn gọi lại (không phải sale phụ trách số).
       // Lịch "Mỗi ngày": lần gần nhất đã tới giờ (cùng giờ mỗi ngày); dedupe
       // theo đúng mốc lần đó nên mỗi ngày nhắc đúng 1 lần.
       const dueAt = callback.repeatDaily
@@ -97,6 +96,7 @@ export class NotificationScannerService {
 
       const existing = await this.prisma.notification.findFirst({
         where: {
+          accountId: callback.createdById,
           leadId: callback.lead.id,
           type: 'callback_reminder',
           channel: 'in_app',
@@ -107,7 +107,7 @@ export class NotificationScannerService {
 
       const created = await this.prisma.notification.create({
         data: {
-          accountId: callback.lead.assignedToId,
+          accountId: callback.createdById,
           leadId: callback.lead.id,
           type: 'callback_reminder',
           channel: 'in_app',

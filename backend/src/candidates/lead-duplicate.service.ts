@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Lead } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-/** Chu kỳ lọc trùng SĐT: chỉ tính trùng khi 2 lần up cách nhau dưới 30 ngày. */
-export const DUPLICATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+/** Chu kỳ lọc trùng SĐT: chỉ tính trùng khi 2 lần up cách nhau dưới 7 ngày. */
+export const DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function isWithinDuplicateWindow(a: Date, b: Date): boolean {
   return Math.abs(a.getTime() - b.getTime()) < DUPLICATE_WINDOW_MS;
@@ -18,7 +18,7 @@ export class LeadDuplicateService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Nhóm đang giữ số gốc: lần up SỚM NHẤT của SĐT này trong 30 ngày gần nhất
+   * Nhóm đang giữ số gốc: lần up SỚM NHẤT của SĐT này trong 7 ngày gần nhất
    * (có nhóm). Số trùng up mới sẽ tự chuyển về nhóm này.
    */
   async findOriginTeam(
@@ -44,7 +44,7 @@ export class LeadDuplicateService {
 
   /**
    * Đồng bộ cờ trùng cho TẤT CẢ bản ghi cùng SĐT: một bản ghi bị đánh dấu
-   * trùng khi có bản ghi khác cùng SĐT up cách nó dưới 30 ngày.
+   * trùng khi có bản ghi khác cùng SĐT up cách nó dưới 7 ngày.
    */
   async syncDuplicateFlags(phoneNumber: string): Promise<Lead[]> {
     const matches = await this.prisma.lead.findMany({

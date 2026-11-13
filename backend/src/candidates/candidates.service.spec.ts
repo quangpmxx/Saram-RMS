@@ -376,7 +376,7 @@ describe('CandidatesService', () => {
       });
     });
 
-    it('trùng trong 30 ngày ở nhóm khác → tự chuyển data về nhóm giữ số gốc + báo moved_to_team', async () => {
+    it('trùng trong 7 ngày ở nhóm khác → tự chuyển data về nhóm giữ số gốc + báo moved_to_team', async () => {
       const existingLead = {
         ...baseLead,
         id: 'lead-0',
@@ -414,7 +414,7 @@ describe('CandidatesService', () => {
       });
     });
 
-    it('bản ghi cùng SĐT up cách quá 30 ngày → không báo trùng', async () => {
+    it('bản ghi cùng SĐT up cách quá 7 ngày → không báo trùng', async () => {
       const oldLead = {
         ...baseLead,
         id: 'lead-0',

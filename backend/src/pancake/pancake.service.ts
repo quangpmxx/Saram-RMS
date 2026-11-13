@@ -756,7 +756,7 @@ export class PancakeService {
     return this.facebookSourceId;
   }
 
-  /** Tạo data như nhập tay (lọc trùng 30 ngày, chia trong nhóm, thông báo). Số trùng không tính lượt. */
+  /** Tạo data như nhập tay (lọc trùng 7 ngày, chia trong nhóm, thông báo). Số trùng không tính lượt. */
   private async autoUp(
     page: PageRow,
     conversationRowId: string,

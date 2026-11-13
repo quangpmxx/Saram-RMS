@@ -1886,7 +1886,7 @@ function buildCreateBanner(result: CreateCandidateResult): { type: "warning" | "
   return {
     type: "warning",
     text:
-      `Đã thêm lao động mới, nhưng SĐT ${warning.phone_number} đã trùng (trong 30 ngày) với:\n${details}` +
+      `Đã thêm lao động mới, nhưng SĐT ${warning.phone_number} đã trùng (trong 7 ngày) với:\n${details}` +
       (warning.moved_to_team
         ? `\nData đã tự chuyển sang ${warning.moved_to_team.name} (nhóm đang giữ số gốc).`
         : ""),

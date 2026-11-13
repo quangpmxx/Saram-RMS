@@ -206,7 +206,7 @@ export class ImportsService {
       // Năm sinh nhập tự do (2026-11-06): lưu nguyên chữ trong ô, không báo lỗi định dạng.
       const birthYear = birthYearRaw.trim().slice(0, 50) || undefined;
 
-      // Số trùng trong 30 ngày → tự vào nhóm đang giữ số gốc.
+      // Số trùng trong 7 ngày → tự vào nhóm đang giữ số gốc.
       const originTeam =
         await this.duplicateService.findOriginTeam(phoneNumber);
 

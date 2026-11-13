@@ -291,7 +291,7 @@ export class CandidatesService {
     query: ListDuplicatesQueryDto,
     currentUser: AuthenticatedUser,
   ): Promise<PaginatedResult<DuplicateGroupDto>> {
-    // Chỉ các bản ghi bị đánh dấu trùng (trùng trong vòng 30 ngày).
+    // Chỉ các bản ghi bị đánh dấu trùng (trùng trong vòng 7 ngày).
     const grouped = await this.prisma.lead.groupBy({
       by: ['phoneNumber'],
       where: { deletedAt: null, isDuplicateFlagged: true },
@@ -383,7 +383,7 @@ export class CandidatesService {
       throw new BadRequestException('Nguồn MKT không tồn tại');
     }
 
-    // Số trùng trong 30 ngày → tự vào nhóm đang giữ số gốc.
+    // Số trùng trong 7 ngày → tự vào nhóm đang giữ số gốc.
     const originTeam = await this.duplicateService.findOriginTeam(
       dto.phone_number,
     );
