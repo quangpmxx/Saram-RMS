@@ -373,6 +373,15 @@ export function TaskDetailModal({
         {/* Cột thông tin */}
         <aside className="space-y-3 rounded-2xl bg-slate-50 p-4 text-sm">
           <Info label="Phụ trách"><PersonChip person={task.assignee} /></Info>
+          {task.editor && <Info label="Người dựng"><PersonChip person={task.editor} /></Info>}
+          {(task.raw_link || task.done_link) && (
+            <Info label="Video">
+              <span className="flex gap-2 text-xs">
+                {task.raw_link && <a href={task.raw_link} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 hover:underline">Video thô</a>}
+                {task.done_link && <a href={task.done_link} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 hover:underline">Video xong</a>}
+              </span>
+            </Info>
+          )}
           <Info label="Cùng tham gia">{task.members.length ? <AvatarStack people={task.members} max={6} /> : <span className="text-xs text-slate-400">—</span>}</Info>
           <Info label="Người giao"><PersonChip person={task.created_by} /></Info>
           <Info label="Kế hoạch">{task.plan?.title ?? "—"}</Info>

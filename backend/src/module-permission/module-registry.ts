@@ -23,6 +23,7 @@ import {
   PancakeController,
 } from '../pancake/pancake.controller';
 import { MediaController } from '../media/media.controller';
+import { MediaVideoController } from '../media/media-video.controller';
 import {
   MyPayslipController,
   PayrollController,
@@ -231,7 +232,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     code: 'media',
     label: 'Media',
     defaultRoles: ['admin', 'manager', 'mkt', 'media_staff'],
-    controllers: [MediaController],
+    controllers: [MediaController, MediaVideoController],
   },
 ];
 

@@ -436,7 +436,7 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
   {
     code: 'media.manage_plan',
     module: 'media',
-    label: 'Quản lý kế hoạch nội dung & chiến dịch',
+    label: 'Quản lý kế hoạch, chiến dịch, nhóm nội dung & kênh đăng',
     defaultRoles: ['manager', 'mkt'],
   },
   {

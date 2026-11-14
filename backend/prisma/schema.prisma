@@ -1859,17 +1859,17 @@ model PayrollTemplate {
 /// Mức lương riêng từng người: lương cơ bản, mức hoa hồng riêng, mẫu riêng (đè mẫu của
 /// vị trí) và công thức riêng từng khoản (`overrides` = { CODE: "công thức" }).
 model PayrollAccountSetting {
-  accountId      String   @id @map("account_id") @db.Uuid
-  baseSalary     Decimal  @default(0) @map("base_salary") @db.Decimal(14, 0)
-  commissionRate Decimal  @default(0) @map("commission_rate") @db.Decimal(14, 0)
-  templateId     String?  @map("template_id") @db.Uuid
-  overrides      Json     @default("{}")
+  accountId         String    @id @map("account_id") @db.Uuid
+  baseSalary        Decimal   @default(0) @map("base_salary") @db.Decimal(14, 0)
+  commissionRate    Decimal   @default(0) @map("commission_rate") @db.Decimal(14, 0)
+  templateId        String?   @map("template_id") @db.Uuid
+  overrides         Json      @default("{}")
   /// Phiếu lương Saram (2026-11-13): ngày chính thức (trước ngày này hưởng lương thử việc),
   /// ngân hàng + chủ tài khoản nhận lương (số tài khoản lấy từ hồ sơ tài khoản).
   officialDate      DateTime? @map("official_date") @db.Date
   bankName          String?   @map("bank_name") @db.VarChar(100)
   bankAccountHolder String?   @map("bank_account_holder") @db.VarChar(150)
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   account Account @relation(fields: [accountId], references: [id])
 
@@ -2016,33 +2016,43 @@ model MediaPlan {
 
 /// Công việc Media. `code` tăng dần → mã Media ID "MD-000123".
 model MediaTask {
-  id          String          @id @default(uuid()) @db.Uuid
-  code        Int             @unique @default(autoincrement())
-  title       String          @db.VarChar(255)
-  description String?
+  id             String          @id @default(uuid()) @db.Uuid
+  code           Int             @unique @default(autoincrement())
+  title          String          @db.VarChar(255)
+  description    String?
   /// video | post | livestream | design | other
-  type        String          @default("video") @db.VarChar(20)
-  status      MediaTaskStatus @default(todo)
-  priority    MediaPriority   @default(normal)
-  deadline    DateTime?
+  type           String          @default("video") @db.VarChar(20)
+  status         MediaTaskStatus @default(todo)
+  priority       MediaPriority   @default(normal)
+  deadline       DateTime?
   /// 0–100, nhân viên tự cập nhật.
-  progress    Int             @default(0)
-  platform    String?         @db.VarChar(30)
-  planId      String?         @map("plan_id") @db.Uuid
-  campaignId  String?         @map("campaign_id") @db.Uuid
-  ideaId      String?         @map("idea_id") @db.Uuid
-  companyId   String?         @map("company_id") @db.Uuid
-  factory     String?         @db.VarChar(200)
-  /// Người phụ trách chính (accounts.id).
-  assigneeId  String?         @map("assignee_id") @db.Uuid
-  createdById String          @map("created_by") @db.Uuid
-  completedAt DateTime?       @map("completed_at")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  progress       Int             @default(0)
+  platform       String?         @db.VarChar(30)
+  planId         String?         @map("plan_id") @db.Uuid
+  campaignId     String?         @map("campaign_id") @db.Uuid
+  ideaId         String?         @map("idea_id") @db.Uuid
+  companyId      String?         @map("company_id") @db.Uuid
+  factory        String?         @db.VarChar(200)
+  /// Người phụ trách chính (accounts.id) — ở Sổ video là "Người quay".
+  assigneeId     String?         @map("assignee_id") @db.Uuid
+  /// Sổ video (2026-11-14): người dựng (accounts.id), có thể khác người quay.
+  editorId       String?         @map("editor_id") @db.Uuid
+  /// Sổ video: link video thô / link video xong.
+  rawLink        String?         @map("raw_link") @db.VarChar(1000)
+  doneLink       String?         @map("done_link") @db.VarChar(1000)
+  /// Sổ video: nhóm nội dung (Giải trí, TEXT video...).
+  contentGroupId String?         @map("content_group_id") @db.Uuid
+  /// Sổ video: ngày ghi sổ (nhóm dòng theo ngày). Null = lấy ngày tạo.
+  workDate       DateTime?       @map("work_date") @db.Date
+  createdById    String          @map("created_by") @db.Uuid
+  completedAt    DateTime?       @map("completed_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   plan         MediaPlan?          @relation(fields: [planId], references: [id], onDelete: SetNull)
   campaign     MediaCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   idea         MediaIdea?          @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  contentGroup MediaContentGroup?  @relation(fields: [contentGroupId], references: [id], onDelete: SetNull)
   members      MediaTaskMember[]
   activities   MediaTaskActivity[]
   submissions  MediaSubmission[]
@@ -2050,8 +2060,40 @@ model MediaTask {
 
   @@index([status])
   @@index([assigneeId])
+  @@index([editorId])
   @@index([deadline])
+  @@index([workDate])
   @@map("media_tasks")
+}
+
+/// Sổ video: danh mục nhóm nội dung có màu (Giải trí, TEXT video, Trò chuyện...).
+model MediaContentGroup {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  colorKey  String?  @map("color_key") @db.VarChar(20)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tasks MediaTask[]
+
+  @@map("media_content_groups")
+}
+
+/// Sổ video: danh mục kênh đăng (không lưu mật khẩu).
+model MediaChannel {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(150)
+  platform  String   @default("tiktok") @db.VarChar(30)
+  url       String?  @db.VarChar(1000)
+  /// Nhân viên giữ kênh (accounts.id).
+  ownerId   String?  @map("owner_id") @db.Uuid
+  colorKey  String?  @map("color_key") @db.VarChar(20)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  publications MediaPublication[]
+
+  @@map("media_channels")
 }
 
 /// Người cùng tham gia công việc (ngoài người phụ trách chính).
@@ -2150,6 +2192,8 @@ model MediaPublication {
   platform         String    @db.VarChar(30)
   /// Tài khoản/kênh đăng (tên page, kênh TikTok...).
   channel          String?   @db.VarChar(200)
+  /// Kênh trong danh mục (Sổ video). Có thì `channel` = tên kênh lúc lưu.
+  channelId        String?   @map("channel_id") @db.Uuid
   publisherId      String?   @map("publisher_id") @db.Uuid
   /// pending | published
   status           String    @default("pending") @db.VarChar(20)
@@ -2171,9 +2215,12 @@ model MediaPublication {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  task     MediaTask?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  campaign MediaCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  task          MediaTask?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  campaign      MediaCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  channelRecord MediaChannel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
 
   @@index([scheduledDate])
+  @@index([taskId])
+  @@index([channelId])
   @@map("media_publications")
 }

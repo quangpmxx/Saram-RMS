@@ -50,6 +50,9 @@ export interface MediaTask {
   company_name: string | null;
   factory: string | null;
   assignee: Person | null;
+  editor: Person | null;
+  raw_link: string | null;
+  done_link: string | null;
   members: Person[];
   created_by: Person | null;
   latest_submission: { version: number; review_status: string; submitted_at: string } | null;

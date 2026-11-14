@@ -6,6 +6,7 @@ import { clientApi } from "@/lib/api-client";
 import { Input } from "@/components/ui/form";
 import { useToast } from "@/lib/toast-context";
 import { cn } from "@/lib/cn";
+import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import { PLATFORM_META, PersonChip, SectionTitle, StudioCard, fmtCompact, fmtNumber, ymd, type MediaOptions, type Person } from "./media-shared";
 import { METRICS, type MetricKey } from "./media-calendar";
 
@@ -28,6 +29,12 @@ const FUNNEL: { key: MetricKey; label: string; grad: string }[] = [
   { key: "hired", label: "Nhận việc", grad: "from-emerald-400 to-teal-500" },
 ];
 
+interface VideoStats {
+  total: { videos: number; done: number; posted: number };
+  by_person: { person: Person; shot: number; edited: number; posted: number }[];
+  by_channel: { channel: { id: string; name: string; color_key: string | null; platform: string } | null; videos: number; posted: number; views: number; inbox: number; candidates: number; hired: number }[];
+}
+
 const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(a / b < 0.01 ? 2 : 1)}%` : "—");
 
 /** Báo cáo hiệu quả: phễu lượt xem → nhận việc, theo nhân viên / chiến dịch / nhà máy / nền tảng. */
@@ -37,15 +44,17 @@ export function MediaReport({ options }: { options: MediaOptions }) {
   const [from, setFrom] = useState(ymd(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [to, setTo] = useState(ymd(now));
   const [data, setData] = useState<ReportData | null>(null);
+  const [video, setVideo] = useState<VideoStats | null>(null);
 
   useEffect(() => {
     clientApi<ReportData>(`/media/report?from=${from}&to=${to}`).then(setData).catch((e: Error) => toast.error(e.message));
+    clientApi<VideoStats>(`/media/videos/stats?from=${from}&to=${to}`).then(setVideo).catch(() => setVideo(null));
   }, [from, to, toast]);
 
   return (
     <div className="space-y-4">
       <StudioCard className="flex flex-wrap items-center gap-2 p-3 text-sm">
-        <span className="font-semibold text-slate-600">Ngày đăng từ</span>
+        <span className="font-semibold text-slate-600">Từ ngày</span>
         <Input uiSize="sm" type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} />
         <span className="font-semibold text-slate-600">đến</span>
         <Input uiSize="sm" type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} />
@@ -56,6 +65,8 @@ export function MediaReport({ options }: { options: MediaOptions }) {
         <div className="grid place-items-center py-16 text-slate-400"><Loader2 className="size-6 animate-spin" /></div>
       ) : (
         <>
+          {video && <VideoStatsCard stats={video} />}
+
           {/* Phễu */}
           <StudioCard>
             <SectionTitle title="Phễu tuyển dụng từ nội dung" hint={`${data.total.posts} bài trong kỳ · ${data.total.published} đã đăng`} />
@@ -168,5 +179,75 @@ function MetricTable({ title, rows }: { title: string; rows: { key: string; labe
         </div>
       )}
     </StudioCard>
+  );
+}
+
+/** Sổ video: mỗi người quay / dựng xong / đã đăng bao nhiêu, mỗi kênh đăng bao nhiêu. */
+function VideoStatsCard({ stats }: { stats: VideoStats }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <StudioCard className="p-0">
+        <div className="px-4 pt-4">
+          <SectionTitle title="Sổ video theo người" hint={`${stats.total.videos} video · ${stats.total.done} xong · ${stats.total.posted} đã đăng`} />
+        </div>
+        {stats.by_person.length === 0 ? (
+          <p className="pb-6 text-center text-sm text-slate-400">Chưa có video.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-y border-slate-100 text-right text-[11px] font-bold text-slate-400 uppercase">
+                <th className="px-4 py-2 text-left">Nhân viên</th>
+                <th className="px-3 py-2">Quay</th>
+                <th className="px-3 py-2">Dựng xong</th>
+                <th className="px-4 py-2">Đã đăng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.by_person.map((r) => (
+                <tr key={r.person.id} className="border-b border-slate-50 text-right font-semibold tabular-nums">
+                  <td className="px-4 py-2 text-left"><PersonChip person={r.person} /></td>
+                  <td className="px-3 py-2 text-violet-700">{r.shot}</td>
+                  <td className="px-3 py-2 text-emerald-600">{r.edited}</td>
+                  <td className="px-4 py-2 text-pink-600">{r.posted}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </StudioCard>
+      <StudioCard className="p-0">
+        <div className="px-4 pt-4"><SectionTitle title="Theo kênh đăng" /></div>
+        {stats.by_channel.length === 0 ? (
+          <p className="pb-6 text-center text-sm text-slate-400">Chưa có video gắn kênh.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-y border-slate-100 text-right text-[11px] font-bold text-slate-400 uppercase">
+                <th className="px-4 py-2 text-left">Kênh</th>
+                <th className="px-3 py-2">Đã đăng</th>
+                <th className="px-3 py-2">Lượt xem</th>
+                <th className="px-4 py-2">Ứng viên</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.by_channel.map((r, i) => (
+                <tr key={r.channel?.id ?? `none-${i}`} className="border-b border-slate-50 text-right tabular-nums">
+                  <td className="px-4 py-2 text-left">
+                    {r.channel ? (
+                      <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", !r.channel.color_key && "bg-pink-50 text-pink-700")} style={shuttleColorStyle(r.channel.color_key)}>{r.channel.name}</span>
+                    ) : (
+                      <span className="text-xs text-slate-400">Chưa chọn kênh</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 font-semibold text-pink-600">{r.posted}</td>
+                  <td className="px-3 py-2">{fmtNumber(r.views)}</td>
+                  <td className="px-4 py-2">{fmtNumber(r.candidates)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </StudioCard>
+    </div>
   );
 }

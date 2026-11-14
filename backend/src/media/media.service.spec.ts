@@ -109,9 +109,9 @@ describe('MediaService', () => {
         createdById: 'lead-1',
       });
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
-      expect(
-        prisma.notification.create.mock.calls[0][0].data.accountId,
-      ).toBe('staff-1');
+      expect(prisma.notification.create.mock.calls[0][0].data.accountId).toBe(
+        'staff-1',
+      );
     });
 
     it('MKT (Trưởng phòng) mặc định giao việc được, thiếu tên thì báo lỗi', async () => {
@@ -128,6 +128,7 @@ describe('MediaService', () => {
       expect(where.AND[0]).toEqual({
         OR: [
           { assigneeId: 'staff-1' },
+          { editorId: 'staff-1' },
           { createdById: 'staff-1' },
           { members: { some: { accountId: 'staff-1' } } },
         ],
@@ -195,9 +196,9 @@ describe('MediaService', () => {
       expect(prisma.mediaTask.update.mock.calls[0][0].data.status).toBe(
         'in_review',
       );
-      expect(
-        prisma.notification.create.mock.calls[0][0].data.accountId,
-      ).toBe('lead-1');
+      expect(prisma.notification.create.mock.calls[0][0].data.accountId).toBe(
+        'lead-1',
+      );
     });
 
     it('Nộp không có link lẫn file → lỗi; link sai dạng → lỗi', async () => {
@@ -235,9 +236,9 @@ describe('MediaService', () => {
         status: 'done',
         progress: 100,
       });
-      expect(
-        prisma.notification.create.mock.calls[0][0].data.accountId,
-      ).toBe('staff-1');
+      expect(prisma.notification.create.mock.calls[0][0].data.accountId).toBe(
+        'staff-1',
+      );
     });
 
     it('Bản đã duyệt / đã có bản mới → không duyệt lại được', async () => {

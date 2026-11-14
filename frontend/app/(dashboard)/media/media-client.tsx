@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BarChart3, CalendarDays, CheckCheck, KanbanSquare, Lightbulb, LayoutDashboard, Target, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, CheckCheck, Film, KanbanSquare, Lightbulb, LayoutDashboard, Target, type LucideIcon } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { cn } from "@/lib/cn";
@@ -14,11 +14,13 @@ import { MediaReviews } from "./media-reviews";
 import { MediaIdeas } from "./media-ideas";
 import { MediaCalendar } from "./media-calendar";
 import { MediaReport } from "./media-report";
+import { MediaVideos } from "./media-videos";
 
-type TabKey = "dashboard" | "plans" | "tasks" | "reviews" | "ideas" | "calendar" | "report";
+type TabKey = "dashboard" | "videos" | "plans" | "tasks" | "reviews" | "ideas" | "calendar" | "report";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon; tint: string }[] = [
   { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard, tint: "from-violet-500 to-fuchsia-500" },
+  { key: "videos", label: "Sổ video", icon: Film, tint: "from-pink-500 to-orange-400" },
   { key: "plans", label: "Kế hoạch", icon: Target, tint: "from-blue-500 to-violet-500" },
   { key: "tasks", label: "Công việc", icon: KanbanSquare, tint: "from-sky-500 to-blue-600" },
   { key: "reviews", label: "Duyệt sản phẩm", icon: CheckCheck, tint: "from-fuchsia-500 to-pink-500" },
@@ -83,6 +85,7 @@ export function MediaClient({ canEdit, initialOptions }: { canEdit: boolean; ini
       </div>
 
       {tab === "dashboard" && <MediaDashboard onOpenTask={openTask} />}
+      {tab === "videos" && <MediaVideos options={options} canEdit={canEdit} onOpenTask={openTask} />}
       {tab === "plans" && <MediaPlans options={options} canEdit={canEdit} onOptionsChanged={reloadOptions} />}
       {tab === "tasks" && <MediaTasks options={options} canEdit={canEdit} openTaskId={openTaskId} onOpenTask={openTask} onCloseTask={closeTask} />}
       {tab === "reviews" && <MediaReviews options={options} canEdit={canEdit} onOpenTask={openTask} />}

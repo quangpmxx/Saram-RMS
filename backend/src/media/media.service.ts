@@ -159,7 +159,7 @@ export class MediaService {
   ) {}
 
   // ============================================================ quyền
-  private canAssign(user: AuthenticatedUser): boolean {
+  canAssign(user: AuthenticatedUser): boolean {
     return can(user, 'media.assign');
   }
 
@@ -168,7 +168,7 @@ export class MediaService {
   }
 
   /** Thấy mọi công việc: người giao việc / duyệt / xem báo cáo. */
-  private seesAllTasks(user: AuthenticatedUser): boolean {
+  seesAllTasks(user: AuthenticatedUser): boolean {
     return (
       this.canAssign(user) ||
       this.canReview(user) ||
@@ -180,29 +180,36 @@ export class MediaService {
     if (!can(user, code)) throw new ForbiddenException(message);
   }
 
-  private taskScope(user: AuthenticatedUser): Prisma.MediaTaskWhereInput {
+  taskScope(user: AuthenticatedUser): Prisma.MediaTaskWhereInput {
     if (this.seesAllTasks(user)) return {};
     return {
       OR: [
         { assigneeId: user.id },
+        { editorId: user.id },
         { createdById: user.id },
         { members: { some: { accountId: user.id } } },
       ],
     };
   }
 
-  private isParticipant(
-    task: { assigneeId: string | null; members: { accountId: string }[] },
+  /** Người làm việc: phụ trách (người quay), người dựng, người cùng tham gia. */
+  isParticipant(
+    task: {
+      assigneeId: string | null;
+      editorId?: string | null;
+      members: { accountId: string }[];
+    },
     user: AuthenticatedUser,
   ): boolean {
     return (
       task.assigneeId === user.id ||
+      task.editorId === user.id ||
       task.members.some((m) => m.accountId === user.id)
     );
   }
 
   // ============================================================ tra tên
-  private async people(ids: (string | null | undefined)[]) {
+  async people(ids: (string | null | undefined)[]) {
     const unique = [...new Set(ids.filter((x): x is string => !!x))];
     const map = new Map<string, PersonRef>();
     if (!unique.length) return map;
@@ -478,6 +485,7 @@ export class MediaService {
       and.push({
         OR: [
           { assigneeId: query.assignee_id },
+          { editorId: query.assignee_id },
           { members: { some: { accountId: query.assignee_id } } },
         ],
       });
@@ -486,6 +494,7 @@ export class MediaService {
       and.push({
         OR: [
           { assigneeId: user.id },
+          { editorId: user.id },
           { members: { some: { accountId: user.id } } },
         ],
       });
@@ -519,6 +528,7 @@ export class MediaService {
     const people = await this.people(
       rows.flatMap((r) => [
         r.assigneeId,
+        r.editorId,
         r.createdById,
         ...r.members.map((m) => m.accountId),
       ]),
@@ -545,6 +555,9 @@ export class MediaService {
       company_name: r.companyId ? (names.get(r.companyId) ?? null) : null,
       factory: r.factory,
       assignee: r.assigneeId ? (people.get(r.assigneeId) ?? null) : null,
+      editor: r.editorId ? (people.get(r.editorId) ?? null) : null,
+      raw_link: r.rawLink,
+      done_link: r.doneLink,
       members: r.members
         .map((m) => people.get(m.accountId))
         .filter((p): p is PersonRef => !!p),
@@ -1687,7 +1700,7 @@ export class MediaService {
   }
 
   /** Thông báo chuông; lỗi gửi không làm hỏng thao tác chính. Bỏ qua chính người thao tác. */
-  private async notify(
+  async notify(
     accountIds: (string | null | undefined)[],
     content: string,
     sender: AuthenticatedUser,
