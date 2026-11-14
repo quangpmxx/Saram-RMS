@@ -891,7 +891,9 @@ export interface AppNotification {
     /** Hệ thống nhắc Sale chưa có người phỏng vấn quá 3 ngày (sender luôn null). */
     | "sale_no_shuttle_reminder"
     /** Media (2026-11-14): giao việc / chờ duyệt / kết quả duyệt — meta.task_id. */
-    | "media_task";
+    | "media_task"
+    /** Bảng công tháng (2026-11-14): gửi xác nhận / báo sai / báo kế toán — meta.link. */
+    | "attendance_sheet";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;

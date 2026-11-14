@@ -12,6 +12,7 @@ import { ShuttleController } from '../shuttle/shuttle.controller';
 import { DailyReportsController } from '../daily-reports/daily-reports.controller';
 import { ReportPenaltyController } from '../report-penalty/report-penalty.controller';
 import { AttendanceController } from '../attendance/attendance.controller';
+import { AttendanceSheetController } from '../attendance/attendance-sheet.controller';
 import { SalesEntryController } from '../sales-entry/sales-entry.controller';
 import { CalendarController } from '../calendar/calendar.controller';
 import { AuditLogController } from '../audit-log/audit-log.controller';
@@ -133,7 +134,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     code: 'attendance',
     label: 'Chấm công',
     defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale', 'sup_leader'],
-    controllers: [AttendanceController],
+    controllers: [AttendanceController, AttendanceSheetController],
   },
   {
     code: 'sales-entry',

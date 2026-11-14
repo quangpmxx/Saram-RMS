@@ -580,8 +580,26 @@ export class AttendanceService {
     const days = buildDays(query.year, query.month);
     const employeeIds = employees.map((e) => e.id);
 
+    // Bảng công tháng (2026-11-14, yêu cầu user): người chỉ xem được công của
+    // mình thì không thấy công hằng ngày — chỉ thấy khi tháng đó đã được gửi bảng công.
+    const selfOnly =
+      !can(currentUser, 'attendance.view_all') &&
+      !can(currentUser, 'attendance.view_team');
+    const released =
+      !selfOnly ||
+      !!(await this.prisma.attendanceSheet.findUnique({
+        where: {
+          accountId_year_month: {
+            accountId: currentUser.id,
+            year: query.year,
+            month: query.month,
+          },
+        },
+        select: { id: true },
+      }));
+
     const records =
-      employeeIds.length === 0
+      employeeIds.length === 0 || !released
         ? []
         : await this.prisma.attendanceRecord.findMany({
             where: {

@@ -297,6 +297,8 @@ model Account {
 
   // Dự án phụ — nâng cấp toàn diện: quan hệ ngược từ AttendanceRecord (Chấm công thủ công)
   attendanceRecords        AttendanceRecord[] @relation("AttendanceRecordAccount")
+  attendanceSheets         AttendanceSheet[]  @relation("AttendanceSheetAccount")
+  attendanceSheetsSent     AttendanceSheet[]  @relation("AttendanceSheetSentBy")
   createdAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordCreatedBy")
   updatedAttendanceRecords AttendanceRecord[] @relation("AttendanceRecordUpdatedBy")
 
@@ -876,6 +878,8 @@ enum NotificationType {
   lead_assigned
   /// Media (2026-11-14): được giao việc / có sản phẩm chờ duyệt / kết quả duyệt.
   media_task
+  /// Bảng công tháng (2026-11-14): gửi nhân viên xác nhận / nhân viên báo sai / báo kế toán chốt lương.
+  attendance_sheet
 
   @@map("notification_type")
 }
@@ -1271,6 +1275,44 @@ model AttendanceRecord {
   @@index([date])
   @@index([accountId])
   @@map("attendance_records")
+}
+
+/// Trạng thái xác nhận bảng công tháng của nhân viên (2026-11-14).
+enum AttendanceSheetStatus {
+  /// Đã gửi, chờ nhân viên xác nhận
+  pending
+  /// Nhân viên đồng ý
+  confirmed
+  /// Nhân viên báo sai (kèm ngày + ghi chú)
+  disputed
+
+  @@map("attendance_sheet_status")
+}
+
+/// Bảng công tháng gửi nhân viên xác nhận (2026-11-14, yêu cầu user): trong
+/// tháng nhân viên không xem công hằng ngày; cuối tháng quản lý gửi bảng, nhân
+/// viên Đồng ý hoặc Báo sai, rồi báo kế toán chốt lương. Mỗi người mỗi tháng 1 dòng.
+model AttendanceSheet {
+  id           String                @id @default(uuid()) @db.Uuid
+  accountId    String                @map("account_id") @db.Uuid
+  year         Int
+  month        Int
+  status       AttendanceSheetStatus @default(pending)
+  sentAt       DateTime              @map("sent_at")
+  sentById     String                @map("sent_by") @db.Uuid
+  respondedAt  DateTime?             @map("responded_at")
+  note         String?               @db.VarChar(1000)
+  /// Ngày nhân viên báo sai: [{ date: "YYYY-MM-DD", expected: AttendanceStatus | null }]
+  disputedDays Json?                 @map("disputed_days")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  account Account @relation("AttendanceSheetAccount", fields: [accountId], references: [id])
+  sentBy  Account @relation("AttendanceSheetSentBy", fields: [sentById], references: [id])
+
+  @@unique([accountId, year, month])
+  @@index([year, month])
+  @@map("attendance_sheets")
 }
 
 /**

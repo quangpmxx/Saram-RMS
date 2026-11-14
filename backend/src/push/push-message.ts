@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
   lead_assigned: 'Được chia data',
   sale_no_shuttle_reminder: 'Nhắc nhở chưa có người phỏng vấn',
   media_task: 'Công việc Media',
+  attendance_sheet: 'Bảng công tháng',
 };
 
 export interface PushableNotification {
@@ -28,6 +29,7 @@ export interface PushableNotification {
   content?: string | null;
   lead_id?: string | null;
   leave_request_id?: string | null;
+  meta?: unknown;
 }
 
 export interface PushMessage {
@@ -50,6 +52,12 @@ function targetUrl(n: PushableNotification): string {
   if (n.type === 'shuttle_update') return '/shuttle';
   if (n.type === 'lead_assigned') return '/candidates';
   if (n.type === 'media_task') return '/media?tab=tasks';
+  if (n.type === 'attendance_sheet') {
+    const link = (n.meta as { link?: unknown } | null | undefined)?.link;
+    return typeof link === 'string' && link.startsWith('/')
+      ? link
+      : '/attendance';
+  }
   return '/';
 }
 

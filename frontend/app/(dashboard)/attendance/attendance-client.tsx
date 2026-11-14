@@ -33,6 +33,7 @@ import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { CheckinManagementPanel } from "./checkin-management-panel";
+import { AttendanceSheetManager, MyAttendanceSheet } from "./attendance-sheet";
 import { LeaveRequestClient } from "../requests/leave-request-client";
 
 /**
@@ -495,19 +496,27 @@ export function AttendanceClient({
   // với Leader/MKT/Sale (kể cả deep-link ?tab=checkin cũng không mở được).
   // Backend (quyền checkin.manage) là lớp chặn thật, đây chỉ là UI.
   const canViewCheckin = useCan()("checkin.manage");
-  const [activeTab, setActiveTab] = useState<"manual" | "checkin" | "requests">(() => {
+  // Bảng công tháng (2026-11-14): người chỉ xem được công của mình không thấy bảng
+  // chấm công hằng ngày — chỉ thấy bảng công tháng được gửi để xác nhận.
+  const selfOnly = !canFilterByAccount;
+  const canSendSheets = initialGrid.can_edit;
+  const [activeTab, setActiveTab] = useState<"manual" | "checkin" | "requests" | "sheet" | "sheets">(() => {
     const tab = searchParams.get("tab");
     if (tab === "checkin") return canViewCheckin ? "checkin" : "manual";
     if (tab === "requests") return "requests";
-    return "manual";
+    if (tab === "sheets" && canSendSheets) return "sheets";
+    if (tab === "sheet" && !canSendSheets) return "sheet";
+    return selfOnly ? "sheet" : "manual";
   });
   // Bấm thông báo (đơn nghỉ phép/đơn phản ánh) khi ĐANG ở trang này: URL đổi
   // `?tab=requests` nhưng component không mount lại, useState ở trên không
   // đọc lại — tự chuyển sang đúng tab theo URL mới.
   useEffect(() => {
-    if (searchParams.get("tab") !== "requests") return;
-    queueMicrotask(() => setActiveTab("requests"));
-  }, [searchParams]);
+    const tab = searchParams.get("tab");
+    if (tab === "requests") queueMicrotask(() => setActiveTab("requests"));
+    else if (tab === "sheets" && canSendSheets) queueMicrotask(() => setActiveTab("sheets"));
+    else if (tab === "sheet" && !canSendSheets) queueMicrotask(() => setActiveTab("sheet"));
+  }, [searchParams, canSendSheets]);
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -1054,7 +1063,20 @@ export function AttendanceClient({
 
   return (
     <div className="relative -top-3 mx-auto max-w-[1600px] space-y-4 md:-top-5">
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {!canSendSheets && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("sheet")}
+            className={cn(
+              "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+              activeTab === "sheet" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+            )}
+          >
+            Bảng công tháng
+          </button>
+        )}
+        {!selfOnly && (
         <button
           type="button"
           onClick={() => setActiveTab("manual")}
@@ -1065,6 +1087,19 @@ export function AttendanceClient({
         >
           Chấm công thủ công
         </button>
+        )}
+        {canSendSheets && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("sheets")}
+            className={cn(
+              "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+              activeTab === "sheets" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+            )}
+          >
+            Gửi bảng công
+          </button>
+        )}
         {canViewCheckin && (
           <button
             type="button"
@@ -1127,6 +1162,9 @@ export function AttendanceClient({
           />
         </div>
       )}
+
+      {activeTab === "sheet" && <MyAttendanceSheet />}
+      {activeTab === "sheets" && <AttendanceSheetManager office={showOfficeTabs ? office : undefined} />}
 
       <div className={activeTab === "requests" ? undefined : "hidden"}>
         <LeaveRequestClient

@@ -14,6 +14,7 @@ describe('AttendanceService', () => {
       upsert: jest.Mock;
       deleteMany: jest.Mock;
     };
+    attendanceSheet: { findUnique: jest.Mock };
     $transaction: jest.Mock;
     $queryRaw: jest.Mock;
   };
@@ -44,6 +45,10 @@ describe('AttendanceService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      // Mặc định tháng đã gửi bảng công (nhân viên xem được công của mình).
+      attendanceSheet: {
+        findUnique: jest.fn().mockResolvedValue({ id: 's1' }),
       },
       // Transaction tương tác (H1): chạy callback với chính mock này làm `tx`.
       $transaction: jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
@@ -186,6 +191,27 @@ describe('AttendanceService', () => {
         saleUser,
       );
       expect(saleGrid.can_edit).toBe(false);
+    });
+  });
+
+  describe('Bảng công tháng — ẩn công hằng ngày', () => {
+    it('nhân viên chỉ xem của mình: tháng chưa gửi bảng công thì không thấy ô công nào', async () => {
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'A', role: 'sale' },
+      ]);
+      prisma.attendanceSheet.findUnique.mockResolvedValue(null);
+      const grid = await service.getGrid({ year: 2026, month: 7 }, saleUser);
+      expect(grid.records).toEqual([]);
+      expect(prisma.attendanceRecord.findMany).not.toHaveBeenCalled();
+    });
+
+    it('Admin vẫn thấy công hằng ngày dù chưa gửi bảng công', async () => {
+      prisma.attendanceSheet.findUnique.mockResolvedValue(null);
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-1', fullName: 'A', role: 'sale' },
+      ]);
+      await service.getGrid({ year: 2026, month: 7 }, adminUser);
+      expect(prisma.attendanceRecord.findMany).toHaveBeenCalled();
     });
   });
 
