@@ -15,6 +15,7 @@ import {
   Handshake,
   History,
   LayoutDashboard,
+  Lock,
   Megaphone,
   Settings2,
   ShieldCheck,
@@ -55,7 +56,11 @@ export interface NavItem {
   href: string;
   label: string;
   icon: NavIconKey;
+  /** Không có quyền vào trang: hiện mờ + khoá, không bấm được. */
+  locked?: boolean;
 }
+
+const LOCKED_TITLE = "Bạn không có quyền vào trang này";
 
 export function SidebarNav({
   items,
@@ -74,6 +79,15 @@ export function SidebarNav({
         {items.map((item) => {
           const active = isNavActive(pathname, item.href);
           const Icon = ICONS[item.icon];
+          if (item.locked) {
+            return (
+              <span key={item.href} title={LOCKED_TITLE} className="flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 opacity-50">
+                <Icon className="h-4 w-4" strokeWidth={2} />
+                {item.label}
+                <Lock className="h-3 w-3" strokeWidth={2} />
+              </span>
+            );
+          }
           return (
             <Link
               key={item.href}
@@ -97,6 +111,30 @@ export function SidebarNav({
       {items.map((item) => {
         const active = isNavActive(pathname, item.href);
         const Icon = ICONS[item.icon];
+        if (item.locked) {
+          return (
+            <span
+              key={item.href}
+              title={LOCKED_TITLE}
+              aria-disabled="true"
+              className={cn(
+                "group relative flex cursor-not-allowed items-center rounded-lg py-2 text-[13px] font-medium text-brand-100/75 opacity-35",
+                collapsed ? "justify-center px-0" : "gap-2.5 px-3",
+              )}
+            >
+              <Icon className={cn("shrink-0 text-brand-200/60", collapsed ? "h-5 w-5" : "h-[17px] w-[17px]")} strokeWidth={2} />
+              <span
+                className={cn(
+                  "flex-1 overflow-hidden whitespace-nowrap transition-[opacity,max-width]",
+                  collapsed ? "max-w-0 opacity-0 duration-100" : "max-w-[150px] opacity-100 delay-150 duration-200",
+                )}
+              >
+                {item.label}
+              </span>
+              {!collapsed && <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />}
+            </span>
+          );
+        }
         return (
           <Link
             key={item.href}

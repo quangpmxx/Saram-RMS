@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { serverApi } from "@/lib/api-server";
+import { getMyModulePermissions } from "@/lib/module-permission";
 import { type BirthdayToday } from "@/lib/types";
 import { MODULE_REGISTRY } from "@/lib/module-registry";
 import { Logo } from "@/components/logo";
@@ -63,7 +64,16 @@ export default async function DashboardLayout({
   // với mọi tài khoản; bấm vào trang không có quyền → trang tự chuyển sang
   // /access-denied (requirePageAccess / kiểm tra vai trò ở page.tsx) báo
   // "Bạn không có quyền thao tác với trang này".
-  const navItems: NavItem[] = MODULE_REGISTRY.filter((item) => !item.hideInNav).map((item) => ({ href: item.href, label: item.label, icon: item.icon }));
+  // Mục không có quyền (2026-11-14, yêu cầu user): vẫn hiện nhưng làm mờ + khoá, khỏi phải bấm mới biết.
+  // Lỗi lấy quyền (map rỗng) → không khoá mục nào, trang tự chặn như cũ.
+  const permissions = await getMyModulePermissions();
+  const hasPermissionData = Object.keys(permissions).length > 0;
+  const navItems: NavItem[] = MODULE_REGISTRY.filter((item) => !item.hideInNav).map((item) => ({
+    href: item.href,
+    label: item.label,
+    icon: item.icon,
+    locked: hasPermissionData && (permissions[item.code] ?? "none") === "none",
+  }));
 
   return (
     <CapabilityProvider capabilities={user.capabilities ?? []}>
