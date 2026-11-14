@@ -93,7 +93,6 @@ export function MediaPlans({ options, canEdit, onOptionsChanged }: { options: Me
       <div>
         <SectionTitle
           title="Kế hoạch nội dung"
-          hint="Mục tiêu số lượng và tiến độ thực tế từ công việc gắn kế hoạch"
           action={
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-semibold">

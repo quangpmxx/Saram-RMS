@@ -84,7 +84,6 @@ export function MediaDashboard({ onOpenTask }: { onOpenTask: (id: string) => voi
         <StudioCard className="lg:col-span-3">
           <SectionTitle
             title="Hiệu suất sản xuất"
-            hint="Việc hoàn thành và việc mới tạo"
             action={
               <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-semibold">
                 {(["weekly", "monthly"] as const).map((r) => (
@@ -114,7 +113,7 @@ export function MediaDashboard({ onOpenTask }: { onOpenTask: (id: string) => voi
 
         {/* Sắp đến hạn */}
         <StudioCard className="lg:col-span-2">
-          <SectionTitle title="Sắp đến deadline" hint="Trong 7 ngày tới và đã quá hạn" />
+          <SectionTitle title="Sắp đến deadline" />
           {data.upcoming.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">Không có việc gấp 🎉</p>
           ) : (
@@ -150,7 +149,7 @@ export function MediaDashboard({ onOpenTask }: { onOpenTask: (id: string) => voi
 
       {/* Sản lượng theo nhân viên */}
       <StudioCard>
-        <SectionTitle title="Sản lượng theo nhân viên" hint="Theo người phụ trách chính — đã xong / đang làm" />
+        <SectionTitle title="Sản lượng theo nhân viên" />
         {data.by_staff.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-400">Chưa có công việc nào được giao.</p>
         ) : (

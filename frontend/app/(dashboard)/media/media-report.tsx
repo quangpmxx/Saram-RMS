@@ -58,7 +58,7 @@ export function MediaReport({ options }: { options: MediaOptions }) {
         <>
           {/* Phễu */}
           <StudioCard>
-            <SectionTitle title="Phễu tuyển dụng từ nội dung" hint={`${data.total.posts} bài trong kỳ · ${data.total.published} đã đăng · số liệu nhập tay ở Lịch xuất bản`} />
+            <SectionTitle title="Phễu tuyển dụng từ nội dung" hint={`${data.total.posts} bài trong kỳ · ${data.total.published} đã đăng`} />
             <div className="grid gap-2 sm:grid-cols-5">
               {FUNNEL.map((f, i) => {
                 const value = data.total[f.key];
@@ -88,7 +88,7 @@ export function MediaReport({ options }: { options: MediaOptions }) {
             </StudioCard>
             {/* Sản lượng */}
             <StudioCard>
-              <SectionTitle title="Sản lượng theo nhân viên" hint="Việc hoàn thành trong kỳ" />
+              <SectionTitle title="Sản lượng theo nhân viên" />
               {data.output_by_staff.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400">Chưa có việc hoàn thành.</p>
               ) : (

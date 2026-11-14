@@ -57,7 +57,7 @@ export function MediaReviews({ options, canEdit, onOpenTask }: { options: MediaO
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
       <div>
-        <SectionTitle title={`Chờ duyệt (${pending.length})`} hint={canReview ? "Duyệt để hoàn thành, hoặc yêu cầu chỉnh sửa kèm lý do" : "Bạn chỉ xem — chưa có quyền duyệt"} />
+        <SectionTitle title={`Chờ duyệt (${pending.length})`} hint={canReview ? undefined : "Bạn chỉ xem — chưa có quyền duyệt"} />
         {pending.length === 0 ? (
           <StudioCard className="py-12 text-center text-sm text-slate-400">Không có sản phẩm nào chờ duyệt 🎉</StudioCard>
         ) : (
@@ -114,7 +114,7 @@ export function MediaReviews({ options, canEdit, onOpenTask }: { options: MediaO
       </div>
 
       <div>
-        <SectionTitle title="Lịch sử duyệt" hint="100 lượt gần nhất" />
+        <SectionTitle title="Lịch sử duyệt" />
         <StudioCard className="p-0">
           {history.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">Chưa có lượt duyệt.</p>

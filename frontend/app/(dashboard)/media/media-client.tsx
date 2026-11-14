@@ -32,7 +32,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon; tint: string }[] = [
  * thông báo chuông mở đúng chỗ, vd `?tab=tasks&task=<id>`).
  */
 export function MediaClient({ canEdit, initialOptions }: { canEdit: boolean; initialOptions: MediaOptions }) {
-  useSetPageTitle("Media", "Creative Studio — kế hoạch, sản xuất, duyệt và đo hiệu quả nội dung tuyển dụng");
+  useSetPageTitle("Media");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -63,9 +63,7 @@ export function MediaClient({ canEdit, initialOptions }: { canEdit: boolean; ini
         <div className="pointer-events-none absolute -top-16 -right-10 size-56 rounded-full bg-white/15 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-20 left-1/3 size-56 rounded-full bg-sky-300/25 blur-3xl" />
         <div className="relative">
-          <p className="text-xs font-semibold tracking-[0.2em] text-white/80 uppercase">Saram Creative Studio</p>
-          <h1 className="mt-1 text-xl font-extrabold sm:text-2xl">Media 🎬</h1>
-          <p className="mt-1 max-w-2xl text-sm text-white/85">Lên kế hoạch, giao việc, duyệt sản phẩm và theo dõi hiệu quả từ lượt xem tới người nhận việc.</p>
+          <h1 className="text-xl font-extrabold sm:text-2xl">Media 🎬</h1>
         </div>
       </div>
 
