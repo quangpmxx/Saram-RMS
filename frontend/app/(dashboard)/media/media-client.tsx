@@ -28,7 +28,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon; tint: string }[] = [
 ];
 
 /**
- * Khung trang Media: hero gradient + thanh tab (tab lưu trên URL `?tab=` để
+ * Khung trang Media: thanh tab (tab lưu trên URL `?tab=` để
  * thông báo chuông mở đúng chỗ, vd `?tab=tasks&task=<id>`).
  */
 export function MediaClient({ canEdit, initialOptions }: { canEdit: boolean; initialOptions: MediaOptions }) {
@@ -58,15 +58,6 @@ export function MediaClient({ canEdit, initialOptions }: { canEdit: boolean; ini
 
   return (
     <div className="space-y-4">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-fuchsia-500 to-orange-400 p-5 text-white shadow-lg shadow-fuchsia-500/20 sm:p-6">
-        <div className="pointer-events-none absolute -top-16 -right-10 size-56 rounded-full bg-white/15 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-20 left-1/3 size-56 rounded-full bg-sky-300/25 blur-3xl" />
-        <div className="relative">
-          <h1 className="text-xl font-extrabold sm:text-2xl">Media 🎬</h1>
-        </div>
-      </div>
-
       {/* Tabs */}
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {TABS.map((t) => {
