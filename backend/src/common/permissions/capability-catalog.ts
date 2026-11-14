@@ -430,6 +430,41 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     label: 'Thêm/sửa/xoá nhóm',
     defaultRoles: [],
   },
+  // ---------------------------------------------------------------- Media (2026-11-14)
+  // Trưởng phòng MKT ≈ vai trò MKT/Quản lý (mặc định có cả 5 quyền). Trưởng nhóm
+  // Media = tài khoản NV Media được Admin bật thêm "Giao việc" + "Duyệt sản phẩm".
+  {
+    code: 'media.manage_plan',
+    module: 'media',
+    label: 'Quản lý kế hoạch nội dung & chiến dịch',
+    defaultRoles: ['manager', 'mkt'],
+  },
+  {
+    code: 'media.assign',
+    module: 'media',
+    label: 'Tạo / giao việc, xem mọi công việc Media',
+    hint: 'Không có quyền này thì chỉ thấy việc mình phụ trách / tham gia',
+    defaultRoles: ['manager', 'mkt'],
+  },
+  {
+    code: 'media.review',
+    module: 'media',
+    label: 'Duyệt sản phẩm (duyệt / yêu cầu chỉnh sửa)',
+    defaultRoles: ['manager', 'mkt'],
+  },
+  {
+    code: 'media.manage_publish',
+    module: 'media',
+    label: 'Sửa mọi lịch xuất bản & số liệu hiệu quả',
+    hint: 'Không có quyền này thì chỉ sửa bài mình đăng / mình tạo',
+    defaultRoles: ['manager', 'mkt'],
+  },
+  {
+    code: 'media.view_report',
+    module: 'media',
+    label: 'Xem báo cáo hiệu quả & thống kê toàn bộ nhân viên',
+    defaultRoles: ['manager', 'mkt'],
+  },
 ];
 
 export const CAPABILITY_CODES = new Set(CAPABILITY_CATALOG.map((c) => c.code));

@@ -20,6 +20,7 @@ Trình duyệt ─► frontend (Next.js, :3000) ─► /api proxy ─► backend
 - **Lịch tuyển dụng:** `recruitment-schedule` (bảng `recruitment_postings`; màn `frontend/app/(dashboard)/recruitment-schedule/` — logic lọc/tin Zalo ở `recruitment-shared.ts`).
 - **Số liệu:** `dashboard`, `daily-reports`, `report-penalty`, `sales-entry`, `order-management`, `payroll` (Tiền lương — trang `/accounting` + `/payslip`).
 - **Nhân sự:** `accounts`, `teams`, `attendance`, `checkin`, `leave-requests`, `leave-accrual`, `birthday`, `anonymous-feedback`.
+- **Media:** `media` (1 controller/service; bảng `media_*`, enum `media_task_status`, `media_priority`; quyền nhỏ `media.*`; trang `frontend/app/(dashboard)/media/` — mỗi tab 1 file `media-*.tsx`, kiểu + nhãn ở `media-shared.tsx`).
 - **Marketing:** `marketing-hub` (client Graph API `facebook-ads.client.ts`, mã hoá token `token-crypto.ts`, bảng `ad_accounts`, `ad_spend_daily`); `pancake` (client `pancake.client.ts`, đọc 10 giây/lần `PancakeService.pollAll`, up qua `CandidatesService.create`; bảng `pancake_pages`, `pancake_conversations`, `pancake_auto_up_config`, `pancake_auto_up_teams`; `PancakeController` thuộc module quyền marketing-hub, `PancakeAutoUpController` thuộc candidates).
 - **Khác:** `shuttle` (Đưa đón), `notification`, `audit-log`, `module-permission`, `realtime`, `auth`, `common`, `prisma`.
 

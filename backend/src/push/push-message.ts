@@ -19,6 +19,7 @@ const TYPE_LABEL: Record<string, string> = {
   shuttle_update: 'Danh sách đưa đón',
   lead_assigned: 'Được chia data',
   sale_no_shuttle_reminder: 'Nhắc nhở chưa có người phỏng vấn',
+  media_task: 'Công việc Media',
 };
 
 export interface PushableNotification {
@@ -48,6 +49,7 @@ function targetUrl(n: PushableNotification): string {
     return '/candidates?view=care&care_scope=assigned';
   if (n.type === 'shuttle_update') return '/shuttle';
   if (n.type === 'lead_assigned') return '/candidates';
+  if (n.type === 'media_task') return '/media?tab=tasks';
   return '/';
 }
 

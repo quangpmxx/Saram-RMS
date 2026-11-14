@@ -22,6 +22,7 @@ import {
   PancakeAutoUpController,
   PancakeController,
 } from '../pancake/pancake.controller';
+import { MediaController } from '../media/media.controller';
 import {
   MyPayslipController,
   PayrollController,
@@ -223,6 +224,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     defaultRoles: ['admin', 'manager', 'leader', 'sup_leader'],
     viewRoles: ['sale'],
     controllers: [RecruitmentScheduleController],
+  },
+  {
+    // Media (2026-11-14): kế hoạch, công việc, duyệt, ý tưởng, lịch đăng, báo cáo.
+    // Quyền chi tiết (giao việc, duyệt...) ở capability-catalog (module 'media').
+    code: 'media',
+    label: 'Media',
+    defaultRoles: ['admin', 'manager', 'mkt', 'media_staff'],
+    controllers: [MediaController],
   },
 ];
 

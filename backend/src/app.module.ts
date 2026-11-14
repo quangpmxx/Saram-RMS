@@ -36,6 +36,7 @@ import { SalesEntryModule } from './sales-entry/sales-entry.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { OrderManagementModule } from './order-management/order-management.module';
 import { RecruitmentScheduleModule } from './recruitment-schedule/recruitment-schedule.module';
+import { MediaModule } from './media/media.module';
 import { ModulePermissionModule } from './module-permission/module-permission.module';
 import { ModulePermissionGuard } from './module-permission/module-permission.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -79,6 +80,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     PayrollModule,
     OrderManagementModule,
     RecruitmentScheduleModule,
+    MediaModule,
     ModulePermissionModule,
   ],
   controllers: [AppController],

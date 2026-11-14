@@ -7,6 +7,7 @@ import {
   Bell,
   Bus,
   CalendarClock,
+  Clapperboard,
   FileStack,
   FileText,
   Megaphone,
@@ -47,6 +48,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   shuttle_update: "Danh sách đưa đón",
   lead_assigned: "Được chia data",
   sale_no_shuttle_reminder: "Nhắc nhở chưa có người phỏng vấn",
+  media_task: "Công việc Media",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -82,6 +84,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   lead_assigned: 60_000,
   // Trước đây thiếu loại này trong bảng → thời gian hiển thị là undefined → toast tự đóng ngay.
   sale_no_shuttle_reminder: 60_000,
+  media_task: 30_000,
 };
 
 function formatDateTime(value: string): string {
@@ -141,6 +144,11 @@ function notificationTarget(n: AppNotification): string | null {
   if (n.type === "shuttle_update") return "/shuttle";
   // Được chia nhiều data 1 lần (không có lead_id) — mở danh sách Data lao động.
   if (n.type === "lead_assigned") return "/candidates";
+  // Media (2026-11-14): mở đúng công việc.
+  if (n.type === "media_task") {
+    const taskId = (n.meta as unknown as { task_id?: string } | null | undefined)?.task_id;
+    return taskId ? `/media?tab=tasks&task=${taskId}` : "/media?tab=tasks";
+  }
   return null;
 }
 
@@ -154,6 +162,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type.startsWith("care_stop_")) return <PauseCircle className={className} strokeWidth={2} />;
   if (type === "care_assigned" || type === "lead_assigned") return <UserCheck className={className} strokeWidth={2} />;
   if (type === "shuttle_update") return <Bus className={className} strokeWidth={2} />;
+  if (type === "media_task") return <Clapperboard className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 

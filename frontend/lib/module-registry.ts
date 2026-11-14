@@ -46,6 +46,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "marketingHub",
     defaultRoles: ["admin", "manager", "mkt"],
   },
+  // Media (2026-11-14). Khớp backend module-registry.ts; quyền nhỏ ở capability-catalog (module 'media').
+  {
+    code: "media",
+    href: "/media",
+    label: "Media",
+    icon: "media",
+    defaultRoles: ["admin", "manager", "mkt", "media_staff"],
+  },
   {
     code: "shuttle",
     href: "/shuttle",

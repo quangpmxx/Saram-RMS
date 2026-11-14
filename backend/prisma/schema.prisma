@@ -874,6 +874,8 @@ enum NotificationType {
   /// Chia/chuyển data cho Sale (2026-11-01): thủ công, hàng loạt, tự động chia (kể cả
   /// khi nhập Excel). Gắn lead_id khi chỉ 1 data để bấm vào mở trang Chi tiết.
   lead_assigned
+  /// Media (2026-11-14): được giao việc / có sản phẩm chờ duyệt / kết quả duyệt.
+  media_task
 
   @@map("notification_type")
 }
@@ -1935,4 +1937,243 @@ model PayrollSlip {
   @@unique([payrollId, accountId])
   @@index([accountId])
   @@map("payroll_slips")
+}
+
+// ============================================================ Media (2026-11-14)
+// Module Media: kế hoạch nội dung, công việc, duyệt sản phẩm, kho ý tưởng, lịch
+// xuất bản, báo cáo hiệu quả. Chỉ THÊM bảng mới — không đụng bảng đang có.
+// Cột *_id trỏ tới accounts/order_records lưu uuid, KHÔNG khai báo quan hệ
+// Prisma (giữ nguyên model Account/OrderRecord); service tự tra tên.
+
+enum MediaTaskStatus {
+  todo
+  in_progress
+  in_review
+  revision
+  done
+
+  @@map("media_task_status")
+}
+
+enum MediaPriority {
+  low
+  normal
+  high
+  urgent
+
+  @@map("media_priority")
+}
+
+/// Chiến dịch tuyển dụng của Media — gắn công ty (Quản lý đơn hàng) + nhà máy.
+model MediaCampaign {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(200)
+  /// order_records.id — công ty.
+  companyId   String?   @map("company_id") @db.Uuid
+  factory     String?   @db.VarChar(200)
+  startDate   DateTime? @map("start_date") @db.Date
+  endDate     DateTime? @map("end_date") @db.Date
+  note        String?
+  active      Boolean   @default(true)
+  createdById String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  plans        MediaPlan[]
+  tasks        MediaTask[]
+  ideas        MediaIdea[]
+  publications MediaPublication[]
+
+  @@map("media_campaigns")
+}
+
+/// Kế hoạch nội dung theo ngày / tuần / tháng.
+model MediaPlan {
+  id                String   @id @default(uuid()) @db.Uuid
+  title             String   @db.VarChar(200)
+  /// day | week | month
+  periodType        String   @map("period_type") @db.VarChar(10)
+  startDate         DateTime @map("start_date") @db.Date
+  endDate           DateTime @map("end_date") @db.Date
+  companyId         String?  @map("company_id") @db.Uuid
+  factory           String?  @db.VarChar(200)
+  campaignId        String?  @map("campaign_id") @db.Uuid
+  platforms         String[] @default([])
+  targetVideos      Int      @default(0) @map("target_videos")
+  targetPosts       Int      @default(0) @map("target_posts")
+  targetLivestreams Int      @default(0) @map("target_livestreams")
+  note              String?
+  createdById       String   @map("created_by") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  campaign MediaCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tasks    MediaTask[]
+
+  @@index([startDate])
+  @@map("media_plans")
+}
+
+/// Công việc Media. `code` tăng dần → mã Media ID "MD-000123".
+model MediaTask {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        Int             @unique @default(autoincrement())
+  title       String          @db.VarChar(255)
+  description String?
+  /// video | post | livestream | design | other
+  type        String          @default("video") @db.VarChar(20)
+  status      MediaTaskStatus @default(todo)
+  priority    MediaPriority   @default(normal)
+  deadline    DateTime?
+  /// 0–100, nhân viên tự cập nhật.
+  progress    Int             @default(0)
+  platform    String?         @db.VarChar(30)
+  planId      String?         @map("plan_id") @db.Uuid
+  campaignId  String?         @map("campaign_id") @db.Uuid
+  ideaId      String?         @map("idea_id") @db.Uuid
+  companyId   String?         @map("company_id") @db.Uuid
+  factory     String?         @db.VarChar(200)
+  /// Người phụ trách chính (accounts.id).
+  assigneeId  String?         @map("assignee_id") @db.Uuid
+  createdById String          @map("created_by") @db.Uuid
+  completedAt DateTime?       @map("completed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  plan         MediaPlan?          @relation(fields: [planId], references: [id], onDelete: SetNull)
+  campaign     MediaCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  idea         MediaIdea?          @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  members      MediaTaskMember[]
+  activities   MediaTaskActivity[]
+  submissions  MediaSubmission[]
+  publications MediaPublication[]
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([deadline])
+  @@map("media_tasks")
+}
+
+/// Người cùng tham gia công việc (ngoài người phụ trách chính).
+model MediaTaskMember {
+  taskId    String @map("task_id") @db.Uuid
+  accountId String @map("account_id") @db.Uuid
+
+  task MediaTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, accountId])
+  @@index([accountId])
+  @@map("media_task_members")
+}
+
+/// Lịch sử cập nhật + trao đổi trong công việc.
+model MediaTaskActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @map("task_id") @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  /// comment | created | updated | status | progress | submit | review
+  kind      String   @db.VarChar(20)
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task MediaTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("media_task_activities")
+}
+
+/// Sản phẩm nộp duyệt — mỗi lần nộp là 1 phiên bản.
+model MediaSubmission {
+  id            String    @id @default(uuid()) @db.Uuid
+  taskId        String    @map("task_id") @db.Uuid
+  version       Int
+  link          String?   @db.VarChar(1000)
+  /// Tên file trong private-uploads/media (uuid + đuôi).
+  filePath      String?   @map("file_path") @db.VarChar(255)
+  fileName      String?   @map("file_name") @db.VarChar(255)
+  note          String?
+  submittedById String    @map("submitted_by") @db.Uuid
+  submittedAt   DateTime  @default(now()) @map("submitted_at")
+  /// pending | approved | revision | superseded (bản chờ duyệt bị thay bằng bản mới)
+  reviewStatus  String    @default("pending") @map("review_status") @db.VarChar(20)
+  reviewNote    String?   @map("review_note")
+  reviewedById  String?   @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime? @map("reviewed_at")
+
+  task MediaTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, version])
+  @@index([reviewStatus])
+  @@map("media_submissions")
+}
+
+/// Kho ý tưởng + kịch bản.
+model MediaIdea {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String   @db.VarChar(255)
+  /// Tiêu đề bỏ dấu, viết thường — cảnh báo trùng ý tưởng.
+  titleKey    String   @map("title_key") @db.VarChar(255)
+  /// video | post | livestream
+  kind        String   @default("video") @db.VarChar(20)
+  topic       String?  @db.VarChar(200)
+  companyId   String?  @map("company_id") @db.Uuid
+  factory     String?  @db.VarChar(200)
+  campaignId  String?  @map("campaign_id") @db.Uuid
+  hook        String?
+  script      String?
+  dialogue    String?
+  content     String?
+  cta         String?
+  /// new | approved | used | archived
+  status      String   @default("new") @db.VarChar(20)
+  createdById String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  campaign MediaCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tasks    MediaTask[]
+
+  @@index([titleKey])
+  @@map("media_ideas")
+}
+
+/// Lịch xuất bản + số liệu hiệu quả từng bài đăng (nhập tay; `metricsSource`
+/// để sẵn cho tích hợp API nền tảng sau này).
+model MediaPublication {
+  id               String    @id @default(uuid()) @db.Uuid
+  title            String    @db.VarChar(255)
+  taskId           String?   @map("task_id") @db.Uuid
+  campaignId       String?   @map("campaign_id") @db.Uuid
+  companyId        String?   @map("company_id") @db.Uuid
+  factory          String?   @db.VarChar(200)
+  scheduledDate    DateTime  @map("scheduled_date") @db.Date
+  platform         String    @db.VarChar(30)
+  /// Tài khoản/kênh đăng (tên page, kênh TikTok...).
+  channel          String?   @db.VarChar(200)
+  publisherId      String?   @map("publisher_id") @db.Uuid
+  /// pending | published
+  status           String    @default("pending") @db.VarChar(20)
+  link             String?   @db.VarChar(1000)
+  publishedAt      DateTime? @map("published_at")
+  views            Int       @default(0)
+  interactions     Int       @default(0)
+  shares           Int       @default(0)
+  comments         Int       @default(0)
+  inbox            Int       @default(0)
+  candidates       Int       @default(0)
+  interviews       Int       @default(0)
+  hired            Int       @default(0)
+  /// manual | api
+  metricsSource    String    @default("manual") @map("metrics_source") @db.VarChar(20)
+  metricsUpdatedAt DateTime? @map("metrics_updated_at")
+  note             String?
+  createdById      String    @map("created_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  task     MediaTask?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  campaign MediaCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([scheduledDate])
+  @@map("media_publications")
 }
