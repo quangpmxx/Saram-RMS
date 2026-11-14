@@ -41,29 +41,29 @@ type TabKey =
   | "reports"
   | "accounts";
 
-const NAV: { group?: string; items: { key: TabKey; label: string; icon: LucideIcon; hint: string }[] }[] = [
+const NAV: { group?: string; items: { key: TabKey; label: string; icon: LucideIcon }[] }[] = [
   {
     items: [
-      { key: "overview", label: "Tổng quan", icon: LayoutDashboard, hint: "Số liệu tháng gần nhất và quy trình nghiệp vụ" },
-      { key: "components", label: "Thành phần lương", icon: Blocks, hint: "Các khoản thu nhập, khấu trừ và công thức tính" },
-      { key: "templates", label: "Mẫu bảng lương", icon: Sheet, hint: "Mỗi vị trí một mẫu: gồm khoản nào, tính ra sao" },
+      { key: "overview", label: "Tổng quan", icon: LayoutDashboard },
+      { key: "components", label: "Thành phần lương", icon: Blocks },
+      { key: "templates", label: "Mẫu bảng lương", icon: Sheet },
     ],
   },
   {
     group: "Dữ liệu tính lương",
     items: [
-      { key: "data-attendance", label: "Chấm công", icon: CalendarCheck, hint: "Số công từng người, lấy từ bảng Chấm công thủ công" },
-      { key: "data-sales", label: "Doanh số", icon: TrendingUp, hint: "Số lao động, tổng giờ, hoa hồng từng người" },
-      { key: "commission", label: "Hoa hồng công ty", icon: Handshake, hint: "Mức hoa hồng theo giờ của từng công ty" },
+      { key: "data-attendance", label: "Chấm công", icon: CalendarCheck },
+      { key: "data-sales", label: "Doanh số", icon: TrendingUp },
+      { key: "commission", label: "Hoa hồng công ty", icon: Handshake },
     ],
   },
   {
     group: "Lương tháng",
     items: [
-      { key: "payroll", label: "Tính lương", icon: Calculator, hint: "Lập bảng lương, nhập thêm, chốt và gửi nhân viên kiểm tra" },
-      { key: "payout", label: "Chi trả", icon: Banknote, hint: "Danh sách chuyển khoản, tải Excel, hoàn thành" },
-      { key: "reports", label: "Báo cáo", icon: BarChart3, hint: "Tổng hợp lương và lịch sử lương nhân viên" },
-      { key: "accounts", label: "Nhân viên", icon: Users, hint: "Lương cơ bản, mức hoa hồng và cách tính riêng từng người" },
+      { key: "payroll", label: "Tính lương", icon: Calculator },
+      { key: "payout", label: "Chi trả", icon: Banknote },
+      { key: "reports", label: "Báo cáo", icon: BarChart3 },
+      { key: "accounts", label: "Nhân viên", icon: Users },
     ],
   },
 ];
@@ -78,7 +78,7 @@ export function AccountingClient({
   initialYear: number;
   initialMonth: number;
 }) {
-  useSetPageTitle("Kế toán — Tiền lương", "Tính lương, hoa hồng và gửi phiếu lương cho nhân viên.");
+  useSetPageTitle("Kế toán — Tiền lương");
   const canEdit = permissionLevel === "edit";
   const [tab, setTab] = useState<TabKey>("overview");
   const [variables, setVariables] = useState<PayrollVariable[]>([]);
@@ -134,7 +134,6 @@ export function AccountingClient({
         <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-lg font-semibold text-slate-900">{current.label}</h1>
           {!canEdit && <ViewOnlyBadge />}
-          <p className="w-full text-sm text-slate-500">{current.hint}</p>
         </header>
 
         {tab === "overview" && <OverviewPanel onGoTab={goTab} />}

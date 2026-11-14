@@ -957,10 +957,6 @@ export function AccountSettingsPanel({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-slate-500">
-          Lương cơ bản, mức hoa hồng và cách tính riêng của từng người (đè lên
-          mẫu của vị trí).
-        </p>
         <Input
           uiSize="sm"
           className="w-56"
@@ -1269,11 +1265,7 @@ export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
 
   return (
     <div className="flex max-w-2xl flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-slate-500">
-          Mức hoa hồng theo giờ của từng công ty. Hoa hồng theo giờ = tổng giờ ở
-          trang Nhập doanh số × mức này.
-        </p>
+      <div className="flex items-center justify-end gap-2">
         {canEdit && (
           <Button
             size="sm"
