@@ -30,6 +30,7 @@ describe('CandidatesService', () => {
     };
     leadSource: { findUnique: jest.Mock };
     team: { findUnique: jest.Mock };
+    leadNote: { count: jest.Mock };
     account: { findUnique: jest.Mock; findMany: jest.Mock };
     notification: {
       createMany: jest.Mock;
@@ -117,6 +118,7 @@ describe('CandidatesService', () => {
       },
       leadSource: { findUnique: jest.fn() },
       team: { findUnique: jest.fn() },
+      leadNote: { count: jest.fn().mockResolvedValue(0) },
       account: {
         findUnique: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
@@ -1497,6 +1499,50 @@ describe('CandidatesService', () => {
       await expect(
         service.transfer('lead-1', { new_account_id: 'sale-2' }, leaderUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Admin chuyển sang nhóm khác khi data chưa có ghi chú → data về Chờ phân chia của nhóm mới', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.team.findUnique.mockResolvedValue({ id: 'team-2' });
+      prisma.lead.findUniqueOrThrow.mockResolvedValue({
+        ...assignedLead,
+        assignedToId: null,
+        assignedTeamId: 'team-2',
+      });
+
+      await expect(
+        service.transfer('lead-1', { new_team_id: 'team-2' }, adminUser),
+      ).resolves.toBeDefined();
+      expect(prisma.lead.updateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          assignedTeamId: 'team-1',
+          isHeld: false,
+          notes: { none: { isDeleted: false } },
+        }),
+        data: { assignedTeamId: 'team-2', assignedToId: null, assignedAt: null },
+      });
+      expect(leadNotice.notifyAssigned).not.toHaveBeenCalled();
+    });
+
+    it('KHÔNG chuyển sang nhóm khác khi data đã có ghi chú', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.team.findUnique.mockResolvedValue({ id: 'team-2' });
+      prisma.leadNote.count.mockResolvedValue(1);
+
+      await expect(
+        service.transfer('lead-1', { new_team_id: 'team-2' }, adminUser),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(prisma.lead.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('Leader không chuyển được data sang nhóm khác', async () => {
+      prisma.lead.findUnique.mockResolvedValue(assignedLead);
+      prisma.account.findUnique.mockResolvedValueOnce({ teamId: 'team-1' });
+
+      await expect(
+        service.transfer('lead-1', { new_team_id: 'team-2' }, leaderUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.lead.updateMany).not.toHaveBeenCalled();
     });
 
     it('từ chối chuyển data đang giữ số cho người khác người giữ số', async () => {

@@ -259,7 +259,7 @@ export function CareWarehousePanel({
   });
   const [applied, setApplied] = useState<CareFilters>(filters);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(50);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(100);
   const [data, setData] = useState<CareWarehouseListResult | null>(null);
   /** Query đã tải xong gần nhất — đang tải = query hiện tại chưa tải xong. */
   const [loadedKey, setLoadedKey] = useState<string | null>(null);

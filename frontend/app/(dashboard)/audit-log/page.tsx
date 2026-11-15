@@ -28,7 +28,7 @@ export default async function AuditLogPage() {
   const canPickAccount = user.role === "admin";
 
   const [logs, accountsResult] = await Promise.all([
-    serverApi<PaginatedResult<AuditLogEntry>>("/audit-log?page=1&page_size=20"),
+    serverApi<PaginatedResult<AuditLogEntry>>("/audit-log?page=1&page_size=100"),
     canPickAccount
       ? serverApi<PaginatedResult<Account>>("/account?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Account>>({ total: 0, page: 1, page_size: 100, items: [] }),

@@ -130,7 +130,7 @@ export default async function DashboardLayout({
                   <div className="hidden md:block">
                     <PageTitleSlot />
                   </div>
-                  <BirthdayBanner />
+                  <BirthdayBanner currentAccountId={user.id} />
                   <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
                     {hasCap(user, "notification.send") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}

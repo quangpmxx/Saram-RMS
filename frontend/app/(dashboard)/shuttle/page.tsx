@@ -20,7 +20,7 @@ export default async function ShuttlePage() {
   const permissionLevel = await requirePageAccess("shuttle");
 
   const [listResult, options, saleAccounts, driverAccounts, companies] = await Promise.all([
-    serverApi<ShuttleListResult>("/shuttle?page=1&page_size=20"),
+    serverApi<ShuttleListResult>("/shuttle?page=1&page_size=100"),
     serverApi<ShuttleOptions>("/shuttle/options"),
     serverApi<AccountOptionItem[]>("/shuttle/sale-accounts"),
     // Bổ sung 2026-07-28 (yêu cầu trực tiếp người dùng: "chuyển cả 2 cột

@@ -103,7 +103,7 @@ export default async function CandidatesPage({
     date: dateFrom || dateTo ? { preset: "custom", from: dateFrom ?? "", to: dateTo ?? "" } : EMPTY_DATE_RANGE,
   };
 
-  const candidateQuery = new URLSearchParams({ page: "1", page_size: "50" });
+  const candidateQuery = new URLSearchParams({ page: "1", page_size: "100" });
   if (initialViewMode === "all" || initialViewMode === "mine") {
     if (keyword) candidateQuery.set("keyword", keyword);
     if (leadState) candidateQuery.set("lead_state", leadState);

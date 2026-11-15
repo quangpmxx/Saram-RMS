@@ -8,17 +8,26 @@ import { useBirthdayTheme } from "@/lib/birthday-theme-context";
  * (yêu cầu người dùng 2026-11-02; trước đây là banner lớn ở đầu nội dung).
  * Đặt 1 LẦN trong layout dùng chung. KHÔNG hiển thị ngày/năm sinh/tuổi.
  */
-export function BirthdayBanner() {
+export function BirthdayBanner({ currentAccountId }: { currentAccountId: string }) {
   const { employees, hasBirthdayToday, decorationsHidden, hideDecorationsToday, showDecorationsToday } = useBirthdayTheme();
 
   if (!hasBirthdayToday) return null;
 
   const names = employees.map((e) => e.full_name).join(", ");
-  const text =
-    employees.length >= 2
+  // Người có sinh nhật: giữ lời chúc cũ. Tài khoản khác: lời nhắc gửi lời chúc (yêu cầu user 2026-11-15).
+  const isBirthdayPerson = employees.some((e) => e.account_id === currentAccountId);
+  const givenNames = employees.map((e) => e.full_name.trim().split(/\s+/).pop() ?? e.full_name);
+  const text = isBirthdayPerson
+    ? employees.length >= 2
       ? `Chúc mừng sinh nhật ${employees.length} thành viên: ${names}!`
-      : `Chúc mừng sinh nhật ${names}!`;
-  const wish = "Chúc bạn một tuổi mới nhiều sức khỏe, niềm vui và thành công cùng Saram Vina.";
+      : `Chúc mừng sinh nhật ${names}!`
+    : `Hôm nay là sinh nhật ${names}`;
+  // "Linh", "Linh và Hoa", "Linh, Hoa và Mai"
+  const givenList =
+    givenNames.length <= 2 ? givenNames.join(" và ") : `${givenNames.slice(0, -1).join(", ")} và ${givenNames.at(-1)}`;
+  const wish = isBirthdayPerson
+    ? "Chúc bạn một tuổi mới nhiều sức khỏe, niềm vui và thành công cùng Saram Vina."
+    : `Hãy dành những lời chúc tốt đẹp nhất dành cho ${givenList} nhé!`;
 
   return (
     <div
@@ -34,13 +43,13 @@ export function BirthdayBanner() {
         ))}
       </div>
       <div className="min-w-0 flex-1 leading-tight">
-        <p className="truncate text-xs font-bold text-rose-900 sm:text-sm">{text}</p>
-        <p className="hidden truncate text-[11px] text-slate-600 xl:block">{wish}</p>
+        <p className="truncate text-xs font-bold text-[#881337] sm:text-sm">{text}</p>
+        <p className="hidden truncate text-[11px] text-[#475569] xl:block">{wish}</p>
       </div>
       <button
         type="button"
         onClick={decorationsHidden ? showDecorationsToday : hideDecorationsToday}
-        className="hidden shrink-0 text-[11px] font-medium text-slate-400 transition-colors hover:text-slate-600 lg:block"
+        className="hidden shrink-0 text-[11px] font-medium text-[#94a3b8] transition-colors hover:text-[#475569] lg:block"
       >
         {decorationsHidden ? "Hiện trang trí" : "Ẩn trang trí"}
       </button>

@@ -92,7 +92,7 @@ import { PancakeAutoUpModal } from "./pancake-auto-up-modal";
 import { LEAD_CARD_CLASS, LEAD_CARD_GRID_CLASS, LeadLayoutToggle, useLeadLayout } from "./lead-layout";
 import { CareWarehousePanel, clearSavedCareState, type CareSaleOption } from "./care-warehouse-panel";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 /** Dự án phụ — nâng cấp toàn diện: cho chọn số dòng/trang, y hệt trang Đưa đón (yêu cầu trực tiếp người dùng). */
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 /**
@@ -2420,6 +2420,12 @@ function TransferModal({
   onClose: () => void;
   onTransferred: () => Promise<void>;
 }) {
+  // Người có quyền mọi nhóm được chuyển sang nhóm khác (sửa chia nhầm nhóm —
+  // máy chủ chỉ cho khi data chưa có ghi chú). Chọn nhóm khác thì KHÔNG chọn
+  // Sale: data về "Chờ phân chia" của nhóm mới, Leader tự chia. Yêu cầu user 2026-11-15.
+  const canPickTeam = useCan()("lead.manage_all_teams");
+  const [teams, setTeams] = useState<Team[] | null>(null);
+  const [teamId, setTeamId] = useState(candidate.assigned_team_id ?? "");
   const [members, setMembers] = useState<TeamMember[] | null>(null);
   const [accountId, setAccountId] = useState("");
   const [reason, setReason] = useState("");
@@ -2427,6 +2433,13 @@ function TransferModal({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(candidate.assigned_team_id));
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!canPickTeam) return;
+    clientApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
+      .then((result) => setTeams(result.items))
+      .catch(() => {});
+  }, [canPickTeam]);
 
   useEffect(() => {
     if (!candidate.assigned_team_id) {
@@ -2439,10 +2452,12 @@ function TransferModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate.assigned_team_id]);
 
+  const isTeamMove = Boolean(teamId) && teamId !== candidate.assigned_team_id;
+
   const missingTeamError = candidate.assigned_team_id ? null : "Lao động chưa thuộc nhóm nào";
 
   async function handleSubmit() {
-    if (!accountId) {
+    if (!isTeamMove && !accountId) {
       setError("Vui lòng chọn Sale nhận lao động");
       return;
     }
@@ -2451,7 +2466,11 @@ function TransferModal({
     try {
       await clientApi(`/candidate/${candidate.id}/transfer`, {
         method: "POST",
-        body: JSON.stringify({ new_account_id: accountId, reason: reason || undefined }),
+        body: JSON.stringify(
+          isTeamMove
+            ? { new_team_id: teamId, reason: reason || undefined }
+            : { new_account_id: accountId, reason: reason || undefined },
+        ),
       });
       await onTransferred();
     } catch (err) {
@@ -2470,23 +2489,47 @@ function TransferModal({
           <Button type="button" variant="outline" onClick={onClose}>
             Hủy
           </Button>
-          <Button type="button" disabled={isSubmitting || !accountId} onClick={() => void handleSubmit()}>
+          <Button type="button" disabled={isSubmitting || (!isTeamMove && !accountId)} onClick={() => void handleSubmit()}>
             {isSubmitting ? "Đang lưu..." : "Chuyển"}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Chuyển sang Sale" hint={isLoading ? "Đang tải danh sách Sale..." : undefined}>
-          <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
-            <option value="">— Chọn Sale —</option>
-            {members?.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.full_name} ({member.assigned_count} data đang phụ trách)
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {canPickTeam && (
+          <Field
+            label="Nhóm"
+            hint={
+              isTeamMove
+                ? "Data về mục Chờ phân chia của nhóm mới để Leader tự chia. Chỉ chuyển được khi data chưa có ghi chú nào."
+                : undefined
+            }
+          >
+            <Select value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+              {!teams && candidate.assigned_team_id && (
+                <option value={candidate.assigned_team_id}>Nhóm hiện tại</option>
+              )}
+              {teams?.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                  {team.id === candidate.assigned_team_id ? " (nhóm hiện tại)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {!isTeamMove && (
+          <Field label="Chuyển sang Sale" hint={isLoading ? "Đang tải danh sách Sale..." : undefined}>
+            <Select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+              <option value="">— Chọn Sale —</option>
+              {members?.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.full_name} ({member.assigned_count} data đang phụ trách)
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Field label="Lý do (không bắt buộc)">
           <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} />

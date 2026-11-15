@@ -20,7 +20,7 @@ export default async function DuplicatesPage() {
   const canFilterByTeam = hasCap(user, "lead.manage_all_teams");
 
   const [duplicates, teamsResult] = await Promise.all([
-    serverApi<PaginatedResult<DuplicateGroup>>("/candidate/duplicate?page=1&page_size=20"),
+    serverApi<PaginatedResult<DuplicateGroup>>("/candidate/duplicate?page=1&page_size=100"),
     canFilterByTeam
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),

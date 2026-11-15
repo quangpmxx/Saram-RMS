@@ -59,7 +59,7 @@ const STATUS_BADGE: Record<ReportViolationStatus, string> = {
   supplemented: "bg-purple-100 text-purple-700",
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 100;
 type PenaltySortKey = "stt" | "report_date" | "deadline" | "submitted_at";
 const EMPLOYEE_ROLES = ["sale", "sup_leader"];
 

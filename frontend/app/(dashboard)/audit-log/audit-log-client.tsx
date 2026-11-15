@@ -16,7 +16,7 @@ import { SortableTh, applySortParams, type SortState } from "@/components/ui/sor
 import { EMPTY_DATE_RANGE, type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 100;
 
 /** Toàn bộ giá trị enum action_type — Mục 2.16, docs/11-database-design.md. */
 const ACTION_TYPE_LABEL: Record<string, string> = {

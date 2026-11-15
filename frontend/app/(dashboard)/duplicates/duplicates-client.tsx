@@ -14,7 +14,7 @@ import { SortableTh, sortRows, type SortState } from "@/components/ui/sortable-t
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { SourceBadge } from "../candidates/source-badge";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 100;
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("vi-VN");

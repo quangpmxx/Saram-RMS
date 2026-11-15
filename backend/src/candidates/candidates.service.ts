@@ -1090,6 +1090,15 @@ export class CandidatesService {
       }
     }
 
+    // Chuyển sang NHÓM khác (sửa chia nhầm nhóm — yêu cầu user 2026-11-15):
+    // chỉ chọn nhóm, data về "Chờ phân chia" của nhóm mới để Leader tự chia.
+    if (dto.new_team_id) {
+      return this.transferToTeam(lead, dto.new_team_id, dto.reason, currentUser);
+    }
+    if (!dto.new_account_id) {
+      throw new BadRequestException('Vui lòng chọn Sale hoặc nhóm nhận');
+    }
+
     const target = await this.prisma.account.findUnique({
       where: { id: dto.new_account_id },
     });
@@ -1098,9 +1107,8 @@ export class CandidatesService {
         'Chỉ được chuyển cho tài khoản vai trò Sale đang hoạt động',
       );
     }
-    // Mục 3, docs/09: Leader chuyển lead "trong cùng nhóm" — áp dụng chung
-    // cho mọi vai trò được phép chuyển (Sale đích phải thuộc đúng nhóm đang
-    // sở hữu lead này, không cho chuyển sang nhóm khác).
+    // Mục 3, docs/09: chuyển cho Sale chỉ trong cùng nhóm đang sở hữu lead
+    // (đổi nhóm thì dùng new_team_id ở trên).
     if (target.teamId !== lead.assignedTeamId) {
       throw new ForbiddenException(
         'Chỉ được chuyển cho Sale trong cùng nhóm đang phụ trách ứng viên này',
@@ -1161,6 +1169,88 @@ export class CandidatesService {
       currentUser,
       'transfer',
     );
+    return finalResponse;
+  }
+
+  /**
+   * Chuyển data sang NHÓM khác (yêu cầu user 2026-11-15, sửa chia nhầm nhóm):
+   * chỉ người có quyền mọi nhóm, data chưa có ghi chú, không đang giữ số.
+   * Data bỏ người phụ trách → nằm ở "Chờ phân chia" của nhóm mới cho Leader chia.
+   */
+  private async transferToTeam(
+    lead: {
+      id: string;
+      assignedToId: string | null;
+      assignedTeamId: string | null;
+      isHeld: boolean;
+    },
+    newTeamId: string,
+    reason: string | undefined,
+    currentUser: AuthenticatedUser,
+  ): Promise<CandidateResponseDto> {
+    if (!can(currentUser, 'lead.manage_all_teams')) {
+      throw new ForbiddenException(
+        'Bạn không có quyền chuyển data sang nhóm khác',
+      );
+    }
+    if (newTeamId === lead.assignedTeamId) {
+      throw new BadRequestException('Data đang thuộc nhóm này rồi');
+    }
+    const team = await this.prisma.team.findUnique({
+      where: { id: newTeamId },
+    });
+    if (!team) {
+      throw new NotFoundException('Không tìm thấy nhóm');
+    }
+    if (lead.isHeld) {
+      throw new UnprocessableEntityException(
+        'Data đang được giữ số — bỏ giữ số trước khi chuyển nhóm',
+      );
+    }
+    const noteCount = await this.prisma.leadNote.count({
+      where: { leadId: lead.id, isDeleted: false },
+    });
+    if (noteCount > 0) {
+      throw new UnprocessableEntityException(
+        'Data đã có ghi chú — không chuyển sang nhóm khác được',
+      );
+    }
+
+    // Chỉ ghi khi data vẫn đúng trạng thái đã kiểm tra (không ai vừa ghi
+    // chú / giữ số / chuyển giữa chừng).
+    const { count } = await this.prisma.lead.updateMany({
+      where: {
+        id: lead.id,
+        deletedAt: null,
+        assignedToId: lead.assignedToId,
+        assignedTeamId: lead.assignedTeamId,
+        isHeld: false,
+        notes: { none: { isDeleted: false } },
+      },
+      data: { assignedTeamId: newTeamId, assignedToId: null, assignedAt: null },
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        'Data vừa bị người khác thay đổi (ghi chú/giữ số/chuyển) — vui lòng tải lại rồi thử lại',
+      );
+    }
+
+    await this.auditLog.log({
+      accountId: currentUser.id,
+      actionType: 'transfer',
+      entityType: 'lead',
+      entityId: lead.id,
+      fieldChanged: 'assigned_team',
+      oldValue: lead.assignedTeamId ?? undefined,
+      newValue: reason ? `${newTeamId} | reason: ${reason}` : newTeamId,
+    });
+
+    const final = await this.prisma.lead.findUniqueOrThrow({
+      where: { id: lead.id },
+      include: CANDIDATE_INCLUDE,
+    });
+    const finalResponse = toCandidateResponse(final);
+    this.realtime.emitCandidateChange('transferred', finalResponse, currentUser);
     return finalResponse;
   }
 
