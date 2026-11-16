@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<string, string> = {
   sale_no_shuttle_reminder: 'Nhắc nhở chưa có người phỏng vấn',
   media_task: 'Công việc Media',
   attendance_sheet: 'Bảng công tháng',
+  website_contact: 'Liên hệ từ website',
 };
 
 export interface PushableNotification {
@@ -52,6 +53,7 @@ function targetUrl(n: PushableNotification): string {
   if (n.type === 'shuttle_update') return '/shuttle';
   if (n.type === 'lead_assigned') return '/candidates';
   if (n.type === 'media_task') return '/media?tab=tasks';
+  if (n.type === 'website_contact') return '/website-contacts';
   if (n.type === 'attendance_sheet') {
     const link = (n.meta as { link?: unknown } | null | undefined)?.link;
     return typeof link === 'string' && link.startsWith('/')

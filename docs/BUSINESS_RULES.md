@@ -83,6 +83,11 @@ Ranh giới Admin–Quản lý · quy trình bộ phận đưa đón · danh m�
 - Bảng **Pancake theo page** ở Marketing Hub, theo kỳ đang lọc: Người nhắn tin mới (hội thoại inbox bắt đầu trong kỳ), Để lại SĐT (trong số đó, có SĐT), Tỉ lệ = để lại SĐT ÷ người nhắn mới, Data đã up tự động.
 - Bảng **Ghi chú theo bài** (dưới bảng page): bài = bài của quảng cáo khách bấm để nhắn (quảng cáo bấm gần nhất) hoặc bài khách bình luận; inbox tự nhiên không có bài. Chỉ hiện bài đã tick ở "Chọn bài viết" (lưu chung), gom theo page, bấm page để mở bài. Data up tự động từ bài đang chọn mang ghi chú của bài vào Ghi chú MKT; bài không chọn / không ghi chú / inbox tự nhiên → không ghi chú. Bỏ chọn giữ ghi chú nhưng không áp. Chọn bài + sửa ghi chú: ai có quyền Chỉnh sửa Marketing Hub. (Ghi chú theo page đã bỏ hẳn.)
 
+## Form trên trang web saramvina.com (duyệt 2026-11-16)
+- **Đăng ký tìm việc** (người lao động) → 1 data: tên, SĐT, nguồn **Website**, Ghi chú MKT "Đăng ký từ website · Muốn làm: <khu vực>", người up = Admin đầu tiên (tài khoản admin tạo sớm nhất). Chia nhóm **lần lượt theo đúng tỉ lệ "Up tự động"** (dùng chung vòng chia với Pancake, không phụ thuộc Up tự động đang bật hay tắt); chưa đặt tỉ lệ nào → xoay vòng đều mọi nhóm. Số trùng 7 ngày → về nhóm giữ số, không tính lượt. Cùng SĐT đăng ký lại trên web trong 24 giờ → không tạo thêm data.
+- **Gửi nhu cầu tuyển dụng** (doanh nghiệp) → lưu ở trang **Liên hệ từ website** (module quyền `website-contacts`, mặc định Admin + Quản lý; Sửa = đánh dấu Đã gọi + ghi chú) và báo chuông mọi Admin/Quản lý đang hoạt động.
+- Chống gửi dồn: mỗi IP tối đa 5 lần / 10 phút (cả 2 form); ô ẩn chống máy tự điền; SĐT phải là số Việt Nam hợp lệ.
+
 ## Lịch tuyển dụng (duyệt 2026-11-11)
 - Sửa: Admin, Quản lý, Leader, Sup Leader. Sale chỉ xem. Vai trò khác không vào (Admin chỉnh riêng ở Phân quyền, module `recruitment-schedule`).
 - **Mỗi nhóm một lịch riêng** (thẻ có `team_id`): Admin thấy/sửa mọi nhóm; tài khoản được Admin chọn "Lịch tuyển dụng của nhóm" ở Quản lý tài khoản (`accounts.recruitment_team_id`) thì thấy đúng nhóm đó; còn lại theo nhóm của tài khoản; riêng Quản lý chưa được chọn nhóm thì thấy mọi nhóm; không có nhóm nào thì không thấy thẻ nào. Thẻ chưa gán nhóm (dữ liệu nhập sẵn từ sheet) chỉ người thấy mọi nhóm mới thấy, có nút gán tất cả cho 1 nhóm.

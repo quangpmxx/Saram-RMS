@@ -25,7 +25,10 @@ import {
 } from '../pancake/pancake.controller';
 import { MediaController } from '../media/media.controller';
 import { MediaVideoController } from '../media/media-video.controller';
-import { WebsiteTextController } from '../website/website.controller';
+import {
+  WebsiteContactsController,
+  WebsiteTextController,
+} from '../website/website.controller';
 import {
   MyPayslipController,
   PayrollController,
@@ -243,6 +246,13 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     label: 'Sửa nội dung website',
     defaultRoles: ['admin'],
     controllers: [WebsiteTextController],
+  },
+  {
+    // Doanh nghiệp gửi nhu cầu tuyển dụng từ form trên saramvina.com (2026-11-16).
+    code: 'website-contacts',
+    label: 'Liên hệ từ website',
+    defaultRoles: ['admin', 'manager'],
+    controllers: [WebsiteContactsController],
   },
 ];
 

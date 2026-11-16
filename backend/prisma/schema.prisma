@@ -876,6 +876,8 @@ enum NotificationType {
   /// Chia/chuyển data cho Sale (2026-11-01): thủ công, hàng loạt, tự động chia (kể cả
   /// khi nhập Excel). Gắn lead_id khi chỉ 1 data để bấm vào mở trang Chi tiết.
   lead_assigned
+  /// Trang web (2026-11-16): doanh nghiệp gửi nhu cầu tuyển dụng từ saramvina.com — báo Admin/Quản lý.
+  website_contact
   /// Media (2026-11-14): được giao việc / có sản phẩm chờ duyệt / kết quả duyệt.
   media_task
   /// Bảng công tháng (2026-11-14): gửi nhân viên xác nhận / nhân viên báo sai / báo kế toán chốt lương.
@@ -2279,4 +2281,20 @@ model WebsiteText {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("website_texts")
+}
+
+/// Doanh nghiệp gửi nhu cầu tuyển dụng từ form trên trang web (2026-11-16). Xem ở trang "Liên hệ từ website".
+model WebsiteContact {
+  id          String    @id @default(uuid()) @db.Uuid
+  companyName String    @map("company_name") @db.VarChar(200)
+  phone       String    @db.VarChar(20)
+  need        String?   @db.VarChar(2000)
+  /// Đã gọi lại chưa (null = chưa); ai đánh dấu (accounts.id, không khoá ngoại).
+  handledAt   DateTime? @map("handled_at")
+  handledById String?   @map("handled_by") @db.Uuid
+  note        String?   @db.VarChar(1000)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("website_contacts")
 }

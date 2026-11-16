@@ -63,6 +63,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     hideInNav: true,
     defaultRoles: ["admin"],
   },
+  // Doanh nghiệp gửi nhu cầu tuyển dụng từ form trên saramvina.com (2026-11-16).
+  {
+    code: "website-contacts",
+    href: "/website-contacts",
+    label: "Liên hệ từ website",
+    icon: "websiteContacts",
+    defaultRoles: ["admin", "manager"],
+  },
   {
     code: "shuttle",
     href: "/shuttle",

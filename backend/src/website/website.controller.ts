@@ -7,8 +7,12 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Put,
+  Query,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -21,6 +25,14 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { SaveWebsiteTextsDto } from './dto/save-website-texts.dto';
 import { WebsiteService } from './website.service';
+import { WebsiteFormsService } from './website-forms.service';
+import {
+  BusinessContactDto,
+  ListWebsiteContactsQueryDto,
+  RegisterWorkerDto,
+  UpdateWebsiteContactDto,
+} from './dto/website-forms.dto';
+import type { Request } from 'express';
 
 /** Ảnh trang web: lưu ở uploads/website, phục vụ tĩnh qua /uploads (main.ts). */
 const IMAGE_EXT: Record<string, string> = {
@@ -33,12 +45,51 @@ const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 /** Trang web công ty đọc chữ/ảnh đã sửa — công khai, không cần đăng nhập. Không nằm trong module-registry. */
 @Controller('website')
 export class WebsitePublicController {
-  constructor(private readonly websiteService: WebsiteService) {}
+  constructor(
+    private readonly websiteService: WebsiteService,
+    private readonly forms: WebsiteFormsService,
+  ) {}
 
   @Public()
   @Get('texts')
   getTexts() {
     return this.websiteService.getTexts();
+  }
+
+  /** Form "Đăng ký tìm việc" → data nguồn Website trong CRM. */
+  @Public()
+  @Post('register-worker')
+  @HttpCode(HttpStatus.OK)
+  registerWorker(@Body() dto: RegisterWorkerDto, @Req() req: Request) {
+    return this.forms.registerWorker(dto, req.ip ?? 'unknown');
+  }
+
+  /** Form "Gửi nhu cầu tuyển dụng" → danh sách Liên hệ từ website + báo chuông. */
+  @Public()
+  @Post('business-contact')
+  @HttpCode(HttpStatus.OK)
+  contactBusiness(@Body() dto: BusinessContactDto, @Req() req: Request) {
+    return this.forms.contactBusiness(dto, req.ip ?? 'unknown');
+  }
+}
+
+/** Trang "Liên hệ từ website" trong CRM — module quyền "website-contacts" (mặc định Admin + Quản lý). */
+@Controller('website/contacts')
+export class WebsiteContactsController {
+  constructor(private readonly forms: WebsiteFormsService) {}
+
+  @Get()
+  list(@Query() query: ListWebsiteContactsQueryDto) {
+    return this.forms.listContacts(query);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateWebsiteContactDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.forms.updateContact(id, dto, user);
   }
 }
 

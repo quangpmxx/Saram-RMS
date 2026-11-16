@@ -12,6 +12,7 @@ import {
   Clapperboard,
   ClipboardList,
   Copy,
+  Globe,
   Handshake,
   History,
   LayoutDashboard,
@@ -48,6 +49,7 @@ const ICONS = {
   marketingHub: Megaphone,
   media: Clapperboard,
   permissions: ShieldCheck,
+  websiteContacts: Globe,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

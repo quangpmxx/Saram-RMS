@@ -893,7 +893,9 @@ export interface AppNotification {
     /** Media (2026-11-14): giao việc / chờ duyệt / kết quả duyệt — meta.task_id. */
     | "media_task"
     /** Bảng công tháng (2026-11-14): gửi xác nhận / báo sai / báo kế toán — meta.link. */
-    | "attendance_sheet";
+    | "attendance_sheet"
+    /** Trang web (2026-11-16): doanh nghiệp gửi nhu cầu tuyển dụng — mở trang Liên hệ từ website. */
+    | "website_contact";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;
