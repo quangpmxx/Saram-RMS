@@ -99,7 +99,17 @@ export function CollapsibleSidebar({ navItems }: { navItems: NavItem[] }) {
         )}
       >
         <p className="text-[11px] whitespace-nowrap text-brand-200/50">Saram CRM · Nội bộ</p>
-        <p className="text-[11px] whitespace-nowrap text-brand-200/50">©PMQ</p>
+        <p className="text-[11px] whitespace-nowrap text-brand-200/50">
+          ©PMQ ·{" "}
+          <a
+            href={process.env.NEXT_PUBLIC_WEBSITE_URL ?? "https://saramvina.com"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-2 hover:text-white hover:underline"
+          >
+            saramvina.com
+          </a>
+        </p>
       </div>
     </div>
     </aside>

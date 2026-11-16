@@ -12,7 +12,6 @@ import {
   Clapperboard,
   ClipboardList,
   Copy,
-  Globe,
   Handshake,
   History,
   LayoutDashboard,
@@ -63,10 +62,6 @@ export interface NavItem {
 
 const LOCKED_TITLE = "Bạn không có quyền vào trang này";
 
-/** Trang web công ty (website/) — mở tab mới. Máy dev đặt NEXT_PUBLIC_WEBSITE_URL=http://localhost:3002 nếu muốn. */
-const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? "https://saramvina.com";
-const WEBSITE_LABEL = "Website";
-
 export function SidebarNav({
   items,
   variant = "vertical",
@@ -107,15 +102,6 @@ export function SidebarNav({
             </Link>
           );
         })}
-        <a
-          href={WEBSITE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
-        >
-          <Globe className="h-4 w-4" strokeWidth={2} />
-          {WEBSITE_LABEL}
-        </a>
       </nav>
     );
   }
@@ -187,29 +173,6 @@ export function SidebarNav({
           </Link>
         );
       })}
-      <a
-        href={WEBSITE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="Mở trang web saramvina.com (tab mới)"
-        className={cn(
-          "group relative flex items-center rounded-lg py-2 text-[13px] font-medium text-brand-100/75 transition-colors hover:bg-white/5 hover:text-white",
-          collapsed ? "justify-center px-0" : "gap-2.5 px-3",
-        )}
-      >
-        <Globe
-          className={cn("shrink-0 text-brand-200/60 transition-[width,height]", collapsed ? "h-5 w-5" : "h-[17px] w-[17px]")}
-          strokeWidth={2}
-        />
-        <span
-          className={cn(
-            "overflow-hidden whitespace-nowrap transition-[opacity,max-width]",
-            collapsed ? "max-w-0 opacity-0 duration-100" : "max-w-[150px] opacity-100 delay-150 duration-200",
-          )}
-        >
-          {WEBSITE_LABEL}
-        </span>
-      </a>
     </nav>
   );
 }
