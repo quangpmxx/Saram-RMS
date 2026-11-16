@@ -7,8 +7,8 @@ const PENDING = "Đang cập nhật";
 export function SiteFooter() {
   return (
     <footer className="bg-ink text-slate-400">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr]">
-        <div>
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-4 py-12 sm:px-6 sm:py-14 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="col-span-2 md:col-span-1">
           <Logo light />
           <p className="mt-5 max-w-sm text-sm leading-relaxed">
             {company.legalName} — cung ứng nhân lực cho các nhà máy tại KCN {company.area} từ năm {company.since}.
@@ -45,7 +45,7 @@ export function SiteFooter() {
           <ul className="mt-4 space-y-2 text-sm">
             {areas.map((a) => (
               <li key={a.name}>
-                KCN {a.name} <span className="text-slate-600">· {a.province}</span>
+                KCN {a.name} <span className="block text-xs text-slate-600 sm:inline sm:text-sm">· {a.province}</span>
               </li>
             ))}
           </ul>

@@ -195,7 +195,7 @@ export function EditBar() {
   const btn = "flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition-colors disabled:opacity-50";
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 max-w-[calc(100vw-6rem)] rounded-2xl bg-ink p-2 text-white shadow-2xl">
+    <div className="fixed bottom-20 left-4 z-50 max-w-[calc(100vw-2rem)] sm:bottom-4 sm:max-w-[calc(100vw-6rem)] rounded-2xl bg-ink p-2 text-white shadow-2xl">
       <div className="flex flex-wrap items-center gap-2">
         {editing ? (
           <>

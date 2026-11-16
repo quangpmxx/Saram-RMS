@@ -22,10 +22,10 @@ export default function BusinessPage() {
         text="Không chỉ tuyển người — Đại Việt lo cả chỗ ở, đi lại và thu nhập cho người lao động, để nhà máy có đội ngũ đi làm đều và gắn bó lâu dài."
       />
 
-      <section className="py-20 sm:py-24">
+      <section className="py-14 sm:py-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <SectionHeading k="business.values" eyebrow="Giá trị" title="Nhà máy nhận được gì khi làm việc với Đại Việt" />
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid sm:mt-10 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {businessValues.map((v, i) => (
               <article key={v.title} className="rounded-2xl border border-slate-200 p-6">
                 <BadgeCheck className="h-7 w-7 text-brand" aria-hidden="true" />
@@ -42,7 +42,7 @@ export default function BusinessPage() {
       </section>
 
       <section className="border-y border-slate-200 bg-mist py-10">
-        <p className="mb-6 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+        <p className="mb-6 text-center text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-slate-500">
           <T k="business.partners.title">Đối tác đang hợp tác liên tục</T>
         </p>
         <PartnersStrip />
@@ -50,7 +50,7 @@ export default function BusinessPage() {
 
       <DormsSection />
 
-      <section className="hero-bg relative overflow-hidden py-20 text-white sm:py-24">
+      <section className="hero-bg relative overflow-hidden py-14 text-white sm:py-24">
         <div className="grid-dots absolute inset-0" aria-hidden="true" />
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
           <div>

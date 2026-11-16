@@ -79,7 +79,9 @@ export function SiteHeader() {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className="block border-b border-slate-100 py-3.5 text-base font-semibold text-ink"
+              className={`block border-b border-slate-100 py-3.5 text-base font-semibold ${
+                (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)) ? "text-brand" : "text-ink"
+              }`}
             >
               {item.label}
             </Link>

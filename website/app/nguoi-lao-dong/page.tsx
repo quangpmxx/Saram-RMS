@@ -22,7 +22,7 @@ export default function WorkerPage() {
       <DormsSection />
       <BikeSection />
       <PolicySection />
-      <section className="bg-mist py-20 sm:py-24">
+      <section className="bg-mist py-14 sm:py-24">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
           <div>
             <SectionHeading k="worker.start" eyebrow="Bắt đầu" title="3 bước để có việc làm" />

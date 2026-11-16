@@ -20,7 +20,7 @@ export default function AboutPage() {
         text={`Từ năm ${company.since}, Đại Việt cung ứng nhân lực cho các nhà máy tại khu công nghiệp trọng điểm ${company.area}, đồng hành liên tục với các tập đoàn công nghệ toàn cầu.`}
       />
 
-      <section className="py-20 sm:py-24">
+      <section className="py-14 sm:py-24">
         <div className="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-2">
           <div>
             <SectionHeading k="about.story" eyebrow="Câu chuyện" title="Giải pháp nhân sự toàn diện" />
@@ -52,10 +52,10 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="bg-ink py-20 text-white sm:py-24">
+      <section className="bg-ink py-14 text-white sm:py-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <SectionHeading light k="about.clients" eyebrow="Khách hàng" title="Hệ thống khách hàng chiến lược" />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-8 grid sm:mt-10 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {partners.map((p) => (
               <div key={p.key} className="flex flex-col items-center gap-3 rounded-2xl bg-white p-5 text-center">
                 <PartnerLogo partner={p} className="h-20 w-full border-0" />

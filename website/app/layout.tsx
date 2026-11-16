@@ -25,7 +25,7 @@ export const revalidate = 300;
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={roboto.variable}>
-      <body className="font-sans">
+      <body className="pb-16 font-sans sm:pb-0">
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />

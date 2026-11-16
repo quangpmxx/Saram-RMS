@@ -31,7 +31,7 @@ const worryIcons = {
 /** 4 nỗi lo của người lao động → cách SARAM giải quyết. */
 export function WorriesSection() {
   return (
-    <section className="bg-mist py-20 sm:py-24">
+    <section className="bg-mist py-14 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeading
           k="worries"
@@ -46,15 +46,15 @@ export function WorriesSection() {
           }
           text="Giải quyết trọn những điều người lao động lo nhất là cách để họ yên tâm làm việc và gắn bó lâu dài với nhà máy."
         />
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid sm:mt-12 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {worries.map((w, i) => {
             const Icon = worryIcons[w.key as keyof typeof worryIcons];
             return (
               <article
                 key={w.key}
-                className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-6 transition-shadow hover:shadow-xl"
+                className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-xl sm:p-6"
               >
-                <span className="absolute top-5 right-6 font-display text-5xl font-bold text-slate-100 transition-colors group-hover:text-orange-100">
+                <span className="absolute top-5 right-6 font-display text-4xl font-bold text-slate-100 sm:text-5xl transition-colors group-hover:text-orange-100">
                   0{i + 1}
                 </span>
                 <span className="relative grid h-12 w-12 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -85,7 +85,7 @@ export function WorriesSection() {
 /** Ký túc xá — ảnh thật từ hồ sơ năng lực. */
 export function DormsSection() {
   return (
-    <section className="py-20 sm:py-24">
+    <section className="py-14 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <SectionHeading
@@ -112,7 +112,7 @@ export function DormsSection() {
           </div>
         </div>
 
-        <div className="mt-12 grid gap-8 lg:grid-cols-2">
+        <div className="mt-8 grid sm:mt-12 gap-8 lg:grid-cols-2">
           {dorms.map((d, di) => (
             <article
               key={d.name}
@@ -122,7 +122,7 @@ export function DormsSection() {
                 {d.images.map((src, i) => (
                   <div
                     key={src}
-                    className="relative aspect-[4/5] overflow-hidden"
+                    className="relative aspect-[4/3] overflow-hidden sm:aspect-[4/5]"
                   >
                     <EImage
                       k={`dorms.${di}.image${i}`}
@@ -167,7 +167,7 @@ export function DormsSection() {
 /** Xe điện miễn phí. */
 export function BikeSection() {
   return (
-    <section className="hero-bg relative overflow-hidden py-20 text-white sm:py-24">
+    <section className="hero-bg relative overflow-hidden py-14 text-white sm:py-24">
       <div className="grid-dots absolute inset-0" aria-hidden="true" />
       <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
         <div>
@@ -235,10 +235,10 @@ export function BikeSection() {
 /** Thủ tục + thu nhập. */
 export function PolicySection() {
   return (
-    <section className="py-20 sm:py-24">
+    <section className="py-14 sm:py-24">
       <div className="mx-auto grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-2">
         <article className="rounded-3xl bg-mist p-8 sm:p-10">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-brand">
             <T k="policy.docs.eyebrow">Hồ sơ</T>
           </p>
           <h3 className="mt-3 font-display text-3xl font-bold">
@@ -277,7 +277,7 @@ export function PolicySection() {
           </ul>
         </article>
         <article className="flex flex-col rounded-3xl bg-royal p-8 text-white sm:p-10">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-blue-200">
             <T k="policy.income.eyebrow">Thu nhập</T>
           </p>
           <h3 className="mt-3 font-display text-3xl font-bold">
@@ -311,7 +311,7 @@ export function PolicySection() {
 /** Logo công ty trong khung trắng; chưa có file logo thì hiện tên viết tắt. */
 export function PartnerLogo({
   partner,
-  className = "h-20 w-20",
+  className = "h-16 w-16 sm:h-20 sm:w-20",
 }: {
   partner: Partner;
   className?: string;
@@ -344,7 +344,7 @@ export function PartnerLogo({
 export function JobCard({ job }: { job: (typeof sampleJobs)[number] }) {
   const partner = partnerOf(job.partner);
   return (
-    <article className="relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:border-royal/30 hover:shadow-xl">
+    <article className="relative flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 transition-all hover:-translate-y-1 hover:border-royal/30 hover:shadow-xl">
       {job.urgent && (
         <span className="absolute -top-2.5 right-3 flex items-center gap-1 rounded-md bg-[#ef4444] px-2.5 py-1 text-xs font-semibold text-white shadow-md">
           <Flame className="h-3.5 w-3.5" aria-hidden="true" /> Tuyển gấp
@@ -371,7 +371,7 @@ export function JobCard({ job }: { job: (typeof sampleJobs)[number] }) {
         </div>
       </div>
       <div className="mt-5 border-t border-slate-100 pt-4">
-        <p className="flex items-center justify-center gap-2 rounded-xl bg-[#eef4ff] px-4 py-3 text-sm text-slate-600">
+        <p className="flex items-center justify-center gap-2 rounded-xl bg-[#eef4ff] px-4 py-2.5 text-sm text-slate-600 sm:py-3">
           <Banknote className="h-5 w-5 text-royal" aria-hidden="true" />
           <span className="font-display text-lg font-bold text-royal">
             {job.salary} Triệu

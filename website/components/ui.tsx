@@ -44,7 +44,7 @@ export function SectionHeading({
 }) {
   return (
     <div className={`max-w-2xl ${center ? "mx-auto text-center" : ""}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">{ed(k && `${k}.eyebrow`, eyebrow)}</p>
+      <p className="text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-brand">{ed(k && `${k}.eyebrow`, eyebrow)}</p>
       <h2 className={`mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl ${light ? "text-white" : "text-ink"}`}>
         {ed(k && `${k}.title`, title)}
       </h2>
@@ -57,7 +57,9 @@ export function ButtonLink({
   href,
   children,
   variant = "primary",
+  className = "",
 }: {
+  className?: string;
   href: string;
   children: React.ReactNode;
   variant?: "primary" | "light" | "outline";
@@ -70,7 +72,7 @@ export function ButtonLink({
   return (
     <Link
       href={href}
-      className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${styles}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${styles} ${className}`}
     >
       {children}
     </Link>
@@ -83,7 +85,7 @@ export function PageHero({ k, eyebrow, title, text }: { k: string; eyebrow: stri
     <section className="hero-bg relative overflow-hidden text-white">
       <div className="grid-dots absolute inset-0" aria-hidden="true" />
       <div className="relative mx-auto max-w-6xl px-4 pt-32 pb-16 sm:px-6 sm:pt-36 sm:pb-20">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">{ed(`${k}.eyebrow`, eyebrow)}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] sm:tracking-[0.2em] text-orange-400">{ed(`${k}.eyebrow`, eyebrow)}</p>
         <h1 className="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight sm:text-5xl">{ed(`${k}.title`, title)}</h1>
         <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-300">{ed(`${k}.text`, text)}</p>
       </div>
