@@ -16,7 +16,7 @@ export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business"
       <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-8 text-center shadow-xl">
         <CheckCircle2 className="h-12 w-12 text-emerald-500" aria-hidden="true" />
         <p className="font-display text-xl font-bold text-ink">Đã nhận thông tin!</p>
-        <p className="text-sm text-slate-600">SARAM sẽ gọi lại cho bạn trong thời gian sớm nhất.</p>
+        <p className="text-sm text-slate-600">Đại Việt sẽ gọi lại cho bạn trong thời gian sớm nhất.</p>
       </div>
     );
   }
@@ -36,7 +36,7 @@ export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business"
         {kind === "worker" ? "Đăng ký tìm việc" : "Gửi nhu cầu tuyển dụng"}
       </p>
       <p className="text-sm text-slate-500">
-        {kind === "worker" ? "Miễn phí 100%. SARAM gọi lại tư vấn ngay." : "SARAM liên hệ lại trong ngày làm việc."}
+        {kind === "worker" ? "Miễn phí 100%. Đại Việt gọi lại tư vấn ngay." : "Đại Việt liên hệ lại trong ngày làm việc."}
       </p>
       <input required name="name" placeholder={kind === "worker" ? "Họ và tên" : "Tên công ty / nhà máy"} className={input} />
       <input required name="phone" type="tel" inputMode="tel" placeholder="Số điện thoại" className={input} />

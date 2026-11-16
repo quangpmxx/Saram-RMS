@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
+import { Roboto } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { FloatingContact } from "@/components/floating-contact";
+import { EditBar } from "@/components/edit-bar";
 
-const body = Plus_Jakarta_Sans({ subsets: ["latin", "vietnamese"], variable: "--font-body" });
-const head = Space_Grotesk({ subsets: ["latin", "vietnamese"], variable: "--font-head" });
+// Roboto (user chọn 2026-11-16) — dùng chung chữ thường + tiêu đề.
+const roboto = Roboto({ subsets: ["latin", "vietnamese"], weight: ["400", "500", "600", "700", "800"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://saramvina.com"),
@@ -15,17 +16,21 @@ export const metadata: Metadata = {
     template: "%s · SARAM VINA - ĐẠI VIỆT",
   },
   description:
-    "SARAM VINA cung ứng nhân lực cho nhà máy tại các KCN Bắc Ninh, Bắc Giang từ năm 2016. Người lao động có ký túc xá sát nhà máy, mượn xe điện miễn phí, chỉ cần CCCD.",
+    "Đại Việt cung ứng nhân lực cho nhà máy tại các KCN Bắc Ninh, Bắc Giang từ năm 2016. Người lao động có ký túc xá sát nhà máy, mượn xe điện miễn phí, chỉ cần CCCD.",
 };
+
+// Chữ sửa tại chỗ lấy từ CRM: tự làm mới tối đa 5 phút/lần (lưu ở chế độ sửa thì làm mới ngay).
+export const revalidate = 300;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" className={`${body.variable} ${head.variable}`}>
+    <html lang="vi" className={roboto.variable}>
       <body className="font-sans">
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
         <FloatingContact />
+        <EditBar />
       </body>
     </html>
   );

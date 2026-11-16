@@ -25,6 +25,7 @@ import {
 } from '../pancake/pancake.controller';
 import { MediaController } from '../media/media.controller';
 import { MediaVideoController } from '../media/media-video.controller';
+import { WebsiteTextController } from '../website/website.controller';
 import {
   MyPayslipController,
   PayrollController,
@@ -234,6 +235,14 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     label: 'Media',
     defaultRoles: ['admin', 'manager', 'mkt', 'media_staff'],
     controllers: [MediaController, MediaVideoController],
+  },
+  {
+    // Trang web công ty (2026-11-16): sửa chữ tại chỗ trên saramvina.com.
+    // Chỉ chặn GHI; đọc chữ công khai ở WebsitePublicController (ngoài registry).
+    code: 'website',
+    label: 'Sửa nội dung website',
+    defaultRoles: ['admin'],
+    controllers: [WebsiteTextController],
   },
 ];
 

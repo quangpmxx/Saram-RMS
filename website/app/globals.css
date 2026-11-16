@@ -11,7 +11,7 @@
   --color-royal-dark: #1a3fae;
   --color-mist: #f8fafc;
   --font-sans: var(--font-body), system-ui, sans-serif;
-  --font-display: var(--font-head), var(--font-body), system-ui, sans-serif;
+  --font-display: var(--font-body), system-ui, sans-serif;
 }
 
 html {
@@ -46,7 +46,7 @@ body {
   }
 }
 .marquee {
-  animation: marquee 30s linear infinite;
+  animation: marquee 60s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -56,4 +56,27 @@ body {
   .marquee {
     animation: none;
   }
+}
+
+/* Chế độ sửa nội dung (components/edit-bar.tsx) */
+html[data-editing] [data-k] {
+  outline: 1.5px dashed rgb(242 107 29 / 0.7);
+  outline-offset: 3px;
+  border-radius: 4px;
+  cursor: text;
+}
+html[data-editing] [data-k]:focus {
+  outline-style: solid;
+  outline-color: #f26b1d;
+}
+html[data-editing] [data-k][data-dirty] {
+  background: rgb(242 107 29 / 0.15);
+}
+html[data-editing] img[data-img-k] {
+  outline: 3px dashed rgb(242 107 29 / 0.85);
+  outline-offset: -3px;
+  cursor: pointer;
+}
+html[data-editing] img[data-img-k][data-dirty] {
+  outline-style: solid;
 }

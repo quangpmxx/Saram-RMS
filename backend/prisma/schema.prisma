@@ -2266,3 +2266,17 @@ model MediaPublication {
   @@index([channelId])
   @@map("media_publications")
 }
+
+// ── Trang web công ty saramvina.com (2026-11-16) ─────────────────────────
+
+/// Chữ đã sửa trên trang web (chế độ sửa tại chỗ). Không có dòng = dùng chữ gốc trong code website/.
+model WebsiteText {
+  /// Mã đoạn chữ, vd "home.hero.title".
+  key         String   @id @db.VarChar(150)
+  value       String
+  /// Người sửa gần nhất (accounts.id) — không đặt khoá ngoại, chỉ để tra cứu.
+  updatedById String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("website_texts")
+}

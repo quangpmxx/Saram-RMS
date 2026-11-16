@@ -24,17 +24,25 @@ export const nav = [
   { href: "/viec-lam", label: "Việc làm" },
   { href: "/nguoi-lao-dong", label: "Người lao động" },
   { href: "/doanh-nghiep", label: "Doanh nghiệp" },
-  { href: "/ve-chung-toi", label: "Về SARAM" },
+  { href: "/ve-chung-toi", label: "Về Đại Việt" },
   { href: "/lien-he", label: "Liên hệ" },
 ];
 
-export const partners = [
-  { name: "FOXCONN", note: "Tập đoàn Hồng Hải" },
-  { name: "GOERTEK", note: "Điện tử âm thanh" },
-  { name: "LUXSHARE ICT", note: "Thiết bị thông minh" },
-  { name: "BIEL CRYSTAL", note: "Kính quang học" },
-  { name: "LENS TECHNOLOGY", note: "Kính & linh kiện" },
+export type PartnerKey = "foxconn" | "goertek" | "luxshare" | "biel" | "lens";
+export type Partner = { key: PartnerKey; name: string; note: string; logo: string };
+
+/** Khách hàng chiến lược. logo: file trong public/logos (để trống thì hiện tên). */
+export const partners: Partner[] = [
+  { key: "foxconn", name: "FOXCONN", note: "Tập đoàn Hồng Hải", logo: "/logos/foxconn.svg" },
+  { key: "goertek", name: "GOERTEK", note: "Điện tử âm thanh", logo: "/logos/goertek.png" },
+  { key: "luxshare", name: "LUXSHARE ICT", note: "Thiết bị thông minh", logo: "/logos/luxshare.svg" },
+  { key: "biel", name: "BIEL CRYSTAL", note: "Kính quang học", logo: "/logos/biel.png" },
+  { key: "lens", name: "LENS TECHNOLOGY", note: "Kính & linh kiện", logo: "/logos/lens.png" },
 ];
+
+export function partnerOf(key: PartnerKey): Partner {
+  return partners.find((p) => p.key === key)!;
+}
 
 export const stats = [
   { value: new Date().getFullYear() - 2016, suffix: "+ năm", label: "Cung ứng nhân lực cho KCN", note: "Hoạt động từ năm 2016" },
@@ -54,7 +62,7 @@ export const worries = [
     key: "di-lai",
     title: "Đi lại",
     worry: "Không có xe, khó đi theo ca kíp.",
-    answer: "Cho mượn xe điện miễn phí, 2 người 1 xe, SARAM lo bảo dưỡng.",
+    answer: "Cho mượn xe điện miễn phí, 2 người 1 xe, Đại Việt lo bảo dưỡng.",
   },
   {
     key: "ho-so",
@@ -101,9 +109,9 @@ export const areas = [
 ];
 
 export const workerSteps = [
-  { title: "Gọi hoặc nhắn Zalo", text: "Cho SARAM biết khu vực muốn làm, ca làm và nhu cầu chỗ ở." },
+  { title: "Gọi hoặc nhắn Zalo", text: "Cho Đại Việt biết khu vực muốn làm, ca làm và nhu cầu chỗ ở." },
   { title: "Chọn việc phù hợp", text: "Được tư vấn rõ lương, phụ cấp, ca làm trước khi quyết định." },
-  { title: "Mang CCCD đi nhận việc", text: "SARAM lo hồ sơ, ảnh thẻ, đưa đi phỏng vấn và sắp xếp chỗ ở." },
+  { title: "Mang CCCD đi nhận việc", text: "Đại Việt lo hồ sơ, ảnh thẻ, đưa đi phỏng vấn và sắp xếp chỗ ở." },
 ];
 
 export const businessSteps = [
@@ -119,33 +127,19 @@ export const businessValues = [
   { title: "An ninh trật tự", text: "Ký túc xá có người quản lý, nắm rõ từng lao động." },
 ];
 
-/** Việc làm MẪU — bước 2 lấy từ trang quản trị (nối Đơn hàng trong CRM). */
-export const sampleJobs = [
-  {
-    slug: "cong-nhan-lap-rap-dien-tu-que-vo",
-    title: "Công nhân lắp ráp linh kiện điện tử",
-    company: "Nhà máy điện tử FDI",
-    area: "KCN Quế Võ, Bắc Ninh",
-    salary: "8–12 triệu/tháng",
-    perks: ["Có KTX", "Mượn xe điện", "Chỉ cần CCCD"],
-    gender: "Nam/Nữ 18–40 tuổi",
-  },
-  {
-    slug: "cong-nhan-kiem-hang-vsip",
-    title: "Công nhân kiểm tra ngoại quan",
-    company: "Nhà máy linh kiện quang học",
-    area: "KCN VSIP, Bắc Ninh",
-    salary: "9–13 triệu/tháng",
-    perks: ["Có KTX", "Phụ cấp chuyên cần"],
-    gender: "Nữ 18–35 tuổi",
-  },
-  {
-    slug: "cong-nhan-van-hanh-may-quang-chau",
-    title: "Công nhân vận hành máy",
-    company: "Nhà máy thiết bị thông minh",
-    area: "KCN Quang Châu, Bắc Giang",
-    salary: "9–14 triệu/tháng",
-    perks: ["Có KTX", "Mượn xe điện", "Tăng ca"],
-    gender: "Nam 18–35 tuổi",
-  },
+/** Việc làm MẪU (lương tự đặt để xem giao diện) — bước 2 lấy từ trang quản trị (nối Đơn hàng trong CRM). salary: triệu/tháng. */
+export const sampleJobs: {
+  slug: string;
+  title: string;
+  partner: PartnerKey;
+  area: string;
+  salary: string;
+  urgent: boolean;
+}[] = [
+  { slug: "cong-nhan-goertek-bac-ninh", title: "Công nhân tại Goertek (Bắc Ninh)", partner: "goertek", area: "Bắc Ninh", salary: "13 - 16", urgent: true },
+  { slug: "cong-nhan-foxconn-bac-giang", title: "Công nhân sản xuất tại Foxconn Bắc Giang", partner: "foxconn", area: "Bắc Giang", salary: "12 - 15", urgent: true },
+  { slug: "cong-nhan-luxshare-ict", title: "Công nhân lắp ráp tại Luxshare ICT", partner: "luxshare", area: "Bắc Ninh, Bắc Giang", salary: "12 - 15", urgent: true },
+  { slug: "cong-nhan-biel-crystal-bac-ninh", title: "Công nhân tại Biel Crystal Bắc Ninh", partner: "biel", area: "Bắc Ninh", salary: "12 - 15", urgent: false },
+  { slug: "cong-nhan-lens-technology", title: "Công nhân kiểm tra kính tại Lens Technology", partner: "lens", area: "Bắc Ninh", salary: "11 - 14", urgent: false },
+  { slug: "cong-nhan-van-hanh-may-goertek", title: "Công nhân vận hành máy tại Goertek", partner: "goertek", area: "Bắc Ninh", salary: "13 - 15", urgent: false },
 ];

@@ -53,7 +53,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-slate-500 sm:px-6">
-          © {new Date().getFullYear()} {company.legalName}. Người lao động không mất bất kỳ khoản phí nào khi tìm việc qua SARAM.
+          © {new Date().getFullYear()} {company.legalName}. Người lao động không mất bất kỳ khoản phí nào khi tìm việc qua Đại Việt.
         </p>
       </div>
     </footer>

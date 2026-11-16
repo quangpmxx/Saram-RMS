@@ -54,6 +54,15 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "media",
     defaultRoles: ["admin", "manager", "mkt", "media_staff"],
   },
+  // Trang web công ty (2026-11-16): sửa chữ tại chỗ trên saramvina.com — không có trang trong CRM.
+  {
+    code: "website",
+    href: "/",
+    label: "Sửa nội dung website",
+    icon: "home",
+    hideInNav: true,
+    defaultRoles: ["admin"],
+  },
   {
     code: "shuttle",
     href: "/shuttle",

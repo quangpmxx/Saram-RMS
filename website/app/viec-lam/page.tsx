@@ -13,9 +13,10 @@ export default function JobsPage() {
   return (
     <>
       <PageHero
+        k="jobs.hero"
         eyebrow="Việc làm"
         title="Việc làm nhà máy đang tuyển"
-        text="Thông tin lương, ca làm và chế độ được SARAM báo rõ trước khi bạn nhận việc. Ứng tuyển hoàn toàn miễn phí."
+        text="Thông tin lương, ca làm và chế độ được Đại Việt báo rõ trước khi bạn nhận việc. Ứng tuyển hoàn toàn miễn phí."
       />
       <section className="py-16 sm:py-20">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_340px]">
@@ -23,7 +24,7 @@ export default function JobsPage() {
             <p className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
               Đây là tin mẫu để xem giao diện. Tin thật sẽ được đăng từ trang quản trị trong CRM.
             </p>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-x-5 gap-y-7 sm:grid-cols-2">
               {sampleJobs.map((job) => (
                 <JobCard key={job.slug} job={job} />
               ))}

@@ -1,5 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import { T } from "./editable";
+
+/** Chữ thường → bọc T (sửa được) khi có mã; JSX giữ nguyên. */
+function ed(k: string | undefined, v: React.ReactNode): React.ReactNode {
+  return k && typeof v === "string" ? <T k={k}>{v}</T> : v;
+}
 
 /** Logo Đại Việt — cùng logo với CRM. */
 export function Logo({ light = false }: { light?: boolean }) {
@@ -26,7 +32,10 @@ export function SectionHeading({
   text,
   light = false,
   center = false,
+  k,
 }: {
+  /** Mã sửa nội dung, vd "home.services" → home.services.eyebrow/title/text. */
+  k?: string;
   eyebrow: string;
   title: React.ReactNode;
   text?: string;
@@ -35,11 +44,11 @@ export function SectionHeading({
 }) {
   return (
     <div className={`max-w-2xl ${center ? "mx-auto text-center" : ""}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">{eyebrow}</p>
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">{ed(k && `${k}.eyebrow`, eyebrow)}</p>
       <h2 className={`mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl ${light ? "text-white" : "text-ink"}`}>
-        {title}
+        {ed(k && `${k}.title`, title)}
       </h2>
-      {text && <p className={`mt-4 text-base leading-relaxed ${light ? "text-slate-300" : "text-slate-600"}`}>{text}</p>}
+      {text && <p className={`mt-4 text-base leading-relaxed ${light ? "text-slate-300" : "text-slate-600"}`}>{ed(k && `${k}.text`, text)}</p>}
     </div>
   );
 }
@@ -69,14 +78,14 @@ export function ButtonLink({
 }
 
 /** Trang con: dải tiêu đề tối ở đầu trang. */
-export function PageHero({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
+export function PageHero({ k, eyebrow, title, text }: { k: string; eyebrow: string; title: string; text: string }) {
   return (
     <section className="hero-bg relative overflow-hidden text-white">
       <div className="grid-dots absolute inset-0" aria-hidden="true" />
       <div className="relative mx-auto max-w-6xl px-4 pt-32 pb-16 sm:px-6 sm:pt-36 sm:pb-20">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">{eyebrow}</p>
-        <h1 className="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-300">{text}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">{ed(`${k}.eyebrow`, eyebrow)}</p>
+        <h1 className="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight sm:text-5xl">{ed(`${k}.title`, title)}</h1>
+        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-300">{ed(`${k}.text`, text)}</p>
       </div>
     </section>
   );
