@@ -59,7 +59,7 @@ function MobileDrawer({ navItems, onClose }: { navItems: NavItem[]; onClose: () 
             rel="noopener noreferrer"
             className="underline-offset-2 hover:text-white hover:underline"
           >
-            saramvina.com
+            https://saramvina.com
           </a>
         </p>
       </aside>
