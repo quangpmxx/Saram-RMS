@@ -110,6 +110,7 @@ export function BirthdayThemeProvider({
     function schedule() {
       timeoutId = setTimeout(() => {
         if (cancelled) return;
+        lastKey = vnDateKey();
         void refetch();
         setDecorationsHidden(loadHiddenToday());
         schedule();
@@ -117,9 +118,27 @@ export function BirthdayThemeProvider({
     }
     schedule();
 
+    // Máy ngủ/gập qua đêm thì hẹn giờ 0h bị trễ → khi quay lại tab/mở máy, nếu đã sang ngày mới thì tải lại ngay.
+    // Chỉ so chuỗi ngày (rất nhẹ); chỉ gọi API khi ngày thật sự đổi.
+    let lastKey = vnDateKey();
+    function onWake() {
+      if (document.visibilityState !== "visible") return;
+      const key = vnDateKey();
+      if (key === lastKey) return;
+      lastKey = key;
+      clearTimeout(timeoutId);
+      void refetch();
+      setDecorationsHidden(loadHiddenToday());
+      schedule();
+    }
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
     };
   }, []);
 
