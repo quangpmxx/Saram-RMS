@@ -2312,3 +2312,72 @@ model WebsiteContact {
   @@index([createdAt])
   @@map("website_contacts")
 }
+
+/// Tin việc làm trên trang web (2026-11-18) — người có quyền "Sửa nội dung website" tự đăng tay (không nối Đơn hàng).
+model WebsiteJob {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Đường dẫn trang chi tiết: /viec-lam/<slug>.
+  slug        String   @unique @db.VarChar(120)
+  title       String   @db.VarChar(200)
+  /// Nhà máy / công ty tuyển.
+  company     String?  @db.VarChar(200)
+  /// Khu công nghiệp / tỉnh.
+  area        String?  @db.VarChar(200)
+  /// Mức lương hiển thị, vd "12 – 15 triệu".
+  salary      String?  @db.VarChar(100)
+  shift       String?  @db.VarChar(200)
+  /// Mô tả, quyền lợi, yêu cầu — nhiều dòng.
+  description String?  @db.VarChar(10000)
+  /// Ảnh đã tải lên (/uploads/website/...).
+  image       String?  @db.VarChar(200)
+  urgent      Boolean  @default(false)
+  published   Boolean  @default(false)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String?  @map("created_by") @db.Uuid
+  updatedById String?  @map("updated_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([published, sortOrder])
+  @@map("website_jobs")
+}
+
+/// Tin tức / album ảnh trên trang web (2026-11-18).
+model WebsitePost {
+  id          String    @id @default(uuid()) @db.Uuid
+  slug        String    @unique @db.VarChar(160)
+  /// "news" = tin tức, "album" = album ảnh.
+  kind        String    @db.VarChar(20)
+  title       String    @db.VarChar(200)
+  summary     String?   @db.VarChar(500)
+  body        String?   @db.VarChar(50000)
+  cover       String?   @db.VarChar(200)
+  /// Danh sách đường dẫn ảnh (album / ảnh trong bài).
+  images      Json      @default("[]")
+  published   Boolean   @default(false)
+  publishedAt DateTime? @map("published_at")
+  createdById String?   @map("created_by") @db.Uuid
+  updatedById String?   @map("updated_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([kind, published, publishedAt])
+  @@map("website_posts")
+}
+
+/// Lịch sử sửa nội dung trang web (2026-11-18): mỗi lần lưu / về bản gốc một mã ghi một dòng — xem lại và quay về bản trước.
+model WebsiteTextHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @db.VarChar(150)
+  /// null = trước đó đang dùng bản gốc.
+  oldValue  String?  @map("old_value")
+  /// null = đưa về bản gốc.
+  newValue  String?  @map("new_value")
+  /// Người sửa (accounts.id, không khoá ngoại).
+  accountId String?  @map("account_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([key])
+  @@map("website_text_history")
+}

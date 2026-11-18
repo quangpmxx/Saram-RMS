@@ -25,6 +25,7 @@ export const nav = [
   { href: "/nguoi-lao-dong", label: "Người lao động" },
   { href: "/doanh-nghiep", label: "Doanh nghiệp" },
   { href: "/ve-chung-toi", label: "Về Đại Việt" },
+  { href: "/tin-tuc", label: "Tin tức" },
   { href: "/lien-he", label: "Liên hệ" },
 ];
 

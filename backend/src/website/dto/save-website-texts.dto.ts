@@ -18,7 +18,8 @@ export class WebsiteTextItemDto {
   key: string;
 
   @IsString()
-  @MaxLength(5000, { message: 'Đoạn chữ tối đa 5.000 ký tự' })
+  // 20.000: đủ cho danh sách mục / khối thêm mới lưu dạng JSON (list.*, custom.*, pages).
+  @MaxLength(20000, { message: 'Đoạn chữ tối đa 20.000 ký tự' })
   value: string;
 }
 

@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Children, isValidElement } from "react";
 import { T } from "./editable";
+import { getTexts } from "@/lib/texts";
+import { BTN_SUFFIX, BUTTON_VARIANTS, HREF_SUFFIX, isButtonVariant, isSafeHref, type ButtonVariant } from "@/lib/style";
 
 /** Chữ thường → bọc T (sửa được) khi có mã; JSX giữ nguyên. */
 function ed(k: string | undefined, v: React.ReactNode): React.ReactNode {
@@ -53,7 +56,11 @@ export function SectionHeading({
   );
 }
 
-export function ButtonLink({
+/**
+ * Nút dẫn tới trang khác. Nút có chữ sửa được (<T k>) thì đường dẫn cũng đổi được ở chế độ sửa
+ * (mã `<k>.__href`, chỉ nhận đường dẫn an toàn).
+ */
+export async function ButtonLink({
   href,
   children,
   variant = "primary",
@@ -62,16 +69,21 @@ export function ButtonLink({
   className?: string;
   href: string;
   children: React.ReactNode;
-  variant?: "primary" | "light" | "outline";
+  variant?: ButtonVariant;
 }) {
-  const styles = {
-    primary: "bg-brand text-white hover:bg-brand-dark shadow-lg shadow-orange-900/20",
-    light: "bg-white text-ink hover:bg-slate-100",
-    outline: "border border-slate-300 text-ink hover:border-ink",
-  }[variant];
+  const textChild = Children.toArray(children).find((c) => isValidElement<{ k?: string }>(c) && c.type === T);
+  const hk = isValidElement<{ k?: string }>(textChild) ? textChild.props.k : undefined;
+  const texts = hk ? await getTexts() : {};
+  const custom = hk ? texts[hk + HREF_SUFFIX] : undefined;
+  // Kiểu nút đổi ở chế độ sửa (mã <k>.__btn).
+  const btnOverride = hk ? texts[hk + BTN_SUFFIX] : undefined;
+  const v: ButtonVariant = isButtonVariant(btnOverride) ? btnOverride : variant;
+  const styles = BUTTON_VARIANTS[v];
   return (
     <Link
-      href={href}
+      href={isSafeHref(custom) ? custom.trim() : href}
+      data-href-k={hk}
+      data-btn={hk ? v : undefined}
       className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-colors ${styles} ${className}`}
     >
       {children}

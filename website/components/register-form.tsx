@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
-import { areas, company } from "@/lib/content";
+import { company } from "@/lib/content";
 import { errorMessage } from "@/lib/editor";
 
 /**
@@ -10,7 +10,17 @@ import { errorMessage } from "@/lib/editor";
  * - Người lao động → 1 data nguồn "Website", chia lần lượt cho các nhóm.
  * - Doanh nghiệp → trang "Liên hệ từ website" + báo chuông Admin/Quản lý.
  */
-export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business" }) {
+export function RegisterFormClient({
+  kind = "worker",
+  areaOptions,
+  jobTitle,
+}: {
+  kind?: "worker" | "business";
+  /** Tên KCN theo danh sách đã sửa (components/register.tsx). */
+  areaOptions: string[];
+  /** Đăng ký từ trang chi tiết tin việc làm → ghi kèm tên việc vào data CRM. */
+  jobTitle?: string;
+}) {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -30,7 +40,12 @@ export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business"
     const text = (key: string) => String(data.get(key) ?? "").trim();
     const body =
       kind === "worker"
-        ? { full_name: text("name"), phone: text("phone"), area: text("area") || undefined, website: text("website") }
+        ? {
+            full_name: text("name"),
+            phone: text("phone"),
+            area: [jobTitle ? `Việc: ${jobTitle}` : "", text("area")].filter(Boolean).join(" · ").slice(0, 100) || undefined,
+            website: text("website"),
+          }
         : { company_name: text("name"), phone: text("phone"), need: text("need") || undefined, website: text("website") };
     setBusy(true);
     setError("");
@@ -46,7 +61,7 @@ export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business"
       }
       setSent(true);
     } catch {
-      setError(`Không gửi được. Bạn gọi ngay ${company.hotlineDisplay} để được tư vấn nhé.`);
+      setError(`Không gửi được. Bạn gọi ngay ${document.body.dataset.hotline || company.hotlineDisplay} để được tư vấn nhé.`);
     } finally {
       setBusy(false);
     }
@@ -64,7 +79,7 @@ export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business"
       className="space-y-3 rounded-2xl bg-white p-6 shadow-xl sm:p-8"
     >
       <p className="font-display text-xl font-bold text-ink">
-        {kind === "worker" ? "Đăng ký tìm việc" : "Gửi nhu cầu tuyển dụng"}
+        {kind === "worker" ? (jobTitle ? "Ứng tuyển việc này" : "Đăng ký tìm việc") : "Gửi nhu cầu tuyển dụng"}
       </p>
       <p className="text-sm text-slate-500">
         {kind === "worker" ? "Miễn phí 100%. Đại Việt gọi lại tư vấn ngay." : "Đại Việt liên hệ lại trong ngày làm việc."}
@@ -92,8 +107,8 @@ export function RegisterForm({ kind = "worker" }: { kind?: "worker" | "business"
       {kind === "worker" ? (
         <select name="area" className={input} defaultValue="">
           <option value="">Khu vực muốn làm</option>
-          {areas.map((a) => (
-            <option key={a.name}>KCN {a.name}</option>
+          {areaOptions.map((a) => (
+            <option key={a}>{a}</option>
           ))}
           <option>Chỗ nào cũng được</option>
         </select>

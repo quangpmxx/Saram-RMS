@@ -27,6 +27,7 @@ import { MediaController } from '../media/media.controller';
 import { MediaVideoController } from '../media/media-video.controller';
 import {
   WebsiteContactsController,
+  WebsiteManageController,
   WebsiteTextController,
 } from '../website/website.controller';
 import {
@@ -247,7 +248,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     code: 'website',
     label: 'Sửa nội dung website',
     defaultRoles: ['admin'],
-    controllers: [WebsiteTextController],
+    controllers: [WebsiteTextController, WebsiteManageController],
   },
   {
     // Doanh nghiệp gửi nhu cầu tuyển dụng từ form trên saramvina.com (2026-11-16).

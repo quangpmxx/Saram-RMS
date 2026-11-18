@@ -1,5 +1,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { TEXTS_TAG } from "@/lib/texts";
+import { CONTENT_TAG } from "@/lib/content-api";
 
 /**
  * Gọi sau khi lưu chữ ở chế độ sửa: bỏ bản cache để mọi người thấy chữ mới ngay.
@@ -7,6 +8,7 @@ import { TEXTS_TAG } from "@/lib/texts";
  */
 export async function POST() {
   revalidateTag(TEXTS_TAG, { expire: 0 });
+  revalidateTag(CONTENT_TAG, { expire: 0 });
   revalidatePath("/", "layout");
   return Response.json({ ok: true });
 }

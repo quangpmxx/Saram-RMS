@@ -26,6 +26,12 @@ import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interfa
 import { SaveWebsiteTextsDto } from './dto/save-website-texts.dto';
 import { WebsiteService } from './website.service';
 import { WebsiteFormsService } from './website-forms.service';
+import { WebsiteContentService } from './website-content.service';
+import {
+  ListWebsitePostsQueryDto,
+  SaveWebsiteJobDto,
+  SaveWebsitePostDto,
+} from './dto/website-content.dto';
 import {
   BusinessContactDto,
   ListWebsiteContactsQueryDto,
@@ -48,12 +54,39 @@ export class WebsitePublicController {
   constructor(
     private readonly websiteService: WebsiteService,
     private readonly forms: WebsiteFormsService,
+    private readonly content: WebsiteContentService,
   ) {}
 
   @Public()
   @Get('texts')
   getTexts() {
     return this.websiteService.getTexts();
+  }
+
+  /** Tin việc làm đã đăng (2026-11-18). */
+  @Public()
+  @Get('jobs')
+  listJobs() {
+    return this.content.listJobs(false);
+  }
+
+  @Public()
+  @Get('jobs/:slug')
+  getJob(@Param('slug') slug: string) {
+    return this.content.getJob(slug, false);
+  }
+
+  /** Tin tức / album đã đăng (2026-11-18). */
+  @Public()
+  @Get('posts')
+  listPosts(@Query() query: ListWebsitePostsQueryDto) {
+    return this.content.listPosts(query, false);
+  }
+
+  @Public()
+  @Get('posts/:slug')
+  getPost(@Param('slug') slug: string) {
+    return this.content.getPost(slug, false);
   }
 
   /** Form "Đăng ký tìm việc" → data nguồn Website trong CRM. */
@@ -109,8 +142,8 @@ export class WebsiteTextController {
 
   @Delete('texts/:key')
   @HttpCode(HttpStatus.OK)
-  reset(@Param('key') key: string) {
-    return this.websiteService.resetText(key);
+  reset(@Param('key') key: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.websiteService.resetText(key, user.id);
   }
 
   /** Tải ảnh mới lên; trả đường dẫn — trang web lưu đường dẫn này như một đoạn "chữ" khi bấm Lưu. */
@@ -142,5 +175,87 @@ export class WebsiteTextController {
   uploadImage(@UploadedFile() file: Express.Multer.File | undefined) {
     if (!file) throw new BadRequestException('Vui lòng chọn ảnh');
     return { url: `/uploads/website/${file.filename}` };
+  }
+}
+
+/**
+ * Quản lý nội dung trang web (2026-11-18): tin việc làm, tin tức/album (cả bản nháp), lịch sử sửa.
+ * Cùng module quyền "website" với WebsiteTextController.
+ */
+@Controller('website/manage')
+export class WebsiteManageController {
+  constructor(
+    private readonly websiteService: WebsiteService,
+    private readonly content: WebsiteContentService,
+  ) {}
+
+  @Get('jobs')
+  listJobs() {
+    return this.content.listJobs(true);
+  }
+
+  @Post('jobs')
+  createJob(
+    @Body() dto: SaveWebsiteJobDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.content.createJob(dto, user.id);
+  }
+
+  @Patch('jobs/:id')
+  updateJob(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveWebsiteJobDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.content.updateJob(id, dto, user.id);
+  }
+
+  @Delete('jobs/:id')
+  deleteJob(@Param('id', ParseUUIDPipe) id: string) {
+    return this.content.deleteJob(id);
+  }
+
+  @Get('posts')
+  listPosts(@Query() query: ListWebsitePostsQueryDto) {
+    return this.content.listPosts(query, true);
+  }
+
+  @Post('posts')
+  createPost(
+    @Body() dto: SaveWebsitePostDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.content.createPost(dto, user.id);
+  }
+
+  @Patch('posts/:id')
+  updatePost(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveWebsitePostDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.content.updatePost(id, dto, user.id);
+  }
+
+  @Delete('posts/:id')
+  deletePost(@Param('id', ParseUUIDPipe) id: string) {
+    return this.content.deletePost(id);
+  }
+
+  /** Lịch sử sửa chữ/kiểu/bố cục (mới nhất trước). */
+  @Get('history')
+  history(@Query('limit') limit?: string) {
+    return this.websiteService.listHistory(Number(limit) || 100);
+  }
+
+  /** Quay về giá trị trước của một lần sửa. */
+  @Post('history/:id/restore')
+  @HttpCode(HttpStatus.OK)
+  restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.websiteService.restoreHistory(id, user.id);
   }
 }

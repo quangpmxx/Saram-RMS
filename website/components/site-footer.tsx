@@ -1,17 +1,21 @@
 import Link from "next/link";
-import { company, nav, areas } from "@/lib/content";
+import type { ReactNode } from "react";
+import { getCompany } from "@/lib/site";
+import { T } from "./editable";
 import { Logo } from "./ui";
+import { AreasFooterList } from "./lists";
 
 const PENDING = "Đang cập nhật";
 
-export function SiteFooter() {
+export async function SiteFooter({ nav }: { nav: { href: string; label: ReactNode }[] }) {
+  const company = await getCompany();
   return (
     <footer className="bg-ink text-slate-400">
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-4 py-12 sm:px-6 sm:py-14 md:grid-cols-[1.4fr_1fr_1fr]">
         <div className="col-span-2 md:col-span-1">
           <Logo light />
           <p className="mt-5 max-w-sm text-sm leading-relaxed">
-            {company.legalName} — cung ứng nhân lực cho các nhà máy tại KCN {company.area} từ năm {company.since}.
+            <T k="footer.about">{`${company.legalName} — cung ứng nhân lực cho các nhà máy tại KCN ${company.area} từ năm ${company.since}.`}</T>
           </p>
           <dl className="mt-5 space-y-1.5 text-sm">
             <div className="flex gap-2">
@@ -29,7 +33,9 @@ export function SiteFooter() {
           </dl>
         </div>
         <div>
-          <p className="text-sm font-semibold text-white">Trang</p>
+          <p className="text-sm font-semibold text-white">
+            <T k="footer.pages">Trang</T>
+          </p>
           <ul className="mt-4 space-y-2 text-sm">
             {nav.map((item) => (
               <li key={item.href}>
@@ -41,19 +47,16 @@ export function SiteFooter() {
           </ul>
         </div>
         <div>
-          <p className="text-sm font-semibold text-white">Khu vực hoạt động</p>
-          <ul className="mt-4 space-y-2 text-sm">
-            {areas.map((a) => (
-              <li key={a.name}>
-                KCN {a.name} <span className="block text-xs text-slate-600 sm:inline sm:text-sm">· {a.province}</span>
-              </li>
-            ))}
-          </ul>
+          <p className="text-sm font-semibold text-white">
+            <T k="footer.areas">Khu vực hoạt động</T>
+          </p>
+          <AreasFooterList />
         </div>
       </div>
       <div className="border-t border-white/10">
         <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-slate-500 sm:px-6">
-          © {new Date().getFullYear()} {company.legalName}. Người lao động không mất bất kỳ khoản phí nào khi tìm việc qua Đại Việt.
+          © {new Date().getFullYear()} {company.legalName}.{" "}
+          <T k="footer.note">Người lao động không mất bất kỳ khoản phí nào khi tìm việc qua Đại Việt.</T>
         </p>
       </div>
     </footer>

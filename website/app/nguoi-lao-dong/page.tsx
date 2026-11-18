@@ -1,38 +1,77 @@
 import type { Metadata } from "next";
-import { workerSteps } from "@/lib/content";
+import { pageMetadata } from "@/lib/site";
+import { Blocks } from "@/components/blocks";
 import { PageHero, SectionHeading } from "@/components/ui";
 import { BikeSection, DormsSection, PolicySection, StepsList, WorriesSection } from "@/components/sections";
-import { RegisterForm } from "@/components/register-form";
+import { RegisterForm } from "@/components/register";
 
-export const metadata: Metadata = {
-  title: "Quyền lợi người lao động",
-  description: "Đi làm qua Đại Việt: ký túc xá sát KCN, mượn xe điện miễn phí, chỉ cần CCCD, phụ cấp 30.000–70.000đ mỗi công.",
-};
+export function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("worker");
+}
 
 export default function WorkerPage() {
   return (
-    <>
-      <PageHero
-        k="worker.hero"
-        eyebrow="Người lao động"
-        title="Đi làm xa mà như ở nhà"
-        text="Có chỗ ở sát nhà máy, có xe đi làm, hồ sơ chỉ cần CCCD và thêm phụ cấp mỗi ngày công. Tất cả miễn phí với người lao động."
-      />
-      <WorriesSection />
-      <DormsSection />
-      <BikeSection />
-      <PolicySection />
-      <section className="bg-mist py-14 sm:py-24">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
-          <div>
-            <SectionHeading k="worker.start" eyebrow="Bắt đầu" title="3 bước để có việc làm" />
-            <div className="mt-8">
-              <StepsList k="steps.worker" steps={workerSteps} />
-            </div>
-          </div>
-          <RegisterForm />
-        </div>
-      </section>
-    </>
+    <Blocks
+      page="worker"
+      items={[
+        {
+          id: "hero",
+          label: "Đầu trang",
+          node: (
+            <PageHero
+              k="worker.hero"
+              eyebrow="Người lao động"
+              title="Đi làm xa mà như ở nhà"
+              text="Có chỗ ở sát nhà máy, có xe đi làm, hồ sơ chỉ cần CCCD và thêm phụ cấp mỗi ngày công. Tất cả miễn phí với người lao động."
+            />
+          ),
+        },
+        {
+          id: "worries",
+          label: "Nỗi lo người lao động",
+          node: (
+            <WorriesSection />
+          ),
+        },
+        {
+          id: "dorms",
+          label: "Ký túc xá",
+          node: (
+            <DormsSection />
+          ),
+        },
+        {
+          id: "bike",
+          label: "Xe điện",
+          node: (
+            <BikeSection />
+          ),
+        },
+        {
+          id: "policy",
+          label: "Chính sách",
+          node: (
+            <PolicySection />
+          ),
+        },
+        {
+          id: "start",
+          label: "3 bước + form",
+          node: (
+            <section className="bg-mist py-14 sm:py-24">
+              <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
+                <div>
+                  <SectionHeading k="worker.start" eyebrow="Bắt đầu" title="3 bước để có việc làm" />
+                  <div className="mt-8">
+                    <StepsList list="steps-worker" />
+                  </div>
+                </div>
+                <RegisterForm />
+              </div>
+            </section>
+          ),
+        },
+      ]}
+    />
   );
 }

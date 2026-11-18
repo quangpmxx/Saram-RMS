@@ -1,12 +1,13 @@
 import { MessageCircle, Phone } from "lucide-react";
-import { company } from "@/lib/content";
+import { getCompany } from "@/lib/site";
 
 /**
  * Liên hệ nhanh — người lao động chủ yếu xem bằng điện thoại.
  * Điện thoại: thanh cố định ở đáy màn hình (Gọi ngay · Nhắn Zalo), luôn trong tầm ngón cái.
  * Máy tính: hai nút tròn nổi góc phải.
  */
-export function FloatingContact() {
+export async function FloatingContact() {
+  const company = await getCompany();
   const zaloHref = company.zalo ? `https://zalo.me/${company.zalo}` : "/lien-he";
   const telHref = company.hotline ? `tel:${company.hotline}` : "/lien-he";
   return (

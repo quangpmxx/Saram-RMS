@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
-import { company } from "@/lib/content";
+import { getCompany, pageMetadata } from "@/lib/site";
 import { PageHero } from "@/components/ui";
-import { RegisterForm } from "@/components/register-form";
+import { RegisterForm } from "@/components/register";
 import { T } from "@/components/editable";
+import { Blocks } from "@/components/blocks";
 
-export const metadata: Metadata = {
-  title: "Liên hệ",
-  description: "Liên hệ Đại Việt để tìm việc làm hoặc trao đổi nhu cầu tuyển dụng cho nhà máy.",
-};
+export function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("contact");
+}
 
 const PENDING = "Đang cập nhật";
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const company = await getCompany();
   const items = [
     { key: "hotline", icon: Phone, label: "Hotline", value: company.hotlineDisplay || PENDING, href: company.hotline ? `tel:${company.hotline}` : "" },
     { key: "zalo", icon: MessageCircle, label: "Zalo", value: company.hotlineDisplay || PENDING, href: company.zalo ? `https://zalo.me/${company.zalo}` : "" },
@@ -26,13 +27,25 @@ export default function ContactPage() {
     },
   ];
   return (
-    <>
+    <Blocks
+      page="contact"
+      items={[
+        {
+          id: "hero",
+          label: "Đầu trang",
+          node: (
       <PageHero
         k="contact.hero"
         eyebrow="Liên hệ"
         title="Nói chuyện với Đại Việt"
         text="Người lao động cần tìm việc hay nhà máy cần tuyển người — để lại thông tin, Đại Việt gọi lại ngay."
       />
+          ),
+        },
+        {
+          id: "info",
+          label: "Thông tin liên hệ + form",
+          node: (
       <section className="py-10 sm:py-20">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_1fr]">
           <div>
@@ -74,6 +87,9 @@ export default function ContactPage() {
           </div>
         </div>
       </section>
-    </>
+          ),
+        },
+      ]}
+    />
   );
 }

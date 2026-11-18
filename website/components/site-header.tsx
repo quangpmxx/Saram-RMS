@@ -4,10 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Phone, X } from "lucide-react";
-import { company, nav } from "@/lib/content";
+import type { ReactNode } from "react";
 import { Logo } from "./ui";
 
-export function SiteHeader() {
+export function SiteHeader({
+  nav,
+  hotline,
+  hotlineDisplay,
+}: {
+  /** Tên mục là <T> từ layout (sửa được ở chế độ sửa). */
+  nav: { href: string; label: ReactNode }[];
+  hotline: string;
+  hotlineDisplay: string;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -54,11 +63,11 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <a
-            href={company.hotline ? `tel:${company.hotline}` : "/lien-he"}
+            href={hotline ? `tel:${hotline}` : "/lien-he"}
             className="hidden items-center gap-2 rounded-full bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark sm:inline-flex"
           >
             <Phone className="h-4 w-4" aria-hidden="true" />
-            {company.hotlineDisplay || "Gọi tư vấn"}
+            {hotlineDisplay || "Gọi tư vấn"}
           </a>
           <button
             type="button"
