@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Globe,
   History,
   MapPin,
   Pencil,
@@ -36,8 +37,7 @@ import {
 } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type LeadCompanyOption } from "@/lib/types";
-import { CompanyPicker } from "./company-picker";
-import { shuttleColorStyle } from "@/lib/shuttle-colors";
+import { CompanyChip, CompanyPicker } from "./company-picker";
 import { cn } from "@/lib/cn";
 import {
   canDecideStop,
@@ -192,8 +192,11 @@ export function CandidatesClient({
   initialViewMode,
   initialFilters,
   initialCareAssigneeId,
+  canViewWebsiteContacts = false,
 }: {
   permissionLevel: ModulePermissionLevel;
+  /** Có quyền module "website-contacts" → hiện nút biểu tượng nhỏ mở trang Liên hệ từ website. */
+  canViewWebsiteContacts?: boolean;
   initialCandidates: Candidate[];
   initialTotal: number;
   sources: LeadSource[];
@@ -1347,6 +1350,19 @@ export function CandidatesClient({
                 Thêm lao động mới
               </Button>
             )}
+            {/* Liên hệ từ website (2026-11-17): bỏ khỏi menu trái, chỉ còn nút biểu tượng nhỏ ở đây. */}
+            {canViewWebsiteContacts && (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                title="Liên hệ từ website"
+                aria-label="Liên hệ từ website"
+                onClick={() => router.push("/website-contacts")}
+              >
+                <Globe className="h-3.5 w-3.5" strokeWidth={2} />
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -1926,19 +1942,6 @@ function sourceRank(name: string): number {
 }
 
 /** Màu nền "ngẫu nhiên" nhưng cố định theo từng nguồn MKT (băm từ id), đủ đậm cho chữ trắng. */
-/** Nhãn công ty của data — tô đúng màu đã chọn ở Quản lý đơn hàng. */
-function CompanyChip({ company }: { company: LeadCompanyOption }) {
-  return (
-    <span
-      className="inline-block max-w-full rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium break-words text-slate-700"
-      style={shuttleColorStyle(company.color_key, company.text_color_key)}
-      title={`Công ty: ${company.name}`}
-    >
-      {company.name}
-    </span>
-  );
-}
-
 function mktSourceColor(id: string): string {
   let hash = 0;
   for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;

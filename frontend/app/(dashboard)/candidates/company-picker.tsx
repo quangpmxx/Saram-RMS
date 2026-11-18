@@ -6,6 +6,19 @@ import { cn } from "@/lib/cn";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
 import type { LeadCompanyOption } from "@/lib/types";
 
+/** Nhãn công ty của data — tô đúng màu đã chọn ở Quản lý đơn hàng (dùng ở trang Tất cả + Kho chăm sóc). */
+export function CompanyChip({ company }: { company: LeadCompanyOption }) {
+  return (
+    <span
+      className="inline-block max-w-full rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium break-words text-slate-700"
+      style={shuttleColorStyle(company.color_key, company.text_color_key)}
+      title={`Công ty: ${company.name}`}
+    >
+      {company.name}
+    </span>
+  );
+}
+
 /** Bỏ dấu + chữ thường để gõ "cong ty" vẫn ra "Công ty". */
 const fold = (text: string) =>
   text

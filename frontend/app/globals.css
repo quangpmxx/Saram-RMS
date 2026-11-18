@@ -111,7 +111,7 @@ body {
 }
 
 .birthday-confetti-piece {
-  animation: birthday-confetti-fall linear forwards;
+  animation: birthday-confetti-fall linear infinite;
 }
 
 .birthday-balloon-float {

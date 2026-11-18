@@ -69,6 +69,8 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     href: "/website-contacts",
     label: "Liên hệ từ website",
     icon: "websiteContacts",
+    // 2026-11-17: bỏ khỏi menu trái — mở bằng nút biểu tượng nhỏ ở trang Data lao động.
+    hideInNav: true,
     defaultRoles: ["admin", "manager"],
   },
   {

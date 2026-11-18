@@ -52,6 +52,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { NameWithRoleHint } from "@/components/name-with-role-hint";
 import { SortableTh, applySortParams, type SortOrder } from "@/components/ui/sortable-th";
 import { SourceBadge } from "./source-badge";
+import { CompanyChip } from "./company-picker";
 import { shouldOpenRowDetail } from "./row-click";
 import { NoteColorFilter, type NoteColorValue } from "./note-color-filter";
 import { CallStatusCellContent, callStatusCellStyle } from "./call-status-cell";
@@ -927,6 +928,11 @@ export function CareWarehousePanel({
                     <div className="mx-3 mb-2 rounded-lg px-2 py-1 ring-1 ring-slate-100" style={callStatusCellStyle(item)}>
                       {p.notes}
                     </div>
+                    {item.company && (
+                      <p className="mx-3 mb-2 text-xs">
+                        <CompanyChip company={item.company} />
+                      </p>
+                    )}
                     {item.quick_note && (
                       <p className="mx-3 mb-2 text-xs font-medium break-words text-red-600">Note: {item.quick_note}</p>
                     )}
@@ -1004,7 +1010,13 @@ export function CareWarehousePanel({
                     <td className="min-w-[300px] border-r border-slate-100 px-2 py-1" style={callStatusCellStyle(item)}>
                       {p.notes}
                     </td>
-                    <td className="w-[90px] max-w-[90px] border-r border-slate-100 px-1.5 py-2 text-[11px] font-medium break-words text-red-600">
+                    {/* Giống cột Note trang Tất cả: nhãn công ty + note. */}
+                    <td className="w-[90px] max-w-[90px] border-r border-slate-100 px-1.5 py-2 align-middle text-[11px] font-medium break-words text-red-600">
+                      {item.company && (
+                        <div className={item.quick_note ? "mb-1" : undefined}>
+                          <CompanyChip company={item.company} />
+                        </div>
+                      )}
                       {item.quick_note}
                     </td>
                     <td className="w-px border-r border-slate-100 px-1.5 py-2 text-center font-medium text-slate-700 tabular-nums">
