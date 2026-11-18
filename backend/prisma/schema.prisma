@@ -885,6 +885,8 @@ enum NotificationType {
   attendance_sheet
   /// Thưởng lao động (2026-11-15): Kế toán đã chi thưởng — báo người nhập dòng.
   labor_bonus_paid
+  /// Marketing Hub (2026-11-18): số dư giới hạn chi tiêu TKQC tụt dưới mốc 1tr/800k/500k/200k — báo người phụ trách + Admin/Quản lý.
+  ad_balance_low
 
   @@map("notification_type")
 }
@@ -1736,6 +1738,12 @@ model AdAccount {
   fbAccountStatus   Int?            @map("fb_account_status") @db.SmallInt
   /// Có ít nhất 1 chiến dịch đang chạy (lấy lúc đồng bộ).
   hasActiveCampaign Boolean?        @map("has_active_campaign")
+  /// Giới hạn chi tiêu tài khoản (spend_cap, VNĐ); null/0 = không đặt giới hạn.
+  spendCap          Decimal?        @map("spend_cap") @db.Decimal(18, 2)
+  /// Đã tiêu tính trên giới hạn (amount_spent, VNĐ).
+  amountSpent       Decimal?        @map("amount_spent") @db.Decimal(18, 2)
+  /// Mốc cảnh báo số dư thấp nhất đã báo (VNĐ); số dư lên lại trên 1tr thì xoá.
+  balanceAlertLevel Int?            @map("balance_alert_level")
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
 

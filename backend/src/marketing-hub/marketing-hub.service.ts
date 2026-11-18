@@ -12,6 +12,8 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { toNotificationResponse } from '../notification/dto/notification-response.dto';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { vnDayRange } from '../care-warehouse/care-time.util';
 import { decryptToken, encryptToken } from './token-crypto';
@@ -36,6 +38,19 @@ const vnToday = () =>
 const vnDaysAgo = (n: number) =>
   new Date(Date.now() + 7 * 3600_000 - n * DAY_MS).toISOString().slice(0, 10);
 
+/** Mốc cảnh báo số dư giới hạn chi tiêu (VNĐ), từ cao xuống thấp. */
+export const BALANCE_ALERT_LEVELS = [1_000_000, 800_000, 500_000, 200_000];
+
+/** Số dư còn lại của giới hạn chi tiêu; null = tài khoản không đặt giới hạn. */
+export function balanceOf(
+  cap: number | null | { toString(): string },
+  spent: number | null | { toString(): string },
+): number | null {
+  const c = cap === null ? 0 : Number(cap);
+  if (!(c > 0)) return null;
+  return Math.max(0, c - (spent === null ? 0 : Number(spent)));
+}
+
 /** account_status Facebook → Live ADS / Chưa thanh toán / Die ADS. */
 export function accountHealth(
   code: number | null,
@@ -56,6 +71,7 @@ export class MarketingHubService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly audit: AuditLogService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private tokenKey(): string {
@@ -199,6 +215,13 @@ export class MarketingHubService {
           vnToday(),
         );
         const health = await fetchAccountHealth(token, account.externalId);
+        const remaining = balanceOf(health.spendCap, health.amountSpent);
+        // Mốc thấp nhất mà số dư đang nằm dưới; tụt xuống mốc mới thấp hơn mốc đã báo thì báo lại.
+        const newLevel =
+          remaining === null
+            ? null
+            : ([...BALANCE_ALERT_LEVELS].reverse().find((l) => remaining < l) ??
+              null);
         await this.prisma.$transaction(
           rows.map((r) =>
             this.prisma.adSpendDaily.upsert({
@@ -229,8 +252,16 @@ export class MarketingHubService {
             lastError: null,
             fbAccountStatus: health.accountStatus,
             hasActiveCampaign: health.hasActiveCampaign,
+            spendCap: health.spendCap,
+            amountSpent: health.amountSpent,
+            balanceAlertLevel: newLevel,
           },
         });
+        if (newLevel !== null && remaining !== null) {
+          const prev = account.balanceAlertLevel;
+          if (prev === null || newLevel < prev)
+            await this.notifyLowBalance(account, remaining, newLevel);
+        }
       } catch (e) {
         const invalid = e instanceof FacebookApiError && e.isTokenInvalid;
         const message =
@@ -251,6 +282,53 @@ export class MarketingHubService {
     }
   }
 
+  /** Báo chuông người phụ trách TKQC + Admin/Quản lý; lỗi gửi không làm hỏng đồng bộ. */
+  private async notifyLowBalance(
+    account: { id: string; name: string; ownerId: string },
+    remaining: number,
+    level: number,
+  ): Promise<void> {
+    try {
+      const managers = await this.prisma.account.findMany({
+        where: { role: { in: ['admin', 'manager'] }, status: 'active' },
+        select: { id: true },
+      });
+      const ids = [...new Set([account.ownerId, ...managers.map((m) => m.id)])];
+      const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN');
+      const content =
+        `TKQC "${account.name}" còn ${fmt(remaining)}đ giới hạn chi tiêu (dưới mốc ${fmt(level)}đ)`.slice(
+          0,
+          500,
+        );
+      const now = new Date();
+      for (const accountId of ids) {
+        const notification = await this.prisma.notification.create({
+          data: {
+            accountId,
+            type: 'ad_balance_low',
+            channel: 'in_app',
+            content,
+            scheduledAt: now,
+            sentAt: now,
+            status: 'sent',
+            meta: { link: '/marketing-hub', ad_account_id: account.id },
+          },
+          include: {
+            sender: {
+              select: { id: true, fullName: true, role: true, avatarUrl: true },
+            },
+          },
+        });
+        this.realtime.emitNotificationCreated(
+          toNotificationResponse(notification),
+          null,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Gửi cảnh báo số dư TKQC thất bại', error as Error);
+    }
+  }
+
   /** Tự đồng bộ mỗi 30 phút. */
   @Cron('*/30 * * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
   async syncAll(): Promise<void> {
@@ -259,6 +337,92 @@ export class MarketingHubService {
       select: { id: true },
     });
     for (const { id } of ids) await this.syncById(id);
+    try {
+      await this.discoverNew();
+    } catch (e) {
+      this.logger.warn(`Quét tài khoản quảng cáo mới lỗi: ${String(e)}`);
+    }
+  }
+
+  /**
+   * Quét lại các token đã lưu, thêm tài khoản VNĐ mới mà token đó truy cập được (người phụ trách = chủ token).
+   * Không đụng tài khoản đã có (kể cả đã gỡ liên kết). user trống = chạy tự động, quét mọi token.
+   */
+  async discoverNew(user?: AuthenticatedUser) {
+    const key = this.tokenKey();
+    const rows = await this.prisma.adAccount.findMany({
+      where: {
+        encryptedToken: { not: null },
+        status: { not: 'disconnected' },
+        ...(user && !can(user, 'mkt.assign_owner') ? { ownerId: user.id } : {}),
+      },
+      select: { encryptedToken: true, ownerId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    // Mỗi token chỉ gọi Facebook 1 lần (cùng token được mã hoá khác nhau ở mỗi dòng).
+    const tokens = new Map<string, { encrypted: string; ownerId: string }>();
+    for (const r of rows) {
+      try {
+        const plain = decryptToken(r.encryptedToken!, key);
+        if (!tokens.has(plain))
+          tokens.set(plain, {
+            encrypted: r.encryptedToken!,
+            ownerId: r.ownerId,
+          });
+      } catch {
+        /* token hỏng → bỏ qua */
+      }
+    }
+    const added: string[] = [];
+    let failedTokens = 0;
+    for (const [plain, { encrypted, ownerId }] of tokens) {
+      let found: FbAdAccount[];
+      try {
+        found = await listAdAccounts(plain);
+      } catch {
+        failedTokens++;
+        continue;
+      }
+      for (const fb of found) {
+        if (fb.currency !== 'VND') continue;
+        const exists = await this.prisma.adAccount.findUnique({
+          where: {
+            platform_externalId: {
+              platform: 'facebook',
+              externalId: fb.externalId,
+            },
+          },
+          select: { id: true },
+        });
+        if (exists) continue;
+        try {
+          const row = await this.prisma.adAccount.create({
+            data: {
+              platform: 'facebook',
+              externalId: fb.externalId,
+              name: fb.name,
+              currency: fb.currency,
+              ownerId,
+              encryptedToken: encrypted,
+            },
+          });
+          await this.audit.log({
+            accountId: user?.id ?? ownerId,
+            actionType: 'create',
+            entityType: 'ad_account',
+            entityId: row.id,
+            fieldChanged: 'discover',
+            oldValue: undefined,
+            newValue: fb.name,
+          });
+          added.push(fb.name);
+          await this.syncById(row.id);
+        } catch (e) {
+          if ((e as { code?: string }).code !== 'P2002') throw e;
+        }
+      }
+    }
+    return { added, failedTokens };
   }
 
   async disconnect(id: string, user: AuthenticatedUser) {
@@ -610,6 +774,8 @@ export class MarketingHubService {
       mkt_source: a.mktSource,
       account_health: accountHealth(a.fbAccountStatus),
       has_active_campaign: a.hasActiveCampaign,
+      /** Số dư còn lại của giới hạn chi tiêu; null = không đặt giới hạn / chưa đồng bộ. */
+      balance: balanceOf(a.spendCap, a.amountSpent),
     }));
     return {
       from,

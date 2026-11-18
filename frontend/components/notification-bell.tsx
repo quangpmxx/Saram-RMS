@@ -19,6 +19,7 @@ import {
   Phone,
   PhoneCall,
   UserCheck,
+  Wallet,
   X,
 } from "lucide-react";
 import { clientApi } from "@/lib/api-client";
@@ -55,6 +56,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   attendance_sheet: "Bảng công tháng",
   website_contact: "Liên hệ từ website",
   labor_bonus_paid: "Thưởng lao động",
+  ad_balance_low: "Số dư TKQC sắp hết",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -94,6 +96,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   attendance_sheet: 30_000,
   website_contact: 30_000,
   labor_bonus_paid: 30_000,
+  ad_balance_low: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -154,6 +157,7 @@ function notificationTarget(n: AppNotification): string | null {
   // Được chia nhiều data 1 lần (không có lead_id) — mở danh sách Data lao động.
   if (n.type === "lead_assigned") return "/candidates";
   if (n.type === "website_contact") return "/website-contacts";
+  if (n.type === "ad_balance_low") return "/marketing-hub";
   // Media (2026-11-14): mở đúng công việc.
   if (n.type === "attendance_sheet" || n.type === "labor_bonus_paid") {
     const link = (n.meta as unknown as { link?: string } | null | undefined)?.link;
@@ -179,6 +183,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type === "media_task") return <Clapperboard className={className} strokeWidth={2} />;
   if (type === "attendance_sheet") return <ClipboardCheck className={className} strokeWidth={2} />;
   if (type === "website_contact") return <Globe className={className} strokeWidth={2} />;
+  if (type === "ad_balance_low") return <Wallet className={className} strokeWidth={2} />;
   if (type === "labor_bonus_paid") return <Gift className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }

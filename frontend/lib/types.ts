@@ -897,7 +897,9 @@ export interface AppNotification {
     /** Trang web (2026-11-16): doanh nghiệp gửi nhu cầu tuyển dụng — mở trang Liên hệ từ website. */
     | "website_contact"
     /** Thưởng lao động (2026-11-15): Kế toán đã chi thưởng — báo người nhập dòng, meta.link. */
-    | "labor_bonus_paid";
+    | "labor_bonus_paid"
+    /** Marketing (2026-11-18): số dư giới hạn chi tiêu TKQC tụt dưới mốc — mở trang Marketing. */
+    | "ad_balance_low";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;

@@ -59,6 +59,14 @@ export class MarketingHubController {
     return this.service.connect(dto.access_token, user);
   }
 
+  /** Quét token đã lưu để thêm tài khoản quảng cáo mới (đặt trước route :id). */
+  @Post('ad-accounts/discover')
+  @HttpCode(200)
+  @RequireCap('mkt.link_own')
+  discover(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.discoverNew(user);
+  }
+
   @Post('ad-accounts/:id/sync')
   @HttpCode(200)
   @RequireCap('mkt.link_own')

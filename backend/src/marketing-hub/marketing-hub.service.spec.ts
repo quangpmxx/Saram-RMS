@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
-import { MarketingHubService } from './marketing-hub.service';
+import { MarketingHubService, balanceOf } from './marketing-hub.service';
 import { decryptToken, encryptToken } from './token-crypto';
 import * as fb from './facebook-ads.client';
 
@@ -17,8 +17,18 @@ function build(prisma: Record<string, unknown>) {
     prisma as never,
     config as never,
     audit as never,
+    { emitNotificationCreated: jest.fn() } as never,
   );
 }
+
+describe('balanceOf', () => {
+  it('không đặt giới hạn → null; có giới hạn → còn lại, không âm', () => {
+    expect(balanceOf(null, 100)).toBeNull();
+    expect(balanceOf(0, 100)).toBeNull();
+    expect(balanceOf(5_000_000, 4_300_000)).toBe(700_000);
+    expect(balanceOf(1_000_000, 1_200_000)).toBe(0);
+  });
+});
 
 describe('token-crypto', () => {
   it('mã hoá rồi giải mã ra đúng token, bản mã không chứa token', () => {

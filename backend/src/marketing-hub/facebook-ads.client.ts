@@ -71,11 +71,23 @@ async function getOne<T>(url: string, token: string): Promise<T> {
 export async function fetchAccountHealth(
   token: string,
   externalId: string,
-): Promise<{ accountStatus: number; hasActiveCampaign: boolean }> {
-  const account = await getOne<{ account_status?: number }>(
-    `${GRAPH}/act_${externalId}?fields=account_status`,
+): Promise<{
+  accountStatus: number;
+  hasActiveCampaign: boolean;
+  /** Giới hạn chi tiêu tài khoản; null = không đặt. VNĐ có offset 1 nên số trả về là đồng. */
+  spendCap: number | null;
+  amountSpent: number | null;
+}> {
+  const account = await getOne<{
+    account_status?: number;
+    spend_cap?: string;
+    amount_spent?: string;
+  }>(
+    `${GRAPH}/act_${externalId}?fields=account_status,spend_cap,amount_spent`,
     token,
   );
+  const cap = Number(account.spend_cap ?? 0);
+  const spent = Number(account.amount_spent);
   const status = encodeURIComponent(JSON.stringify(['ACTIVE']));
   const campaigns = await getOne<{ data?: unknown[] }>(
     `${GRAPH}/act_${externalId}/campaigns?fields=id&effective_status=${status}&limit=1`,
@@ -84,6 +96,8 @@ export async function fetchAccountHealth(
   return {
     accountStatus: Number(account.account_status ?? 0),
     hasActiveCampaign: (campaigns.data?.length ?? 0) > 0,
+    spendCap: cap > 0 ? cap : null,
+    amountSpent: Number.isFinite(spent) ? spent : null,
   };
 }
 

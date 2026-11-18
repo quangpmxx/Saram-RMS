@@ -27,6 +27,20 @@ interface AdItem {
   mkt_source: { id: string; name: string } | null;
   account_health: "live" | "unpaid" | "die" | null;
   has_active_campaign: boolean | null;
+  /** Số dư còn lại của giới hạn chi tiêu; null = không đặt giới hạn. */
+  balance: number | null;
+}
+
+/** Số dư giới hạn chi tiêu: dưới 1tr cam, dưới 500k đỏ. */
+function BalanceCell({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-slate-400">—</span>;
+  const cls =
+    value < 500_000
+      ? "font-semibold text-red-600"
+      : value < 1_000_000
+        ? "font-medium text-amber-600"
+        : "";
+  return <span className={cls}>{vnd(value)}</span>;
 }
 interface CostThresholds {
   green_max: number;
@@ -245,14 +259,50 @@ export function MarketingHubClient({
           </>
         )}
         {canConnect && (
-          <Button
-            type="button"
-            size="xs"
-            className={canConfig ? "" : "ml-auto"}
-            onClick={() => setShowConnect(true)}
-          >
-            Liên kết Facebook
-          </Button>
+          <>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              className={canConfig ? "" : "ml-auto"}
+              disabled={busyId === "discover"}
+              title="Quét lại token đã liên kết để thêm tài khoản quảng cáo mới"
+              onClick={async () => {
+                setBusyId("discover");
+                try {
+                  const r = await clientApi<{
+                    added: string[];
+                    failedTokens: number;
+                  }>("/marketing-hub/ad-accounts/discover", {
+                    method: "POST",
+                  });
+                  if (r.added.length)
+                    toast.success(
+                      `Đã thêm ${r.added.length} TKQC mới: ${r.added.join(", ")}`,
+                    );
+                  else toast.success("Không có TKQC mới");
+                  if (r.failedTokens)
+                    toast.error(
+                      `${r.failedTokens} token hết hạn/bị từ chối — hãy Liên kết Facebook lại`,
+                    );
+                  await load();
+                } catch (e) {
+                  toast.error(errorText(e));
+                } finally {
+                  setBusyId(null);
+                }
+              }}
+            >
+              {busyId === "discover" ? "Đang quét…" : "Cập nhật TKQC mới"}
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              onClick={() => setShowConnect(true)}
+            >
+              Liên kết Facebook
+            </Button>
+          </>
         )}
       </Card>
 
@@ -304,6 +354,7 @@ export function MarketingHubClient({
               <th className="px-3 py-2">Loại</th>
               <th className="px-3 py-2">Nguồn MKT</th>
               <th className="px-3 py-2 text-right">Tổng chi tiêu</th>
+              <th className="px-3 py-2 text-right">Số dư</th>
               <th className="px-3 py-2">Trạng thái</th>
               <th className="px-3 py-2" />
             </tr>
@@ -391,6 +442,9 @@ export function MarketingHubClient({
                   <td className="px-3 py-2 text-right">
                     {i.synced ? vnd(i.total_spend) : "—"}
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <BalanceCell value={i.balance} />
+                  </td>
                   <td className="px-3 py-2">
                     <span
                       className={
@@ -465,7 +519,7 @@ export function MarketingHubClient({
             {data && data.items.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-3 py-8 text-center text-slate-400"
                 >
                   Chưa có tài khoản quảng cáo nào được liên kết
@@ -531,6 +585,7 @@ function EfficiencyTable({ data }: { data: Overview }) {
     <>
       <td className={`${td} text-right`}>{s.count.toLocaleString("vi-VN")}</td>
       <td className={`${td} text-right`}>{vnd(s.spend)}</td>
+      <td className={td} />
       <td className={`${td} text-right ${costClass(s.cost, thresholds)}`}>
         {s.cost === null ? "—" : vnd(s.cost)}
       </td>
@@ -563,6 +618,7 @@ function EfficiencyTable({ data }: { data: Overview }) {
               <th className={td}>Loại TK</th>
               <th className={`${td} text-right`}>Số data</th>
               <th className={`${td} text-right`}>Tổng chi tiêu</th>
+              <th className={`${td} text-right`}>Số dư</th>
               <th className={`${td} text-right`}>Giá số</th>
               <th className={td}>Trạng thái camp</th>
               <th className={td}>Trạng thái tài khoản</th>
@@ -599,6 +655,9 @@ function EfficiencyTable({ data }: { data: Overview }) {
                         </td>
                         <td className={`${td} text-right`}>
                           {i.synced ? vnd(i.total_spend) : "—"}
+                        </td>
+                        <td className={`${td} text-right`}>
+                          <BalanceCell value={i.balance} />
                         </td>
                         <td className={td} />
                         <td className={td}>
@@ -658,7 +717,7 @@ function EfficiencyTable({ data }: { data: Overview }) {
             {items.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-3 py-8 text-center text-slate-400"
                 >
                   Chưa có tài khoản quảng cáo nào
