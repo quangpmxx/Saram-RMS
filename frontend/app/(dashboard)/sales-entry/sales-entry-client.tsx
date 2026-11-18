@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import type {
   AccountRole,
+  BonusGroup,
   DsKind,
   DsSaleAccountOption,
   DsSaleCompanyOption,
@@ -21,7 +22,15 @@ type SalesSubTab = "ds-sale" | "ds-media" | "ds-recruitment" | "ds-shuttle";
 
 const MAIN_TABS: Array<{ key: MainTab; label: string }> = [
   { key: "sales", label: "Nhập doanh số" },
-  { key: "bonus", label: "Nhập thưởng" },
+  { key: "bonus", label: "Nhập thưởng lao động" },
+];
+
+/** Nhập thưởng lao động (2026-11-15): 4 tab con theo bộ phận — Kế toán xem / chi ở Kế toán › Thưởng lao động. */
+const BONUS_SUB_TABS: Array<{ key: BonusGroup; label: string }> = [
+  { key: "sale", label: "Sale" },
+  { key: "media", label: "Media" },
+  { key: "recruitment", label: "Tuyển dụng" },
+  { key: "shuttle", label: "Đưa đón" },
 ];
 
 const SALES_SUB_TABS: Array<{ key: SalesSubTab; label: string }> = [
@@ -55,6 +64,7 @@ interface StaffAccounts {
  */
 function DsStaffTab({
   kind,
+  bonusGroup,
   active,
   accounts,
   accountsFailed,
@@ -64,6 +74,8 @@ function DsStaffTab({
   ...shared
 }: {
   kind: Exclude<DsKind, "sale">;
+  /** Chỉ kind = bonus: tab con (bộ phận). */
+  bonusGroup?: BonusGroup;
   /** Tab đang được chọn — tab khác vẫn chạy ngầm nhưng ẩn. */
   active: boolean;
   /** null = danh sách người chọn chưa tải xong. */
@@ -85,7 +97,7 @@ function DsStaffTab({
 
   useEffect(() => {
     let cancelled = false;
-    listDsSaleRows({ kind, page: 1, page_size: STAFF_PAGE_SIZE, year, month })
+    listDsSaleRows({ kind, bonus_group: bonusGroup, page: 1, page_size: STAFF_PAGE_SIZE, year, month })
       .then((result) => {
         if (!cancelled) setRows(result);
       })
@@ -95,7 +107,7 @@ function DsStaffTab({
     return () => {
       cancelled = true;
     };
-  }, [kind, year, month]);
+  }, [kind, bonusGroup, year, month]);
 
   if (failed || accountsFailed) {
     if (!active) return null;
@@ -114,6 +126,7 @@ function DsStaffTab({
       <DsSaleClient
         {...shared}
         kind={kind}
+        bonusGroup={bonusGroup}
         initialRows={rows}
         initialSaleAccounts={accounts.recruiters}
         initialPickupAccounts={NO_ACCOUNTS}
@@ -151,6 +164,7 @@ export function SalesEntryClient({
   initialCompanies,
   initialYear,
   initialMonth,
+  initialMainTab = "sales",
 }: {
   permissionLevel: ModulePermissionLevel;
   currentUserId: string;
@@ -164,13 +178,16 @@ export function SalesEntryClient({
   /** Kỳ mặc định (tháng hiện tại, giờ Việt Nam) — tính ở server để mọi tab khớp nhau. */
   initialYear: number;
   initialMonth: number;
+  /** ?tab=bonus (link thông báo chi thưởng) → mở sẵn Nhập thưởng lao động. */
+  initialMainTab?: MainTab;
 }) {
   useSetPageTitle("Nhập DS/Thưởng");
   // Yêu cầu trực tiếp người dùng (2026-11-12): trang đổi tên "Nhập DS/Thưởng",
   // 2 tab lớn "Nhập doanh số" / "Nhập thưởng"; trong "Nhập doanh số" có tab nhỏ
   // DS Sale, DS Media... (thêm tab nhỏ mới: thêm vào SALES_SUB_TABS).
-  const [mainTab, setMainTab] = useState<MainTab>("sales");
+  const [mainTab, setMainTab] = useState<MainTab>(initialMainTab);
   const [activeTab, setActiveTab] = useState<SalesSubTab>("ds-sale");
+  const [bonusTab, setBonusTab] = useState<BonusGroup>("sale");
 
   // Cột "Sale" của Nhập thưởng dùng đúng danh sách Sale đã tải sẵn cho DS Sale.
   const bonusAccounts = useMemo<StaffAccounts>(
@@ -234,6 +251,23 @@ export function SalesEntryClient({
             </button>
           ))}
         </div>
+        {mainTab === "bonus" && (
+          <div className="flex flex-wrap gap-1.5">
+            {BONUS_SUB_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setBonusTab(tab.key)}
+                className={cn(
+                  "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  bonusTab === tab.key ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100",
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
         {mainTab === "sales" && (
           <div className="flex gap-1.5">
             {SALES_SUB_TABS.map((tab) => (
@@ -253,12 +287,15 @@ export function SalesEntryClient({
         )}
       </div>
 
-      {/* Nhập thưởng: một danh sách dùng chung mọi bộ phận, để Kế toán chi (2026-11-12). */}
+      {/* Nhập thưởng lao động: mỗi bộ phận 1 tab con; tab Sale chọn Sale, 3 tab còn lại tự lấy người nhập. */}
+      {BONUS_SUB_TABS.map((tab) => (
       <DsStaffTab
+        key={tab.key}
         kind="bonus"
-        active={mainTab === "bonus"}
-        accounts={bonusAccounts}
-        accountsFailed={false}
+        bonusGroup={tab.key}
+        active={mainTab === "bonus" && bonusTab === tab.key}
+        accounts={tab.key === "sale" ? bonusAccounts : staffAccounts}
+        accountsFailed={tab.key === "sale" ? false : staffAccountsFailed}
         permissionLevel={permissionLevel}
         currentUserId={currentUserId}
         currentUserRole={currentUserRole}
@@ -269,6 +306,7 @@ export function SalesEntryClient({
           month={initialMonth}
         extraTopOffset={tabBarHeight}
       />
+      ))}
       {STAFF_TAB_KEYS.map((tabKey) => (
         <DsStaffTab
           key={tabKey}

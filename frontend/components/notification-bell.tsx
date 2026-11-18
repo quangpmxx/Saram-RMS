@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
+  Gift,
   Bell,
   Bus,
   CalendarClock,
@@ -53,6 +54,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   media_task: "Công việc Media",
   attendance_sheet: "Bảng công tháng",
   website_contact: "Liên hệ từ website",
+  labor_bonus_paid: "Thưởng lao động",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -91,6 +93,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   media_task: 30_000,
   attendance_sheet: 30_000,
   website_contact: 30_000,
+  labor_bonus_paid: 30_000,
 };
 
 function formatDateTime(value: string): string {
@@ -152,9 +155,9 @@ function notificationTarget(n: AppNotification): string | null {
   if (n.type === "lead_assigned") return "/candidates";
   if (n.type === "website_contact") return "/website-contacts";
   // Media (2026-11-14): mở đúng công việc.
-  if (n.type === "attendance_sheet") {
+  if (n.type === "attendance_sheet" || n.type === "labor_bonus_paid") {
     const link = (n.meta as unknown as { link?: string } | null | undefined)?.link;
-    return link && link.startsWith("/") ? link : "/attendance";
+    return link && link.startsWith("/") ? link : n.type === "attendance_sheet" ? "/attendance" : "/sales-entry?tab=bonus";
   }
   if (n.type === "media_task") {
     const taskId = (n.meta as unknown as { task_id?: string } | null | undefined)?.task_id;
@@ -176,6 +179,7 @@ function NotificationIcon({ type, className }: { type: AppNotification["type"]; 
   if (type === "media_task") return <Clapperboard className={className} strokeWidth={2} />;
   if (type === "attendance_sheet") return <ClipboardCheck className={className} strokeWidth={2} />;
   if (type === "website_contact") return <Globe className={className} strokeWidth={2} />;
+  if (type === "labor_bonus_paid") return <Gift className={className} strokeWidth={2} />;
   return <CalendarClock className={className} strokeWidth={2} />;
 }
 

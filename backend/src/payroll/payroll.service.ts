@@ -46,10 +46,18 @@ export const PAYROLL_VARIABLES: { code: string; label: string }[] = [
     code: 'SO_LAO_DONG',
     label: 'Số lao động trong Nhập doanh số của người đó',
   },
-  { code: 'TONG_GIO_DS', label: 'Tổng giờ trong Nhập doanh số của người đó' },
+  {
+    code: 'TONG_GIO_DS',
+    label: 'Tổng giờ (DS Media / Tuyển dụng / Đưa đón) của người đó',
+  },
+  {
+    code: 'HOA_HONG_DAU',
+    label: 'DS Sale: tổng (mỗi đầu lao động × mức theo đầu của công ty)',
+  },
   {
     code: 'HOA_HONG_GIO',
-    label: 'Tổng (giờ × mức hoa hồng theo giờ của từng công ty)',
+    label:
+      'DS Media / Tuyển dụng / Đưa đón: tổng (giờ × mức theo giờ của công ty, theo vị trí)',
   },
 ];
 const RESERVED = new Set([
@@ -369,6 +377,7 @@ export class PayrollService {
       NGAY_NGHI_BU: 0,
       SO_LAO_DONG: 6,
       TONG_GIO_DS: 1_000,
+      HOA_HONG_DAU: 450_000,
       HOA_HONG_GIO: 1_500_000,
     };
     // Nhân viên mẫu: vài phụ cấp + khoản nhập tay để phiếu xem trước có số.
@@ -552,19 +561,28 @@ export class PayrollService {
     return companies.map((c) => ({
       company_id: c.id,
       company_name: c.name,
-      rate_per_hour: num(c.commissionRate?.ratePerHour),
+      rate_per_head: num(c.commissionRate?.ratePerHead),
+      rate_per_hour_media: num(c.commissionRate?.ratePerHourMedia),
+      rate_per_hour_recruitment: num(c.commissionRate?.ratePerHourRecruitment),
+      rate_per_hour_shuttle: num(c.commissionRate?.ratePerHourShuttle),
     }));
   }
 
   async saveCommissionRates(dto: SaveCommissionRatesDto) {
     await this.prisma.$transaction(
-      dto.rates.map((r) =>
-        this.prisma.payrollCommissionRate.upsert({
+      dto.rates.map((r) => {
+        const data = {
+          ratePerHead: r.rate_per_head,
+          ratePerHourMedia: r.rate_per_hour_media,
+          ratePerHourRecruitment: r.rate_per_hour_recruitment,
+          ratePerHourShuttle: r.rate_per_hour_shuttle,
+        };
+        return this.prisma.payrollCommissionRate.upsert({
           where: { companyId: r.company_id },
-          create: { companyId: r.company_id, ratePerHour: r.rate_per_hour },
-          update: { ratePerHour: r.rate_per_hour },
-        }),
-      ),
+          create: { companyId: r.company_id, ...data },
+          update: data,
+        });
+      }),
     );
     return { ok: true };
   }
@@ -664,16 +682,19 @@ export class PayrollService {
           deletedAt: null,
           saleUserId: { not: null },
         },
-        select: { saleUserId: true, companyId: true, totalHours: true },
+        select: {
+          kind: true,
+          saleUserId: true,
+          companyId: true,
+          totalHours: true,
+        },
       }),
       this.prisma.payrollCommissionRate.findMany(),
       this.prisma.payrollSlip.findMany({ where: { payrollId } }),
     ]);
 
     const componentByCode = new Map(components.map((c) => [c.code, c]));
-    const rateByCompany = new Map(
-      rates.map((r) => [r.companyId, num(r.ratePerHour)]),
-    );
+    const rateByCompany = new Map(rates.map((r) => [r.companyId, r]));
     const oldByAccount = new Map(oldSlips.map((s) => [s.accountId, s]));
     const defaultTemplate = templates.find((t) => t.isDefault) ?? null;
 
@@ -699,21 +720,38 @@ export class PayrollService {
       m[key] = (m[key] ?? 0) + paid;
       att.set(row.accountId, m);
     }
+    // Hoa hồng công ty (user 2026-11-15): dòng DS Sale = mỗi đầu lao động × mức theo
+    // đầu; dòng DS Media / Tuyển dụng / Đưa đón = giờ × mức theo giờ của vị trí đó.
     const sale = new Map<
       string,
-      { count: number; hours: number; commission: number }
+      { count: number; hours: number; perHead: number; perHour: number }
     >();
     for (const row of sales) {
       const m = sale.get(row.saleUserId!) ?? {
         count: 0,
         hours: 0,
-        commission: 0,
+        perHead: 0,
+        perHour: 0,
       };
-      const hours = num(row.totalHours);
+      const rate = row.companyId ? rateByCompany.get(row.companyId) : undefined;
       m.count += 1;
-      m.hours += hours;
-      m.commission +=
-        hours * (row.companyId ? (rateByCompany.get(row.companyId) ?? 0) : 0);
+      if (row.kind === 'sale') {
+        m.perHead += num(rate?.ratePerHead);
+      } else {
+        const hours = num(row.totalHours);
+        m.hours += hours;
+        m.perHour +=
+          hours *
+          num(
+            row.kind === 'media'
+              ? rate?.ratePerHourMedia
+              : row.kind === 'recruitment'
+                ? rate?.ratePerHourRecruitment
+                : row.kind === 'shuttle'
+                  ? rate?.ratePerHourShuttle
+                  : 0,
+          );
+      }
       sale.set(row.saleUserId!, m);
     }
 
@@ -726,7 +764,12 @@ export class PayrollService {
         continue;
 
       const a = att.get(acc.id) ?? {};
-      const s = sale.get(acc.id) ?? { count: 0, hours: 0, commission: 0 };
+      const s = sale.get(acc.id) ?? {
+        count: 0,
+        hours: 0,
+        perHead: 0,
+        perHour: 0,
+      };
       const worked = (a.present ?? 0) + (a.half ?? 0) * 0.5;
       const inputs: Record<string, number> = {
         LUONG_CO_BAN: num(setting?.baseSalary),
@@ -742,7 +785,8 @@ export class PayrollService {
         NGAY_NGHI_BU: a.compensatory_leave ?? 0,
         SO_LAO_DONG: s.count,
         TONG_GIO_DS: s.hours,
-        HOA_HONG_GIO: s.commission,
+        HOA_HONG_DAU: s.perHead,
+        HOA_HONG_GIO: s.perHour,
       };
       const manualValues = (old?.manualValues ?? {}) as Record<string, number>;
 

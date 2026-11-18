@@ -31,6 +31,15 @@ export const DS_KINDS = [
 ] as const;
 export type DsKind = (typeof DS_KINDS)[number];
 
+/** Thưởng lao động (2026-11-15): 4 tab con của "Nhập thưởng lao động" = bộ phận của khoản thưởng. */
+export const BONUS_GROUPS = [
+  'sale',
+  'media',
+  'recruitment',
+  'shuttle',
+] as const;
+export type BonusGroup = (typeof BONUS_GROUPS)[number];
+
 /** Chỉ cần biết đang ở tab nào (vd lấy danh sách người chọn được). */
 /** Tháng/năm hiện tại theo giờ Việt Nam (UTC+7) — kỳ mặc định của trang Nhập DS/Thưởng. */
 export function currentVnPeriod(): { year: number; month: number } {
@@ -96,6 +105,11 @@ export class ListDsSaleQueryDto {
   @IsOptional()
   @IsUUID()
   pickup_user_id?: string;
+
+  /** Chỉ tab Nhập thưởng: bộ phận (tab con). Không gửi = mọi bộ phận. */
+  @IsOptional()
+  @IsIn(BONUS_GROUPS)
+  bonus_group?: BonusGroup;
 
   /** Chỉ tab Nhập thưởng: yes = đã có Ngày chi, no = chưa chi. */
   @IsOptional()

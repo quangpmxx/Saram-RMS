@@ -101,6 +101,7 @@ export function DataPanel({ kind, onGoTab }: { kind: "attendance" | "sales"; onG
       : [
           ["Số lao động", "SO_LAO_DONG"],
           ["Tổng giờ", "TONG_GIO_DS"],
+          ["Hoa hồng theo đầu LĐ", "HOA_HONG_DAU", true],
           ["Hoa hồng theo giờ", "HOA_HONG_GIO", true],
           ["Mức hoa hồng riêng", "MUC_HOA_HONG"],
         ];

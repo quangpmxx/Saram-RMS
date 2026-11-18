@@ -33,6 +33,7 @@ import {
   MyPayslipController,
   PayrollController,
 } from '../payroll/payroll.controller';
+import { LaborBonusController } from '../payroll/labor-bonus.controller';
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, ngoài phạm vi Design Freeze
@@ -195,7 +196,8 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     label: 'Kế toán',
     defaultRoles: ['admin', 'accounting'],
     viewRoles: ['manager'],
-    controllers: [PayrollController],
+    // Thưởng lao động (2026-11-15) là 1 trang trong Kế toán.
+    controllers: [PayrollController, LaborBonusController],
   },
   // Phiếu lương của chính mình (2026-11-13): mọi vai trò xem + xác nhận / thắc mắc.
   {

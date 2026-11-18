@@ -39,12 +39,14 @@ export const DEFAULT_COMPONENTS: PresetComponent[] = [
     nature: 'income',
     formula: null,
   },
-  // Có mức hoa hồng riêng (vd 50.000đ/người) → tính theo đầu người; không có → theo giờ × mức công ty.
+  // Có mức hoa hồng riêng (vd 50.000đ/người) → tính theo đầu người; không có → theo mức của
+  // công ty (DS Sale: theo đầu lao động; DS Media / Tuyển dụng / Đưa đón: theo giờ).
   {
     code: 'DOANH_SO',
     name: 'Doanh số',
     nature: 'income',
-    formula: 'IF(MUC_HOA_HONG > 0, SO_LAO_DONG * MUC_HOA_HONG, HOA_HONG_GIO)',
+    formula:
+      'IF(MUC_HOA_HONG > 0, SO_LAO_DONG * MUC_HOA_HONG, HOA_HONG_DAU + HOA_HONG_GIO)',
   },
   {
     code: 'PC_DIEN_THOAI',

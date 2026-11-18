@@ -65,8 +65,14 @@ export interface PayrollAccountSetting {
 export interface CommissionRate {
   company_id: string;
   company_name: string;
-  rate_per_hour: number;
+  /** DS Sale: đ / đầu lao động. */
+  rate_per_head: number;
+  /** DS Media / Tuyển dụng / Đưa đón: đ / giờ công nhân làm. */
+  rate_per_hour_media: number;
+  rate_per_hour_recruitment: number;
+  rate_per_hour_shuttle: number;
 }
+export type CommissionRateField = Exclude<keyof CommissionRate, "company_id" | "company_name">;
 export type PayrollStatus = "draft" | "locked" | "sent" | "completed";
 export const PAYROLL_STATUS_LABEL: Record<PayrollStatus, string> = {
   draft: "Đang nháp",
@@ -180,7 +186,7 @@ export const payrollApi = {
     >,
   ) => send(`/payroll/account-settings/${accountId}`, "PUT", body),
   commissionRates: () => clientApi<CommissionRate[]>("/payroll/commission-rates"),
-  saveCommissionRates: (rates: { company_id: string; rate_per_hour: number }[]) =>
+  saveCommissionRates: (rates: Omit<CommissionRate, "company_name">[]) =>
     send("/payroll/commission-rates", "PUT", { rates }),
   periods: () => clientApi<PayrollSummary[]>("/payroll/periods"),
   createPeriod: (year: number, month: number) => send<{ id: string }>("/payroll/periods", "POST", { year, month }),

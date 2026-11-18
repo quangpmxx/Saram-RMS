@@ -27,6 +27,7 @@ describe('Thành phần lương mặc định', () => {
       evaluateFormula(f('DOANH_SO'), {
         MUC_HOA_HONG: 50000,
         SO_LAO_DONG: 4,
+        HOA_HONG_DAU: 1,
         HOA_HONG_GIO: 999,
       }),
     ).toBe(200000);
@@ -34,8 +35,9 @@ describe('Thành phần lương mặc định', () => {
       evaluateFormula(f('DOANH_SO'), {
         MUC_HOA_HONG: 0,
         SO_LAO_DONG: 4,
+        HOA_HONG_DAU: 240000,
         HOA_HONG_GIO: 860000,
       }),
-    ).toBe(860000);
+    ).toBe(1100000);
   });
 });

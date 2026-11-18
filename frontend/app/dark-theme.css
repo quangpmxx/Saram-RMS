@@ -55,6 +55,8 @@ html.dark .bg-brand-50\/60 { background-color: color-mix(in srgb, color-mix(in s
 html.dark .bg-brand-50\/95 { background-color: color-mix(in srgb, color-mix(in srgb, #3b82f6 12%, #111a2b) 95%, transparent); }
 html.dark .bg-emerald-100 { background-color: color-mix(in srgb, #10b981 20%, #111a2b); }
 html.dark .bg-emerald-50 { background-color: color-mix(in srgb, #10b981 12%, #111a2b); }
+html.dark .bg-emerald-50\/40 { background-color: color-mix(in srgb, color-mix(in srgb, #10b981 12%, #111a2b) 40%, transparent); }
+html.dark .bg-emerald-50\/60 { background-color: color-mix(in srgb, color-mix(in srgb, #10b981 12%, #111a2b) 60%, transparent); }
 html.dark .bg-indigo-100 { background-color: color-mix(in srgb, #6366f1 20%, #111a2b); }
 html.dark .bg-indigo-50 { background-color: color-mix(in srgb, #6366f1 12%, #111a2b); }
 html.dark .bg-orange-100 { background-color: color-mix(in srgb, #f97316 20%, #111a2b); }

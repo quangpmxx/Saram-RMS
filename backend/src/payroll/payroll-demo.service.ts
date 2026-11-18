@@ -50,7 +50,13 @@ export class PayrollDemoService {
     for (const c of companies) {
       if (c.commissionRate) continue;
       await this.prisma.payrollCommissionRate.create({
-        data: { companyId: c.id, ratePerHour: rand(2, 6) * 500 },
+        data: {
+          companyId: c.id,
+          ratePerHead: rand(5, 10) * 10_000,
+          ratePerHourMedia: rand(2, 6) * 500,
+          ratePerHourRecruitment: rand(2, 6) * 500,
+          ratePerHourShuttle: rand(2, 6) * 500,
+        },
       });
     }
 
@@ -135,7 +141,7 @@ export class PayrollDemoService {
           standardDays - leave - holiday - unpaid - rand(0, 1) * 0.5;
         const isSeller = ['sale', 'sup_leader', 'leader'].includes(a.role);
         const count = isSeller ? rand(2, 14) : 0;
-        const hours = count * rand(140, 210);
+        const hours = isSeller ? 0 : rand(0, 6) * rand(140, 210);
         const inputs: Record<string, number> = {
           LUONG_CO_BAN: Number(setting?.baseSalary ?? 0),
           MUC_HOA_HONG: Number(setting?.commissionRate ?? 0),
@@ -148,6 +154,7 @@ export class PayrollDemoService {
           NGAY_NGHI_BU: 0,
           SO_LAO_DONG: count,
           TONG_GIO_DS: hours,
+          HOA_HONG_DAU: count * rand(5, 10) * 10_000,
           HOA_HONG_GIO: hours * rand(2, 5) * 500,
         };
         const official = setting?.officialDate;

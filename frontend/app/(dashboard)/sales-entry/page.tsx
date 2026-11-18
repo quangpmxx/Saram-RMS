@@ -17,7 +17,13 @@ const DEFAULT_PAGE_SIZE = 100;
  * đúng khuôn mẫu shuttle/attendance/candidates) — tránh 1 vòng fetch client
  * thừa lúc mount và tránh setState-trong-effect (react-hooks/set-state-in-effect).
  */
-export default async function SalesEntryPage() {
+export default async function SalesEntryPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // Link từ thông báo "Kế toán đã chi thưởng": /sales-entry?tab=bonus.
+  const initialMainTab = (await searchParams).tab === "bonus" ? "bonus" : "sales";
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
@@ -58,6 +64,7 @@ export default async function SalesEntryPage() {
       initialCompanies={companies}
       initialYear={initialYear}
       initialMonth={initialMonth}
+      initialMainTab={initialMainTab}
     />
   );
 }

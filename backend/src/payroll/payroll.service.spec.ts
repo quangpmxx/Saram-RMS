@@ -37,7 +37,7 @@ describe('PayrollService.compute', () => {
         name: 'Doanh số',
         nature: 'income',
         formula:
-          'IF(MUC_HOA_HONG > 0, SO_LAO_DONG * MUC_HOA_HONG, HOA_HONG_GIO)',
+          'IF(MUC_HOA_HONG > 0, SO_LAO_DONG * MUC_HOA_HONG, HOA_HONG_DAU + HOA_HONG_GIO)',
         showOnPayslip: true,
       },
       {
@@ -113,15 +113,34 @@ describe('PayrollService.compute', () => {
       attendanceRecord: { findMany: jest.fn().mockResolvedValue(attendance) },
       salesEntryRecord: {
         findMany: jest.fn().mockResolvedValue([
-          { saleUserId: 'a1', companyId: 'c1', totalHours: 100 },
-          { saleUserId: 'a1', companyId: 'c2', totalHours: 50 },
-          { saleUserId: 'a1', companyId: null, totalHours: null },
+          // Media / Tuyển dụng: theo giờ × mức của vị trí; Sale: theo đầu lao động.
+          { kind: 'media', saleUserId: 'a1', companyId: 'c1', totalHours: 100 },
+          {
+            kind: 'recruitment',
+            saleUserId: 'a1',
+            companyId: 'c2',
+            totalHours: 50,
+          },
+          { kind: 'sale', saleUserId: 'a1', companyId: 'c1', totalHours: null },
+          { kind: 'sale', saleUserId: 'a1', companyId: null, totalHours: null },
         ]),
       },
       payrollCommissionRate: {
         findMany: jest.fn().mockResolvedValue([
-          { companyId: 'c1', ratePerHour: 1000 },
-          { companyId: 'c2', ratePerHour: 2000 },
+          {
+            companyId: 'c1',
+            ratePerHead: 60000,
+            ratePerHourMedia: 1000,
+            ratePerHourRecruitment: 3000,
+            ratePerHourShuttle: 0,
+          },
+          {
+            companyId: 'c2',
+            ratePerHead: 80000,
+            ratePerHourMedia: 0,
+            ratePerHourRecruitment: 2000,
+            ratePerHourShuttle: 0,
+          },
         ]),
       },
       payrollSlip: {
@@ -147,7 +166,9 @@ describe('PayrollService.compute', () => {
       CONG_HUONG_LUONG: 23,
       CONG_THU_VIEC: 0,
       CONG_CHINH_THUC: 23,
-      SO_LAO_DONG: 3,
+      SO_LAO_DONG: 4,
+      TONG_GIO_DS: 150,
+      HOA_HONG_DAU: 60000,
       HOA_HONG_GIO: 200000,
     });
     // 7.500.000 / 25 × 23 = 6.900.000
@@ -155,11 +176,11 @@ describe('PayrollService.compute', () => {
       LUONG_THU_VIEC: 0,
       LUONG_CHINH_THUC: 6900000,
       LUONG_NGAY_LE: 0,
-      DOANH_SO: 200000,
+      DOANH_SO: 260000, // 60.000 (Sale theo đầu) + 200.000 (theo giờ)
       PC_DIEN_THOAI: 0,
       UNG_LUONG: 0,
     });
-    expect(slip.netPay).toBe(7100000);
+    expect(slip.netPay).toBe(7160000);
   });
 
   it('chính thức từ ngày 12: công trước đó hưởng 85%; phụ cấp riêng từng người; khoản nhập tay; mức hoa hồng riêng → theo đầu người', async () => {
@@ -190,7 +211,7 @@ describe('PayrollService.compute', () => {
       LUONG_THU_VIEC: 2550000, // 7.500.000 × 0,85 / 25 × 10
       LUONG_CHINH_THUC: 3900000, // 7.500.000 / 25 × 13
       LUONG_NGAY_LE: 600000,
-      DOANH_SO: 150000, // 3 người × 50.000
+      DOANH_SO: 200000, // 4 người × 50.000
       PC_DIEN_THOAI: 1500000,
       UNG_LUONG: 2000000,
     });
@@ -198,7 +219,7 @@ describe('PayrollService.compute', () => {
       true,
     );
     expect(slip.netPay).toBe(
-      2550000 + 3900000 + 600000 + 150000 + 1500000 - 2000000,
+      2550000 + 3900000 + 600000 + 200000 + 1500000 - 2000000,
     );
     // Số đổi sau khi nhân viên đã đồng ý → phải xác nhận lại.
     expect(slip.confirmStatus).toBe('pending');

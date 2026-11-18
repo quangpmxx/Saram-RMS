@@ -334,6 +334,7 @@ model Account {
   salesEntryCheckFor  SalesEntryRecord[] @relation("SalesEntryCheckUser")
   createdSalesEntries SalesEntryRecord[] @relation("SalesEntryCreatedBy")
   updatedSalesEntries SalesEntryRecord[] @relation("SalesEntryUpdatedBy")
+  paidSalesEntries    SalesEntryRecord[] @relation("SalesEntryPaidBy")
 
   // Dự án phụ — nâng cấp toàn diện (2026-07-24): quan hệ ngược từ UserModulePermission (Phân quyền)
   modulePermissions          UserModulePermission[] @relation("UserModulePermissionAccount")
@@ -882,6 +883,8 @@ enum NotificationType {
   media_task
   /// Bảng công tháng (2026-11-14): gửi nhân viên xác nhận / nhân viên báo sai / báo kế toán chốt lương.
   attendance_sheet
+  /// Thưởng lao động (2026-11-15): Kế toán đã chi thưởng — báo người nhập dòng.
+  labor_bonus_paid
 
   @@map("notification_type")
 }
@@ -1467,6 +1470,10 @@ model SalesEntryRecord {
   bankName          String?   @map("bank_name") @db.VarChar(100)
   referrerName      String?   @map("referrer_name") @db.VarChar(150)
   paidDate          DateTime? @map("paid_date") @db.Date
+  /// Thưởng lao động (2026-11-15): bộ phận của khoản thưởng — sale | media | recruitment |
+  /// shuttle (chỉ dòng kind = bonus). Kế toán tick "Đã chi" → paidDate + paidById.
+  bonusGroup        String?   @map("bonus_group") @db.VarChar(20)
+  paidById          String?   @map("paid_by") @db.Uuid
   /// Kỳ (tháng/năm) của dòng — bộ lọc Tháng/Năm của trang, như Chấm công (2026-11-12).
   /// Dòng tạo ở tháng nào đang xem thì thuộc tháng đó; dòng cũ lấy theo ngày tạo.
   periodYear        Int       @map("period_year")
@@ -1495,6 +1502,7 @@ model SalesEntryRecord {
   checkUser  Account?     @relation("SalesEntryCheckUser", fields: [checkUserId], references: [id])
   createdBy  Account      @relation("SalesEntryCreatedBy", fields: [createdById], references: [id])
   updatedBy  Account      @relation("SalesEntryUpdatedBy", fields: [updatedById], references: [id])
+  paidBy     Account?     @relation("SalesEntryPaidBy", fields: [paidById], references: [id])
   company    OrderRecord? @relation(fields: [companyId], references: [id])
 
   @@index([fullName])
@@ -1507,6 +1515,7 @@ model SalesEntryRecord {
   @@index([kind])
   @@index([checkUserId])
   @@index([kind, periodYear, periodMonth])
+  @@index([kind, bonusGroup])
   @@map("sales_entry_records")
 }
 
@@ -1921,10 +1930,15 @@ model PayrollAccountSetting {
 }
 
 /// Mức hoa hồng theo giờ của từng công ty (công ty = OrderRecord).
+/// Hoa hồng theo công ty (user 2026-11-15): dòng DS Sale tính theo đầu lao động
+/// (ratePerHead); dòng DS Media / Tuyển dụng / Đưa đón tính theo giờ, mỗi vị trí 1 mức.
 model PayrollCommissionRate {
-  companyId   String   @id @map("company_id") @db.Uuid
-  ratePerHour Decimal  @default(0) @map("rate_per_hour") @db.Decimal(14, 0)
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  companyId              String   @id @map("company_id") @db.Uuid
+  ratePerHead            Decimal  @default(0) @map("rate_per_head") @db.Decimal(14, 0)
+  ratePerHourMedia       Decimal  @default(0) @map("rate_per_hour_media") @db.Decimal(14, 0)
+  ratePerHourRecruitment Decimal  @default(0) @map("rate_per_hour_recruitment") @db.Decimal(14, 0)
+  ratePerHourShuttle     Decimal  @default(0) @map("rate_per_hour_shuttle") @db.Decimal(14, 0)
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
   company OrderRecord @relation(fields: [companyId], references: [id], onDelete: Cascade)
 

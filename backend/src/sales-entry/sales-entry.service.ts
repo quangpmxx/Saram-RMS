@@ -31,6 +31,22 @@ import {
 } from './dto/ds-sale-response.dto';
 import { findOwnTeamId } from '../common/utils/account-team.util';
 
+/** 3 tab DS Media / DS Tuyển dụng / DS Đưa đón — cột "Người tuyển" = người nhập dòng. */
+const STAFF_KINDS: readonly string[] = ['media', 'recruitment', 'shuttle'];
+function isStaffKind(kind: string | null | undefined): boolean {
+  return !!kind && STAFF_KINDS.includes(kind);
+}
+/**
+ * Cột "Người tuyển" tự lấy người nhập: DS Media/Tuyển dụng/Đưa đón, và 3 tab Thưởng
+ * Media/Tuyển dụng/Đưa đón của Nhập thưởng lao động (tab Thưởng Sale vẫn chọn Sale).
+ */
+function isAutoRecruiter(
+  kind: string | null | undefined,
+  bonusGroup: string | null | undefined,
+): boolean {
+  return isStaffKind(kind) || (kind === 'bonus' && isStaffKind(bonusGroup));
+}
+
 /** "" hoặc chỉ khoảng trắng đều coi như chưa nhập — dùng để chặn lưu dòng hoàn toàn rỗng (Mục 9/14, yêu cầu người dùng). */
 function isBlank(value: string | null | undefined): boolean {
   return value === null || value === undefined || value.trim() === '';
@@ -149,6 +165,8 @@ export class SalesEntryService {
         { referrerName: { contains: query.keyword, mode: 'insensitive' } },
       ];
     }
+    if (query.kind === 'bonus' && query.bonus_group)
+      where.bonusGroup = query.bonus_group;
     if (query.paid === 'yes') where.paidDate = { not: null };
     if (query.paid === 'no') where.paidDate = null;
     if (query.company_id) where.companyId = query.company_id;
@@ -201,7 +219,10 @@ export class SalesEntryService {
     currentUser: AuthenticatedUser,
   ): boolean {
     const saleFieldBlank =
-      salesScope(currentUser) === 'own' ? true : !dto.sale_user_id;
+      salesScope(currentUser) === 'own' ||
+      isAutoRecruiter(dto.kind, dto.bonus_group)
+        ? true
+        : !dto.sale_user_id;
     return (
       isBlank(dto.employee_code) &&
       isBlank(dto.full_name) &&
@@ -235,17 +256,21 @@ export class SalesEntryService {
       throw new BadRequestException('Không thể lưu 1 dòng hoàn toàn trống');
     }
 
-    const saleUserId = await this.resolveSaleUserId(
-      dto.sale_user_id ?? null,
-      currentUser,
-    );
+    // DS Media/Tuyển dụng/Đưa đón (user 2026-11-15): "Người tuyển" luôn là người nhập.
+    const kind = dto.kind ?? 'sale';
+    const saleUserId = isAutoRecruiter(kind, dto.bonus_group)
+      ? currentUser.id
+      : await this.resolveSaleUserId(dto.sale_user_id ?? null, currentUser);
 
     let record: DsSaleRowWithRelations;
     try {
       record = await this.prisma.salesEntryRecord.create({
         data: {
           ...this.toWriteData(dto),
-          kind: dto.kind ?? 'sale',
+          kind,
+          bonusGroup: kind === 'bonus' ? (dto.bonus_group ?? 'sale') : null,
+          // Ngày chi chỉ do Kế toán tick ở trang Thưởng lao động.
+          paidDate: null,
           periodYear: dto.period_year ?? currentVnPeriod().year,
           periodMonth: dto.period_month ?? currentVnPeriod().month,
           saleUserId,
@@ -287,11 +312,18 @@ export class SalesEntryService {
       throw new NotFoundException('Không tìm thấy dòng DS Sale');
     }
     await this.assertCanModifyRow(existing.saleUserId, currentUser);
+    if (existing.paidDate) {
+      throw new BadRequestException(
+        'Khoản thưởng này Kế toán đã chi — không sửa được nữa',
+      );
+    }
 
     // Không gửi sale_user_id = giữ nguyên Sale cũ (gửi null = bỏ gán có chủ ý).
     // Sale luôn bị ép về chính mình nên vẫn đi qua resolveSaleUserId.
-    const saleUserId =
-      dto.sale_user_id === undefined && salesScope(currentUser) !== 'own'
+    // DS Media/Tuyển dụng/Đưa đón: "Người tuyển" cố định là người đã nhập dòng.
+    const saleUserId = isAutoRecruiter(existing.kind, existing.bonusGroup)
+      ? existing.saleUserId
+      : dto.sale_user_id === undefined && salesScope(currentUser) !== 'own'
         ? existing.saleUserId
         : await this.resolveSaleUserId(dto.sale_user_id ?? null, currentUser);
 
@@ -301,6 +333,7 @@ export class SalesEntryService {
         where: { id },
         data: {
           ...this.toWriteData(dto),
+          paidDate: existing.paidDate,
           saleUserId,
           updatedById: currentUser.id,
         },
@@ -347,6 +380,8 @@ export class SalesEntryService {
     // Xoá mềm (rà soát 2026-10-30): chỉ đụng các dòng trong phạm vi quyền và
     // chưa xoá; audit ghi nội dung từng dòng; realtime chỉ phát cho id thật sự xoá.
     where.deletedAt = null;
+    // Khoản thưởng Kế toán đã chi thì không xoá được (2026-11-15).
+    where.paidDate = null;
     const targets = await this.prisma.salesEntryRecord.findMany({
       where,
       select: { id: true, employeeCode: true, fullName: true },

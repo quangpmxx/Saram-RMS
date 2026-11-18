@@ -15,6 +15,7 @@ import { ViewOnlyBadge } from "@/components/ui/view-only-badge";
 import type {
   AccountRole,
   AppRealtimeEvent,
+  BonusGroup,
   DsKind,
   DsSaleAccountOption,
   DsSaleCompanyOption,
@@ -400,6 +401,7 @@ export function DsSaleClient({
   initialMonth,
   initialCheckAccounts = EMPTY_ACCOUNTS,
   kind = "sale",
+  bonusGroup,
   extraTopOffset = 0,
 }: {
   permissionLevel: ModulePermissionLevel;
@@ -418,6 +420,8 @@ export function DsSaleClient({
   initialCheckAccounts?: DsSaleAccountOption[];
   /** Tab nhỏ đang hiển thị (mặc định DS Sale). 3 tab còn lại dùng bộ cột theo file Excel mẫu. */
   kind?: DsKind;
+  /** Nhập thưởng lao động: tab con (bộ phận) đang hiển thị. */
+  bonusGroup?: BonusGroup;
   /** Chiều cao thanh tab "DS Sale" ở component cha (sales-entry-client.tsx) — cộng vào phần đo chiều cao khối cuộn bảng bên dưới. */
   extraTopOffset?: number;
 }) {
@@ -425,7 +429,13 @@ export function DsSaleClient({
   const isSale = kind === "sale";
   const isBonus = kind === "bonus";
   /** Tên cột chọn người: DS Sale và Nhập thưởng là "Sale", 3 tab còn lại là "Người tuyển". */
-  const recruiterLabel = isSale || isBonus ? "Sale" : "Người tuyển";
+  const isBonusSale = isBonus && (bonusGroup ?? "sale") === "sale";
+  const recruiterLabel = isSale || isBonusSale ? "Sale" : "Người tuyển";
+  /** Tham số bộ phận gửi kèm mọi lần tải / xuất / tạo dòng của tab Nhập thưởng lao động. */
+  const bonusParam = useMemo<{ bonus_group?: BonusGroup }>(
+    () => (isBonus ? { bonus_group: bonusGroup ?? "sale" } : {}),
+    [isBonus, bonusGroup],
+  );
   const kindLabel = KIND_LABELS[kind];
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): "Chỉ xem" — khóa toàn bộ bảng bằng pointer-events (bảng
@@ -437,6 +447,10 @@ export function DsSaleClient({
   // Chỉ nhập doanh số của chính mình khi không có quyền cả nhóm/toàn công ty (mặc định Sale).
   const can = useCan();
   const isSaleRole = !can("sales.team") && !can("sales.all");
+  // DS Media / Tuyển dụng / Đưa đón (user 2026-11-15): "Người tuyển" luôn là người nhập
+  // dòng, không chọn được (backend cũng ép như vậy).
+  // Tab Thưởng Media / Tuyển dụng / Đưa đón cũng vậy; tab Thưởng Sale vẫn chọn Sale.
+  const autoRecruiter = isSaleRole || (!isSale && !isBonusSale);
   const selfOption: DsSaleSelectOption = useMemo(
     () => ({ id: currentUserId, label: currentUserNickname ?? currentUserFullName }),
     [currentUserId, currentUserFullName, currentUserNickname],
@@ -521,6 +535,7 @@ export function DsSaleClient({
       try {
         const result = await listDsSaleRows({
           kind,
+          ...bonusParam,
           page: targetPage,
           page_size: size,
           keyword: filters.keyword || undefined,
@@ -547,7 +562,7 @@ export function DsSaleClient({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- appliedFilters/pageSize truyền tường minh qua tham số ở nơi gọi, không cần liệt kê lại
-    [toast, kind, kindLabel],
+    [toast, kind, kindLabel, bonusParam],
   );
 
   // Mục 9: luôn giữ đúng 1 dòng nháp trống ở cuối bảng để nhập nhanh — không
@@ -555,8 +570,8 @@ export function DsSaleClient({
   // nghị thay useEffect, đã dùng ở shuttle-client.tsx) thay vì effect phụ
   // thuộc [sheetRows] — tránh 1 lượt render thừa + lỗi lint set-state-in-effect.
   const lastRow = sheetRows[sheetRows.length - 1];
-  if (!lastRow || lastRow.id !== null || !isRowBlank(lastRow, isSaleRole)) {
-    setSheetRows((prev) => [...prev, makeDraftRow(isSaleRole ? selfOption : null)]);
+  if (!lastRow || lastRow.id !== null || !isRowBlank(lastRow, autoRecruiter)) {
+    setSheetRows((prev) => [...prev, makeDraftRow(autoRecruiter ? selfOption : null)]);
   }
 
   useEffect(() => {
@@ -624,6 +639,7 @@ export function DsSaleClient({
     try {
       const result = await listDsSaleRows({
         kind,
+        ...bonusParam,
         page: 1,
         page_size: 1,
         keyword: appliedFilters.keyword || undefined,
@@ -642,7 +658,7 @@ export function DsSaleClient({
   async function saveRow(row: SheetRow) {
     const localId = row.localId;
 
-    if (isRowBlank(row, isSaleRole)) {
+    if (isRowBlank(row, autoRecruiter)) {
       setSheetRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: "idle" } : r)));
       return;
     }
@@ -650,7 +666,7 @@ export function DsSaleClient({
     setSheetRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, status: "saving" } : r)));
     try {
       // Dòng mới thuộc kỳ (tháng/năm) đang xem.
-      const input = toInput(row, kind, { year: appliedFilters.year, month: appliedFilters.month });
+      const input = { ...toInput(row, kind, { year: appliedFilters.year, month: appliedFilters.month }), ...bonusParam };
       const response = row.id ? await updateDsSaleRow(row.id, input) : await createDsSaleRow(input);
       const wasDraft = row.id === null;
       setSheetRows((prev) =>
@@ -679,6 +695,7 @@ export function DsSaleClient({
       if (!payload) return;
       // Dòng của tab nhỏ khác (DS Sale/Media/Tuyển dụng/Đưa đón) — không thuộc bảng này.
       if (payload.kind !== kind) return;
+      if (kind === "bonus" && (payload.bonus_group ?? "sale") !== (bonusGroup ?? "sale")) return;
       // Dòng của tháng khác với tháng đang xem.
       const viewing = periodRef.current;
       if (payload.period_year !== viewing.year || payload.period_month !== viewing.month) return;
@@ -694,7 +711,7 @@ export function DsSaleClient({
         setSheetRows((prev) => [toSheetRow(payload), ...prev]);
         setTotal((t) => t + 1);
       }
-    }, [currentUserId, kind]),
+    }, [currentUserId, kind, bonusGroup]),
   );
 
   useRealtimeReconnect(
@@ -765,14 +782,14 @@ export function DsSaleClient({
   }
 
   function addRow() {
-    const row = makeDraftRow(isSaleRole ? selfOption : null);
+    const row = makeDraftRow(autoRecruiter ? selfOption : null);
     focusFieldOnMount.current = `${row.localId}:full_name`;
     setSheetRows((prev) => [...prev.slice(0, -1), row, prev[prev.length - 1]]);
   }
 
   function addMultipleRows(count: number) {
     const clamped = Math.min(Math.max(count, 1), 100);
-    const rows = Array.from({ length: clamped }, () => makeDraftRow(isSaleRole ? selfOption : null));
+    const rows = Array.from({ length: clamped }, () => makeDraftRow(autoRecruiter ? selfOption : null));
     setSheetRows((prev) => [...prev.slice(0, -1), ...rows, prev[prev.length - 1]]);
     setAddCountModalOpen(false);
   }
@@ -786,7 +803,11 @@ export function DsSaleClient({
     });
   }
 
-  const selectableRows = sheetRows.filter((r) => r.id !== null || !isRowBlank(r, isSaleRole));
+  // Khoản thưởng Kế toán đã chi: khoá, không chọn để xoá được.
+  const isPaidRow = (r: SheetRow) => isBonus && r.id !== null && !!r.paid_date;
+  const selectableRows = sheetRows.filter(
+    (r) => (r.id !== null || !isRowBlank(r, autoRecruiter)) && !isPaidRow(r),
+  );
   const allSelected = selectableRows.length > 0 && selectableRows.every((r) => selected.has(r.localId));
 
   function toggleSelectAll() {
@@ -845,7 +866,7 @@ export function DsSaleClient({
       grid.forEach((lineCells, r) => {
         const targetIndex = rowIndex + r;
         while (targetIndex >= next.length - 1) {
-          next.splice(next.length - 1, 0, makeDraftRow(isSaleRole ? selfOption : null));
+          next.splice(next.length - 1, 0, makeDraftRow(autoRecruiter ? selfOption : null));
         }
         let updatedRow = next[targetIndex];
         lineCells.forEach((cellValue, c) => {
@@ -928,6 +949,7 @@ export function DsSaleClient({
   const exportParams = useMemo(
     () => ({
       kind,
+      ...bonusParam,
       keyword: appliedFilters.keyword || undefined,
       year: appliedFilters.year,
       month: appliedFilters.month,
@@ -936,7 +958,7 @@ export function DsSaleClient({
       pickup_user_id: appliedFilters.pickup_user_id || undefined,
       paid: appliedFilters.paid || undefined,
     }),
-    [appliedFilters, kind],
+    [appliedFilters, kind, bonusParam],
   );
 
   return (
@@ -1238,7 +1260,7 @@ export function DsSaleClient({
                   <th className={headCellClass}>Tên TK</th>
                   <th className={headCellClass}>Ngân hàng</th>
                   <th className={headCellClass}>Người giới thiệu</th>
-                  <th className={headCellClass}>Sale</th>
+                  <th className={headCellClass}>{recruiterLabel}</th>
                   <th className={headCellClass}>Ghi chú</th>
                   <th className={headCellClass}>Ngày chi</th>
                 </>
@@ -1271,7 +1293,7 @@ export function DsSaleClient({
           </thead>
           <tbody className={cn(isReadOnly && "pointer-events-none opacity-60")}>
             {sheetRows.map((row, rowIndex) => {
-              const isBlankDraft = row.id === null && isRowBlank(row, isSaleRole);
+              const isBlankDraft = row.id === null && isRowBlank(row, autoRecruiter);
               const zebra = rowIndex % 2 === 1 ? "bg-slate-50" : "bg-white";
               // Các ô dùng chung cho cả 2 bộ cột (DS Sale / 3 tab còn lại) — chỉ khác thứ tự.
               const joinCell = (
@@ -1299,13 +1321,13 @@ export function DsSaleClient({
               );
               const recruiterCell = (
                   <td className={cn("border-r border-b border-slate-100 p-0.5", zebra)}>
-                    {isSaleRole ? (
+                    {autoRecruiter ? (
                       // Yêu cầu trực tiếp người dùng (2026-07-27): Sale tự
                       // nhập doanh số cho chính mình — luôn hiện tên mình,
                       // không mở được ô chọn (đã ép ở backend, đây chỉ là
                       // phản ánh đúng UX, không phải lớp bảo mật).
                       <div className="flex w-full items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
-                        <span className="min-w-0 truncate text-center">{selfOption.label}</span>
+                        <span className="min-w-0 truncate text-center">{row.sale?.label ?? selfOption.label}</span>
                       </div>
                     ) : (
                       <DsSaleSearchSelect
@@ -1331,12 +1353,16 @@ export function DsSaleClient({
                   </td>
               );
               return (
-                <tr key={row.localId} className={cn(zebra, "group")}>
+                <tr
+                  key={row.localId}
+                  className={cn(zebra, "group", isPaidRow(row) && "[&>td:not(:first-child)]:pointer-events-none [&>td]:bg-emerald-50/60")}
+                  title={isPaidRow(row) ? "Kế toán đã chi khoản thưởng này — không sửa / xoá được" : undefined}
+                >
                   <td
                     className={cn("border-r border-b border-slate-100 px-1 py-1 text-center", zebra, Z_BODY_STICKY)}
                     style={{ position: "sticky", left: CHECK_LEFT }}
                   >
-                    {!isBlankDraft && (
+                    {!isBlankDraft && !isPaidRow(row) && (
                       <Checkbox checked={selected.has(row.localId)} onChange={() => toggleSelect(row.localId)} />
                     )}
                   </td>
@@ -1472,14 +1498,16 @@ export function DsSaleClient({
                       {recruiterCell}
                       {noteCell}
                       <td className={cn("border-r border-b border-slate-100 p-0.5", zebra)}>
-                        <CellInput
-                          type="date"
-                          innerRef={(el) => cellRefs.current.set(`${rowIndex}:paid_date`, el)}
-                          value={row.paid_date}
-                          onChange={(v) => updateField(row.localId, "paid_date", v)}
-                          onBlur={() => flushSave(row.localId)}
-                          onEnter={() => focusNextRow(rowIndex, "paid_date")}
-                        />
+                        {/* Ngày chi do Kế toán tick ở Kế toán › Thưởng lao động (2026-11-15). */}
+                        <div className="px-1.5 py-1 text-center text-xs whitespace-nowrap">
+                          {row.paid_date ? (
+                            <span className="font-medium text-emerald-700">
+                              Đã chi {row.paid_date.split("-").reverse().join("/")}
+                            </span>
+                          ) : row.id ? (
+                            <span className="text-slate-400">Chưa chi</span>
+                          ) : null}
+                        </div>
                       </td>
                     </>
                   ) : isSale ? (

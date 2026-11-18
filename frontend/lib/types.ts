@@ -895,7 +895,9 @@ export interface AppNotification {
     /** Bảng công tháng (2026-11-14): gửi xác nhận / báo sai / báo kế toán — meta.link. */
     | "attendance_sheet"
     /** Trang web (2026-11-16): doanh nghiệp gửi nhu cầu tuyển dụng — mở trang Liên hệ từ website. */
-    | "website_contact";
+    | "website_contact"
+    /** Thưởng lao động (2026-11-15): Kế toán đã chi thưởng — báo người nhập dòng, meta.link. */
+    | "labor_bonus_paid";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;
@@ -1061,6 +1063,14 @@ export interface DsSaleCompanyOption {
 
 /** 4 tab nhỏ của "Nhập doanh số" (2026-11-12) dùng chung bảng/API DS Sale. */
 export type DsKind = "sale" | "media" | "recruitment" | "shuttle" | "bonus";
+/** Nhập thưởng lao động (2026-11-15): 4 tab con = bộ phận của khoản thưởng. */
+export type BonusGroup = "sale" | "media" | "recruitment" | "shuttle";
+export const BONUS_GROUP_LABEL: Record<BonusGroup, string> = {
+  sale: "Sale",
+  media: "Media",
+  recruitment: "Tuyển dụng",
+  shuttle: "Đưa đón",
+};
 
 export interface DsSaleRow {
   id: string;
@@ -1079,7 +1089,10 @@ export interface DsSaleRow {
   bank_account_name: string | null;
   bank_name: string | null;
   referrer_name: string | null;
+  /** Kế toán tick "Đã chi" ở trang Thưởng lao động — có ngày chi thì dòng bị khoá. */
   paid_date: string | null;
+  bonus_group: BonusGroup | null;
+  paid_by: NamedRef | null;
   employee_code: string | null;
   full_name: string | null;
   date_of_birth: string | null;
@@ -1110,6 +1123,8 @@ export interface DsSaleRowInput {
   sale_user_id?: string | null;
   pickup_user_id?: string | null;
   note?: string;
+  /** Nhập thưởng lao động: bộ phận — chỉ dùng khi tạo dòng. */
+  bonus_group?: BonusGroup;
   /** Chỉ dùng khi tạo dòng; không gửi = DS Sale. */
   kind?: DsKind;
   /** Kỳ đang xem — chỉ dùng khi tạo dòng. */

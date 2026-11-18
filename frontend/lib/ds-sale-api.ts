@@ -1,5 +1,5 @@
 import { clientApi } from "./api-client";
-import type { DsKind, DsSaleAccountOption, DsSaleCompanyOption, DsSalePage, DsSaleRow, DsSaleRowInput } from "./types";
+import type { BonusGroup, DsKind, DsSaleAccountOption, DsSaleCompanyOption, DsSalePage, DsSaleRow, DsSaleRowInput } from "./types";
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-17, yêu cầu trực tiếp người
@@ -25,6 +25,8 @@ export interface ListDsSaleParams {
   pickup_user_id?: string;
   /** Chỉ tab Nhập thưởng: yes = đã chi, no = chưa chi. */
   paid?: "yes" | "no";
+  /** Chỉ tab Nhập thưởng: bộ phận (tab con). */
+  bonus_group?: BonusGroup;
   /** Cột đang sắp xếp (bấm tiêu đề STT/Ngày sinh/Ngày vào). */
   sort?: "stt" | "date_of_birth" | "join_date";
   order?: "asc" | "desc";

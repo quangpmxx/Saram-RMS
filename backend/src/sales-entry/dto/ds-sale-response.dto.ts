@@ -19,6 +19,9 @@ export interface DsSaleRowResponseDto {
   bank_name: string | null;
   referrer_name: string | null;
   paid_date: string | null;
+  /** Nhập thưởng lao động: bộ phận + người Kế toán đã tick chi. */
+  bonus_group: string | null;
+  paid_by: { id: string; name: string } | null;
   employee_code: string | null;
   full_name: string | null;
   date_of_birth: string | null;
@@ -92,6 +95,7 @@ function toAccountOption(
 export type DsSaleRowWithRelations = SalesEntryRecord & {
   createdBy: Pick<Account, 'id' | 'fullName'>;
   updatedBy: Pick<Account, 'id' | 'fullName'>;
+  paidBy: Pick<Account, 'id' | 'fullName'> | null;
   saleUser: AccountPick | null;
   pickupUser: AccountPick | null;
   checkUser: AccountPick | null;
@@ -116,6 +120,10 @@ export function toDsSaleRowResponse(
     bank_name: record.bankName,
     referrer_name: record.referrerName,
     paid_date: toDateOnly(record.paidDate),
+    bonus_group: record.bonusGroup,
+    paid_by: record.paidBy
+      ? { id: record.paidBy.id, name: record.paidBy.fullName }
+      : null,
     employee_code: record.employeeCode,
     full_name: record.fullName,
     date_of_birth: toDateOnly(record.dateOfBirth),
@@ -139,6 +147,7 @@ export function toDsSaleRowResponse(
 export const DS_SALE_INCLUDE = {
   createdBy: { select: { id: true, fullName: true } },
   updatedBy: { select: { id: true, fullName: true } },
+  paidBy: { select: { id: true, fullName: true } },
   saleUser: {
     select: {
       id: true,

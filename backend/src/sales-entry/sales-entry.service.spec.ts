@@ -12,6 +12,7 @@ describe('SalesEntryService (rà soát 2026-10-30: xoá mềm, phạm vi xoá, g
       findUnique: jest.Mock;
       findMany: jest.Mock;
       count: jest.Mock;
+      create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
       deleteMany: jest.Mock;
@@ -33,6 +34,7 @@ describe('SalesEntryService (rà soát 2026-10-30: xoá mềm, phạm vi xoá, g
         findUnique: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
@@ -219,6 +221,85 @@ describe('SalesEntryService (rà soát 2026-10-30: xoá mềm, phạm vi xoá, g
       expect(prisma.salesEntryRecord.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ saleUserId: null }),
+        }),
+      );
+    });
+
+    it('DS Media / Tuyển dụng / Đưa đón: không đổi được Người tuyển (luôn là người nhập)', async () => {
+      prisma.salesEntryRecord.findUnique.mockResolvedValue({
+        ...base,
+        kind: 'media',
+      });
+      prisma.salesEntryRecord.update.mockResolvedValue({ id: 'row-1' });
+
+      await service
+        .updateRow('row-1', { full_name: 'A', sale_user_id: 'x-2' }, admin)
+        .catch(() => undefined);
+
+      expect(prisma.salesEntryRecord.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ saleUserId: 'sale-9' }),
+        }),
+      );
+    });
+  });
+
+  describe('Nhập thưởng lao động', () => {
+    it('dòng thưởng Kế toán đã chi → không sửa được', async () => {
+      prisma.salesEntryRecord.findUnique.mockResolvedValue({
+        id: 'row-1',
+        kind: 'bonus',
+        bonusGroup: 'sale',
+        saleUserId: 'sale-9',
+        paidDate: new Date('2026-11-15'),
+        deletedAt: null,
+      });
+      await expect(
+        service.updateRow('row-1', { full_name: 'A' }, admin),
+      ).rejects.toThrow('đã chi');
+      expect(prisma.salesEntryRecord.update).not.toHaveBeenCalled();
+    });
+
+    it('tạo dòng Thưởng Media: bộ phận media, Người tuyển = người nhập, chưa có ngày chi', async () => {
+      prisma.salesEntryRecord.create.mockResolvedValue({ id: 'row-3' });
+      await service
+        .createRow(
+          {
+            kind: 'bonus',
+            bonus_group: 'media',
+            full_name: 'C',
+            sale_user_id: 'x-2',
+            paid_date: '2026-11-01',
+          },
+          admin,
+        )
+        .catch(() => undefined);
+      expect(prisma.salesEntryRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            bonusGroup: 'media',
+            saleUserId: 'admin-1',
+            paidDate: null,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('createRow', () => {
+    it('DS Tuyển dụng: Người tuyển = người nhập, bỏ qua sale_user_id gửi lên', async () => {
+      prisma.salesEntryRecord.create.mockResolvedValue({ id: 'row-2' });
+
+      await service
+        .createRow(
+          { kind: 'recruitment', full_name: 'B', sale_user_id: 'x-2' },
+          admin,
+        )
+        .catch(() => undefined);
+
+      expect(prisma.salesEntryRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ saleUserId: 'admin-1' }),
         }),
       );
     });

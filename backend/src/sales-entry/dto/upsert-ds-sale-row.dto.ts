@@ -11,7 +11,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { DS_KINDS, type DsKind } from './list-ds-sale-query.dto';
+import {
+  BONUS_GROUPS,
+  DS_KINDS,
+  type BonusGroup,
+  type DsKind,
+} from './list-ds-sale-query.dto';
 
 /** Ô ngày trên bảng gửi "" khi người dùng xóa trắng — coi như null, không phải lỗi định dạng. */
 const emptyToNull = ({ value }: { value: unknown }) =>
@@ -83,6 +88,11 @@ export class UpsertDsSaleRowDto {
   @IsIn(DS_KINDS)
   kind?: DsKind;
 
+  /** Nhập thưởng lao động: bộ phận (tab con) — chỉ dùng khi TẠO dòng; không gửi = Sale. */
+  @IsOptional()
+  @IsIn(BONUS_GROUPS)
+  bonus_group?: BonusGroup;
+
   /** Kỳ (tháng/năm đang xem) — chỉ dùng khi TẠO dòng; không gửi = tháng hiện tại. */
   @IsOptional()
   @IsInt()
@@ -145,6 +155,7 @@ export class UpsertDsSaleRowDto {
   @MaxLength(150)
   referrer_name?: string;
 
+  /** Bỏ qua khi lưu (2026-11-15): Ngày chi do Kế toán tick ở trang Thưởng lao động. */
   @IsOptional()
   @Transform(emptyToNull)
   @IsDateString()

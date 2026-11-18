@@ -116,9 +116,23 @@ export class CommissionRateItemDto {
   @IsUUID()
   company_id: string;
 
+  /** DS Sale: tiền hoa hồng mỗi đầu lao động. */
   @IsNumber()
   @Min(0)
-  rate_per_hour: number;
+  rate_per_head: number;
+
+  /** DS Media / Tuyển dụng / Đưa đón: tiền hoa hồng mỗi giờ công nhân làm. */
+  @IsNumber()
+  @Min(0)
+  rate_per_hour_media: number;
+
+  @IsNumber()
+  @Min(0)
+  rate_per_hour_recruitment: number;
+
+  @IsNumber()
+  @Min(0)
+  rate_per_hour_shuttle: number;
 }
 
 export class SaveCommissionRatesDto {

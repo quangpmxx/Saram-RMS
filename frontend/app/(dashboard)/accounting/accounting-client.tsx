@@ -7,6 +7,7 @@ import {
   Blocks,
   Calculator,
   CalendarCheck,
+  Gift,
   Handshake,
   LayoutDashboard,
   Sheet,
@@ -20,6 +21,7 @@ import { useSetPageTitle } from "@/lib/page-title-context";
 import { payrollApi, type PayrollVariable } from "@/lib/payroll-api";
 import type { ModulePermissionLevel } from "@/lib/types";
 import { DataPanel, PayoutPanel } from "./payroll-data";
+import { LaborBonusPanel } from "./labor-bonus-panel";
 import { PayrollPanel } from "./payroll-panel";
 import { OverviewPanel, ReportsPanel } from "./payroll-reports";
 import { AccountSettingsPanel, CommissionRatesPanel, ComponentsPanel, TemplatesPanel } from "./payroll-settings";
@@ -38,6 +40,7 @@ type TabKey =
   | "commission"
   | "payroll"
   | "payout"
+  | "labor-bonus"
   | "reports"
   | "accounts";
 
@@ -62,6 +65,7 @@ const NAV: { group?: string; items: { key: TabKey; label: string; icon: LucideIc
     items: [
       { key: "payroll", label: "Tính lương", icon: Calculator },
       { key: "payout", label: "Chi trả", icon: Banknote },
+      { key: "labor-bonus", label: "Thưởng lao động", icon: Gift },
       { key: "reports", label: "Báo cáo", icon: BarChart3 },
       { key: "accounts", label: "Nhân viên", icon: Users },
     ],
@@ -144,6 +148,9 @@ export function AccountingClient({
         {tab === "commission" && <CommissionRatesPanel canEdit={canEdit} />}
         {tab === "payroll" && <PayrollPanel canEdit={canEdit} initialYear={initialYear} initialMonth={initialMonth} />}
         {tab === "payout" && <PayoutPanel canEdit={canEdit} onGoTab={goTab} />}
+        {tab === "labor-bonus" && (
+          <LaborBonusPanel canEdit={canEdit} initialYear={initialYear} initialMonth={initialMonth} />
+        )}
         {tab === "reports" && <ReportsPanel />}
         {tab === "accounts" && <AccountSettingsPanel canEdit={canEdit} />}
       </div>

@@ -17,6 +17,7 @@ import {
   parseMoney,
   payrollApi,
   type CommissionRate,
+  type CommissionRateField,
   type PayrollAccountSetting,
   type PayrollComponent,
   type PayrollNature,
@@ -1217,11 +1218,23 @@ export function AccountSettingsPanel({ canEdit }: { canEdit: boolean }) {
 
 // ── Hoa hồng theo công ty ─────────────────────────────────────────────────────
 
+/** Sale tính theo đầu lao động; Media / Tuyển dụng / Đưa đón tính theo giờ, mỗi vị trí 1 mức (user 2026-11-15). */
+const RATE_COLUMNS: { field: CommissionRateField; label: string }[] = [
+  { field: "rate_per_head", label: "Sale (đ/đầu LĐ)" },
+  { field: "rate_per_hour_media", label: "Media (đ/giờ)" },
+  { field: "rate_per_hour_recruitment", label: "Tuyển dụng (đ/giờ)" },
+  { field: "rate_per_hour_shuttle", label: "Đưa đón (đ/giờ)" },
+];
+
 export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
   const [rows, setRows] = useState<CommissionRate[]>([]);
+  /** Khoá: `${company_id}:${field}`. */
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const key = (companyId: string, field: CommissionRateField) => `${companyId}:${field}`;
+  const valueOf = (companyId: string, field: CommissionRateField) =>
+    parseMoney(values[key(companyId, field)] ?? "");
 
   const load = () =>
     payrollApi
@@ -1230,10 +1243,12 @@ export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
         setRows(r);
         setValues(
           Object.fromEntries(
-            r.map((x) => [
-              x.company_id,
-              x.rate_per_hour ? formatMoney(x.rate_per_hour) : "",
-            ]),
+            r.flatMap((x) =>
+              RATE_COLUMNS.map(({ field }) => [
+                key(x.company_id, field),
+                x[field] ? formatMoney(x[field]) : "",
+              ]),
+            ),
           ),
         );
       })
@@ -1241,8 +1256,8 @@ export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void load(), []);
 
-  const changed = rows.filter(
-    (r) => parseMoney(values[r.company_id] ?? "") !== r.rate_per_hour,
+  const changed = rows.filter((r) =>
+    RATE_COLUMNS.some(({ field }) => valueOf(r.company_id, field) !== r[field]),
   );
 
   async function save() {
@@ -1251,7 +1266,10 @@ export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
       await payrollApi.saveCommissionRates(
         changed.map((r) => ({
           company_id: r.company_id,
-          rate_per_hour: parseMoney(values[r.company_id] ?? ""),
+          rate_per_head: valueOf(r.company_id, "rate_per_head"),
+          rate_per_hour_media: valueOf(r.company_id, "rate_per_hour_media"),
+          rate_per_hour_recruitment: valueOf(r.company_id, "rate_per_hour_recruitment"),
+          rate_per_hour_shuttle: valueOf(r.company_id, "rate_per_hour_shuttle"),
         })),
       );
       toast.success("Đã lưu mức hoa hồng");
@@ -1264,7 +1282,7 @@ export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-3">
+    <div className="flex max-w-5xl flex-col gap-3">
       <div className="flex items-center justify-end gap-2">
         {canEdit && (
           <Button
@@ -1281,38 +1299,44 @@ export function CommissionRatesPanel({ canEdit }: { canEdit: boolean }) {
           <thead>
             <tr>
               <th className={thClass}>Công ty</th>
-              <th className={`${thClass} w-48 text-right`}>Hoa hồng (đ/giờ)</th>
+              {RATE_COLUMNS.map((c) => (
+                <th key={c.field} className={`${thClass} w-40 text-right`}>
+                  {c.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.company_id}>
                 <td className={tdClass}>{row.company_name}</td>
-                <td className={`${tdClass} text-right`}>
-                  <Input
-                    uiSize="sm"
-                    inputMode="numeric"
-                    className="text-right tabular-nums"
-                    disabled={!canEdit}
-                    placeholder="0"
-                    value={values[row.company_id] ?? ""}
-                    onChange={(e) =>
-                      setValues({
-                        ...values,
-                        [row.company_id]: e.target.value
-                          ? formatMoney(parseMoney(e.target.value))
-                          : "",
-                      })
-                    }
-                  />
-                </td>
+                {RATE_COLUMNS.map(({ field }) => (
+                  <td key={field} className={`${tdClass} text-right`}>
+                    <Input
+                      uiSize="sm"
+                      inputMode="numeric"
+                      className="min-w-24 text-right tabular-nums"
+                      disabled={!canEdit}
+                      placeholder="0"
+                      value={values[key(row.company_id, field)] ?? ""}
+                      onChange={(e) =>
+                        setValues({
+                          ...values,
+                          [key(row.company_id, field)]: e.target.value
+                            ? formatMoney(parseMoney(e.target.value))
+                            : "",
+                        })
+                      }
+                    />
+                  </td>
+                ))}
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
                 <td
                   className={`${tdClass} text-center text-slate-400`}
-                  colSpan={2}
+                  colSpan={RATE_COLUMNS.length + 1}
                 >
                   Chưa có công ty nào (thêm ở Quản lý đơn hàng)
                 </td>
