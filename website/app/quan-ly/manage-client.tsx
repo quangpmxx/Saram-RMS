@@ -110,7 +110,7 @@ export function ManageClient() {
     return (
       <p className="rounded-2xl bg-white p-6 text-sm">
         Bạn cần{" "}
-        <Link href="/dang-nhap" className="font-semibold text-brand underline">
+        <Link href="/fix" className="font-semibold text-brand underline">
           đăng nhập
         </Link>{" "}
         bằng tài khoản CRM để quản lý tin.

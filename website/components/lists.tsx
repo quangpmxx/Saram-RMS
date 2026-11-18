@@ -5,6 +5,7 @@ import { getList, listAttrs } from "@/lib/lists-server";
 import { LISTS } from "@/lib/lists";
 import { isUploadUrl } from "@/lib/style";
 import type { Job } from "@/lib/content-api";
+import { partners } from "@/lib/content";
 import { CountUp } from "./count-up";
 import { T } from "./editable";
 
@@ -248,7 +249,15 @@ export async function PartnersGrid() {
 }
 
 /** Thẻ tin tuyển dụng: ảnh · tên việc · nhà máy · nơi làm · lương. */
+/** Tin chưa tải ảnh: tên công ty trùng/chứa tên đối tác (vd "Goertek") thì hiện logo đối tác có sẵn. */
+function partnerLogo(company: string | null): string | null {
+  const c = company?.trim().toUpperCase() ?? "";
+  if (!c) return null;
+  return partners.find((p) => c.includes(p.name) || p.name.includes(c))?.logo ?? null;
+}
+
 export function JobCard({ job }: { job: Job }) {
+  const logo = partnerLogo(job.company);
   return (
     <article className="relative flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-1 hover:border-royal/30 hover:shadow-xl sm:p-5">
       {job.urgent && (
@@ -260,6 +269,8 @@ export function JobCard({ job }: { job: Job }) {
         <span className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white sm:h-20 sm:w-20">
           {job.image && isUploadUrl(job.image) ? (
             <Image src={`/api${job.image}`} alt="" fill sizes="80px" unoptimized className="object-cover" />
+          ) : logo ? (
+            <Image src={logo} alt={job.company ?? ""} fill sizes="80px" className="object-contain p-2" />
           ) : (
             <span className="px-1 text-center font-display text-[10px] leading-tight font-bold text-ink [overflow-wrap:anywhere]">{job.company ?? "Đại Việt"}</span>
           )}

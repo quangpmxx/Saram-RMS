@@ -17,6 +17,7 @@ const RESERVED = new Set([
   "lien-he",
   "tin-tuc",
   "dang-nhap",
+  "fix",
   "lam-moi-noi-dung",
   "quan-ly",
   "api",

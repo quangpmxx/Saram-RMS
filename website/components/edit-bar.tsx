@@ -147,7 +147,7 @@ function applyTheme(th: Theme) {
 }
 
 /**
- * Thanh "Chế độ sửa" — chỉ hiện trên máy đã đăng nhập ở /dang-nhap.
+ * Thanh "Chế độ sửa" — chỉ hiện trên máy đã đăng nhập ở /fix.
  * - Bấm chữ [data-k]: gõ sửa; thanh kiểu chữ (cỡ, màu, đậm/nghiêng/gạch chân, căn lề, ẩn); chữ trên nút
  *   [data-href-k] → đổi đường dẫn + kiểu nút.
  * - Bấm ảnh [data-img-k]: đổi ảnh, lấp đầy/vừa khung, dời, phóng to.
@@ -746,7 +746,7 @@ export function EditBar({ site, theme, pages }: { site: SiteProps; theme: Theme;
     const can = await checkCanEdit().catch(() => false);
     if (can === null) {
       writeEditorFlag(false);
-      window.location.href = "/dang-nhap";
+      window.location.href = "/fix";
       return;
     }
     if (!can) {
