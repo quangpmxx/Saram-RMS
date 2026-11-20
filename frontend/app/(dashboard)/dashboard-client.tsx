@@ -399,7 +399,7 @@ export function DashboardClient({
   // Dashboard) — chỉ đánh dấu "cũ" và tải đúng 1 lần khi người dùng quay lại tab.
   const staleWhileHiddenRef = useRef(false);
   // Giờ làm có ghi chú/đổi trạng thái liên tục → mỗi máy đang mở Dashboard tải lại tối đa
-  // 1 lần / 5 giây (4 API nặng), tránh máy chủ bận liên tục làm chậm thao tác của Sale.
+  // 1 lần / phút (4 API nặng, user duyệt 2026-11-20), tránh máy chủ bận liên tục làm chậm thao tác của Sale.
   const lastInvalidateRefreshRef = useRef(0);
   const silentRefreshLatestRef = useRef(silentRefresh);
   useEffect(() => {
@@ -408,7 +408,7 @@ export function DashboardClient({
   function scheduleInvalidateRefresh() {
     // Đã hẹn 1 lượt tải thì các sự kiện sau gộp vào lượt đó (lượt tải lấy dữ liệu mới nhất lúc chạy).
     if (invalidateTimerRef.current) return;
-    const wait = Math.max(800, 5000 - (Date.now() - lastInvalidateRefreshRef.current));
+    const wait = Math.max(800, 60_000 - (Date.now() - lastInvalidateRefreshRef.current));
     invalidateTimerRef.current = setTimeout(() => {
       invalidateTimerRef.current = null;
       if (document.visibilityState === "hidden") {

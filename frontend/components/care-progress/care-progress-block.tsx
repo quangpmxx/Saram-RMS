@@ -386,17 +386,26 @@ export function CareProgressBlock({
   // Tab đang ẩn thì không tải lại (API nặng, mỗi ghi chú của bất kỳ ai đều phát tín hiệu) —
   // đánh dấu cũ, mở lại tab thì tải 1 lần.
   const staleWhileHiddenRef = useRef(false);
+  // Tải lại theo realtime tối đa 1 lần / phút (API nặng, user duyệt 2026-11-20); các sự kiện
+  // trong lúc chờ gộp vào lượt đã hẹn, lượt tải dùng bộ lọc mới nhất.
+  const lastReloadRef = useRef(0);
+  const queryKeyRef = useRef(queryKey);
+  useEffect(() => {
+    queryKeyRef.current = queryKey;
+  }, [queryKey]);
   const scheduleReload = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
+    if (timerRef.current) return;
+    const wait = Math.max(REALTIME_DEBOUNCE_MS, 60_000 - (Date.now() - lastReloadRef.current));
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       if (document.visibilityState === "hidden") {
         staleWhileHiddenRef.current = true;
         return;
       }
-      void load(queryKey);
-    }, REALTIME_DEBOUNCE_MS);
-  }, [load, queryKey]);
+      lastReloadRef.current = Date.now();
+      void load(queryKeyRef.current);
+    }, wait);
+  }, [load]);
   useEffect(() => {
     function handleVisibility() {
       if (document.visibilityState === "visible" && staleWhileHiddenRef.current) {
