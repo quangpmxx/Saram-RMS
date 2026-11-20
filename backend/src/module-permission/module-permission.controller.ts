@@ -44,6 +44,10 @@ export class ModulePermissionController {
       label: c.label,
       hint: c.hint ?? null,
       default_roles: c.defaultRoles,
+      // Rà soát 2026-11-20: vai trò dùng được (null = mọi vai trò), quyền cần kèm, mặc định có thêm.
+      applicable_roles: c.applicableRoles ?? null,
+      requires: c.requires ?? [],
+      also_default_when: c.alsoDefaultWhen ?? null,
     }));
   }
 

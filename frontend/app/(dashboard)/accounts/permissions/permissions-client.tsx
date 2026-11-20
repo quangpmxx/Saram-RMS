@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import {
   ACCOUNT_ROLE_LABEL,
   type Account,
+  type AccountRole,
   type AccountModulePermissions,
   type CapabilitySummary,
   type ModulePermissionLevel,
@@ -38,6 +39,59 @@ const CAP_OPTIONS: Array<{ value: CapChoice; label: string }> = [
 const OTHER_MODULE: ModulePermissionSummary = { code: "other", label: "Khác (thông báo, nhóm)" };
 
 const capOf = (overrides: Record<string, CapChoice> | undefined, code: string): CapChoice => overrides?.[code] ?? null;
+
+/**
+ * Rà soát phân quyền (2026-11-20): các cặp quyền "nhóm mình / toàn công ty" gộp thành 1 ô Phạm vi
+ * (Của mình / Nhóm mình / Toàn công ty). Mức không hợp với vai trò thì không hiện (vd Sale không có
+ * "Toàn công ty" ở data lao động — nhóm nào chỉ biết data nhóm ấy).
+ */
+const SCOPE_PAIRS: Array<{ label: string; team: string; all: string }> = [
+  { label: "Xem data lao động", team: "lead.view_team", all: "lead.view_all" },
+  { label: "Lọc số liệu Dashboard theo nhóm/nhân viên", team: "dashboard.filter_team", all: "dashboard.filter_all" },
+  { label: "Xem hiệu quả từng nhân viên (Dashboard)", team: "dashboard.perf_team", all: "dashboard.perf_all" },
+  { label: "Xem báo cáo hằng ngày", team: "report.view_team", all: "report.view_all" },
+  { label: "Xem phạt báo cáo", team: "penalty.view_team", all: "penalty.view_all" },
+  { label: "Xem chấm công", team: "attendance.view_team", all: "attendance.view_all" },
+  { label: "Nhập/xem doanh số", team: "sales.team", all: "sales.all" },
+  { label: "Xem lịch hẹn", team: "calendar.view_team", all: "calendar.view_all" },
+];
+const PAIRED_CODES = new Set(SCOPE_PAIRS.flatMap((p) => [p.team, p.all]));
+type Scope = "role" | "mine" | "team" | "all";
+
+/** Bộ máy tính quyền hiệu lực trên bản nháp — khớp can() ở backend (capability-catalog.ts). */
+function makeCapEngine(capabilities: CapabilitySummary[], role: AccountRole) {
+  const byCode = new Map(capabilities.map((c) => [c.code, c]));
+  const applicable = (code: string) => {
+    const roles = byCode.get(code)?.applicable_roles;
+    return !roles || roles.includes(role);
+  };
+  function roleDefault(code: string, draft: Record<string, CapChoice>): boolean {
+    const cap = byCode.get(code);
+    if (!cap || !applicable(code)) return false;
+    if (cap.default_roles.includes(role)) return true;
+    const extra = cap.also_default_when;
+    return Boolean(extra && extra.role === role && effective(extra.cap, draft));
+  }
+  function effective(code: string, draft: Record<string, CapChoice>): boolean {
+    if (!applicable(code)) return false;
+    return capOf(draft, code) ?? roleDefault(code, draft);
+  }
+  /** Đặt 1 lựa chọn + tự bật quyền cần kèm / tự tắt quyền phụ thuộc. */
+  function withChoice(draft: Record<string, CapChoice>, code: string, value: CapChoice): Record<string, CapChoice> {
+    let next = { ...draft, [code]: value };
+    if (effective(code, next)) {
+      for (const req of byCode.get(code)?.requires ?? []) {
+        if (applicable(req) && !effective(req, next)) next = withChoice(next, req, true);
+      }
+    } else {
+      for (const dep of capabilities) {
+        if (dep.requires.includes(code) && effective(dep.code, next)) next = withChoice(next, dep.code, false);
+      }
+    }
+    return next;
+  }
+  return { byCode, applicable, roleDefault, effective, withChoice };
+}
 
 /**
  * Dự án phụ — nâng cấp toàn diện (2026-07-24, yêu cầu trực tiếp người
@@ -117,10 +171,22 @@ export function PermissionsClient({
   }, [selectedId]);
 
   const selectedAccount = accounts.find((a) => a.id === selectedId) ?? null;
+  const engine = useMemo(
+    () => (selectedAccount ? makeCapEngine(capabilities, selectedAccount.role) : null),
+    [capabilities, selectedAccount],
+  );
+  /** Chỉnh riêng cũ trên quyền không hợp vai trò — máy chủ đã bỏ qua; bấm Lưu thì dọn luôn. */
+  const staleCaps =
+    detail === null || !engine
+      ? []
+      : capabilities.filter((c) => !engine.applicable(c.code) && capOf(detail.capability_overrides, c.code) !== null);
   const changedCaps =
     detail === null ? [] : capabilities.filter((c) => capOf(capDraft, c.code) !== capOf(detail.capability_overrides, c.code));
   const isDirty =
-    detail !== null && (Object.keys(draft).some((code) => draft[code] !== detail.permissions[code]) || changedCaps.length > 0);
+    detail !== null &&
+    (Object.keys(draft).some((code) => draft[code] !== detail.permissions[code]) ||
+      changedCaps.length > 0 ||
+      staleCaps.length > 0);
 
   async function handleSave() {
     if (!selectedId) return;
@@ -134,7 +200,10 @@ export function PermissionsClient({
         method: "PUT",
         body: JSON.stringify({
           permissions: draft,
-          capabilities: Object.fromEntries(changedCaps.map((c) => [c.code, capOf(capDraft, c.code)])),
+          capabilities: Object.fromEntries([
+            ...staleCaps.map((c) => [c.code, null]),
+            ...changedCaps.filter((c) => !staleCaps.includes(c)).map((c) => [c.code, capOf(capDraft, c.code)]),
+          ]),
         }),
       });
       setDetail((prev) =>
@@ -240,6 +309,12 @@ export function PermissionsClient({
               </Button>
             </div>
 
+            {!loading && staleCaps.length > 0 && (
+              <p className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                Có {staleCaps.length} quyền chỉnh riêng cũ không hợp với vai trò {ACCOUNT_ROLE_LABEL[selectedAccount.role]} (
+                {staleCaps.map((c) => c.label).join("; ")}) — đã không còn tác dụng. Bấm &ldquo;Lưu phân quyền&rdquo; để dọn.
+              </p>
+            )}
             {loading ? (
               <div className="p-8 text-center text-sm text-slate-400">Đang tải...</div>
             ) : (
@@ -247,7 +322,15 @@ export function PermissionsClient({
                 {sections.map((module) => {
                   const isOther = module.code === OTHER_MODULE.code;
                   const level = draft[module.code] ?? "none";
-                  const caps = capsByModule.get(module.code) ?? [];
+                  const moduleCaps = capsByModule.get(module.code) ?? [];
+                  const scopes = SCOPE_PAIRS.filter(
+                    (p) =>
+                      engine &&
+                      moduleCaps.some((c) => c.code === p.team || c.code === p.all) &&
+                      (engine.applicable(p.team) || engine.applicable(p.all)),
+                  );
+                  // Quyền không hợp vai trò thì ẩn hẳn; cặp nhóm/toàn công ty hiện ở ô Phạm vi.
+                  const caps = moduleCaps.filter((c) => !PAIRED_CODES.has(c.code) && engine?.applicable(c.code));
                   return (
                     <div key={module.code} className="p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -269,17 +352,73 @@ export function PermissionsClient({
                           </div>
                         )}
                       </div>
-                      {caps.length > 0 && (isOther || level !== "none") && (
+                      {engine && caps.length + scopes.length > 0 && (isOther || level !== "none") && (
                         <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100 bg-slate-50/60">
                           {level === "view" && !isOther && (
                             <p className="px-3 py-2 text-xs text-amber-600">
                               Trang đang để &ldquo;Chỉ xem&rdquo;: mọi thao tác thêm/sửa/xoá ở trang này bị chặn dù quyền nhỏ cho phép.
                             </p>
                           )}
+                          {scopes.map((pair) => {
+                            const teamOk = engine.applicable(pair.team);
+                            const allOk = engine.applicable(pair.all);
+                            const scopeOf = (d: Record<string, CapChoice>): Exclude<Scope, "role"> =>
+                              engine.effective(pair.all, d) ? "all" : engine.effective(pair.team, d) ? "team" : "mine";
+                            const isRole =
+                              (!teamOk || capOf(capDraft, pair.team) === null) && (!allOk || capOf(capDraft, pair.all) === null);
+                            const current: Scope = isRole ? "role" : scopeOf(capDraft);
+                            const roleScope = scopeOf({ ...capDraft, [pair.team]: null, [pair.all]: null });
+                            const SCOPE_LABEL = { mine: "Của mình", team: "Nhóm mình", all: "Toàn công ty" } as const;
+                            const options: Scope[] = ["role", "mine", ...(teamOk ? (["team"] as const) : []), ...(allOk ? (["all"] as const) : [])];
+                            function pick(scope: Scope) {
+                              setCapDraft((prev) => {
+                                const set = (d: Record<string, CapChoice>, code: string, ok: boolean, v: CapChoice) =>
+                                  ok ? engine!.withChoice(d, code, v) : d;
+                                if (scope === "role") return set(set(prev, pair.all, allOk, null), pair.team, teamOk, null);
+                                if (scope === "mine") return set(set(prev, pair.all, allOk, false), pair.team, teamOk, false);
+                                if (scope === "team") return set(set(prev, pair.all, allOk, false), pair.team, teamOk, true);
+                                return set(set(prev, pair.team, teamOk, true), pair.all, allOk, true);
+                              });
+                            }
+                            return (
+                              <div key={pair.all} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                                <div className="min-w-0 flex-1 basis-60">
+                                  <p className="text-sm text-slate-700">
+                                    <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-sky-500 align-middle" />
+                                    {pair.label}: <span className="font-medium">{SCOPE_LABEL[scopeOf(capDraft)]}</span>
+                                  </p>
+                                  {!allOk && (
+                                    <p className="mt-0.5 pl-3.5 text-xs text-slate-400">
+                                      Vai trò này làm theo nhóm — không mở được toàn công ty
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white text-xs">
+                                  {options.map((scope) => (
+                                    <button
+                                      key={scope}
+                                      type="button"
+                                      onClick={() => pick(scope)}
+                                      className={cn(
+                                        "border-l border-slate-200 px-2.5 py-1 transition-colors first:border-l-0",
+                                        current !== scope && "text-slate-600 hover:bg-slate-50",
+                                        current === scope && (scope === "role" ? "bg-slate-700 text-white" : "bg-sky-600 text-white"),
+                                      )}
+                                    >
+                                      {scope === "role" ? `Theo vai trò (${SCOPE_LABEL[roleScope]})` : SCOPE_LABEL[scope]}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
                           {caps.map((cap) => {
                             const choice = capOf(capDraft, cap.code);
-                            const roleDefault = cap.default_roles.includes(selectedAccount.role);
-                            const effective = choice ?? roleDefault;
+                            const roleDefault = engine.roleDefault(cap.code, capDraft);
+                            const effective = engine.effective(cap.code, capDraft);
+                            const reqLabels = cap.requires
+                              .filter((r) => engine.applicable(r))
+                              .map((r) => engine.byCode.get(r)?.label ?? r);
                             return (
                               <div key={cap.code} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                                 <div className="min-w-0 flex-1 basis-60">
@@ -294,6 +433,9 @@ export function PermissionsClient({
                                     {cap.label}
                                   </p>
                                   {cap.hint && <p className="mt-0.5 pl-3.5 text-xs text-slate-400">{cap.hint}</p>}
+                                  {reqLabels.length > 0 && (
+                                    <p className="mt-0.5 pl-3.5 text-xs text-slate-400">Tự bật kèm: {reqLabels.join(", ")}</p>
+                                  )}
                                 </div>
                                 <div className="flex shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white text-xs">
                                   {CAP_OPTIONS.map((option) => {
@@ -302,7 +444,7 @@ export function PermissionsClient({
                                       <button
                                         key={String(option.value)}
                                         type="button"
-                                        onClick={() => setCapDraft((prev) => ({ ...prev, [cap.code]: option.value }))}
+                                        onClick={() => setCapDraft((prev) => engine.withChoice(prev, cap.code, option.value))}
                                         className={cn(
                                           "border-l border-slate-200 px-2.5 py-1 transition-colors first:border-l-0",
                                           !active && "text-slate-600 hover:bg-slate-50",

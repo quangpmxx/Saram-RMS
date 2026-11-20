@@ -58,6 +58,12 @@ export interface CapabilitySummary {
   label: string;
   hint: string | null;
   default_roles: AccountRole[];
+  /** Vai trò dùng được quyền (null = mọi vai trò) — ngoài danh sách thì ẩn ở trang Phân quyền. */
+  applicable_roles: AccountRole[] | null;
+  /** Quyền cần có kèm (tự bật kèm / tự tắt theo). */
+  requires: string[];
+  /** Mặc định có thêm cho vai trò `role` khi có quyền `cap`. */
+  also_default_when: { role: AccountRole; cap: string } | null;
 }
 
 /**
