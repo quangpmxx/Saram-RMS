@@ -5,7 +5,7 @@ import { useRememberedFilters } from "@/lib/remembered-filters";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Download, Loader2, Pencil, RotateCcw, Save, StickyNote } from "lucide-react";
+import { Download, Pencil, StickyNote } from "lucide-react";
 import { PayslipButton } from "@/components/payroll/payslip-button";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -530,7 +530,7 @@ export function AttendanceClient({
   const [grid, setGrid] = useState(initialGrid);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [noteEditor, setNoteEditor] = useState<NoteEditorState | null>(null);
   /**
@@ -551,6 +551,17 @@ export function AttendanceClient({
   const [savingPosition, setSavingPosition] = useState(false);
 
   const [pending, setPending] = useState<Map<string, PendingCell | null>>(new Map());
+  /** Bản pending mới nhất — dùng khi lưu nốt lúc rời trang/đổi bộ lọc. */
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  /** Lần lưu tự động bị lỗi với đúng bản pending này → không tự thử lại cho tới khi có thay đổi mới. */
+  const failedPendingRef = useRef<Map<string, PendingCell | null> | null>(null);
+  /**
+   * Ctrl+Z: mỗi thao tác (chấm 1 ô / cả cột / xoá / ghi chú) là 1 mục — lưu giá trị TRƯỚC khi đổi
+   * của các ô bị ảnh hưởng. undoBatchRef gom các ô trong 1 thao tác, commitUndo() đẩy vào ngăn xếp.
+   */
+  const undoStackRef = useRef<Map<string, PendingCell | null>[]>([]);
+  const undoBatchRef = useRef<Map<string, PendingCell | null> | null>(null);
 
   /**
    * Ghim cố định thanh tiêu đề bảng khi cuộn (yêu cầu trực tiếp người dùng,
@@ -604,14 +615,14 @@ export function AttendanceClient({
   const isDirty = pending.size > 0;
 
   useEffect(() => {
-    if (!isDirty) return;
+    if (!isDirty && !saving) return;
     function handleBeforeUnload(event: BeforeUnloadEvent) {
       event.preventDefault();
       event.returnValue = "";
     }
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
+  }, [isDirty, saving]);
 
   const savedByKey = useMemo(() => {
     const map = new Map<string, PendingCell>();
@@ -725,10 +736,12 @@ export function AttendanceClient({
     includeInactive?: boolean;
     office?: Office;
   }) {
-    if (isDirty) {
-      const proceed = window.confirm("Bạn có thay đổi chưa lưu. Chuyển bộ lọc sẽ mất các thay đổi này — tiếp tục?");
+    // Tự lưu nốt thay đổi trước khi đổi bảng; chỉ hỏi khi lưu lỗi.
+    if (pendingRef.current.size > 0 && !(await handleSave())) {
+      const proceed = window.confirm("Có thay đổi lưu không được. Chuyển bộ lọc sẽ bỏ các thay đổi này — tiếp tục?");
       if (!proceed) return;
     }
+    undoStackRef.current = [];
     const nextYear = overrides?.year ?? year;
     const nextMonth = overrides?.month ?? month;
     const nextTeamId = overrides?.teamId ?? teamId;
@@ -843,7 +856,43 @@ export function AttendanceClient({
     }
   }
 
+  /** Ghi lại giá trị trước khi đổi của 1 ô vào thao tác đang gom (chỉ lần đầu trong thao tác). */
+  function rememberForUndo(accountId: string, date: string) {
+    const key = cellKey(accountId, date);
+    if (!undoBatchRef.current) undoBatchRef.current = new Map();
+    if (!undoBatchRef.current.has(key)) undoBatchRef.current.set(key, effectiveCell(accountId, date));
+  }
+
+  function commitUndo() {
+    const batch = undoBatchRef.current;
+    undoBatchRef.current = null;
+    if (batch && batch.size > 0) {
+      undoStackRef.current.push(batch);
+      if (undoStackRef.current.length > 100) undoStackRef.current.shift();
+    }
+  }
+
+  /** Ctrl+Z: trả các ô của thao tác gần nhất về giá trị cũ — rồi tự lưu như thao tác thường. */
+  function undoLast() {
+    const batch = undoStackRef.current.pop();
+    if (!batch) {
+      toast.warning("Không còn thao tác để hoàn tác.");
+      return;
+    }
+    setPending((prev) => {
+      const next = new Map(prev);
+      for (const [key, before] of batch) {
+        if (before) next.set(key, before);
+        else if (savedByKey.has(key)) next.set(key, null);
+        else next.delete(key);
+      }
+      return next;
+    });
+
+  }
+
   function setCellLocal(accountId: string, date: string, status: AttendanceStatus) {
+    rememberForUndo(accountId, date);
     // Giữ nguyên ghi chú đã có khi chỉ đổi trạng thái — tránh mất ghi chú
     // vừa nhập chỉ vì đổi ý trạng thái (yêu cầu trực tiếp người dùng, 2026-07-15).
     const existingNote = effectiveCell(accountId, date)?.note;
@@ -857,6 +906,7 @@ export function AttendanceClient({
   function setCellNoteLocal(accountId: string, date: string, note: string) {
     const current = effectiveCell(accountId, date);
     if (!current) return;
+    rememberForUndo(accountId, date);
     setPending((prev) => {
       const next = new Map(prev);
       next.set(cellKey(accountId, date), { status: current.status, note: note.trim() ? note.trim() : undefined });
@@ -866,6 +916,7 @@ export function AttendanceClient({
 
   function clearCellLocal(accountId: string, date: string) {
     const key = cellKey(accountId, date);
+    if (effectiveCell(accountId, date)) rememberForUndo(accountId, date);
     setPending((prev) => {
       const next = new Map(prev);
       if (savedByKey.has(key)) {
@@ -913,6 +964,7 @@ export function AttendanceClient({
         toast.warning(`Đã bỏ qua ${skipped} nhân viên do hết ngày phép.`);
       }
     }
+    commitUndo();
     setMenu(null);
   }
 
@@ -925,6 +977,7 @@ export function AttendanceClient({
         clearCellLocal(employee.account_id, menu.date);
       }
     }
+    commitUndo();
     setMenu(null);
   }
 
@@ -944,17 +997,16 @@ export function AttendanceClient({
   function handleNoteSave(note: string) {
     if (!noteEditor) return;
     setCellNoteLocal(noteEditor.accountId, noteEditor.date, note);
+    commitUndo();
     setNoteEditor(null);
   }
 
-  function handleDiscardPending() {
-    setPending(new Map());
-  }
-
-  async function handleSave() {
+  /** Lưu các thay đổi đang chờ; trả true nếu lưu xong (hoặc không có gì để lưu). */
+  async function handleSave(): Promise<boolean> {
+    const sent = pendingRef.current;
     const upserts: AttendanceBulkSavePayload["upserts"] = [];
     const deletes: AttendanceBulkSavePayload["deletes"] = [];
-    for (const [key, cell] of pending) {
+    for (const [key, cell] of sent) {
       const separatorIndex = key.indexOf("__");
       const accId = key.slice(0, separatorIndex);
       const date = key.slice(separatorIndex + 2);
@@ -964,7 +1016,7 @@ export function AttendanceClient({
         upserts.push({ account_id: accId, date, status: cell.status, note: cell.note });
       }
     }
-    if (upserts.length === 0 && deletes.length === 0) return;
+    if (upserts.length === 0 && deletes.length === 0) return true;
 
     setSaving(true);
     try {
@@ -983,17 +1035,61 @@ export function AttendanceClient({
       // Số liệu vừa đổi — bỏ các bảng đã nhớ tạm, chỉ giữ bảng vừa tải lại.
       gridCacheRef.current.clear();
       if (currentGridKeyRef.current) gridCacheRef.current.set(currentGridKeyRef.current, nextGrid);
-      setPending(new Map());
-      setLastSavedAt(new Date());
-      toast.success("Đã lưu chấm công thành công.");
+      // Chỉ bỏ những ô đã gửi mà chưa bị đổi tiếp trong lúc đang lưu (đổi tiếp thì lần sau lưu tiếp).
+      setPending((prev) => {
+        const next = new Map(prev);
+        for (const [key, cell] of sent) {
+          if (next.has(key) && next.get(key) === cell) next.delete(key);
+        }
+        return next;
+      });
+      failedPendingRef.current = null;
+      return true;
     } catch (error) {
       // Hiện đúng lý do cụ thể từ backend (VD: hết ngày phép còn lại) thay
       // vì thông báo chung chung — yêu cầu trực tiếp người dùng, 2026-07-15.
-      toast.error(error instanceof ApiError ? error.message : "Lưu chấm công thất bại, vui lòng thử lại.");
+      failedPendingRef.current = sent;
+      toast.error(
+        `${error instanceof ApiError ? error.message : "Lưu chấm công thất bại."} Bấm Ctrl+Z để hoàn tác hoặc chấm lại.`,
+      );
+      return false;
     } finally {
       setSaving(false);
     }
   }
+
+  // Tự lưu: chấm xong ~0,6 giây là lưu (gom các thao tác liền nhau thành 1 lần gửi).
+  useEffect(() => {
+    if (pending.size === 0 || saving || failedPendingRef.current === pending) return;
+    const timer = setTimeout(() => void handleSave(), 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, saving]);
+
+  // Rời trang trong lúc còn thay đổi chưa kịp gửi → gửi nốt.
+  const saveRef = useRef(handleSave);
+  saveRef.current = handleSave;
+  useEffect(() => {
+    return () => {
+      if (pendingRef.current.size > 0) void saveRef.current();
+    };
+  }, []);
+
+  // Ctrl+Z (Cmd+Z trên Mac) hoàn tác thao tác chấm gần nhất — trừ khi đang gõ trong ô nhập.
+  const undoRef = useRef(undoLast);
+  undoRef.current = undoLast;
+  useEffect(() => {
+    if (!grid.can_edit) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== "z") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      event.preventDefault();
+      undoRef.current();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [grid.can_edit]);
 
   const totalByEmployee = useMemo(() => {
     const totals = new Map<string, number>();
@@ -1277,39 +1373,12 @@ export function AttendanceClient({
                   Tải Excel
                 </button>
               </div>
-              {isDirty && (
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                  Chưa lưu {pending.size} thay đổi
-                </span>
-              )}
-              {!isDirty && lastSavedAt && (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
-                  Đã lưu
+              {!saving && isDirty && failedPendingRef.current === pending && (
+                <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                  Lưu lỗi {pending.size} ô — Ctrl+Z để hoàn tác
                 </span>
               )}
             </div>
-            {grid.can_edit && (
-              // Yêu cầu người dùng: "Lưu thay đổi" to hơn đúng 1 cỡ so với
-              // trước (xs -> sm), "Xóa thay đổi chưa lưu" giữ nguyên bé (nút
-              // tự viết riêng, không sửa components/ui/button.tsx để tránh
-              // ảnh hưởng mọi nút khác trong toàn app).
-              <div className="flex flex-col gap-1">
-                <Button type="button" variant="primary" size="sm" disabled={!isDirty || saving} onClick={() => void handleSave()}>
-                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} /> : <Save className="h-3.5 w-3.5" strokeWidth={2} />}
-                  Lưu thay đổi
-                </Button>
-                <button
-                  type="button"
-                  disabled={!isDirty}
-                  onClick={handleDiscardPending}
-                  className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RotateCcw className="h-2.5 w-2.5" strokeWidth={2} />
-                  Xóa thay đổi chưa lưu
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </Card>
@@ -1486,9 +1555,15 @@ export function AttendanceClient({
                           cell={effectiveCell(employee.account_id, day.date)}
                           isSunday={day.is_sunday}
                           canEdit={grid.can_edit}
-                          onMark={() => setCellLocal(employee.account_id, day.date, "present")}
+                          onMark={() => {
+                            setCellLocal(employee.account_id, day.date, "present");
+                            commitUndo();
+                          }}
                           onOpenMenu={(rect) => openMenuForCell(employee.account_id, day.date, rect)}
-                          onClear={() => clearCellLocal(employee.account_id, day.date)}
+                          onClear={() => {
+                            clearCellLocal(employee.account_id, day.date);
+                            commitUndo();
+                          }}
                         />
                       </td>
                     ))}
