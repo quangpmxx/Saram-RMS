@@ -662,7 +662,7 @@ export function CandidateDetailClient({
       return;
     }
     await saveAllChanges();
-    await clientApi(`/candidate/${candidate.id}/note`, {
+    const created = await clientApi<Note>(`/candidate/${candidate.id}/note`, {
       method: "POST",
       // Nhãn của ghi chú = đúng tình trạng/kết quả đang chọn ở lần chăm sóc
       // này (để trống = không gắn), không lấy giá trị cũ của data.
@@ -678,7 +678,8 @@ export function CandidateDetailClient({
     setCallResultId("");
     setZaloFriendStatusId("");
     savedCallInfoRef.current = { ...savedCallInfoRef.current, callStatusId: "", callResultId: "" };
-    await refreshNotes();
+    // Dùng luôn ghi chú máy chủ trả về (ghi chú xếp cũ → mới nên thêm cuối) — bỏ 1 lượt tải lại cả danh sách.
+    setNotes((prev) => (prev.some((n) => n.id === created.id) ? prev : [...prev, created]));
   }
 
   function handleStartEdit(note: Note) {

@@ -383,9 +383,29 @@ export function CareProgressBlock({
   }, [load, queryKey]);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tab đang ẩn thì không tải lại (API nặng, mỗi ghi chú của bất kỳ ai đều phát tín hiệu) —
+  // đánh dấu cũ, mở lại tab thì tải 1 lần.
+  const staleWhileHiddenRef = useRef(false);
   const scheduleReload = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => void load(queryKey), REALTIME_DEBOUNCE_MS);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      if (document.visibilityState === "hidden") {
+        staleWhileHiddenRef.current = true;
+        return;
+      }
+      void load(queryKey);
+    }, REALTIME_DEBOUNCE_MS);
+  }, [load, queryKey]);
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible" && staleWhileHiddenRef.current) {
+        staleWhileHiddenRef.current = false;
+        void load(queryKey);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [load, queryKey]);
   useEffect(
     () => () => {
