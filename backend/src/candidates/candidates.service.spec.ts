@@ -1519,7 +1519,11 @@ describe('CandidatesService', () => {
           isHeld: false,
           notes: { none: { isDeleted: false } },
         }),
-        data: { assignedTeamId: 'team-2', assignedToId: null, assignedAt: null },
+        data: {
+          assignedTeamId: 'team-2',
+          assignedToId: null,
+          assignedAt: null,
+        },
       });
       expect(leadNotice.notifyAssigned).not.toHaveBeenCalled();
     });

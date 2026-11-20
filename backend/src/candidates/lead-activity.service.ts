@@ -87,17 +87,20 @@ const LOG_ENTITY_TYPES = [
   'callback_schedule',
 ] as const;
 
+// Tạo 1 lần dùng lại — tạo Intl.DateTimeFormat mỗi lần gọi rất tốn CPU.
+const VN_DATE_TIME_FORMAT = new Intl.DateTimeFormat('vi-VN', {
+  timeZone: TIMEZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+});
+
 function formatVnDateTime(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: TIMEZONE,
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-  }).format(date);
+  return VN_DATE_TIME_FORMAT.format(date);
 }
 
 function quote(text: string | null, max = 160): string {

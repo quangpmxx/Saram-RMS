@@ -32,4 +32,3 @@ Nhánh riêng mỗi tính năng; làm hết các việc đang giao rồi mới g
 - `README.md` còn mô tả Care-pool/Zalo (đã gỡ 2026-07-24) và chưa nhắc các module mới (Đưa đón, Chấm công…).
 - `docs/09` mục 10.10 nói thông báo qua Zalo/không có chuông; thực tế đã gỡ Zalo và có chuông trong app.
 - `docs/09` mục 10.1 (Care-pool 30 phút tự động) đã cũ so với code.
-- `docs.zip` ở gốc repo: chưa rõ còn cần không.

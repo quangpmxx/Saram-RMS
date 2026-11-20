@@ -6,6 +6,17 @@ import { toNotificationResponse } from './dto/notification-response.dto';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Giờ hiển thị trong nội dung thông báo — luôn theo giờ Việt Nam, không phụ thuộc múi giờ của máy chủ. */
+const VN_DATE_TIME_PARTS = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 /**
  * Yêu cầu trực tiếp người dùng (2026-07-24): đã gỡ bỏ hẳn worker nhắc lịch
  * qua Zalo (Phase 8, dùng tham số cấu hình NOTIFICATION_LEAD_MINUTES) —
@@ -30,8 +41,13 @@ export class NotificationScannerService {
    * (frontend) tự phát hiện thông báo mới qua GET /notification, không cần
    * API riêng.
    */
+  /** Chặn 2 lượt quét chồng nhau khi DB chậm (lượt trước chưa xong) — tránh tạo trùng thông báo. */
+  private scanning = false;
+
   @Interval(30 * 1000)
   async tickInAppCallback(): Promise<void> {
+    if (this.scanning) return;
+    this.scanning = true;
     try {
       const sent = await this.runInAppCallbackTick();
       if (sent > 0) {
@@ -44,6 +60,8 @@ export class NotificationScannerService {
         'Quét thông báo trong ứng dụng (lịch gọi lại) thất bại',
         error as Error,
       );
+    } finally {
+      this.scanning = false;
     }
   }
 
@@ -135,11 +153,14 @@ export class NotificationScannerService {
     phoneNumber: string,
     scheduledAt: Date,
   ): string {
-    const hh = String(scheduledAt.getHours()).padStart(2, '0');
-    const mm = String(scheduledAt.getMinutes()).padStart(2, '0');
-    const dd = String(scheduledAt.getDate()).padStart(2, '0');
-    const MM = String(scheduledAt.getMonth() + 1).padStart(2, '0');
-    const yyyy = scheduledAt.getFullYear();
+    const parts = VN_DATE_TIME_PARTS.formatToParts(scheduledAt);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value ?? '';
+    const hh = part('hour');
+    const mm = part('minute');
+    const dd = part('day');
+    const MM = part('month');
+    const yyyy = part('year');
     return `Bạn có lịch gọi lại lao động ${fullName}, sđt ${phoneNumber} vào lúc ${hh}:${mm} ngày ${dd}/${MM}/${yyyy}`;
   }
 }

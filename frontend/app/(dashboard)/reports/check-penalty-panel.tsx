@@ -224,6 +224,26 @@ export function CheckPenaltyPanel({
     }
   }
 
+  // Job chốt hạn tạo nhiều vi phạm cùng lúc → gộp thành 1 lần tải nền sau 800ms.
+  const silentRefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silentRefetchLatestRef = useRef(silentRefetch);
+  useEffect(() => {
+    silentRefetchLatestRef.current = silentRefetch;
+  });
+  useEffect(
+    () => () => {
+      if (silentRefetchTimerRef.current) clearTimeout(silentRefetchTimerRef.current);
+    },
+    [],
+  );
+  function scheduleSilentRefetch() {
+    if (silentRefetchTimerRef.current) clearTimeout(silentRefetchTimerRef.current);
+    silentRefetchTimerRef.current = setTimeout(() => {
+      silentRefetchTimerRef.current = null;
+      void silentRefetchLatestRef.current();
+    }, 800);
+  }
+
   const [conflictViolationIds, setConflictViolationIds] = useState<Set<string>>(new Set());
 
   function handleAppRealtimeEvent(event: AppRealtimeEvent) {
@@ -244,7 +264,7 @@ export function CheckPenaltyPanel({
     }
 
     if (event.action === "created") {
-      void silentRefetch();
+      scheduleSilentRefetch();
     }
   }
 

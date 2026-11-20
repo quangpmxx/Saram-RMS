@@ -571,6 +571,27 @@ export function CandidatesClient({
     }
   }
 
+  // Nhiều data mới tới dồn dập (Pancake/website tự up) → gộp thành 1 lần tải
+  // lại trang sau 800ms thay vì mỗi data một lần.
+  const silentRefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silentRefetchLatestRef = useRef(silentRefetchCurrentPage);
+  useEffect(() => {
+    silentRefetchLatestRef.current = silentRefetchCurrentPage;
+  });
+  useEffect(
+    () => () => {
+      if (silentRefetchTimerRef.current) clearTimeout(silentRefetchTimerRef.current);
+    },
+    [],
+  );
+  function scheduleSilentRefetch() {
+    if (silentRefetchTimerRef.current) clearTimeout(silentRefetchTimerRef.current);
+    silentRefetchTimerRef.current = setTimeout(() => {
+      silentRefetchTimerRef.current = null;
+      void silentRefetchLatestRef.current();
+    }, 800);
+  }
+
   /**
    * Yêu cầu người dùng — đồng bộ realtime cho danh sách Data lao động (không
    * F5, không polling, không reload toàn trang). Chiến lược: nếu dòng đang
@@ -641,7 +662,7 @@ export function CandidatesClient({
     }
 
     if (event.change_type === "created") {
-      void silentRefetchCurrentPage();
+      scheduleSilentRefetch();
     }
   }
 

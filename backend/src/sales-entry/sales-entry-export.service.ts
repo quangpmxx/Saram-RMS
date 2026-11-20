@@ -222,11 +222,12 @@ export class SalesEntryExportService {
     const arrayBuffer = await workbook.xlsx.writeBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const now = new Date();
+    // Giờ Việt Nam (UTC+7) bất kể múi giờ máy chủ.
+    const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
     const pad = (n: number) => String(n).padStart(2, '0');
-    const filename = `${FILE_PREFIXES[kind]}_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
-      now.getHours(),
-    )}-${pad(now.getMinutes())}.xlsx`;
+    const filename = `${FILE_PREFIXES[kind]}_${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}_${pad(
+      now.getUTCHours(),
+    )}-${pad(now.getUTCMinutes())}.xlsx`;
 
     return { buffer, filename };
   }
