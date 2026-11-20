@@ -94,6 +94,7 @@ export function CandidateDetailClient({
   currentUserRole,
   currentUserTeamId,
   inModal = false,
+  initialOpenLock,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialCandidate: Candidate;
@@ -107,6 +108,8 @@ export function CandidateDetailClient({
   currentUserTeamId: string | null;
   /** Mở dạng popup (bấm từ trong app) thay vì trang riêng — 2026-11-10. */
   inModal?: boolean;
+  /** Khoá "đang ở trong data" đã xin sẵn phía máy chủ lúc tải trang — không phải chờ thêm 1 lượt mới hiện nội dung. */
+  initialOpenLock?: { status: "ok" | "blocked"; message?: string };
 }) {
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): trang Chi tiết ứng viên có RẤT NHIỀU điểm chỉnh sửa rải
@@ -298,13 +301,16 @@ export function CandidateDetailClient({
    * người khác đang ở trong → hiện "<Tên> đang ở trong data" và tự thử lại
    * theo cùng nhịp. Lỗi khác (mất mạng, quyền Chỉ xem) không chặn trang.
    */
-  const [openLock, setOpenLock] = useState<{ status: "checking" | "ok" | "blocked"; message?: string }>({
-    status: "checking",
-  });
+  const [openLock, setOpenLock] = useState<{ status: "checking" | "ok" | "blocked"; message?: string }>(
+    initialOpenLock ?? { status: "checking" },
+  );
+  const lockHeldByServerRef = useRef(initialOpenLock?.status === "ok");
   useEffect(() => {
     const leadId = candidate.id;
     let stopped = false;
-    let held = false;
+    // Máy chủ đã xin khoá lúc tải trang → coi như đang giữ (để rời trang thì nhả); vẫn gọi lại ngay bên dưới
+    // để giữ nhịp, nhưng không còn chặn hiển thị.
+    let held = lockHeldByServerRef.current;
     async function tryLock() {
       try {
         await clientApi(`/candidate/${leadId}/open-lock`, { method: "POST" });
