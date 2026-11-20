@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -13,6 +14,23 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   app.use(cookieParser());
+  // Ghi log lượt gọi chậm (> 500ms) để tìm nguyên nhân lag trên máy chủ thật
+  // (2026-11-20). Không ghi query string (có thể chứa từ khoá tìm kiếm/SĐT).
+  const slowLogger = new Logger('ChamAPI');
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const ms = Number(process.hrtime.bigint() - start) / 1e6;
+      if (ms < 500) return;
+      const path = req.originalUrl
+        .split('?')[0]
+        .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id');
+      slowLogger.warn(
+        `CHAM ${Math.round(ms)}ms ${req.method} ${path} ${res.statusCode}`,
+      );
+    });
+    next();
+  });
   // Header bảo mật cơ bản (rà soát 2026-10-30) — không chặn tải chéo nguồn
   // ảnh đại diện từ frontend nên KHÔNG đặt Cross-Origin-Resource-Policy.
   app.disable('x-powered-by');

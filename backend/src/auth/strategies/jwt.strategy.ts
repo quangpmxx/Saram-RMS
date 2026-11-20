@@ -33,21 +33,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
-    const session = await this.prisma.session.findUnique({
-      where: { id: payload.sessionId },
-    });
+    // Mọi lượt gọi API đều qua đây — đọc phiên + tài khoản song song (1 lượt chờ DB thay vì 2).
+    const [session, account] = await Promise.all([
+      this.prisma.session.findUnique({
+        where: { id: payload.sessionId },
+      }),
+      this.prisma.account.findUnique({
+        where: { id: payload.sub },
+        include: {
+          capabilityOverrides: { select: { code: true, granted: true } },
+        },
+      }),
+    ]);
     if (!session || session.revokedAt) {
       throw new UnauthorizedException(
         'Phiên đăng nhập đã kết thúc, vui lòng đăng nhập lại',
       );
     }
 
-    const account = await this.prisma.account.findUnique({
-      where: { id: payload.sub },
-      include: {
-        capabilityOverrides: { select: { code: true, granted: true } },
-      },
-    });
     if (!account || account.status === 'inactive') {
       throw new UnauthorizedException('Tài khoản không còn hoạt động');
     }
