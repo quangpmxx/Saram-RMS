@@ -200,6 +200,18 @@ export class CandidatesService {
     return toCandidateResponse(lead);
   }
 
+  /** Như findOne() nhưng chỉ kiểm quyền xem, không nạp các bảng liên quan — cho lệnh gọi lặp lại (giữ khoá 15 giây/lần). */
+  async assertCanView(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    if (!lead || lead.deletedAt) {
+      throw new NotFoundException('Không tìm thấy ứng viên');
+    }
+    await this.assertInScope(lead, currentUser);
+  }
+
   /**
    * Mục 2.1, docs/12 (tooltip/popup khi hover badge "Trùng SĐT") + Mục 10.4,
    * docs/09: Admin/Quản lý/MKT xem toàn bộ các lần trùng không giới hạn

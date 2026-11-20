@@ -355,9 +355,15 @@ export function CandidatesClient({
     if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     pendingTimerRef.current = setTimeout(() => {
       pendingTimerRef.current = null;
+      // Tab đang ẩn: không gọi máy chủ, mở lại tab mới tải (mỗi thay đổi data của bất kỳ ai đều kích hoạt).
+      if (document.visibilityState === "hidden") {
+        pendingStaleRef.current = true;
+        return;
+      }
       void refreshPendingTotal();
     }, 800);
   }
+  const pendingStaleRef = useRef(false);
 
   // Tải lần đầu và mỗi khi danh sách đang xem đổi (sau khi chia/nhận/thêm/xoá data thì danh sách được tải lại).
   useEffect(() => {
@@ -588,9 +594,33 @@ export function CandidatesClient({
     if (silentRefetchTimerRef.current) clearTimeout(silentRefetchTimerRef.current);
     silentRefetchTimerRef.current = setTimeout(() => {
       silentRefetchTimerRef.current = null;
+      if (document.visibilityState === "hidden") {
+        listStaleRef.current = true;
+        return;
+      }
       void silentRefetchLatestRef.current();
     }, 800);
   }
+  const listStaleRef = useRef(false);
+  const refreshPendingLatestRef = useRef(refreshPendingTotal);
+  useEffect(() => {
+    refreshPendingLatestRef.current = refreshPendingTotal;
+  });
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState !== "visible") return;
+      if (listStaleRef.current) {
+        listStaleRef.current = false;
+        void silentRefetchLatestRef.current();
+      }
+      if (pendingStaleRef.current) {
+        pendingStaleRef.current = false;
+        void refreshPendingLatestRef.current();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   /**
    * Yêu cầu người dùng — đồng bộ realtime cho danh sách Data lao động (không

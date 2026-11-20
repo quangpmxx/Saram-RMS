@@ -180,7 +180,7 @@ export class LeadActivityService {
     leadId: string,
     currentUser: AuthenticatedUser,
   ): Promise<{ locked: true }> {
-    await this.candidatesService.findOne(leadId, currentUser);
+    await this.candidatesService.assertCanView(leadId, currentUser);
 
     // Ghi và so thời gian đều bằng now() của DB (giờ UTC như Prisma lưu) —
     // không phụ thuộc cách truyền tham số ngày giờ / múi giờ phiên DB.
