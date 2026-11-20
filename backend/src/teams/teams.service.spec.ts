@@ -276,10 +276,19 @@ describe('TeamsService', () => {
 
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          // Sale/Sup Leader + Leader được bật quyền nhận data (lead.claim) — 2026-11-20.
           where: {
             teamId: 'team-1',
-            role: { in: ['sale', 'sup_leader'] },
             status: 'active',
+            OR: [
+              { role: { in: ['sale', 'sup_leader'] } },
+              {
+                role: 'leader',
+                capabilityOverrides: {
+                  some: { code: 'lead.claim', granted: true },
+                },
+              },
+            ],
           },
         }),
       );

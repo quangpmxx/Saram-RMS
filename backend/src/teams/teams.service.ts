@@ -1,4 +1,4 @@
-import { SALE_ROLES } from '../common/utils/sale-roles';
+import { LEAD_RECEIVER_WHERE } from '../common/utils/sale-roles';
 import {
   canSeeAllMembers,
   canSeeAllTeams,
@@ -214,7 +214,8 @@ export class TeamsService {
     // hóa không còn trong danh sách chọn Sale / bộ lọc. Data đang giao cho họ
     // vẫn giữ nguyên, vẫn hiện tên phụ trách ở danh sách data.
     const members = await this.prisma.account.findMany({
-      where: { teamId, role: { in: SALE_ROLES }, status: 'active' },
+      // + Leader được bật quyền nhận data (2026-11-20) — chọn được khi chia/chuyển.
+      where: { teamId, status: 'active', ...LEAD_RECEIVER_WHERE },
       include: { team: { select: { id: true, name: true } } },
       orderBy: { fullName: 'asc' },
     });

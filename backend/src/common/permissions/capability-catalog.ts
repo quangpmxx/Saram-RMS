@@ -131,6 +131,7 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     code: 'lead.claim',
     module: 'candidates',
     label: 'Tự nhận data chờ phân chia',
+    hint: 'Bật cho Leader thì Leader cũng được chia/chuyển data (không vào vòng chia tự động)',
     defaultRoles: ['sale', 'sup_leader'],
   },
   {

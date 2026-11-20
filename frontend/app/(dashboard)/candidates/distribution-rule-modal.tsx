@@ -34,7 +34,8 @@ export function DistributionRuleModal({
 }) {
   const [teamId, setTeamId] = useState(initialTeamId);
   const [loadedMembers, setLoadedMembers] = useState<TeamMember[]>([]);
-  const teamMembers = givenMembers ?? loadedMembers;
+  // Vòng chia tự động chỉ Sale/Sup Leader — Leader được bật nhận data vẫn không vào vòng (2026-11-20).
+  const teamMembers = (givenMembers ?? loadedMembers).filter((m) => isSaleRole(m.role));
   const [rule, setRule] = useState<DistributionRule | null>(null);
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
   const [addAccountId, setAddAccountId] = useState("");

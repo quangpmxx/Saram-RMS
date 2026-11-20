@@ -1,4 +1,4 @@
-import { isSaleRole } from '../common/utils/sale-roles';
+import { isLeadReceiver } from '../common/utils/sale-roles';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
 import {
   BadRequestException,
@@ -1093,7 +1093,12 @@ export class CandidatesService {
     // Chuyển sang NHÓM khác (sửa chia nhầm nhóm — yêu cầu user 2026-11-15):
     // chỉ chọn nhóm, data về "Chờ phân chia" của nhóm mới để Leader tự chia.
     if (dto.new_team_id) {
-      return this.transferToTeam(lead, dto.new_team_id, dto.reason, currentUser);
+      return this.transferToTeam(
+        lead,
+        dto.new_team_id,
+        dto.reason,
+        currentUser,
+      );
     }
     if (!dto.new_account_id) {
       throw new BadRequestException('Vui lòng chọn Sale hoặc nhóm nhận');
@@ -1101,10 +1106,17 @@ export class CandidatesService {
 
     const target = await this.prisma.account.findUnique({
       where: { id: dto.new_account_id },
+      include: {
+        capabilityOverrides: { select: { code: true, granted: true } },
+      },
     });
-    if (!target || target.status !== 'active' || !isSaleRole(target.role)) {
+    if (
+      !target ||
+      target.status !== 'active' ||
+      !isLeadReceiver(target.role, target.capabilityOverrides)
+    ) {
       throw new UnprocessableEntityException(
-        'Chỉ được chuyển cho tài khoản vai trò Sale đang hoạt động',
+        'Chỉ được chuyển cho Sale (hoặc Leader được bật quyền nhận data) đang hoạt động',
       );
     }
     // Mục 3, docs/09: chuyển cho Sale chỉ trong cùng nhóm đang sở hữu lead
@@ -1250,7 +1262,11 @@ export class CandidatesService {
       include: CANDIDATE_INCLUDE,
     });
     const finalResponse = toCandidateResponse(final);
-    this.realtime.emitCandidateChange('transferred', finalResponse, currentUser);
+    this.realtime.emitCandidateChange(
+      'transferred',
+      finalResponse,
+      currentUser,
+    );
     return finalResponse;
   }
 
@@ -1408,13 +1424,16 @@ export class CandidatesService {
 
     const target = await this.prisma.account.findUnique({
       where: { id: accountId },
+      include: {
+        capabilityOverrides: { select: { code: true, granted: true } },
+      },
     });
     if (!target || target.status !== 'active') {
       throw new NotFoundException('Không tìm thấy tài khoản Sale hợp lệ');
     }
-    if (!isSaleRole(target.role)) {
+    if (!isLeadReceiver(target.role, target.capabilityOverrides)) {
       throw new UnprocessableEntityException(
-        'Chỉ được phân chia cho tài khoản vai trò Sale',
+        'Chỉ được phân chia cho Sale (hoặc Leader được bật quyền nhận data)',
       );
     }
 

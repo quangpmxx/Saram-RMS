@@ -13,6 +13,33 @@ export function isSaleRole(role: string): boolean {
 }
 
 /**
+ * Leader được nhận data (2026-11-20): Leader được Admin bật riêng quyền "Tự nhận
+ * data chờ phân chia" (lead.claim — mặc định Leader không có) thì tự nhận + được
+ * chia/chuyển data như Sale. KHÔNG vào vòng chia tự động, KHÔNG vào Kho chăm sóc.
+ */
+export const RECEIVER_LEADER_WHERE = {
+  role: 'leader' as const,
+  capabilityOverrides: { some: { code: 'lead.claim', granted: true } },
+};
+
+/** Điều kiện Prisma: tài khoản nhận được data (Sale/Sup Leader + Leader được bật quyền). */
+export const LEAD_RECEIVER_WHERE = {
+  OR: [{ role: { in: SALE_ROLES } }, RECEIVER_LEADER_WHERE],
+};
+
+/** Tài khoản nhận được data không — `overrides` là quyền chỉnh riêng của chính tài khoản đó. */
+export function isLeadReceiver(
+  role: string,
+  overrides: { code: string; granted: boolean }[] = [],
+): boolean {
+  if (isSaleRole(role)) return true;
+  return (
+    role === 'leader' &&
+    overrides.some((o) => o.code === 'lead.claim' && o.granted)
+  );
+}
+
+/**
  * Người chọn được ở cột "Sale" của Danh sách đưa đón và Nhập doanh số
  * (2026-11-07): Sale/Sup Leader và cả Leader — Leader cũng có thể tự tuyển
  * được người.
