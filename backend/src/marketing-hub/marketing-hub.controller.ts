@@ -3,6 +3,7 @@ import {
   RequireCap,
 } from '../common/decorators/require-cap.decorator';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -23,6 +24,7 @@ import {
   OverviewQueryDto,
   SaveCostThresholdsDto,
   SaveMktSourcesDto,
+  SetAdsetStatusDto,
   SetMktSourceDto,
 } from './dto/marketing-hub.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -43,8 +45,24 @@ export class MarketingHubController {
 
   /** Bảng Data theo camp: số data Pancake từ quảng cáo theo nhân viên + camp, kèm số đỏ/vàng/xanh/đóng. */
   @Get('campaign-data')
-  campaignData(@Query() query: OverviewQueryDto) {
-    return this.service.campaignData(query);
+  campaignData(
+    @Query() query: OverviewQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.campaignData(query, user);
+  }
+
+  /** Bật/tắt 1 ad set trên Facebook (MKT: chỉ TKQC mình phụ trách — kiểm trong service). */
+  @Patch('adsets/:adsetId/status')
+  @RequireCap('mkt.toggle_adset')
+  setAdsetStatus(
+    @Param('adsetId') adsetId: string,
+    @Body() dto: SetAdsetStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!/^d{1,64}$/.test(adsetId))
+      throw new BadRequestException('Mã ad set không hợp lệ');
+    return this.service.setAdsetActive(adsetId, dto.active, user);
   }
 
   /** Nút Làm mới bảng Data theo ad set: tra lại ngay tên ad set còn thiếu với Facebook. */

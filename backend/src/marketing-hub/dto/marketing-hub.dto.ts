@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -46,6 +47,11 @@ export class ConnectAdAccountDto {
 export class ChangeOwnerDto {
   @IsUUID('4')
   owner_id: string;
+}
+
+export class SetAdsetStatusDto {
+  @IsBoolean()
+  active: boolean;
 }
 
 export class SetMktSourceDto {

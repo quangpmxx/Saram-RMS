@@ -1,3 +1,4 @@
+import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { MarketingHubService, balanceOf } from './marketing-hub.service';
 import { decryptToken, encryptToken } from './token-crypto';
@@ -346,6 +347,7 @@ describe('MarketingHubService.today', () => {
 });
 
 describe('MarketingHubService.campaignData', () => {
+  const viewer = { id: 'm1', role: 'manager' } as AuthenticatedUser;
   const row = (owner: string, camp: string | null, total: number) => ({
     owner_id: owner,
     owner_name: owner.toUpperCase(),
@@ -368,12 +370,13 @@ describe('MarketingHubService.campaignData', () => {
         row('u2', 'c2', 4),
       ]);
     const service = build({ $queryRaw: queryRaw });
-    const all = await service.campaignData({
-      from: '2026-11-01',
-      to: '2026-11-02',
-    });
+    const all = await service.campaignData(
+      { from: '2026-11-01', to: '2026-11-02' },
+      viewer,
+    );
     expect(all.items).toHaveLength(3);
     expect(all.items[0]).toEqual({
+      account: null,
       owner: { id: 'u1', full_name: 'U1' },
       no_ad: false,
       adset_id: 'c1',
@@ -384,17 +387,16 @@ describe('MarketingHubService.campaignData', () => {
       green: 3,
       closed: 0,
     });
-    const one = await service.campaignData({
-      from: '2026-11-01',
-      to: '2026-11-02',
-      owner_id: 'u2',
-    });
+    const one = await service.campaignData(
+      { from: '2026-11-01', to: '2026-11-02', owner_id: 'u2' },
+      viewer,
+    );
     expect(one.items.map((i) => i.adset_id)).toEqual(['c2']);
   });
 
   it('ngày bắt đầu sau ngày kết thúc → lỗi', async () => {
     await expect(
-      build({}).campaignData({ from: '2026-11-05', to: '2026-11-01' }),
+      build({}).campaignData({ from: '2026-11-05', to: '2026-11-01' }, viewer),
     ).rejects.toThrow('Ngày bắt đầu');
   });
 });

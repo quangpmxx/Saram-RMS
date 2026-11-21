@@ -23,6 +23,8 @@ import {
   FbAdAccount,
   fetchAccountHealth,
   fetchAdInfo,
+  fetchAdsetStatuses,
+  setAdsetStatus,
   fetchDailySpend,
   listAdAccounts,
 } from './facebook-ads.client';
@@ -896,7 +898,10 @@ export class MarketingHubService implements OnApplicationBootstrap {
    * theo nhân viên + ad set (Nhân viên = người phụ trách TKQC; chưa tra được thì người up);
    * data còn lại (không qua quảng cáo) gộp 1 dòng mỗi người up.
    */
-  async campaignData(q: MarketingPeriodQueryDto & { owner_id?: string }) {
+  async campaignData(
+    q: MarketingPeriodQueryDto & { owner_id?: string },
+    user: AuthenticatedUser,
+  ) {
     const to = q.to ?? vnToday();
     const from = q.from ?? vnDaysAgo(29);
     if (from > to)
@@ -905,6 +910,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
     const end = vnDayRange(to).end;
     const rows = await this.prisma.$queryRaw<
       {
+        account_id: string | null;
+        account_name: string | null;
         owner_id: string;
         owner_name: string;
         no_ad: boolean;
@@ -918,7 +925,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
         closed: number;
       }[]
     >`
-      SELECT o.id AS owner_id, o.full_name AS owner_name,
+      SELECT aa.id AS account_id, aa.name AS account_name,
+             o.id AS owner_id, o.full_name AS owner_name,
              (pc.ad_id IS NULL) AS no_ad, fa.adset_id, MAX(fa.adset_name) AS adset_name,
              -- Chưa tra được ad set → tách dòng theo mã quảng cáo (mã Pancake hiện ở hội thoại).
              CASE WHEN fa.adset_id IS NULL THEN pc.ad_id END AS ad_id,
@@ -950,12 +958,16 @@ export class MarketingHubService implements OnApplicationBootstrap {
          -- Cột lưu giờ UTC không múi giờ: đổi tham số về UTC, không phụ thuộc múi giờ phiên DB.
          AND l.uploaded_at >= (${start}::timestamptz AT TIME ZONE 'UTC')
          AND l.uploaded_at < (${end}::timestamptz AT TIME ZONE 'UTC')
-       GROUP BY o.id, o.full_name, (pc.ad_id IS NULL), fa.adset_id,
+       GROUP BY aa.id, aa.name, o.id, o.full_name, (pc.ad_id IS NULL), fa.adset_id,
                 CASE WHEN fa.adset_id IS NULL THEN pc.ad_id END
-       ORDER BY o.full_name, (pc.ad_id IS NULL), total DESC`;
+       ORDER BY (pc.ad_id IS NULL), (aa.id IS NULL), aa.name, o.full_name, total DESC`;
     const items = rows
       .filter((r) => !q.owner_id || r.owner_id === q.owner_id)
       .map((r) => ({
+        /** TKQC đã liên kết chứa ad set; null = không qua quảng cáo / chưa rõ TKQC. */
+        account: r.account_id
+          ? { id: r.account_id, name: r.account_name ?? '' }
+          : null,
         owner: { id: r.owner_id, full_name: r.owner_name },
         /** true = dòng data không qua quảng cáo (nhập tay/Excel/website/tự nhắn page). */
         no_ad: r.no_ad,
@@ -969,6 +981,125 @@ export class MarketingHubService implements OnApplicationBootstrap {
         green: r.green,
         closed: r.closed,
       }));
-    return { from, to, items };
+    const { accounts, adsetStatus } = await this.adsetStatuses(items, user);
+    return { from, to, items, accounts, adset_status: adsetStatus };
+  }
+
+  /** Được bật/tắt ad set của TKQC: quyền mkt.toggle_adset + là người phụ trách (hoặc có quyền gán người phụ trách). */
+  private canToggleAdset(
+    account: { ownerId: string },
+    user: AuthenticatedUser,
+  ) {
+    return (
+      can(user, 'mkt.toggle_adset') &&
+      (account.ownerId === user.id || can(user, 'mkt.assign_owner'))
+    );
+  }
+
+  /**
+   * Trạng thái bật/tắt (đọc thẳng Facebook) của các ad set trong bảng, theo từng TKQC — chỉ với TKQC
+   * người xem được bật/tắt (người chỉ xem không tốn lượt gọi Facebook). Lỗi 1 TKQC không làm hỏng bảng.
+   */
+  private async adsetStatuses(
+    items: { account: { id: string } | null; adset_id: string | null }[],
+    user: AuthenticatedUser,
+  ) {
+    const idsByAccount = new Map<string, Set<string>>();
+    for (const r of items) {
+      if (!r.account || !r.adset_id) continue;
+      const set = idsByAccount.get(r.account.id) ?? new Set<string>();
+      set.add(r.adset_id);
+      idsByAccount.set(r.account.id, set);
+    }
+    const accounts: Record<
+      string,
+      { can_toggle: boolean; status_error: string | null }
+    > = {};
+    const adsetStatus: Record<
+      string,
+      { status: string | null; effective_status: string | null }
+    > = {};
+    if (idsByAccount.size === 0) return { accounts, adsetStatus };
+    const rows = await this.prisma.adAccount.findMany({
+      where: { id: { in: [...idsByAccount.keys()] } },
+      select: { id: true, ownerId: true, encryptedToken: true },
+    });
+    await Promise.all(
+      rows.map(async (a) => {
+        const canToggle = this.canToggleAdset(a, user) && !!a.encryptedToken;
+        accounts[a.id] = { can_toggle: canToggle, status_error: null };
+        if (!canToggle) return;
+        try {
+          const token = decryptToken(a.encryptedToken!, this.tokenKey());
+          const map = await fetchAdsetStatuses(token, [
+            ...idsByAccount.get(a.id)!,
+          ]);
+          for (const [id, st] of map)
+            adsetStatus[id] = {
+              status: st.status,
+              effective_status: st.effectiveStatus,
+            };
+        } catch (e) {
+          accounts[a.id].status_error =
+            e instanceof FacebookApiError
+              ? e.message.slice(0, 200)
+              : 'Không kết nối được Facebook';
+        }
+      }),
+    );
+    return { accounts, adsetStatus };
+  }
+
+  /** Bật/tắt 1 ad set ngay trên Facebook (công tắc cuối bảng Data theo ad set). */
+  async setAdsetActive(
+    adsetId: string,
+    active: boolean,
+    user: AuthenticatedUser,
+  ) {
+    const ad = await this.prisma.fbAd.findFirst({
+      where: { adsetId, adAccountId: { not: null } },
+      select: { adsetName: true, adAccount: true },
+    });
+    const account = ad?.adAccount;
+    if (!ad || !account)
+      throw new NotFoundException(
+        'Không tìm thấy ad set trong TKQC đã liên kết',
+      );
+    if (!this.canToggleAdset(account, user))
+      throw new ForbiddenException(
+        'Bạn không có quyền bật/tắt ad set của TKQC này',
+      );
+    if (!account.encryptedToken)
+      throw new BadRequestException(
+        'TKQC đã gỡ liên kết — liên kết lại để bật/tắt',
+      );
+    const token = decryptToken(account.encryptedToken, this.tokenKey());
+    const status = active ? 'ACTIVE' : 'PAUSED';
+    try {
+      await setAdsetStatus(token, adsetId, status);
+    } catch (e) {
+      if (e instanceof FacebookApiError) {
+        // #200/#10: token chỉ có quyền đọc (ads_read) → phải tạo lại token có ads_management.
+        const noPerm =
+          e.code === 200 || e.code === 10 || /permission/i.test(e.message);
+        throw new BadRequestException(
+          noPerm
+            ? 'Token của TKQC chưa có quyền sửa quảng cáo (ads_management) — tạo lại token có quyền này rồi liên kết lại'
+            : `Facebook báo lỗi: ${e.message.slice(0, 200)}`,
+        );
+      }
+      throw new BadRequestException('Không kết nối được Facebook');
+    }
+    const label = ad.adsetName ?? adsetId;
+    await this.audit.log({
+      accountId: user.id,
+      actionType: 'update',
+      entityType: 'ad_account',
+      entityId: account.id,
+      fieldChanged: 'adset_status',
+      oldValue: `${label}: ${active ? 'PAUSED' : 'ACTIVE'}`,
+      newValue: `${label}: ${status}`,
+    });
+    return { adset_id: adsetId, status };
   }
 }

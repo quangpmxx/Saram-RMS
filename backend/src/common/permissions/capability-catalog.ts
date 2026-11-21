@@ -480,6 +480,13 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     label: 'Gắn Nguồn MKT, đặt mốc giá số, quản lý danh mục Nguồn MKT',
     defaultRoles: [],
   },
+  {
+    code: 'mkt.toggle_adset',
+    module: 'marketing-hub',
+    label: 'Bật/tắt nhóm quảng cáo (ad set) từ phần mềm',
+    hint: 'Chỉ TKQC mình phụ trách (có quyền Gán/đổi người phụ trách thì mọi TKQC); token TKQC cần quyền ads_management',
+    defaultRoles: ['mkt'],
+  },
   // ---------------------------------------------------------------- Khác
   {
     code: 'notification.send',

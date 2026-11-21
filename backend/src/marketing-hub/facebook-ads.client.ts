@@ -149,6 +149,65 @@ export interface FbAdInfo {
   adsetName: string | null;
 }
 
+export interface FbAdsetStatus {
+  /** Trạng thái đặt (ACTIVE / PAUSED…) — công tắc bật/tắt. */
+  status: string | null;
+  /** Trạng thái thực tế (vd CAMPAIGN_PAUSED khi chiến dịch đang tắt). */
+  effectiveStatus: string | null;
+}
+
+/** Trạng thái nhiều ad set cùng TKQC (tối đa 50 mã/lần gọi). */
+export async function fetchAdsetStatuses(
+  token: string,
+  adsetIds: string[],
+): Promise<Map<string, FbAdsetStatus>> {
+  const out = new Map<string, FbAdsetStatus>();
+  for (let i = 0; i < adsetIds.length; i += 50) {
+    const ids = adsetIds
+      .slice(i, i + 50)
+      .map(encodeURIComponent)
+      .join(',');
+    const r = await getOne<
+      Record<string, { status?: string; effective_status?: string }>
+    >(`${GRAPH}/?ids=${ids}&fields=status,effective_status`, token);
+    for (const [id, v] of Object.entries(r)) {
+      if (!v || typeof v !== 'object') continue;
+      out.set(id, {
+        status: v.status ?? null,
+        effectiveStatus: v.effective_status ?? null,
+      });
+    }
+  }
+  return out;
+}
+
+/** Bật (ACTIVE) / tắt (PAUSED) 1 ad set — token cần quyền ads_management. */
+export async function setAdsetStatus(
+  token: string,
+  adsetId: string,
+  status: 'ACTIVE' | 'PAUSED',
+): Promise<void> {
+  const res = await fetch(`${GRAPH}/${encodeURIComponent(adsetId)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ status }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    error?: { message?: string; code?: number };
+  };
+  if (!res.ok || body.error || body.success === false) {
+    throw new FacebookApiError(
+      body.error?.message ?? `Facebook trả lỗi HTTP ${res.status}`,
+      body.error?.code,
+    );
+  }
+}
+
 /** Tra 1 quảng cáo theo mã (mã Pancake ghi ở hội thoại) ra TKQC + camp + nhóm quảng cáo. */
 export async function fetchAdInfo(
   token: string,

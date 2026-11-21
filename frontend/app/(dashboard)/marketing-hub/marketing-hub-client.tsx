@@ -738,6 +738,8 @@ function EfficiencyTable({ data }: { data: Overview }) {
 }
 
 type CampaignRow = {
+  /** TKQC đã liên kết chứa ad set; null = không qua quảng cáo / chưa rõ TKQC. */
+  account: { id: string; name: string } | null;
   owner: { id: string; full_name: string };
   /** Dòng data không qua quảng cáo (nhập tay/Excel/website/tự nhắn page). */
   no_ad: boolean;
@@ -752,9 +754,94 @@ type CampaignRow = {
   closed: number;
 };
 
+type CampaignData = {
+  items: CampaignRow[];
+  /** Theo TKQC: người xem được bật/tắt không + lỗi đọc trạng thái từ Facebook. */
+  accounts: Record<string, { can_toggle: boolean; status_error: string | null }>;
+  /** Trạng thái ad set đọc thẳng từ Facebook (chỉ TKQC người xem được bật/tắt). */
+  adset_status: Record<
+    string,
+    { status: string | null; effective_status: string | null }
+  >;
+};
+
+type CampaignGroup = {
+  key: string;
+  label: string;
+  sub: string | null;
+  accountId: string | null;
+  kind: "account" | "unknown" | "manual";
+  rows: CampaignRow[];
+};
+
+type CountKey = "total" | "red" | "yellow" | "green" | "closed";
+
+/** Gom theo TKQC; data có quảng cáo nhưng chưa rõ TKQC 1 nhóm; data không qua quảng cáo 1 nhóm cuối. */
+function groupCampaignRows(rows: CampaignRow[]): CampaignGroup[] {
+  const byKey = new Map<string, CampaignGroup>();
+  for (const r of rows) {
+    const key = r.no_ad ? "manual" : (r.account?.id ?? "unknown");
+    let g = byKey.get(key);
+    if (!g) {
+      g = r.no_ad
+        ? { key, label: "Không qua quảng cáo / nhập tay", sub: null, accountId: null, kind: "manual", rows: [] }
+        : r.account
+          ? { key, label: r.account.name, sub: r.owner.full_name, accountId: r.account.id, kind: "account", rows: [] }
+          : { key, label: "Chưa rõ TKQC (TKQC chưa liên kết / chưa tra được)", sub: null, accountId: null, kind: "unknown", rows: [] };
+      byKey.set(key, g);
+    }
+    g.rows.push(r);
+  }
+  const order = { account: 0, unknown: 1, manual: 2 };
+  return [...byKey.values()].sort(
+    (a, b) => order[a.kind] - order[b.kind] || a.label.localeCompare(b.label),
+  );
+}
+
+/** Công tắc bật/tắt ad set. */
+function AdsetSwitch({
+  on,
+  busy,
+  onChange,
+}: {
+  on: boolean;
+  busy: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={busy}
+      onClick={onChange}
+      title={on ? "Đang bật — bấm để tắt" : "Đang tắt — bấm để bật"}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${on ? "bg-emerald-500" : "bg-slate-300"}`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`}
+      />
+    </button>
+  );
+}
+
+/** Trạng thái thực tế khác công tắc (vd chiến dịch đang tắt) → ghi chú nhỏ. */
+const EFFECTIVE_NOTE: Record<string, string> = {
+  CAMPAIGN_PAUSED: "Chiến dịch đang tắt",
+  ADSET_PAUSED: "Đang tắt",
+  IN_PROCESS: "Đang xử lý",
+  WITH_ISSUES: "Có lỗi",
+  DISAPPROVED: "Bị từ chối",
+  PENDING_REVIEW: "Đang duyệt",
+  PENDING_BILLING_INFO: "Chờ thanh toán",
+  ARCHIVED: "Đã lưu trữ",
+  DELETED: "Đã xoá",
+};
+
 /**
- * Bảng Data theo ad set (2026-11-21): mọi data trong kỳ — data từ quảng cáo theo nhân viên
- * phụ trách TKQC + nhóm quảng cáo; cột Đỏ/Vàng/Xanh = số data đang bôi màu đó, Đóng = data đã đóng.
+ * Bảng Data theo ad set (2026-11-21): mọi data trong kỳ, gom theo TKQC (bấm để mở danh sách
+ * ad set, như bảng Ghi chú theo bài). Cột Đỏ/Vàng/Xanh = số data đang bôi màu đó, Đóng = data đã
+ * đóng. Cột Bật/tắt: đổi trạng thái ad set ngay trên Facebook (quyền mkt.toggle_adset).
  */
 function CampaignDataTable({
   from,
@@ -765,18 +852,21 @@ function CampaignDataTable({
   to: string;
   ownerId: string;
 }) {
-  const [rows, setRows] = useState<CampaignRow[] | null>(null);
+  const toast = useToast();
+  const [data, setData] = useState<CampaignData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [busyAdset, setBusyAdset] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     const q = new URLSearchParams({ from, to });
     if (ownerId) q.set("owner_id", ownerId);
-    clientApi<{ items: CampaignRow[] }>(`/marketing-hub/campaign-data?${q}`)
+    clientApi<CampaignData>(`/marketing-hub/campaign-data?${q}`)
       .then((r) => {
         if (cancelled) return;
-        setRows(r.items);
+        setData(r);
         setError(null);
       })
       .catch((e: unknown) => {
@@ -791,23 +881,108 @@ function CampaignDataTable({
   }, [from, to, ownerId, reloadKey]);
 
   // Làm mới: tra lại ngay tên ad set còn thiếu với Facebook (người chỉ có quyền xem thì bỏ qua bước này),
-  // rồi tải lại bảng.
+  // rồi tải lại bảng (kèm trạng thái bật/tắt mới nhất).
   async function refresh() {
     setRefreshing(true);
     await clientApi("/marketing-hub/campaign-data/refresh", { method: "POST" }).catch(() => undefined);
     setReloadKey((k) => k + 1);
   }
 
-  const td = "border border-slate-200 px-3 py-2";
-  const groups: CampaignRow[][] = [];
-  for (const r of rows ?? []) {
-    const last = groups[groups.length - 1];
-    if (last && last[0].owner.id === r.owner.id) last.push(r);
-    else groups.push([r]);
+  async function toggleAdset(adsetId: string, name: string, turnOn: boolean) {
+    if (
+      !window.confirm(
+        `${turnOn ? "BẬT" : "TẮT"} ad set “${name}” trên Facebook?${turnOn ? "" : "\nQuảng cáo trong ad set sẽ ngừng chạy."}`,
+      )
+    )
+      return;
+    setBusyAdset(adsetId);
+    try {
+      await clientApi(`/marketing-hub/adsets/${adsetId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: turnOn }),
+      });
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              adset_status: {
+                ...d.adset_status,
+                [adsetId]: {
+                  ...d.adset_status[adsetId],
+                  status: turnOn ? "ACTIVE" : "PAUSED",
+                },
+              },
+            }
+          : d,
+      );
+      toast.success(turnOn ? "Đã bật ad set" : "Đã tắt ad set");
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setBusyAdset(null);
+    }
   }
-  const sum = (key: "total" | "red" | "yellow" | "green" | "closed") =>
-    (rows ?? []).reduce((s, r) => s + r[key], 0);
+
+  const toggle = (key: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const td = "border border-slate-200 px-3 py-2";
+  const rows = data?.items ?? null;
+  const groups = groupCampaignRows(rows ?? []);
+  const sumOf = (list: CampaignRow[], key: CountKey) =>
+    list.reduce((s, r) => s + r[key], 0);
   const num = (n: number) => n.toLocaleString("vi-VN");
+  const countCells = (list: CampaignRow[]) => (
+    <>
+      <td className={`${td} font-medium`}>{num(sumOf(list, "total"))}</td>
+      <td className={`${td} text-red-600`}>{num(sumOf(list, "red"))}</td>
+      <td className={`${td} text-amber-600`}>{num(sumOf(list, "yellow"))}</td>
+      <td className={`${td} text-emerald-600`}>{num(sumOf(list, "green"))}</td>
+      <td className={`${td} text-slate-600`}>{num(sumOf(list, "closed"))}</td>
+    </>
+  );
+
+  function rowLabel(g: CampaignGroup, r: CampaignRow) {
+    if (g.kind === "manual") return r.owner.full_name;
+    const name =
+      r.adset_name ??
+      (r.adset_id
+        ? `Ad set ${r.adset_id}`
+        : r.ad_id
+          ? `Quảng cáo ${r.ad_id} (chưa tra được ad set)`
+          : "Chưa rõ ad set");
+    return g.kind === "unknown" ? `${name} · ${r.owner.full_name}` : name;
+  }
+
+  function switchCell(g: CampaignGroup, r: CampaignRow) {
+    const acc = g.accountId ? data?.accounts[g.accountId] : undefined;
+    if (!acc?.can_toggle || !r.adset_id) return null;
+    const st = data?.adset_status[r.adset_id];
+    if (!st?.status)
+      return <span className="text-xs text-slate-400">—</span>;
+    const on = st.status === "ACTIVE";
+    const note =
+      on && st.effective_status && st.effective_status !== "ACTIVE"
+        ? EFFECTIVE_NOTE[st.effective_status] ?? st.effective_status
+        : null;
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <AdsetSwitch
+          on={on}
+          busy={busyAdset === r.adset_id}
+          onChange={() =>
+            void toggleAdset(r.adset_id!, r.adset_name ?? r.adset_id!, !on)
+          }
+        />
+        {note && <span className="text-[10px] text-amber-600">{note}</span>}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -826,67 +1001,74 @@ function CampaignDataTable({
         <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
           <thead className="bg-slate-700 text-xs font-semibold text-white">
             <tr>
-              <th className={td}>Nhân viên</th>
-              <th className={td}>Ad set</th>
+              <th className={td}>Tài khoản QC / Ad set</th>
               <th className={td}>Số lượng Data</th>
               <th className={td}>Đỏ</th>
               <th className={td}>Vàng</th>
               <th className={td}>Xanh</th>
               <th className={td}>Đóng</th>
+              <th className={td}>Bật/tắt</th>
             </tr>
           </thead>
           <tbody>
-            {groups.map((g) =>
-              g.map((r, idx) => (
-                <tr
-                  key={`${r.owner.id}-${r.no_ad ? "no-ad" : (r.adset_id ?? r.ad_id ?? "none")}`}
-                  className={r.no_ad ? "bg-slate-50" : undefined}
-                >
-                  {idx === 0 && (
-                    <td
-                      rowSpan={g.length}
-                      className={`${td} align-middle font-medium`}
-                    >
-                      {r.owner.full_name}
-                    </td>
-                  )}
-                  <td className={`${td} !text-left`}>
-                    {r.no_ad ? (
-                      <span className="italic text-slate-500">
-                        Không qua quảng cáo / nhập tay
+            {groups.map((g) => {
+              const isOpen = open.has(g.key);
+              const acc = g.accountId ? data?.accounts[g.accountId] : undefined;
+              return (
+                <Fragment key={g.key}>
+                  <tr
+                    className="cursor-pointer bg-slate-50 font-medium hover:bg-slate-100"
+                    onClick={() => toggle(g.key)}
+                  >
+                    <td className={`${td} !text-left`}>
+                      <span className="inline-block w-4 text-slate-500">
+                        {isOpen ? "▾" : "▸"}
                       </span>
-                    ) : (
-                      (r.adset_name ?? (
-                        <span className="text-xs text-slate-400">
-                          {r.adset_id
-                            ? `Ad set ${r.adset_id}`
-                            : r.ad_id
-                              ? `Quảng cáo ${r.ad_id} (chưa tra được ad set)`
-                              : "Chưa rõ ad set (chưa tra được)"}
-                        </span>
-                      ))
-                    )}
-                  </td>
-                  <td className={`${td} font-medium`}>{num(r.total)}</td>
-                  <td className={`${td} text-red-600`}>{num(r.red)}</td>
-                  <td className={`${td} text-amber-600`}>{num(r.yellow)}</td>
-                  <td className={`${td} text-emerald-600`}>{num(r.green)}</td>
-                  <td className={`${td} text-slate-600`}>{num(r.closed)}</td>
-                </tr>
-              )),
-            )}
+                      <span className={g.kind === "account" ? undefined : "italic text-slate-600"}>
+                        {g.label}
+                      </span>{" "}
+                      <span className="text-xs font-normal text-slate-500">
+                        ({g.sub ? `${g.sub} · ` : ""}
+                        {g.rows.length} {g.kind === "manual" ? "người up" : "dòng"})
+                      </span>
+                      {acc?.status_error && (
+                        <div
+                          className="pl-4 text-xs font-normal text-red-600"
+                          title={acc.status_error}
+                        >
+                          Không đọc được trạng thái bật/tắt từ Facebook
+                        </div>
+                      )}
+                    </td>
+                    {countCells(g.rows)}
+                    <td className={td} />
+                  </tr>
+                  {isOpen &&
+                    g.rows.map((r) => (
+                      <tr key={`${g.key}-${r.owner.id}-${r.adset_id ?? r.ad_id ?? "none"}`}>
+                        <td className={`${td} !text-left pl-8`}>
+                          <span
+                            className={
+                              r.adset_name || g.kind === "manual"
+                                ? undefined
+                                : "text-xs text-slate-400"
+                            }
+                          >
+                            {rowLabel(g, r)}
+                          </span>
+                        </td>
+                        {countCells([r])}
+                        <td className={td}>{switchCell(g, r)}</td>
+                      </tr>
+                    ))}
+                </Fragment>
+              );
+            })}
             {rows && rows.length > 0 && (
               <tr className="bg-slate-100 font-semibold">
-                <td className={td} colSpan={2}>
-                  Tổng cộng
-                </td>
-                <td className={td}>{num(sum("total"))}</td>
-                <td className={`${td} text-red-600`}>{num(sum("red"))}</td>
-                <td className={`${td} text-amber-600`}>{num(sum("yellow"))}</td>
-                <td className={`${td} text-emerald-600`}>
-                  {num(sum("green"))}
-                </td>
-                <td className={td}>{num(sum("closed"))}</td>
+                <td className={td}>Tổng cộng</td>
+                {countCells(rows)}
+                <td className={td} />
               </tr>
             )}
             {(rows === null || rows.length === 0) && (
