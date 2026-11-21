@@ -22,7 +22,6 @@ import {
   FacebookApiError,
   FbAdAccount,
   fetchAccountHealth,
-  fetchAdCampaigns,
   fetchAdInfo,
   fetchDailySpend,
   listAdAccounts,
@@ -272,7 +271,6 @@ export class MarketingHubService implements OnApplicationBootstrap {
           if (prev === null || newLevel < prev)
             await this.notifyLowBalance(account, remaining, newLevel);
         }
-        await this.syncAdCampaigns(id, token, account.externalId);
       } catch (e) {
         const invalid = e instanceof FacebookApiError && e.isTokenInvalid;
         const message =
@@ -290,44 +288,6 @@ export class MarketingHubService implements OnApplicationBootstrap {
       }
     } finally {
       this.syncing.delete(id);
-    }
-  }
-
-  /**
-   * Lưu danh sách quảng cáo → camp của TKQC (tra camp cho data Pancake). Lỗi chỉ ghi log,
-   * không làm hỏng đồng bộ chi tiêu.
-   */
-  private async syncAdCampaigns(
-    adAccountId: string,
-    token: string,
-    externalId: string,
-  ): Promise<void> {
-    try {
-      const ads = await fetchAdCampaigns(token, externalId);
-      this.logger.log(
-        `Lấy danh sách camp của TKQC ${externalId}: ${ads.length} quảng cáo`,
-      );
-      if (ads.length === 0) return;
-      // Ghi gộp 1 câu lệnh: thêm mới hoặc cập nhật tên camp đã đổi.
-      await this.prisma.$executeRaw`
-        INSERT INTO fb_ads (ad_id, ad_account_id, campaign_id, campaign_name, updated_at)
-        SELECT a.ad_id, ${adAccountId}::uuid, a.campaign_id, a.campaign_name, (now() AT TIME ZONE 'UTC')
-          FROM unnest(
-            ${ads.map((a) => a.adId.slice(0, 64))}::varchar[],
-            ${ads.map((a) => a.campaignId?.slice(0, 64) ?? null)}::varchar[],
-            ${ads.map((a) => a.campaignName?.slice(0, 255) ?? null)}::varchar[]
-          ) AS a(ad_id, campaign_id, campaign_name)
-        ON CONFLICT (ad_id) DO UPDATE
-           SET ad_account_id = EXCLUDED.ad_account_id,
-               campaign_id = EXCLUDED.campaign_id,
-               campaign_name = EXCLUDED.campaign_name,
-               updated_at = (now() AT TIME ZONE 'UTC')
-         WHERE fb_ads.campaign_name IS DISTINCT FROM EXCLUDED.campaign_name
-            OR fb_ads.ad_account_id IS DISTINCT FROM EXCLUDED.ad_account_id`;
-    } catch (e) {
-      this.logger.warn(
-        `Lấy danh sách camp của TKQC ${adAccountId} lỗi: ${e instanceof Error ? e.message : String(e)}`,
-      );
     }
   }
 

@@ -140,49 +140,6 @@ export async function fetchDailySpend(
   }));
 }
 
-export interface FbAdCampaign {
-  adId: string;
-  campaignId: string | null;
-  campaignName: string | null;
-}
-
-/**
- * Quảng cáo của TKQC kèm camp (để tra mã quảng cáo Pancake ra camp). Lấy cả quảng
- * cáo đã tạm dừng/lưu trữ vì data cũ có thể đến từ camp đã tắt.
- */
-export async function fetchAdCampaigns(
-  token: string,
-  externalId: string,
-): Promise<FbAdCampaign[]> {
-  const status = encodeURIComponent(
-    JSON.stringify([
-      'ACTIVE',
-      'PAUSED',
-      'ARCHIVED',
-      'CAMPAIGN_PAUSED',
-      'ADSET_PAUSED',
-      'IN_PROCESS',
-      'WITH_ISSUES',
-      'DISAPPROVED',
-      'PENDING_REVIEW',
-      'PREAPPROVED',
-      'PENDING_BILLING_INFO',
-    ]),
-  );
-  const rows = await getAll<{
-    id: string;
-    campaign?: { id?: string; name?: string };
-  }>(
-    `${GRAPH}/act_${externalId}/ads?fields=id,campaign{id,name}&effective_status=${status}&limit=200`,
-    token,
-  );
-  return rows.map((r) => ({
-    adId: r.id,
-    campaignId: r.campaign?.id ?? null,
-    campaignName: r.campaign?.name ?? null,
-  }));
-}
-
 export interface FbAdInfo {
   /** Mã TKQC (không có tiền tố act_). */
   accountId: string | null;

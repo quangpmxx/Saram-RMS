@@ -223,24 +223,25 @@ export class CandidatesService {
   ): Promise<{
     ad_campaign: { ad_id: string; campaign_name: string | null } | null;
   }> {
-    await this.assertCanView(id, currentUser);
     // Chỉ Admin/Quản lý/MKT (mặc định) — quyền "Xem tên camp quảng cáo của data" (2026-11-21).
+    // Kiểm quyền trước (không tốn truy vấn) để Sale mở data không phải chờ thêm gì.
     if (!can(currentUser, 'lead.view_ad_campaign'))
       return { ad_campaign: null };
-    const conversation = await this.prisma.pancakeConversation.findFirst({
-      where: { leadId: id, adId: { not: null } },
-      select: { adId: true },
-    });
-    if (!conversation?.adId) return { ad_campaign: null };
-    const ad = await this.prisma.fbAd.findUnique({
-      where: { adId: conversation.adId },
-      select: { campaignName: true },
-    });
+    await this.assertCanView(id, currentUser);
+    // 1 truy vấn: hội thoại Pancake có mã quảng cáo + tên camp (nếu đã tra được).
+    const rows = await this.prisma.$queryRaw<
+      { ad_id: string; campaign_name: string | null }[]
+    >`
+      SELECT pc.ad_id, fa.campaign_name
+        FROM pancake_conversations pc
+        LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
+       WHERE pc.lead_id = ${id}::uuid AND pc.ad_id IS NOT NULL
+       LIMIT 1`;
+    const row = rows[0];
     return {
-      ad_campaign: {
-        ad_id: conversation.adId,
-        campaign_name: ad?.campaignName ?? null,
-      },
+      ad_campaign: row
+        ? { ad_id: row.ad_id, campaign_name: row.campaign_name }
+        : null,
     };
   }
 
