@@ -79,6 +79,13 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     defaultRoles: ['mkt'],
   },
   {
+    code: 'lead.view_ad_campaign',
+    module: 'candidates',
+    label: 'Xem tên camp quảng cáo của data',
+    hint: 'Dòng Camp ở trang Chi tiết (data up tự động từ Pancake)',
+    defaultRoles: ['manager', 'mkt'],
+  },
+  {
     code: 'lead.view_all',
     applicableRoles: NON_TEAM_ROLES,
     module: 'candidates',

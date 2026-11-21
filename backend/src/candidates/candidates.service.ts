@@ -224,6 +224,9 @@ export class CandidatesService {
     ad_campaign: { ad_id: string; campaign_name: string | null } | null;
   }> {
     await this.assertCanView(id, currentUser);
+    // Chỉ Admin/Quản lý/MKT (mặc định) — quyền "Xem tên camp quảng cáo của data" (2026-11-21).
+    if (!can(currentUser, 'lead.view_ad_campaign'))
+      return { ad_campaign: null };
     const conversation = await this.prisma.pancakeConversation.findFirst({
       where: { leadId: id, adId: { not: null } },
       select: { adId: true },
