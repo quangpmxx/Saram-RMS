@@ -1762,12 +1762,15 @@ model AdAccount {
 /// (Pancake ghi ở pancake_conversations.ad_id) ra camp mà data đến từ đó.
 model FbAd {
   adId         String   @id @map("ad_id") @db.VarChar(64)
-  adAccountId  String   @map("ad_account_id") @db.Uuid
+  /// TKQC đã liên kết chứa quảng cáo; trống = tra được camp nhưng TKQC chưa liên kết.
+  adAccountId  String?  @map("ad_account_id") @db.Uuid
   campaignId   String?  @map("campaign_id") @db.VarChar(64)
   campaignName String?  @map("campaign_name") @db.VarChar(255)
+  /// Lỗi lần tra gần nhất (không có token nào đọc được quảng cáo này...).
+  lastError    String?  @map("last_error") @db.VarChar(255)
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  adAccount AdAccount? @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
 
   @@index([adAccountId])
   @@map("fb_ads")

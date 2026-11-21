@@ -182,3 +182,29 @@ export async function fetchAdCampaigns(
     campaignName: r.campaign?.name ?? null,
   }));
 }
+
+export interface FbAdInfo {
+  /** Mã TKQC (không có tiền tố act_). */
+  accountId: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+}
+
+/** Tra 1 quảng cáo theo mã (mã Pancake ghi ở hội thoại) ra TKQC + camp. */
+export async function fetchAdInfo(
+  token: string,
+  adId: string,
+): Promise<FbAdInfo> {
+  const ad = await getOne<{
+    account_id?: string;
+    campaign?: { id?: string; name?: string };
+  }>(
+    `${GRAPH}/${encodeURIComponent(adId)}?fields=account_id,campaign{id,name}`,
+    token,
+  );
+  return {
+    accountId: ad.account_id ?? null,
+    campaignId: ad.campaign?.id ?? null,
+    campaignName: ad.campaign?.name ?? null,
+  };
+}

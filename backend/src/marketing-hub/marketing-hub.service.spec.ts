@@ -396,3 +396,64 @@ describe('MarketingHubService.campaignData', () => {
     ).rejects.toThrow('Ngày bắt đầu');
   });
 });
+
+describe('MarketingHubService.resolveUnknownAds', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('tra từng mã quảng cáo, thử token tiếp theo khi token trước không đọc được', async () => {
+    const t1 = encryptToken('token-1', KEY);
+    const t2 = encryptToken('token-2', KEY);
+    const upsert = jest.fn().mockResolvedValue({});
+    const prisma = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([{ ad_id: 'ad-1' }, { ad_id: 'ad-2' }]),
+      adAccount: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'acc-1', externalId: '111', encryptedToken: t1 },
+          { id: 'acc-2', externalId: '222', encryptedToken: t2 },
+        ]),
+      },
+      fbAd: { upsert },
+    };
+    jest.spyOn(fb, 'fetchAdInfo').mockImplementation((token, adId) => {
+      if (adId === 'ad-1' && token === 'token-2')
+        return Promise.resolve({
+          accountId: '222',
+          campaignId: 'c1',
+          campaignName: 'Camp A',
+        });
+      return Promise.reject(new fb.FacebookApiError('Không có quyền', 10));
+    });
+    const resolved = await build(prisma).resolveUnknownAds();
+    expect(resolved).toBe(1);
+    expect(upsert).toHaveBeenCalledWith({
+      where: { adId: 'ad-1' },
+      create: {
+        adId: 'ad-1',
+        adAccountId: 'acc-2',
+        campaignId: 'c1',
+        campaignName: 'Camp A',
+        lastError: null,
+      },
+      update: {
+        adAccountId: 'acc-2',
+        campaignId: 'c1',
+        campaignName: 'Camp A',
+        lastError: null,
+      },
+    });
+    expect(upsert).toHaveBeenCalledWith({
+      where: { adId: 'ad-2' },
+      create: { adId: 'ad-2', lastError: 'Không có quyền' },
+      update: { lastError: 'Không có quyền' },
+    });
+  });
+
+  it('không có mã nào cần tra → không gọi Facebook', async () => {
+    const spy = jest.spyOn(fb, 'fetchAdInfo');
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([]) };
+    expect(await build(prisma).resolveUnknownAds()).toBe(0);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});

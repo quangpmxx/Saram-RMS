@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnApplicationBootstrap,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +23,7 @@ import {
   FbAdAccount,
   fetchAccountHealth,
   fetchAdCampaigns,
+  fetchAdInfo,
   fetchDailySpend,
   listAdAccounts,
 } from './facebook-ads.client';
@@ -63,8 +65,9 @@ export function accountHealth(
 }
 
 @Injectable()
-export class MarketingHubService {
+export class MarketingHubService implements OnApplicationBootstrap {
   private readonly logger = new Logger(MarketingHubService.name);
+  private resolvingAds = false;
   /** Khoá trong bộ nhớ: không đồng bộ 2 lần cùng lúc 1 tài khoản (backend chạy 1 bản). */
   private readonly syncing = new Set<string>();
 
@@ -74,6 +77,11 @@ export class MarketingHubService {
     private readonly audit: AuditLogService,
     private readonly realtime: RealtimeService,
   ) {}
+
+  /** Khởi động xong 30 giây thì tra camp cho mã quảng cáo chưa biết (không chặn khởi động). */
+  onApplicationBootstrap(): void {
+    setTimeout(() => void this.resolveUnknownAds(), 30_000).unref();
+  }
 
   private tokenKey(): string {
     const key = this.config.get<string>('MARKETING_TOKEN_KEY');
@@ -194,6 +202,7 @@ export class MarketingHubService {
     if (this.syncing.has(id))
       throw new ConflictException('Đang đồng bộ, vui lòng chờ');
     await this.syncById(id);
+    void this.resolveUnknownAds();
     return { ok: true };
   }
 
@@ -295,11 +304,14 @@ export class MarketingHubService {
   ): Promise<void> {
     try {
       const ads = await fetchAdCampaigns(token, externalId);
+      this.logger.log(
+        `Lấy danh sách camp của TKQC ${externalId}: ${ads.length} quảng cáo`,
+      );
       if (ads.length === 0) return;
       // Ghi gộp 1 câu lệnh: thêm mới hoặc cập nhật tên camp đã đổi.
       await this.prisma.$executeRaw`
         INSERT INTO fb_ads (ad_id, ad_account_id, campaign_id, campaign_name, updated_at)
-        SELECT a.ad_id, ${adAccountId}::uuid, a.campaign_id, a.campaign_name, now()
+        SELECT a.ad_id, ${adAccountId}::uuid, a.campaign_id, a.campaign_name, (now() AT TIME ZONE 'UTC')
           FROM unnest(
             ${ads.map((a) => a.adId.slice(0, 64))}::varchar[],
             ${ads.map((a) => a.campaignId?.slice(0, 64) ?? null)}::varchar[],
@@ -309,7 +321,7 @@ export class MarketingHubService {
            SET ad_account_id = EXCLUDED.ad_account_id,
                campaign_id = EXCLUDED.campaign_id,
                campaign_name = EXCLUDED.campaign_name,
-               updated_at = now()
+               updated_at = (now() AT TIME ZONE 'UTC')
          WHERE fb_ads.campaign_name IS DISTINCT FROM EXCLUDED.campaign_name
             OR fb_ads.ad_account_id IS DISTINCT FROM EXCLUDED.ad_account_id`;
     } catch (e) {
@@ -379,6 +391,87 @@ export class MarketingHubService {
     } catch (e) {
       this.logger.warn(`Quét tài khoản quảng cáo mới lỗi: ${String(e)}`);
     }
+    await this.resolveUnknownAds();
+  }
+
+  /**
+   * Tra camp cho các mã quảng cáo Pancake chưa biết bằng cách hỏi thẳng Facebook từng mã,
+   * thử lần lượt các token TKQC đã lưu (2026-11-21 — lấy danh sách theo TKQC không đủ).
+   * Mỗi lượt tối đa 200 mã; mã tra không được thì thử lại sau 1 ngày. Trả về số mã ra tên camp.
+   */
+  async resolveUnknownAds(): Promise<number> {
+    if (this.resolvingAds) return 0;
+    this.resolvingAds = true;
+    let resolved = 0;
+    try {
+      const pending = await this.prisma.$queryRaw<{ ad_id: string }[]>`
+        SELECT DISTINCT pc.ad_id
+          FROM pancake_conversations pc
+          LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
+         WHERE pc.ad_id IS NOT NULL
+           AND (fa.ad_id IS NULL
+                OR (fa.campaign_name IS NULL
+                    AND fa.updated_at < (now() AT TIME ZONE 'UTC') - interval '1 day'))
+         LIMIT 200`;
+      if (pending.length === 0) return 0;
+      const accounts = await this.prisma.adAccount.findMany({
+        where: { status: 'connected', encryptedToken: { not: null } },
+        select: { id: true, externalId: true, encryptedToken: true },
+      });
+      const key = this.tokenKey();
+      const tokens = [
+        ...new Set(accounts.map((a) => decryptToken(a.encryptedToken!, key))),
+      ];
+      if (tokens.length === 0) return 0;
+      const accountIdByExternal = new Map(
+        accounts.map((a) => [a.externalId, a.id]),
+      );
+      const badTokens = new Set<string>();
+      for (const { ad_id: adId } of pending) {
+        let info: Awaited<ReturnType<typeof fetchAdInfo>> | null = null;
+        let lastError = 'Không token nào đọc được quảng cáo này';
+        for (const token of tokens) {
+          if (badTokens.has(token)) continue;
+          try {
+            info = await fetchAdInfo(token, adId);
+            break;
+          } catch (e) {
+            if (e instanceof FacebookApiError) {
+              if (e.isTokenInvalid) badTokens.add(token);
+              lastError = e.message;
+            } else {
+              lastError = 'Lỗi kết nối Facebook';
+            }
+          }
+        }
+        const data = info
+          ? {
+              adAccountId:
+                (info.accountId && accountIdByExternal.get(info.accountId)) ??
+                null,
+              campaignId: info.campaignId?.slice(0, 64) ?? null,
+              campaignName: info.campaignName?.slice(0, 255) ?? null,
+              lastError: null,
+            }
+          : { lastError: lastError.slice(0, 255) };
+        await this.prisma.fbAd.upsert({
+          where: { adId },
+          create: { adId, ...data },
+          update: data,
+        });
+        if (info?.campaignName) resolved++;
+      }
+      this.logger.log(
+        `Tra camp quảng cáo: ${resolved}/${pending.length} mã ra tên camp`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `Tra camp quảng cáo lỗi: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      this.resolvingAds = false;
+    }
+    return resolved;
   }
 
   /**
