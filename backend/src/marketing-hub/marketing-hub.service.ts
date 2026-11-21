@@ -370,8 +370,11 @@ export class MarketingHubService implements OnApplicationBootstrap {
           LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
          WHERE pc.ad_id IS NOT NULL
            AND (fa.ad_id IS NULL
-                OR (fa.campaign_name IS NULL
-                    AND fa.updated_at < (now() AT TIME ZONE 'UTC') - interval '1 day'))
+                -- Chưa có tên nhóm quảng cáo: mã tra thành công trước đây (chưa lấy ad set) tra lại
+                -- ngay; mã tra lỗi thì đợi 1 ngày.
+                OR (fa.adset_name IS NULL
+                    AND (fa.last_error IS NULL
+                         OR fa.updated_at < (now() AT TIME ZONE 'UTC') - interval '1 day')))
          LIMIT 200`;
       if (pending.length === 0) return 0;
       const accounts = await this.prisma.adAccount.findMany({
@@ -411,6 +414,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
                 null,
               campaignId: info.campaignId?.slice(0, 64) ?? null,
               campaignName: info.campaignName?.slice(0, 255) ?? null,
+              adsetId: info.adsetId?.slice(0, 64) ?? null,
+              adsetName: info.adsetName?.slice(0, 255) ?? null,
               lastError: null,
             }
           : { lastError: lastError.slice(0, 255) };
@@ -419,10 +424,10 @@ export class MarketingHubService implements OnApplicationBootstrap {
           create: { adId, ...data },
           update: data,
         });
-        if (info?.campaignName) resolved++;
+        if (info?.adsetName) resolved++;
       }
       this.logger.log(
-        `Tra camp quảng cáo: ${resolved}/${pending.length} mã ra tên camp`,
+        `Tra camp quảng cáo: ${resolved}/${pending.length} mã ra tên nhóm quảng cáo`,
       );
     } catch (e) {
       this.logger.warn(
@@ -897,8 +902,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
       {
         owner_id: string;
         owner_name: string;
-        campaign_id: string | null;
-        campaign_name: string | null;
+        adset_id: string | null;
+        adset_name: string | null;
         total: number;
         red: number;
         yellow: number;
@@ -907,7 +912,7 @@ export class MarketingHubService implements OnApplicationBootstrap {
       }[]
     >`
       SELECT o.id AS owner_id, o.full_name AS owner_name,
-             fa.campaign_id, MAX(fa.campaign_name) AS campaign_name,
+             fa.adset_id, MAX(fa.adset_name) AS adset_name,
              COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE l.note_color = 'red')::int AS red,
              COUNT(*) FILTER (WHERE l.note_color = 'yellow')::int AS yellow,
@@ -922,14 +927,14 @@ export class MarketingHubService implements OnApplicationBootstrap {
          -- Cột lưu giờ UTC không múi giờ: đổi tham số về UTC, không phụ thuộc múi giờ phiên DB.
          AND l.uploaded_at >= (${start}::timestamptz AT TIME ZONE 'UTC')
          AND l.uploaded_at < (${end}::timestamptz AT TIME ZONE 'UTC')
-       GROUP BY o.id, o.full_name, fa.campaign_id
+       GROUP BY o.id, o.full_name, fa.adset_id
        ORDER BY o.full_name, total DESC`;
     const items = rows
       .filter((r) => !q.owner_id || r.owner_id === q.owner_id)
       .map((r) => ({
         owner: { id: r.owner_id, full_name: r.owner_name },
-        campaign_id: r.campaign_id,
-        campaign_name: r.campaign_name,
+        adset_id: r.adset_id,
+        adset_name: r.adset_name,
         total: r.total,
         red: r.red,
         yellow: r.yellow,

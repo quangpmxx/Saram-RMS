@@ -349,8 +349,8 @@ describe('MarketingHubService.campaignData', () => {
   const row = (owner: string, camp: string | null, total: number) => ({
     owner_id: owner,
     owner_name: owner.toUpperCase(),
-    campaign_id: camp,
-    campaign_name: camp ? `Camp ${camp}` : null,
+    adset_id: camp,
+    adset_name: camp ? `Camp ${camp}` : null,
     total,
     red: 1,
     yellow: 2,
@@ -374,8 +374,8 @@ describe('MarketingHubService.campaignData', () => {
     expect(all.items).toHaveLength(3);
     expect(all.items[0]).toEqual({
       owner: { id: 'u1', full_name: 'U1' },
-      campaign_id: 'c1',
-      campaign_name: 'Camp c1',
+      adset_id: 'c1',
+      adset_name: 'Camp c1',
       total: 5,
       red: 1,
       yellow: 2,
@@ -387,7 +387,7 @@ describe('MarketingHubService.campaignData', () => {
       to: '2026-11-02',
       owner_id: 'u2',
     });
-    expect(one.items.map((i) => i.campaign_id)).toEqual(['c2']);
+    expect(one.items.map((i) => i.adset_id)).toEqual(['c2']);
   });
 
   it('ngày bắt đầu sau ngày kết thúc → lỗi', async () => {
@@ -422,6 +422,8 @@ describe('MarketingHubService.resolveUnknownAds', () => {
           accountId: '222',
           campaignId: 'c1',
           campaignName: 'Camp A',
+          adsetId: 's1',
+          adsetName: 'Nhóm A',
         });
       return Promise.reject(new fb.FacebookApiError('Không có quyền', 10));
     });
@@ -434,12 +436,16 @@ describe('MarketingHubService.resolveUnknownAds', () => {
         adAccountId: 'acc-2',
         campaignId: 'c1',
         campaignName: 'Camp A',
+        adsetId: 's1',
+        adsetName: 'Nhóm A',
         lastError: null,
       },
       update: {
         adAccountId: 'acc-2',
         campaignId: 'c1',
         campaignName: 'Camp A',
+        adsetId: 's1',
+        adsetName: 'Nhóm A',
         lastError: null,
       },
     });

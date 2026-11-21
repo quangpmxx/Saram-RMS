@@ -221,7 +221,7 @@ export class CandidatesService {
     id: string,
     currentUser: AuthenticatedUser,
   ): Promise<{
-    ad_campaign: { ad_id: string; campaign_name: string | null } | null;
+    ad_campaign: { ad_id: string; adset_name: string | null } | null;
   }> {
     // Chỉ Admin/Quản lý/MKT (mặc định) — quyền "Xem tên camp quảng cáo của data" (2026-11-21).
     // Kiểm quyền trước (không tốn truy vấn) để Sale mở data không phải chờ thêm gì.
@@ -230,9 +230,9 @@ export class CandidatesService {
     await this.assertCanView(id, currentUser);
     // 1 truy vấn: hội thoại Pancake có mã quảng cáo + tên camp (nếu đã tra được).
     const rows = await this.prisma.$queryRaw<
-      { ad_id: string; campaign_name: string | null }[]
+      { ad_id: string; adset_name: string | null }[]
     >`
-      SELECT pc.ad_id, fa.campaign_name
+      SELECT pc.ad_id, fa.adset_name
         FROM pancake_conversations pc
         LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
        WHERE pc.lead_id = ${id}::uuid AND pc.ad_id IS NOT NULL
@@ -240,7 +240,7 @@ export class CandidatesService {
     const row = rows[0];
     return {
       ad_campaign: row
-        ? { ad_id: row.ad_id, campaign_name: row.campaign_name }
+        ? { ad_id: row.ad_id, adset_name: row.adset_name }
         : null,
     };
   }

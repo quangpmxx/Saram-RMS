@@ -735,8 +735,8 @@ function EfficiencyTable({ data }: { data: Overview }) {
 
 type CampaignRow = {
   owner: { id: string; full_name: string };
-  campaign_id: string | null;
-  campaign_name: string | null;
+  adset_id: string | null;
+  adset_name: string | null;
   total: number;
   red: number;
   yellow: number;
@@ -745,8 +745,8 @@ type CampaignRow = {
 };
 
 /**
- * Bảng Data theo camp (2026-11-21): data Pancake up từ quảng cáo trong kỳ, theo nhân viên
- * phụ trách TKQC + camp; cột Đỏ/Vàng/Xanh = số data đang bôi màu đó, Đóng = data đã đóng.
+ * Bảng Data theo ad set (2026-11-21): data Pancake up từ quảng cáo trong kỳ, theo nhân viên
+ * phụ trách TKQC + nhóm quảng cáo; cột Đỏ/Vàng/Xanh = số data đang bôi màu đó, Đóng = data đã đóng.
  */
 function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ownerId: string }) {
   const [rows, setRows] = useState<CampaignRow[] | null>(null);
@@ -782,13 +782,13 @@ function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ow
 
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-semibold text-slate-700">Data theo camp</h2>
+      <h2 className="text-sm font-semibold text-slate-700">Data theo ad set</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
           <thead className="bg-slate-700 text-xs font-semibold text-white">
             <tr>
               <th className={td}>Nhân viên</th>
-              <th className={td}>Camp</th>
+              <th className={td}>Ad set</th>
               <th className={td}>Số lượng Data</th>
               <th className={td}>Đỏ</th>
               <th className={td}>Vàng</th>
@@ -799,16 +799,16 @@ function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ow
           <tbody>
             {groups.map((g) =>
               g.map((r, idx) => (
-                <tr key={`${r.owner.id}-${r.campaign_id ?? "none"}`}>
+                <tr key={`${r.owner.id}-${r.adset_id ?? "none"}`}>
                   {idx === 0 && (
                     <td rowSpan={g.length} className={`${td} align-middle font-medium`}>
                       {r.owner.full_name}
                     </td>
                   )}
                   <td className={`${td} !text-left`}>
-                    {r.campaign_name ?? (
+                    {r.adset_name ?? (
                       <span className="text-xs text-slate-400">
-                        {r.campaign_id ? `Camp ${r.campaign_id}` : "Chưa rõ camp (TKQC chưa liên kết)"}
+                        {r.adset_id ? `Ad set ${r.adset_id}` : "Chưa rõ ad set (chưa tra được)"}
                       </span>
                     )}
                   </td>

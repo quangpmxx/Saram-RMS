@@ -33,9 +33,9 @@ export async function CandidateDetailContent({ id, inModal = false }: { id: stri
       serverApi<StatusCatalogItem[]>("/status?category=zalo_friend_status"),
     ]),
     asResult(serverApi(`/candidate/${id}/open-lock`, { method: "POST" })),
-    // Camp quảng cáo (2026-11-21) — lỗi thì bỏ qua, không chặn trang.
+    // Nhóm quảng cáo (ad set) (2026-11-21) — lỗi thì bỏ qua, không chặn trang.
     asResult(
-      serverApi<{ ad_campaign: { ad_id: string; campaign_name: string | null } | null }>(`/candidate/${id}/ad-campaign`),
+      serverApi<{ ad_campaign: { ad_id: string; adset_name: string | null } | null }>(`/candidate/${id}/ad-campaign`),
     ),
   ]);
   if (!user) {

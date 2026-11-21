@@ -1766,6 +1766,9 @@ model FbAd {
   adAccountId  String?  @map("ad_account_id") @db.Uuid
   campaignId   String?  @map("campaign_id") @db.VarChar(64)
   campaignName String?  @map("campaign_name") @db.VarChar(255)
+  /// Nhóm quảng cáo (ad set) — cột hiển thị ở trang Chi tiết + bảng Data theo ad set (2026-11-21).
+  adsetId      String?  @map("adset_id") @db.VarChar(64)
+  adsetName    String?  @map("adset_name") @db.VarChar(255)
   /// Lỗi lần tra gần nhất (không có token nào đọc được quảng cáo này...).
   lastError    String?  @map("last_error") @db.VarChar(255)
   updatedAt    DateTime @updatedAt @map("updated_at")

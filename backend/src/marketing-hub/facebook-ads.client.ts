@@ -145,9 +145,11 @@ export interface FbAdInfo {
   accountId: string | null;
   campaignId: string | null;
   campaignName: string | null;
+  adsetId: string | null;
+  adsetName: string | null;
 }
 
-/** Tra 1 quảng cáo theo mã (mã Pancake ghi ở hội thoại) ra TKQC + camp. */
+/** Tra 1 quảng cáo theo mã (mã Pancake ghi ở hội thoại) ra TKQC + camp + nhóm quảng cáo. */
 export async function fetchAdInfo(
   token: string,
   adId: string,
@@ -155,13 +157,16 @@ export async function fetchAdInfo(
   const ad = await getOne<{
     account_id?: string;
     campaign?: { id?: string; name?: string };
+    adset?: { id?: string; name?: string };
   }>(
-    `${GRAPH}/${encodeURIComponent(adId)}?fields=account_id,campaign{id,name}`,
+    `${GRAPH}/${encodeURIComponent(adId)}?fields=account_id,campaign{id,name},adset{id,name}`,
     token,
   );
   return {
     accountId: ad.account_id ?? null,
     campaignId: ad.campaign?.id ?? null,
     campaignName: ad.campaign?.name ?? null,
+    adsetId: ad.adset?.id ?? null,
+    adsetName: ad.adset?.name ?? null,
   };
 }
