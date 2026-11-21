@@ -47,6 +47,13 @@ export class MarketingHubController {
     return this.service.campaignData(query);
   }
 
+  /** Nút Làm mới bảng Data theo ad set: tra lại ngay tên ad set còn thiếu với Facebook. */
+  @Post('campaign-data/refresh')
+  @HttpCode(200)
+  refreshAdsets() {
+    return this.service.refreshAdsets();
+  }
+
   /** Khối Chi phí Marketing trên Dashboard (Admin/Quản lý/MKT) — theo khoảng from/to, trống = hôm nay. */
   @Get('today')
   @AllowWithoutModule()

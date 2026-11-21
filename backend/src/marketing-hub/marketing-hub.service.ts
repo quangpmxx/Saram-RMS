@@ -359,7 +359,7 @@ export class MarketingHubService implements OnApplicationBootstrap {
    * thử lần lượt các token TKQC đã lưu (2026-11-21 — lấy danh sách theo TKQC không đủ).
    * Mỗi lượt tối đa 200 mã; mã tra không được thì thử lại sau 1 ngày. Trả về số mã ra tên camp.
    */
-  async resolveUnknownAds(): Promise<number> {
+  async resolveUnknownAds(retryFailedNow = false): Promise<number> {
     if (this.resolvingAds) return 0;
     this.resolvingAds = true;
     let resolved = 0;
@@ -373,7 +373,7 @@ export class MarketingHubService implements OnApplicationBootstrap {
                 -- Chưa có tên nhóm quảng cáo: mã tra thành công trước đây (chưa lấy ad set) tra lại
                 -- ngay; mã tra lỗi thì đợi 1 ngày.
                 OR (fa.adset_name IS NULL
-                    AND (fa.last_error IS NULL
+                    AND (fa.last_error IS NULL OR ${retryFailedNow}::boolean
                          OR fa.updated_at < (now() AT TIME ZONE 'UTC') - interval '1 day')))
          LIMIT 200`;
       if (pending.length === 0) return 0;
@@ -437,6 +437,11 @@ export class MarketingHubService implements OnApplicationBootstrap {
       this.resolvingAds = false;
     }
     return resolved;
+  }
+
+  /** Nút Làm mới của bảng Data theo ad set: tra lại ngay mọi mã chưa có tên ad set (kể cả mã từng lỗi). */
+  async refreshAdsets(): Promise<{ resolved: number }> {
+    return { resolved: await this.resolveUnknownAds(true) };
   }
 
   /**

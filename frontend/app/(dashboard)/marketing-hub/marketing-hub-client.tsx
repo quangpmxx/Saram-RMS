@@ -765,6 +765,8 @@ function CampaignDataTable({
 }) {
   const [rows, setRows] = useState<CampaignRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   useEffect(() => {
     let cancelled = false;
     const q = new URLSearchParams({ from, to });
@@ -777,11 +779,22 @@ function CampaignDataTable({
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(errorText(e));
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [from, to, ownerId]);
+  }, [from, to, ownerId, reloadKey]);
+
+  // Làm mới: tra lại ngay tên ad set còn thiếu với Facebook (người chỉ có quyền xem thì bỏ qua bước này),
+  // rồi tải lại bảng.
+  async function refresh() {
+    setRefreshing(true);
+    await clientApi("/marketing-hub/campaign-data/refresh", { method: "POST" }).catch(() => undefined);
+    setReloadKey((k) => k + 1);
+  }
 
   const td = "border border-slate-200 px-3 py-2";
   const groups: CampaignRow[][] = [];
@@ -796,7 +809,17 @@ function CampaignDataTable({
 
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-semibold text-slate-700">Data theo ad set</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-700">Data theo ad set</h2>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        >
+          {refreshing ? "Đang làm mới…" : "↻ Làm mới"}
+        </button>
+      </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
         <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
           <thead className="bg-slate-700 text-xs font-semibold text-white">

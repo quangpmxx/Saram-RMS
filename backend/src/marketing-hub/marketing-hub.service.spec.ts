@@ -464,4 +464,13 @@ describe('MarketingHubService.resolveUnknownAds', () => {
     expect(await build(prisma).resolveUnknownAds()).toBe(0);
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('nút Làm mới: tra lại ngay cả mã từng lỗi (bỏ chờ 1 ngày)', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([]);
+    const svc = build({ $queryRaw: queryRaw });
+    await svc.resolveUnknownAds();
+    expect(queryRaw.mock.calls[0]).toContain(false);
+    expect(await svc.refreshAdsets()).toEqual({ resolved: 0 });
+    expect(queryRaw.mock.calls[1]).toContain(true);
+  });
 });
