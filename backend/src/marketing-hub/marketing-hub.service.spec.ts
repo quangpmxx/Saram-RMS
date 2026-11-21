@@ -349,6 +349,7 @@ describe('MarketingHubService.campaignData', () => {
   const row = (owner: string, camp: string | null, total: number) => ({
     owner_id: owner,
     owner_name: owner.toUpperCase(),
+    no_ad: false,
     adset_id: camp,
     adset_name: camp ? `Camp ${camp}` : null,
     total,
@@ -374,6 +375,7 @@ describe('MarketingHubService.campaignData', () => {
     expect(all.items).toHaveLength(3);
     expect(all.items[0]).toEqual({
       owner: { id: 'u1', full_name: 'U1' },
+      no_ad: false,
       adset_id: 'c1',
       adset_name: 'Camp c1',
       total: 5,

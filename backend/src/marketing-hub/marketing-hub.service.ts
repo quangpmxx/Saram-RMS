@@ -887,9 +887,9 @@ export class MarketingHubService implements OnApplicationBootstrap {
   }
 
   /**
-   * Bảng "Data theo camp" (2026-11-21): data Pancake up từ quảng cáo trong kỳ (theo ngày up),
-   * nhóm theo nhân viên + camp. Nhân viên = người phụ trách TKQC chứa camp; chưa tra được
-   * camp (TKQC chưa liên kết/chưa đồng bộ) thì theo người up, camp để trống.
+   * Bảng "Data theo ad set" (2026-11-21): MỌI data up trong kỳ (theo ngày up); data Pancake từ quảng cáo,
+   * theo nhân viên + ad set (Nhân viên = người phụ trách TKQC; chưa tra được thì người up);
+   * data còn lại (không qua quảng cáo) gộp 1 dòng mỗi người up.
    */
   async campaignData(q: MarketingPeriodQueryDto & { owner_id?: string }) {
     const to = q.to ?? vnToday();
@@ -902,6 +902,7 @@ export class MarketingHubService implements OnApplicationBootstrap {
       {
         owner_id: string;
         owner_name: string;
+        no_ad: boolean;
         adset_id: string | null;
         adset_name: string | null;
         total: number;
@@ -912,14 +913,20 @@ export class MarketingHubService implements OnApplicationBootstrap {
       }[]
     >`
       SELECT o.id AS owner_id, o.full_name AS owner_name,
-             fa.adset_id, MAX(fa.adset_name) AS adset_name,
+             (pc.ad_id IS NULL) AS no_ad, fa.adset_id, MAX(fa.adset_name) AS adset_name,
              COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE l.note_color = 'red')::int AS red,
              COUNT(*) FILTER (WHERE l.note_color = 'yellow')::int AS yellow,
              COUNT(*) FILTER (WHERE l.note_color = 'green')::int AS green,
              COUNT(*) FILTER (WHERE l.care_stopped_at IS NOT NULL)::int AS closed
         FROM leads l
-        JOIN pancake_conversations pc ON pc.lead_id = l.id AND pc.ad_id IS NOT NULL
+        -- Mọi data trong kỳ (2026-11-21: thêm dòng nhập tay để đủ số): data có mã quảng cáo
+        -- theo ad set; còn lại (nhập tay/Excel/website/khách tự nhắn page) gộp 1 dòng/người up.
+        LEFT JOIN LATERAL (
+          SELECT ad_id FROM pancake_conversations
+           WHERE lead_id = l.id AND ad_id IS NOT NULL
+           LIMIT 1
+        ) pc ON true
         LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
         LEFT JOIN ad_accounts aa ON aa.id = fa.ad_account_id
         JOIN accounts o ON o.id = COALESCE(aa.owner_id, l.uploaded_by)
@@ -927,12 +934,14 @@ export class MarketingHubService implements OnApplicationBootstrap {
          -- Cột lưu giờ UTC không múi giờ: đổi tham số về UTC, không phụ thuộc múi giờ phiên DB.
          AND l.uploaded_at >= (${start}::timestamptz AT TIME ZONE 'UTC')
          AND l.uploaded_at < (${end}::timestamptz AT TIME ZONE 'UTC')
-       GROUP BY o.id, o.full_name, fa.adset_id
-       ORDER BY o.full_name, total DESC`;
+       GROUP BY o.id, o.full_name, (pc.ad_id IS NULL), fa.adset_id
+       ORDER BY o.full_name, (pc.ad_id IS NULL), total DESC`;
     const items = rows
       .filter((r) => !q.owner_id || r.owner_id === q.owner_id)
       .map((r) => ({
         owner: { id: r.owner_id, full_name: r.owner_name },
+        /** true = dòng data không qua quảng cáo (nhập tay/Excel/website/tự nhắn page). */
+        no_ad: r.no_ad,
         adset_id: r.adset_id,
         adset_name: r.adset_name,
         total: r.total,

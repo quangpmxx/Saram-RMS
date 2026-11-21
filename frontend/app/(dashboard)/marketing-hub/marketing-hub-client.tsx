@@ -112,12 +112,16 @@ export function MarketingHubClient({
   const [accountId, setAccountId] = useState("");
   const [ownerId, setOwnerId] = useState("");
   // Ghi nhớ bộ lọc khi rời trang rồi quay lại (2026-11-10); đổi state là tự tải lại.
-  useRememberedFilters("marketing-hub", { date, platform, accountId, ownerId }, (saved) => {
-    setDate(saved.date);
-    setPlatform(saved.platform);
-    setAccountId(saved.accountId);
-    setOwnerId(saved.ownerId);
-  });
+  useRememberedFilters(
+    "marketing-hub",
+    { date, platform, accountId, ownerId },
+    (saved) => {
+      setDate(saved.date);
+      setPlatform(saved.platform);
+      setAccountId(saved.accountId);
+      setOwnerId(saved.ownerId);
+    },
+  );
   const [data, setData] = useState<Overview | null>(null);
   const [allItems, setAllItems] = useState<AdItem[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
@@ -735,6 +739,8 @@ function EfficiencyTable({ data }: { data: Overview }) {
 
 type CampaignRow = {
   owner: { id: string; full_name: string };
+  /** Dòng data không qua quảng cáo (nhập tay/Excel/website/tự nhắn page). */
+  no_ad: boolean;
   adset_id: string | null;
   adset_name: string | null;
   total: number;
@@ -745,10 +751,18 @@ type CampaignRow = {
 };
 
 /**
- * Bảng Data theo ad set (2026-11-21): data Pancake up từ quảng cáo trong kỳ, theo nhân viên
+ * Bảng Data theo ad set (2026-11-21): mọi data trong kỳ — data từ quảng cáo theo nhân viên
  * phụ trách TKQC + nhóm quảng cáo; cột Đỏ/Vàng/Xanh = số data đang bôi màu đó, Đóng = data đã đóng.
  */
-function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ownerId: string }) {
+function CampaignDataTable({
+  from,
+  to,
+  ownerId,
+}: {
+  from: string;
+  to: string;
+  ownerId: string;
+}) {
   const [rows, setRows] = useState<CampaignRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -799,17 +813,31 @@ function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ow
           <tbody>
             {groups.map((g) =>
               g.map((r, idx) => (
-                <tr key={`${r.owner.id}-${r.adset_id ?? "none"}`}>
+                <tr
+                  key={`${r.owner.id}-${r.no_ad ? "no-ad" : (r.adset_id ?? "none")}`}
+                  className={r.no_ad ? "bg-slate-50" : undefined}
+                >
                   {idx === 0 && (
-                    <td rowSpan={g.length} className={`${td} align-middle font-medium`}>
+                    <td
+                      rowSpan={g.length}
+                      className={`${td} align-middle font-medium`}
+                    >
                       {r.owner.full_name}
                     </td>
                   )}
                   <td className={`${td} !text-left`}>
-                    {r.adset_name ?? (
-                      <span className="text-xs text-slate-400">
-                        {r.adset_id ? `Ad set ${r.adset_id}` : "Chưa rõ ad set (chưa tra được)"}
+                    {r.no_ad ? (
+                      <span className="italic text-slate-500">
+                        Không qua quảng cáo / nhập tay
                       </span>
+                    ) : (
+                      (r.adset_name ?? (
+                        <span className="text-xs text-slate-400">
+                          {r.adset_id
+                            ? `Ad set ${r.adset_id}`
+                            : "Chưa rõ ad set (chưa tra được)"}
+                        </span>
+                      ))
                     )}
                   </td>
                   <td className={`${td} font-medium`}>{num(r.total)}</td>
@@ -828,14 +856,22 @@ function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ow
                 <td className={td}>{num(sum("total"))}</td>
                 <td className={`${td} text-red-600`}>{num(sum("red"))}</td>
                 <td className={`${td} text-amber-600`}>{num(sum("yellow"))}</td>
-                <td className={`${td} text-emerald-600`}>{num(sum("green"))}</td>
+                <td className={`${td} text-emerald-600`}>
+                  {num(sum("green"))}
+                </td>
                 <td className={td}>{num(sum("closed"))}</td>
               </tr>
             )}
             {(rows === null || rows.length === 0) && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
-                  {error ?? (rows === null ? "Đang tải..." : "Chưa có data nào up từ quảng cáo trong khoảng này")}
+                <td
+                  colSpan={7}
+                  className="px-3 py-8 text-center text-slate-400"
+                >
+                  {error ??
+                    (rows === null
+                      ? "Đang tải..."
+                      : "Chưa có data nào trong khoảng này")}
                 </td>
               </tr>
             )}
