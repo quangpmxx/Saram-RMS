@@ -95,6 +95,7 @@ export function CandidateDetailClient({
   currentUserTeamId,
   inModal = false,
   initialOpenLock,
+  adCampaign = null,
 }: {
   permissionLevel: ModulePermissionLevel;
   initialCandidate: Candidate;
@@ -110,6 +111,8 @@ export function CandidateDetailClient({
   inModal?: boolean;
   /** Khoá "đang ở trong data" đã xin sẵn phía máy chủ lúc tải trang — không phải chờ thêm 1 lượt mới hiện nội dung. */
   initialOpenLock?: { status: "ok" | "blocked"; message?: string };
+  /** Camp quảng cáo của data (Pancake up tự động); null = không đến từ quảng cáo. */
+  adCampaign?: { ad_id: string; campaign_name: string | null } | null;
 }) {
   // Dự án phụ — nâng cấp toàn diện (2026-07-24, "Phân quyền" phiên bản đơn
   // giản, Mục 2/6): trang Chi tiết ứng viên có RẤT NHIỀU điểm chỉnh sửa rải
@@ -975,6 +978,19 @@ export function CandidateDetailClient({
                   {candidate.assigned_to ? <NameWithRoleHint account={candidate.assigned_to} /> : "Chờ phân chia"}
                 </dd>
               </div>
+              {/* Camp quảng cáo (2026-11-21) — chỉ data Pancake up từ quảng cáo. */}
+              {adCampaign && (
+                <div className="flex min-w-0 flex-col gap-1">
+                  <dt className="text-xs text-slate-500">Camp</dt>
+                  <dd className="break-words text-slate-800">
+                    {adCampaign.campaign_name ?? (
+                      <span className="text-xs text-slate-400" title={`Mã quảng cáo ${adCampaign.ad_id}`}>
+                        Chưa lấy được tên (TKQC chưa liên kết)
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
             </dl>
           </Card>
         </div>

@@ -22,7 +22,7 @@ export async function CandidateDetailContent({ id, inModal = false }: { id: stri
         throw error; // redirect() (hết phiên) và lỗi khác giữ nguyên hành vi cũ
       },
     );
-  const [user, permissionLevel, main, statuses, lock] = await Promise.all([
+  const [user, permissionLevel, main, statuses, lock, campaign] = await Promise.all([
     getCurrentUser(),
     requirePageAccess("candidates"),
     asResult(Promise.all([serverApi<Candidate>(`/candidate/${id}`), serverApi<Note[]>(`/candidate/${id}/note`)])),
@@ -33,6 +33,10 @@ export async function CandidateDetailContent({ id, inModal = false }: { id: stri
       serverApi<StatusCatalogItem[]>("/status?category=zalo_friend_status"),
     ]),
     asResult(serverApi(`/candidate/${id}/open-lock`, { method: "POST" })),
+    // Camp quảng cáo (2026-11-21) — lỗi thì bỏ qua, không chặn trang.
+    asResult(
+      serverApi<{ ad_campaign: { ad_id: string; campaign_name: string | null } | null }>(`/candidate/${id}/ad-campaign`),
+    ),
   ]);
   if (!user) {
     redirect("/login");
@@ -63,6 +67,7 @@ export async function CandidateDetailContent({ id, inModal = false }: { id: stri
       currentUserTeamId={user.team_id}
       inModal={inModal}
       initialOpenLock={initialOpenLock}
+      adCampaign={campaign.ok ? campaign.value.ad_campaign : null}
     />
   );
 }

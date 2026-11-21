@@ -41,6 +41,12 @@ export class MarketingHubController {
     return this.service.overview(query);
   }
 
+  /** Bảng Data theo camp: số data Pancake từ quảng cáo theo nhân viên + camp, kèm số đỏ/vàng/xanh/đóng. */
+  @Get('campaign-data')
+  campaignData(@Query() query: OverviewQueryDto) {
+    return this.service.campaignData(query);
+  }
+
   /** Khối Chi phí Marketing trên Dashboard (Admin/Quản lý/MKT) — theo khoảng from/to, trống = hôm nay. */
   @Get('today')
   @AllowWithoutModule()

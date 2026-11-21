@@ -139,6 +139,15 @@ export class CandidatesController {
     return this.candidatesService.findOne(id, user);
   }
 
+  /** Camp quảng cáo mà data đến từ đó (data Pancake up tự động); null = không đến từ quảng cáo. */
+  @Get(':id/ad-campaign')
+  getAdCampaign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.candidatesService.getAdCampaign(id, user);
+  }
+
   /**
    * Trang Chi tiết data: ghi 1 lượt truy cập (gọi khi mở trang) và đọc lịch
    * sử truy cập + thao tác công khai của data (yêu cầu người dùng 2026-10-29).

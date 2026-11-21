@@ -213,6 +213,35 @@ export class CandidatesService {
   }
 
   /**
+   * Camp của data up tự động từ Pancake (2026-11-21): hội thoại có mã quảng cáo → bảng fb_ads
+   * (lấy lúc đồng bộ TKQC). null = data không đến từ quảng cáo; campaign_name null = có mã
+   * quảng cáo nhưng TKQC chưa liên kết/chưa đồng bộ nên chưa biết tên.
+   */
+  async getAdCampaign(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{
+    ad_campaign: { ad_id: string; campaign_name: string | null } | null;
+  }> {
+    await this.assertCanView(id, currentUser);
+    const conversation = await this.prisma.pancakeConversation.findFirst({
+      where: { leadId: id, adId: { not: null } },
+      select: { adId: true },
+    });
+    if (!conversation?.adId) return { ad_campaign: null };
+    const ad = await this.prisma.fbAd.findUnique({
+      where: { adId: conversation.adId },
+      select: { campaignName: true },
+    });
+    return {
+      ad_campaign: {
+        ad_id: conversation.adId,
+        campaign_name: ad?.campaignName ?? null,
+      },
+    };
+  }
+
+  /**
    * Mục 2.1, docs/12 (tooltip/popup khi hover badge "Trùng SĐT") + Mục 10.4,
    * docs/09: Admin/Quản lý/MKT xem toàn bộ các lần trùng không giới hạn
    * nhóm; Leader/Sale chỉ xem chi tiết các bản ghi trùng thuộc đúng nhóm

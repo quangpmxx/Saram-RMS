@@ -1750,11 +1750,27 @@ model AdAccount {
   owner     Account        @relation("AdAccountOwner", fields: [ownerId], references: [id])
   mktSource MktSource?     @relation(fields: [mktSourceId], references: [id], onDelete: SetNull)
   spends    AdSpendDaily[]
+  ads       FbAd[]
 
   @@unique([platform, externalId])
   @@index([ownerId])
   @@index([mktSourceId])
   @@map("ad_accounts")
+}
+
+/// Quảng cáo Facebook của TKQC đã liên kết (lấy lúc đồng bộ) — tra mã quảng cáo
+/// (Pancake ghi ở pancake_conversations.ad_id) ra camp mà data đến từ đó.
+model FbAd {
+  adId         String   @id @map("ad_id") @db.VarChar(64)
+  adAccountId  String   @map("ad_account_id") @db.Uuid
+  campaignId   String?  @map("campaign_id") @db.VarChar(64)
+  campaignName String?  @map("campaign_name") @db.VarChar(255)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  @@index([adAccountId])
+  @@map("fb_ads")
 }
 
 /// Marketing Hub — chi tiêu theo ngày (đơn vị VNĐ). Unique (tài khoản, ngày)
@@ -1823,6 +1839,7 @@ model PancakeConversation {
   @@unique([pancakePageId, conversationId])
   @@index([pancakePageId, startedAt])
   @@index([postId])
+  @@index([leadId])
   @@map("pancake_conversations")
 }
 

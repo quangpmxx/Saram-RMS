@@ -21,6 +21,7 @@ import {
   FacebookApiError,
   FbAdAccount,
   fetchAccountHealth,
+  fetchAdCampaigns,
   fetchDailySpend,
   listAdAccounts,
 } from './facebook-ads.client';
@@ -262,6 +263,7 @@ export class MarketingHubService {
           if (prev === null || newLevel < prev)
             await this.notifyLowBalance(account, remaining, newLevel);
         }
+        await this.syncAdCampaigns(id, token, account.externalId);
       } catch (e) {
         const invalid = e instanceof FacebookApiError && e.isTokenInvalid;
         const message =
@@ -279,6 +281,41 @@ export class MarketingHubService {
       }
     } finally {
       this.syncing.delete(id);
+    }
+  }
+
+  /**
+   * Lưu danh sách quảng cáo → camp của TKQC (tra camp cho data Pancake). Lỗi chỉ ghi log,
+   * không làm hỏng đồng bộ chi tiêu.
+   */
+  private async syncAdCampaigns(
+    adAccountId: string,
+    token: string,
+    externalId: string,
+  ): Promise<void> {
+    try {
+      const ads = await fetchAdCampaigns(token, externalId);
+      if (ads.length === 0) return;
+      // Ghi gộp 1 câu lệnh: thêm mới hoặc cập nhật tên camp đã đổi.
+      await this.prisma.$executeRaw`
+        INSERT INTO fb_ads (ad_id, ad_account_id, campaign_id, campaign_name, updated_at)
+        SELECT a.ad_id, ${adAccountId}::uuid, a.campaign_id, a.campaign_name, now()
+          FROM unnest(
+            ${ads.map((a) => a.adId.slice(0, 64))}::varchar[],
+            ${ads.map((a) => a.campaignId?.slice(0, 64) ?? null)}::varchar[],
+            ${ads.map((a) => a.campaignName?.slice(0, 255) ?? null)}::varchar[]
+          ) AS a(ad_id, campaign_id, campaign_name)
+        ON CONFLICT (ad_id) DO UPDATE
+           SET ad_account_id = EXCLUDED.ad_account_id,
+               campaign_id = EXCLUDED.campaign_id,
+               campaign_name = EXCLUDED.campaign_name,
+               updated_at = now()
+         WHERE fb_ads.campaign_name IS DISTINCT FROM EXCLUDED.campaign_name
+            OR fb_ads.ad_account_id IS DISTINCT FROM EXCLUDED.ad_account_id`;
+    } catch (e) {
+      this.logger.warn(
+        `Lấy danh sách camp của TKQC ${adAccountId} lỗi: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
@@ -789,5 +826,63 @@ export class MarketingHubService {
       lead_total: leadTotal,
       items,
     };
+  }
+
+  /**
+   * Bảng "Data theo camp" (2026-11-21): data Pancake up từ quảng cáo trong kỳ (theo ngày up),
+   * nhóm theo nhân viên + camp. Nhân viên = người phụ trách TKQC chứa camp; chưa tra được
+   * camp (TKQC chưa liên kết/chưa đồng bộ) thì theo người up, camp để trống.
+   */
+  async campaignData(q: MarketingPeriodQueryDto & { owner_id?: string }) {
+    const to = q.to ?? vnToday();
+    const from = q.from ?? vnDaysAgo(29);
+    if (from > to)
+      throw new BadRequestException('Ngày bắt đầu phải trước ngày kết thúc');
+    const start = vnDayRange(from).start;
+    const end = vnDayRange(to).end;
+    const rows = await this.prisma.$queryRaw<
+      {
+        owner_id: string;
+        owner_name: string;
+        campaign_id: string | null;
+        campaign_name: string | null;
+        total: number;
+        red: number;
+        yellow: number;
+        green: number;
+        closed: number;
+      }[]
+    >`
+      SELECT o.id AS owner_id, o.full_name AS owner_name,
+             fa.campaign_id, MAX(fa.campaign_name) AS campaign_name,
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE l.note_color = 'red')::int AS red,
+             COUNT(*) FILTER (WHERE l.note_color = 'yellow')::int AS yellow,
+             COUNT(*) FILTER (WHERE l.note_color = 'green')::int AS green,
+             COUNT(*) FILTER (WHERE l.care_stopped_at IS NOT NULL)::int AS closed
+        FROM leads l
+        JOIN pancake_conversations pc ON pc.lead_id = l.id AND pc.ad_id IS NOT NULL
+        LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
+        LEFT JOIN ad_accounts aa ON aa.id = fa.ad_account_id
+        JOIN accounts o ON o.id = COALESCE(aa.owner_id, l.uploaded_by)
+       WHERE l.deleted_at IS NULL
+         -- Cột lưu giờ UTC không múi giờ: đổi tham số về UTC, không phụ thuộc múi giờ phiên DB.
+         AND l.uploaded_at >= (${start}::timestamptz AT TIME ZONE 'UTC')
+         AND l.uploaded_at < (${end}::timestamptz AT TIME ZONE 'UTC')
+       GROUP BY o.id, o.full_name, fa.campaign_id
+       ORDER BY o.full_name, total DESC`;
+    const items = rows
+      .filter((r) => !q.owner_id || r.owner_id === q.owner_id)
+      .map((r) => ({
+        owner: { id: r.owner_id, full_name: r.owner_name },
+        campaign_id: r.campaign_id,
+        campaign_name: r.campaign_name,
+        total: r.total,
+        red: r.red,
+        yellow: r.yellow,
+        green: r.green,
+        closed: r.closed,
+      }));
+    return { from, to, items };
   }
 }

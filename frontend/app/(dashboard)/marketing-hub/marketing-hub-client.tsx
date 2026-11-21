@@ -330,6 +330,8 @@ export function MarketingHubClient({
 
       {data && <EfficiencyTable data={data} />}
 
+      <CampaignDataTable from={from} to={to} ownerId={ownerId} />
+
       <PancakeSection
         from={from}
         to={to}
@@ -721,6 +723,119 @@ function EfficiencyTable({ data }: { data: Overview }) {
                   className="px-3 py-8 text-center text-slate-400"
                 >
                   Chưa có tài khoản quảng cáo nào
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+type CampaignRow = {
+  owner: { id: string; full_name: string };
+  campaign_id: string | null;
+  campaign_name: string | null;
+  total: number;
+  red: number;
+  yellow: number;
+  green: number;
+  closed: number;
+};
+
+/**
+ * Bảng Data theo camp (2026-11-21): data Pancake up từ quảng cáo trong kỳ, theo nhân viên
+ * phụ trách TKQC + camp; cột Đỏ/Vàng/Xanh = số data đang bôi màu đó, Đóng = data đã đóng.
+ */
+function CampaignDataTable({ from, to, ownerId }: { from: string; to: string; ownerId: string }) {
+  const [rows, setRows] = useState<CampaignRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const q = new URLSearchParams({ from, to });
+    if (ownerId) q.set("owner_id", ownerId);
+    clientApi<{ items: CampaignRow[] }>(`/marketing-hub/campaign-data?${q}`)
+      .then((r) => {
+        if (cancelled) return;
+        setRows(r.items);
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(errorText(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [from, to, ownerId]);
+
+  const td = "border border-slate-200 px-3 py-2";
+  const groups: CampaignRow[][] = [];
+  for (const r of rows ?? []) {
+    const last = groups[groups.length - 1];
+    if (last && last[0].owner.id === r.owner.id) last.push(r);
+    else groups.push([r]);
+  }
+  const sum = (key: "total" | "red" | "yellow" | "green" | "closed") =>
+    (rows ?? []).reduce((s, r) => s + r[key], 0);
+  const num = (n: number) => n.toLocaleString("vi-VN");
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-semibold text-slate-700">Data theo camp</h2>
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white/80">
+        <table className="w-full border-collapse text-sm [&_td]:text-center [&_th]:text-center">
+          <thead className="bg-slate-700 text-xs font-semibold text-white">
+            <tr>
+              <th className={td}>Nhân viên</th>
+              <th className={td}>Camp</th>
+              <th className={td}>Số lượng Data</th>
+              <th className={td}>Đỏ</th>
+              <th className={td}>Vàng</th>
+              <th className={td}>Xanh</th>
+              <th className={td}>Đóng</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) =>
+              g.map((r, idx) => (
+                <tr key={`${r.owner.id}-${r.campaign_id ?? "none"}`}>
+                  {idx === 0 && (
+                    <td rowSpan={g.length} className={`${td} align-middle font-medium`}>
+                      {r.owner.full_name}
+                    </td>
+                  )}
+                  <td className={`${td} !text-left`}>
+                    {r.campaign_name ?? (
+                      <span className="text-xs text-slate-400">
+                        {r.campaign_id ? `Camp ${r.campaign_id}` : "Chưa rõ camp (TKQC chưa liên kết)"}
+                      </span>
+                    )}
+                  </td>
+                  <td className={`${td} font-medium`}>{num(r.total)}</td>
+                  <td className={`${td} text-red-600`}>{num(r.red)}</td>
+                  <td className={`${td} text-amber-600`}>{num(r.yellow)}</td>
+                  <td className={`${td} text-emerald-600`}>{num(r.green)}</td>
+                  <td className={`${td} text-slate-600`}>{num(r.closed)}</td>
+                </tr>
+              )),
+            )}
+            {rows && rows.length > 0 && (
+              <tr className="bg-slate-100 font-semibold">
+                <td className={td} colSpan={2}>
+                  Tổng cộng
+                </td>
+                <td className={td}>{num(sum("total"))}</td>
+                <td className={`${td} text-red-600`}>{num(sum("red"))}</td>
+                <td className={`${td} text-amber-600`}>{num(sum("yellow"))}</td>
+                <td className={`${td} text-emerald-600`}>{num(sum("green"))}</td>
+                <td className={td}>{num(sum("closed"))}</td>
+              </tr>
+            )}
+            {(rows === null || rows.length === 0) && (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
+                  {error ?? (rows === null ? "Đang tải..." : "Chưa có data nào up từ quảng cáo trong khoảng này")}
                 </td>
               </tr>
             )}

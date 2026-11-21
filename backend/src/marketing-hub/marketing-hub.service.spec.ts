@@ -344,3 +344,55 @@ describe('MarketingHubService.today', () => {
     expect(r).toMatchObject({ data_count: 5 });
   });
 });
+
+describe('MarketingHubService.campaignData', () => {
+  const row = (owner: string, camp: string | null, total: number) => ({
+    owner_id: owner,
+    owner_name: owner.toUpperCase(),
+    campaign_id: camp,
+    campaign_name: camp ? `Camp ${camp}` : null,
+    total,
+    red: 1,
+    yellow: 2,
+    green: 3,
+    closed: 0,
+  });
+
+  it('trả dòng theo nhân viên + camp, lọc theo nhân viên', async () => {
+    const queryRaw = jest
+      .fn()
+      .mockResolvedValue([
+        row('u1', 'c1', 5),
+        row('u1', null, 2),
+        row('u2', 'c2', 4),
+      ]);
+    const service = build({ $queryRaw: queryRaw });
+    const all = await service.campaignData({
+      from: '2026-11-01',
+      to: '2026-11-02',
+    });
+    expect(all.items).toHaveLength(3);
+    expect(all.items[0]).toEqual({
+      owner: { id: 'u1', full_name: 'U1' },
+      campaign_id: 'c1',
+      campaign_name: 'Camp c1',
+      total: 5,
+      red: 1,
+      yellow: 2,
+      green: 3,
+      closed: 0,
+    });
+    const one = await service.campaignData({
+      from: '2026-11-01',
+      to: '2026-11-02',
+      owner_id: 'u2',
+    });
+    expect(one.items.map((i) => i.campaign_id)).toEqual(['c2']);
+  });
+
+  it('ngày bắt đầu sau ngày kết thúc → lỗi', async () => {
+    await expect(
+      build({}).campaignData({ from: '2026-11-05', to: '2026-11-01' }),
+    ).rejects.toThrow('Ngày bắt đầu');
+  });
+});
