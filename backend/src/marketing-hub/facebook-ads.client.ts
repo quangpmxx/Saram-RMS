@@ -156,28 +156,41 @@ export interface FbAdsetStatus {
   effectiveStatus: string | null;
 }
 
-/** Trạng thái nhiều ad set cùng TKQC (tối đa 50 mã/lần gọi). */
+/**
+ * Trạng thái nhiều ad set cùng TKQC — hỏi từng mã (5 mã song song). Kiểu gộp `?ids=` Facebook đã
+ * bỏ (báo "deprecated in v26+", 2026-11-21). Mã lỗi riêng lẻ (ad set đã xoá...) thì bỏ qua; mọi mã
+ * đều lỗi hoặc token hỏng thì báo lỗi.
+ */
 export async function fetchAdsetStatuses(
   token: string,
   adsetIds: string[],
 ): Promise<Map<string, FbAdsetStatus>> {
   const out = new Map<string, FbAdsetStatus>();
-  for (let i = 0; i < adsetIds.length; i += 50) {
-    const ids = adsetIds
-      .slice(i, i + 50)
-      .map(encodeURIComponent)
-      .join(',');
-    const r = await getOne<
-      Record<string, { status?: string; effective_status?: string }>
-    >(`${GRAPH}/?ids=${ids}&fields=status,effective_status`, token);
-    for (const [id, v] of Object.entries(r)) {
-      if (!v || typeof v !== 'object') continue;
-      out.set(id, {
-        status: v.status ?? null,
-        effectiveStatus: v.effective_status ?? null,
-      });
-    }
+  const err: { last: Error | null } = { last: null };
+  for (let i = 0; i < adsetIds.length; i += 5) {
+    await Promise.all(
+      adsetIds.slice(i, i + 5).map(async (id) => {
+        try {
+          const v = await getOne<{
+            status?: string;
+            effective_status?: string;
+          }>(
+            `${GRAPH}/${encodeURIComponent(id)}?fields=status,effective_status`,
+            token,
+          );
+          out.set(id, {
+            status: v.status ?? null,
+            effectiveStatus: v.effective_status ?? null,
+          });
+        } catch (e) {
+          err.last = e instanceof Error ? e : new Error(String(e));
+        }
+      }),
+    );
+    if (err.last instanceof FacebookApiError && err.last.isTokenInvalid)
+      throw err.last;
   }
+  if (out.size === 0 && err.last) throw err.last;
   return out;
 }
 
