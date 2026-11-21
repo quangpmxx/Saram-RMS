@@ -60,7 +60,7 @@ export class MarketingHubController {
     @Body() dto: SetAdsetStatusDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    if (!/^d{1,64}$/.test(adsetId))
+    if (!/^\d{1,64}$/.test(adsetId))
       throw new BadRequestException('Mã ad set không hợp lệ');
     return this.service.setAdsetActive(adsetId, dto.active, user);
   }

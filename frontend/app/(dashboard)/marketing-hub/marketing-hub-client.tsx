@@ -888,19 +888,9 @@ function CampaignDataTable({
     setReloadKey((k) => k + 1);
   }
 
-  async function toggleAdset(adsetId: string, name: string, turnOn: boolean) {
-    if (
-      !window.confirm(
-        `${turnOn ? "BẬT" : "TẮT"} ad set “${name}” trên Facebook?${turnOn ? "" : "\nQuảng cáo trong ad set sẽ ngừng chạy."}`,
-      )
-    )
-      return;
-    setBusyAdset(adsetId);
-    try {
-      await clientApi(`/marketing-hub/adsets/${adsetId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ active: turnOn }),
-      });
+  // Bấm là gạt ngay (không hỏi lại — user yêu cầu 2026-11-21); Facebook báo lỗi thì gạt về như cũ.
+  async function toggleAdset(adsetId: string, turnOn: boolean) {
+    const setStatus = (on: boolean) =>
       setData((d) =>
         d
           ? {
@@ -909,14 +899,22 @@ function CampaignDataTable({
                 ...d.adset_status,
                 [adsetId]: {
                   ...d.adset_status[adsetId],
-                  status: turnOn ? "ACTIVE" : "PAUSED",
+                  status: on ? "ACTIVE" : "PAUSED",
                 },
               },
             }
           : d,
       );
+    setStatus(turnOn);
+    setBusyAdset(adsetId);
+    try {
+      await clientApi(`/marketing-hub/adsets/${adsetId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: turnOn }),
+      });
       toast.success(turnOn ? "Đã bật ad set" : "Đã tắt ad set");
     } catch (e) {
+      setStatus(!turnOn);
       toast.error(errorText(e));
     } finally {
       setBusyAdset(null);
@@ -976,7 +974,7 @@ function CampaignDataTable({
           on={on}
           busy={busyAdset === r.adset_id}
           onChange={() =>
-            void toggleAdset(r.adset_id!, r.adset_name ?? r.adset_id!, !on)
+            void toggleAdset(r.adset_id!, !on)
           }
         />
         {note && <span className="text-[10px] text-amber-600">{note}</span>}
