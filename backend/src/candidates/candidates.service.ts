@@ -235,7 +235,12 @@ export class CandidatesService {
       SELECT pc.ad_id, fa.adset_name
         FROM pancake_conversations pc
         LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
-       WHERE pc.lead_id = ${id}::uuid AND pc.ad_id IS NOT NULL
+       WHERE pc.ad_id IS NOT NULL
+         -- Hội thoại đã gắn data; data up tay số lấy từ Pancake thì khớp theo SĐT.
+         AND (pc.lead_id = ${id}::uuid
+              OR pc.phone_number = (SELECT phone_number FROM leads WHERE id = ${id}::uuid))
+       ORDER BY (pc.lead_id IS NOT DISTINCT FROM ${id}::uuid) DESC,
+                pc.phone_seen_at DESC NULLS LAST
        LIMIT 1`;
     const row = rows[0];
     return {

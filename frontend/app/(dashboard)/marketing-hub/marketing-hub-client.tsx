@@ -743,6 +743,8 @@ type CampaignRow = {
   no_ad: boolean;
   adset_id: string | null;
   adset_name: string | null;
+  /** Mã quảng cáo — chỉ có khi chưa tra được ad set. */
+  ad_id: string | null;
   total: number;
   red: number;
   yellow: number;
@@ -837,7 +839,7 @@ function CampaignDataTable({
             {groups.map((g) =>
               g.map((r, idx) => (
                 <tr
-                  key={`${r.owner.id}-${r.no_ad ? "no-ad" : (r.adset_id ?? "none")}`}
+                  key={`${r.owner.id}-${r.no_ad ? "no-ad" : (r.adset_id ?? r.ad_id ?? "none")}`}
                   className={r.no_ad ? "bg-slate-50" : undefined}
                 >
                   {idx === 0 && (
@@ -858,7 +860,9 @@ function CampaignDataTable({
                         <span className="text-xs text-slate-400">
                           {r.adset_id
                             ? `Ad set ${r.adset_id}`
-                            : "Chưa rõ ad set (chưa tra được)"}
+                            : r.ad_id
+                              ? `Quảng cáo ${r.ad_id} (chưa tra được ad set)`
+                              : "Chưa rõ ad set (chưa tra được)"}
                         </span>
                       ))
                     )}

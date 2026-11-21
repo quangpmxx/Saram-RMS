@@ -984,8 +984,8 @@ export function CandidateDetailClient({
                   <dt className="text-xs text-slate-500">Ad set</dt>
                   <dd className="break-words text-slate-800">
                     {adCampaign.adset_name ?? (
-                      <span className="text-xs text-slate-400" title={`Mã quảng cáo ${adCampaign.ad_id}`}>
-                        Chưa lấy được tên (TKQC chưa liên kết)
+                      <span className="text-xs text-slate-400">
+                        Quảng cáo {adCampaign.ad_id} (chưa lấy được tên ad set)
                       </span>
                     )}
                   </dd>

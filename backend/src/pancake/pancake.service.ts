@@ -705,11 +705,15 @@ export class PancakeService {
       where,
     });
     if (existing?.phoneNumber || (existing && !phone)) {
-      // Hội thoại ghi nhận trước khi có cột bài → bổ sung bài khi thấy lại.
-      if (!existing.postId && postId) {
+      // Hội thoại ghi nhận trước khi có cột bài, hoặc khách bình luận/nhắn trước rồi mới bấm
+      // quảng cáo → bổ sung bài + mã quảng cáo khi thấy lại.
+      if ((!existing.postId && postId) || (!existing.adId && adId)) {
         await this.prisma.pancakeConversation.update({
           where: { id: existing.id },
-          data: { postId, adId },
+          data: {
+            postId: existing.postId ?? postId,
+            adId: existing.adId ?? adId,
+          },
         });
       }
       return;

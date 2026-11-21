@@ -910,6 +910,7 @@ export class MarketingHubService implements OnApplicationBootstrap {
         no_ad: boolean;
         adset_id: string | null;
         adset_name: string | null;
+        ad_id: string | null;
         total: number;
         red: number;
         yellow: number;
@@ -919,6 +920,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
     >`
       SELECT o.id AS owner_id, o.full_name AS owner_name,
              (pc.ad_id IS NULL) AS no_ad, fa.adset_id, MAX(fa.adset_name) AS adset_name,
+             -- Chưa tra được ad set → tách dòng theo mã quảng cáo (mã Pancake hiện ở hội thoại).
+             CASE WHEN fa.adset_id IS NULL THEN pc.ad_id END AS ad_id,
              COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE l.note_color = 'red')::int AS red,
              COUNT(*) FILTER (WHERE l.note_color = 'yellow')::int AS yellow,
@@ -927,11 +930,19 @@ export class MarketingHubService implements OnApplicationBootstrap {
         FROM leads l
         -- Mọi data trong kỳ (2026-11-21: thêm dòng nhập tay để đủ số): data có mã quảng cáo
         -- theo ad set; còn lại (nhập tay/Excel/website/khách tự nhắn page) gộp 1 dòng/người up.
-        LEFT JOIN LATERAL (
-          SELECT ad_id FROM pancake_conversations
-           WHERE lead_id = l.id AND ad_id IS NOT NULL
-           LIMIT 1
-        ) pc ON true
+        -- Hội thoại đã gắn data; không có thì khớp theo SĐT (MKT up tay số lấy từ Pancake,
+        -- số thấy lúc Up tự động đang tắt, số trùng) — 2026-11-21.
+        LEFT JOIN (
+          SELECT DISTINCT ON (lead_id) lead_id, ad_id FROM pancake_conversations
+           WHERE lead_id IS NOT NULL AND ad_id IS NOT NULL
+           ORDER BY lead_id, phone_seen_at DESC NULLS LAST
+        ) pl ON pl.lead_id = l.id
+        LEFT JOIN (
+          SELECT DISTINCT ON (phone_number) phone_number, ad_id FROM pancake_conversations
+           WHERE phone_number IS NOT NULL AND ad_id IS NOT NULL
+           ORDER BY phone_number, phone_seen_at DESC NULLS LAST
+        ) pp ON pl.lead_id IS NULL AND pp.phone_number = l.phone_number
+        CROSS JOIN LATERAL (SELECT COALESCE(pl.ad_id, pp.ad_id) AS ad_id) pc
         LEFT JOIN fb_ads fa ON fa.ad_id = pc.ad_id
         LEFT JOIN ad_accounts aa ON aa.id = fa.ad_account_id
         JOIN accounts o ON o.id = COALESCE(aa.owner_id, l.uploaded_by)
@@ -939,7 +950,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
          -- Cột lưu giờ UTC không múi giờ: đổi tham số về UTC, không phụ thuộc múi giờ phiên DB.
          AND l.uploaded_at >= (${start}::timestamptz AT TIME ZONE 'UTC')
          AND l.uploaded_at < (${end}::timestamptz AT TIME ZONE 'UTC')
-       GROUP BY o.id, o.full_name, (pc.ad_id IS NULL), fa.adset_id
+       GROUP BY o.id, o.full_name, (pc.ad_id IS NULL), fa.adset_id,
+                CASE WHEN fa.adset_id IS NULL THEN pc.ad_id END
        ORDER BY o.full_name, (pc.ad_id IS NULL), total DESC`;
     const items = rows
       .filter((r) => !q.owner_id || r.owner_id === q.owner_id)
@@ -949,6 +961,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
         no_ad: r.no_ad,
         adset_id: r.adset_id,
         adset_name: r.adset_name,
+        /** Mã quảng cáo — chỉ có khi chưa tra được ad set. */
+        ad_id: r.ad_id,
         total: r.total,
         red: r.red,
         yellow: r.yellow,
