@@ -956,8 +956,8 @@ export class MarketingHubService implements OnApplicationBootstrap {
         JOIN accounts o ON o.id = COALESCE(aa.owner_id, l.uploaded_by)
        WHERE l.deleted_at IS NULL
          -- Cột lưu giờ UTC không múi giờ: đổi tham số về UTC, không phụ thuộc múi giờ phiên DB.
-         AND l.uploaded_at >= (${start}::timestamptz AT TIME ZONE 'UTC')
-         AND l.uploaded_at < (${end}::timestamptz AT TIME ZONE 'UTC')
+         AND l.uploaded_at >= (${start.toISOString()}::timestamptz AT TIME ZONE 'UTC')
+         AND l.uploaded_at < (${end.toISOString()}::timestamptz AT TIME ZONE 'UTC')
        GROUP BY aa.id, aa.name, o.id, o.full_name, (pc.ad_id IS NULL), fa.adset_id,
                 CASE WHEN fa.adset_id IS NULL THEN pc.ad_id END
        ORDER BY (pc.ad_id IS NULL), (aa.id IS NULL), aa.name, o.full_name, total DESC`;
