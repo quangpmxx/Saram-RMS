@@ -337,7 +337,7 @@ export function DashboardCharts({
           />
         </ChartCard>
         <ChartCard
-          title={`Hẹn PV theo nhóm · ${periodShort}`}
+          title={`Hẹn phỏng vấn theo nhóm · ${periodShort}`}
           top
         >
           <Pie
