@@ -140,7 +140,8 @@ export default async function DashboardLayout({
                   </div>
                 </div>
               </BirthdayHeaderBackground>
-              <main className="relative flex-1 p-3 sm:p-4 md:p-6">
+              {/* pt-1.5: hàng đầu mỗi trang (thường là thanh tab) cách header ~6px — yêu cầu người dùng 2026-11-23, áp dụng mọi trang. */}
+              <main className="relative flex-1 px-3 pt-1.5 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6">
                 {/* Điện thoại: header không còn chỗ cho tiêu đề trang → hiện ngay đầu nội dung. */}
                 <div className="relative z-10 mb-2 empty:hidden md:hidden">
                   <PageTitleSlot />

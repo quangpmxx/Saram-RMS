@@ -1,8 +1,8 @@
 # Ghi chú kỹ thuật (chỉ những điều dễ vấp)
 
 ## Chạy dev & DB
-- DB dev dùng `npx prisma dev` (cổng ngẫu nhiên, đặt vào `DATABASE_URL`; đặt `DATABASE_POOL_MAX` riêng cho nó) hoặc Docker (`docker-compose.yml`). Production: xoá `DATABASE_POOL_MAX`.
-- DB dev `default` thỉnh thoảng treo (cổng LISTEN nhưng ECONNRESET → `/login` trả 500). Cách xử lý đã thấy hiệu quả: `npx prisma dev stop default`, rồi chạy `npx prisma dev start default` ở chế độ nền **không bọc `timeout`**; kiểm tra `POST /login` sai mật khẩu phải ra 401 chứ không 500.
+- DB dev (từ 2026-11-23): **PostgreSQL 17 cài trên máy** (dịch vụ Windows `postgresql-x64-17`, tự chạy), DB `saram_rms_dev`, múi giờ Asia/Ho_Chi_Minh như VPS; `DATABASE_POOL_MAX` để trống như production. Trước đó dùng `npx prisma dev` (PGlite, 1 kết nối) — hay treo khi nest watch khởi động lại giữa lúc poller Pancake đang truy vấn; dòng cũ còn để comment trong `.env`, data cũ vẫn nằm trong `prisma dev` `default` (đã stop).
+- Chép data giữa 2 DB: PGlite sập với lệnh COPY → dùng `pg_dump --data-only --inserts`, nạp vào DB đã `migrate deploy` sau khi TRUNCATE các bảng (migration có chèn sẵn dòng mặc định) với `session_replication_role = replica`.
 - `prisma dev` tạm có thể chiếm cổng 3001 của backend; đừng tạo DB tạm khi user đang khởi động server; xong thì dọn và kiểm tra lại login.
 
 ## Prisma / dist cũ

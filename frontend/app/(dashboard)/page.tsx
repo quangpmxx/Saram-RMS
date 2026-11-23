@@ -4,6 +4,7 @@ import { serverApi } from "@/lib/api-server";
 import { requirePageAccess } from "@/lib/module-permission";
 import type { DashboardSummary, LeadSource, PaginatedResult, SalePerformance, Team, TeamSummary } from "@/lib/types";
 import { DashboardClient } from "./dashboard-client";
+import { DashboardTabs } from "./dashboard-tabs";
 
 /**
  * Phase 7 (docs/14-roadmap.md) — thay thế trang "Trang chủ" tạm thời (link
@@ -54,21 +55,23 @@ export default async function HomePage() {
   ]);
 
   return (
-    <DashboardClient
-      currentUserFullName={user.full_name}
-      currentUserId={user.id}
-      currentUserTeamId={user.team_id}
-      currentUserRole={user.role}
-      canViewPerformance={canViewPerformance}
-      canViewByTeam={canViewByTeam}
-      canFilterByTeam={canFilterByTeam}
-      canFilterBySale={canFilterBySale}
-      teams={teamsResult.items}
-      sources={sources}
-      initialSummary={summary}
-      initialPerformance={performance}
-      initialRanking={ranking}
-      initialByTeam={byTeam}
-    />
+    <DashboardTabs currentUserRole={user.role}>
+      <DashboardClient
+        currentUserFullName={user.full_name}
+        currentUserId={user.id}
+        currentUserTeamId={user.team_id}
+        currentUserRole={user.role}
+        canViewPerformance={canViewPerformance}
+        canViewByTeam={canViewByTeam}
+        canFilterByTeam={canFilterByTeam}
+        canFilterBySale={canFilterBySale}
+        teams={teamsResult.items}
+        sources={sources}
+        initialSummary={summary}
+        initialPerformance={performance}
+        initialRanking={ranking}
+        initialByTeam={byTeam}
+        />
+    </DashboardTabs>
   );
 }

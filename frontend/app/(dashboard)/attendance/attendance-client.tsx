@@ -1158,7 +1158,7 @@ export function AttendanceClient({
     STT_COL_WIDTH + NAME_COL_WIDTH + POSITION_COL_WIDTH + grid.days.length * DAY_COL_WIDTH + TOTAL_COL_WIDTH;
 
   return (
-    <div className="relative -top-3 mx-auto max-w-[1600px] space-y-4 md:-top-5">
+    <div className="relative mx-auto max-w-[1600px] space-y-4">
       <div className="flex flex-wrap gap-1.5">
         {!canSendSheets && (
           <button

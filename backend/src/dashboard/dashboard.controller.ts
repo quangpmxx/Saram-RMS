@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { DashboardChartsQueryDto } from './dto/dashboard-charts-query.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -49,6 +50,15 @@ export class DashboardController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.dashboardService.getByTeam(query, user);
+  }
+
+  /** Tab Biểu đồ: số liệu chung toàn công ty theo tháng/năm (chi phí MKT chỉ khi có dashboard.mkt_cost). */
+  @Get('charts')
+  getCharts(
+    @Query() query: DashboardChartsQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.dashboardService.getCharts(query, user);
   }
 
   /**

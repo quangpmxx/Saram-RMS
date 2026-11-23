@@ -6,6 +6,8 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { DashboardChartsQueryDto } from './dto/dashboard-charts-query.dto';
+import { vnMonthKey, vnMonthRange } from '../care-warehouse/care-time.util';
 import {
   DashboardSummaryDto,
   FunnelStep,
@@ -524,6 +526,209 @@ export class DashboardService {
         kpi: this.buildKpiBreakdown(leadCount, shuttle),
       };
     });
+  }
+
+  /**
+   * GET /dashboard/charts — tab "Biểu đồ" (2026-11-23): hiệu suất CHUNG toàn
+   * công ty (không tách cá nhân) cho 1 tháng hoặc cả năm, kèm kỳ trước để so
+   * sánh và số từng tháng trong năm. Cùng nguồn số với tab Chi tiết: Data mới/
+   * Đi làm từ Lead (computeFunnel), Hẹn/Đến/Bùng/Đỗ/Trượt PV từ Đưa đón (đếm
+   * người). Chi phí MKT = null khi không có quyền dashboard.mkt_cost.
+   */
+  async getCharts(
+    query: DashboardChartsQueryDto,
+    currentUser: AuthenticatedUser,
+  ) {
+    const year = Number(query.year ?? vnMonthKey(new Date()).slice(0, 4));
+    const month = query.month ? Number(query.month) : null;
+    const key = (y: number, m: number) => `${y}-${String(m).padStart(2, '0')}`;
+    const yearMonths = Array.from({ length: 12 }, (_, i) => key(year, i + 1));
+    const periodMonths = month ? [key(year, month)] : yearMonths;
+    const prevMonths = month
+      ? [month === 1 ? key(year - 1, 12) : key(year, month - 1)]
+      : Array.from({ length: 12 }, (_, i) => key(year - 1, i + 1));
+    const leadWhere = (months: string[]): Prisma.LeadWhereInput => ({
+      deletedAt: null,
+      uploadedAt: {
+        gte: vnMonthRange(months[0]).start,
+        lt: vnMonthRange(months[months.length - 1]).end,
+      },
+    });
+    // Cột ngày (@db.Date) của Đưa đón / chi tiêu: lấy 1 lần từ đầu kỳ trước đến hết năm.
+    const firstMonth =
+      prevMonths[0] < yearMonths[0] ? prevMonths[0] : yearMonths[0];
+    const dateFrom = new Date(`${firstMonth}-01T00:00:00.000Z`);
+    const dateTo = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+    const monthOf = (d: Date) => d.toISOString().slice(0, 7);
+    const showSpend = can(currentUser, 'dashboard.mkt_cost');
+
+    const [funnel, prevFunnel, monthlyLeads, shuttleRows, spendRows] =
+      await Promise.all([
+        this.computeFunnel(leadWhere(periodMonths)),
+        this.computeFunnel(leadWhere(prevMonths)),
+        Promise.all(
+          yearMonths.map((m) =>
+            this.prisma.lead.count({ where: leadWhere([m]) }),
+          ),
+        ),
+        this.prisma.shuttleRecord.findMany({
+          where: { deletedAt: null, date: { gte: dateFrom, lt: dateTo } },
+          select: {
+            date: true,
+            saleUserId: true,
+            status: true,
+            interviewResult: true,
+            type: true,
+            phoneNumber: true,
+            fullName: true,
+          },
+        }),
+        showSpend
+          ? this.prisma.adSpendDaily.findMany({
+              where: { date: { gte: dateFrom, lt: dateTo } },
+              select: { date: true, spend: true },
+            })
+          : Promise.resolve([]),
+      ]);
+
+    const spendByMonth = new Map<string, number>();
+    for (const r of spendRows) {
+      const m = monthOf(r.date);
+      spendByMonth.set(m, (spendByMonth.get(m) ?? 0) + Number(r.spend));
+    }
+    const spendOf = (months: string[]) =>
+      showSpend
+        ? months.reduce((sum, m) => sum + (spendByMonth.get(m) ?? 0), 0)
+        : null;
+    const rowsOf = (months: string[]) => {
+      const set = new Set(months);
+      return shuttleRows.filter((r) => set.has(monthOf(r.date)));
+    };
+    const stepCount = (steps: FunnelStep[], code: string) =>
+      steps.find((s) => s.code === code)?.count ?? 0;
+    const periodOf = (months: string[], steps: FunnelStep[]) => {
+      const c = countShuttle(rowsOf(months));
+      return {
+        new_leads: stepCount(steps, 'LEAD'),
+        interview_scheduled: c.interview_scheduled,
+        attended: c.attended,
+        no_show: c.no_show,
+        passed: c.passed,
+        failed: c.failed,
+        employed: stepCount(steps, 'EMPLOYED'),
+        spend: spendOf(months),
+      };
+    };
+
+    // Hẹn PV theo nhóm: theo nhóm hiện tại của Sale trên dòng đưa đón.
+    const periodRows = rowsOf(periodMonths);
+    const saleIds = [
+      ...new Set(
+        periodRows
+          .map((r) => r.saleUserId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const [saleTeams, teams] = await Promise.all([
+      saleIds.length
+        ? this.prisma.account.findMany({
+            where: { id: { in: saleIds } },
+            select: {
+              id: true,
+              teamId: true,
+              fullName: true,
+              avatarUrl: true,
+            },
+          })
+        : Promise.resolve<
+            {
+              id: string;
+              teamId: string | null;
+              fullName: string;
+              avatarUrl: string | null;
+            }[]
+          >([]),
+      this.prisma.team.findMany({ select: { id: true, name: true } }),
+    ]);
+    const teamBySale = new Map(saleTeams.map((a) => [a.id, a.teamId]));
+    const rowsByTeam = new Map<string | null, ShuttleRow[]>();
+    for (const r of periodRows) {
+      const teamId = (r.saleUserId && teamBySale.get(r.saleUserId)) || null;
+      const list = rowsByTeam.get(teamId);
+      if (list) list.push(r);
+      else rowsByTeam.set(teamId, [r]);
+    }
+    const teamName = new Map(teams.map((t) => [t.id, t.name]));
+    const byTeam = [...rowsByTeam.entries()]
+      .map(([teamId, rows]) => ({
+        team_id: teamId,
+        team_name: teamId
+          ? (teamName.get(teamId) ?? 'Nhóm đã xoá')
+          : 'Chưa có nhóm',
+        interview_scheduled: countShuttlePersons(rows),
+        passed: countShuttlePersons(
+          rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED),
+        ),
+      }))
+      .sort((a, b) => b.interview_scheduled - a.interview_scheduled);
+
+    // Top 3 Sale đỗ PV nhiều nhất trong kỳ (như Top 3 ở tab Chi tiết: ai cũng xem được).
+    const passedBySale = new Map<string, ShuttleRow[]>();
+    for (const r of periodRows) {
+      if (!r.saleUserId || r.interviewResult !== SHUTTLE_RESULT_PASSED)
+        continue;
+      const list = passedBySale.get(r.saleUserId);
+      if (list) list.push(r);
+      else passedBySale.set(r.saleUserId, [r]);
+    }
+    const saleById = new Map(saleTeams.map((a) => [a.id, a]));
+    const passers = [...passedBySale.entries()]
+      .map(([id, rows]) => {
+        const a = saleById.get(id);
+        return {
+          account_id: id,
+          name: a?.fullName ?? 'Không rõ',
+          avatar_url: a?.avatarUrl ?? null,
+          team_id: a?.teamId ?? null,
+          team_name: a?.teamId ? (teamName.get(a.teamId) ?? null) : null,
+          passed: countShuttlePersons(rows),
+        };
+      })
+      .sort((a, b) => b.passed - a.passed);
+    const topPassed = passers.slice(0, 3);
+    // Top 1 đỗ PV của TỪNG nhóm (xếp theo tên nhóm: Nhóm 1, Nhóm 2…).
+    const seenTeams = new Set<string>();
+    const topByTeam = passers
+      .filter((x) => {
+        if (!x.team_id || seenTeams.has(x.team_id)) return false;
+        seenTeams.add(x.team_id);
+        return true;
+      })
+      .sort((a, b) =>
+        (a.team_name ?? '').localeCompare(b.team_name ?? '', 'vi', {
+          numeric: true,
+        }),
+      );
+
+    return {
+      year,
+      month,
+      period: periodOf(periodMonths, funnel),
+      previous: periodOf(prevMonths, prevFunnel),
+      by_team: byTeam,
+      top_passed: topPassed,
+      top_by_team: topByTeam,
+      monthly: yearMonths.map((m, i) => {
+        const c = countShuttle(rowsOf([m]));
+        return {
+          month: i + 1,
+          new_leads: monthlyLeads[i],
+          interview_scheduled: c.interview_scheduled,
+          passed: c.passed,
+          spend: spendOf([m]),
+        };
+      }),
+    };
   }
 
   /**

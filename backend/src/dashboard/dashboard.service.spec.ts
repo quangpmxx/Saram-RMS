@@ -607,4 +607,84 @@ describe('DashboardService', () => {
       );
     });
   });
+
+  describe('getCharts — tab Biểu đồ', () => {
+    const d = (x: string) => new Date(x + 'T00:00:00.000Z');
+    it('chia số theo tháng, kỳ trước, theo nhóm; chi phí chỉ khi có quyền', async () => {
+      const adSpend = {
+        findMany: jest.fn().mockResolvedValue([
+          { date: d('2026-11-03'), spend: '100' },
+          { date: d('2026-10-20'), spend: '50' },
+        ]),
+      };
+      (prisma as unknown as { adSpendDaily: unknown }).adSpendDaily = adSpend;
+      mockShuttle([
+        {
+          date: d('2026-11-02'),
+          saleUserId: 'sale-a',
+          interviewResult: 'Đỗ PV',
+        },
+        { date: d('2026-11-05'), saleUserId: null },
+        { date: d('2026-10-09'), saleUserId: 'sale-a' },
+      ]);
+      prisma.account.findMany.mockResolvedValue([
+        { id: 'sale-a', teamId: 'team-1' },
+      ]);
+      prisma.team.findMany.mockResolvedValue([
+        { id: 'team-1', name: 'Nhóm A' },
+      ]);
+
+      const r = await service.getCharts(
+        { year: '2026', month: '11' },
+        adminUser,
+      );
+      expect(r.period.interview_scheduled).toBe(2);
+      expect(r.period.passed).toBe(1);
+      expect(r.period.spend).toBe(100);
+      expect(r.previous.interview_scheduled).toBe(1);
+      expect(r.previous.spend).toBe(50);
+      expect(r.monthly).toHaveLength(12);
+      expect(r.monthly[10]).toMatchObject({
+        month: 11,
+        interview_scheduled: 2,
+        passed: 1,
+        spend: 100,
+      });
+      expect(r.monthly[9].interview_scheduled).toBe(1);
+      expect(r.by_team).toEqual([
+        {
+          team_id: 'team-1',
+          team_name: 'Nhóm A',
+          interview_scheduled: 1,
+          passed: 1,
+        },
+        {
+          team_id: null,
+          team_name: 'Chưa có nhóm',
+          interview_scheduled: 1,
+          passed: 0,
+        },
+      ]);
+
+      expect(r.top_passed).toEqual([
+        {
+          account_id: 'sale-a',
+          name: 'Không rõ',
+          avatar_url: null,
+          team_id: 'team-1',
+          team_name: 'Nhóm A',
+          passed: 1,
+        },
+      ]);
+      expect(r.top_by_team).toEqual(r.top_passed);
+
+      adSpend.findMany.mockClear();
+      const s2 = await service.getCharts(
+        { year: '2026', month: '11' },
+        saleUser,
+      );
+      expect(s2.period.spend).toBeNull();
+      expect(adSpend.findMany).not.toHaveBeenCalled();
+    });
+  });
 });
