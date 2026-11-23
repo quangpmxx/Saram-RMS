@@ -353,7 +353,9 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     applicableRoles: TEAM_ROLES,
     module: 'attendance',
     label: 'Xem chấm công cả nhóm',
-    defaultRoles: ['leader'],
+    // 2026-11-23 (user): Leader chỉ xem công của mình như Sale — không thấy
+    // công hằng ngày, chỉ thấy bảng công tháng khi đã được gửi. Vẫn bật riêng được ở Phân quyền.
+    defaultRoles: [],
   },
   {
     code: 'attendance.view_all',

@@ -134,11 +134,23 @@ describe('AttendanceService', () => {
       );
     });
 
-    it('8) Leader bị ép về đúng nhóm mình, bỏ qua team_id truyền vào', async () => {
+    it('8a) Leader mặc định chỉ xem chính mình (như Sale, 2026-11-23)', async () => {
+      await service.getGrid({ year: 2026, month: 7 }, leaderUser);
+      expect(prisma.account.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'leader-1' }),
+        }),
+      );
+    });
+
+    it('8) Leader được bật riêng "xem cả nhóm" bị ép về đúng nhóm mình, bỏ qua team_id truyền vào', async () => {
       prisma.account.findUnique.mockResolvedValueOnce({ teamId: 'team-A' });
       await service.getGrid(
         { year: 2026, month: 7, team_id: 'team-B' },
-        leaderUser,
+        {
+          ...leaderUser,
+          capabilityOverrides: { 'attendance.view_team': true },
+        },
       );
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
