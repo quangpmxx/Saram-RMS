@@ -328,7 +328,7 @@ export function DashboardCharts({
             }
           />
           <TopList
-            title="Top đỗ PV"
+            title="Top đỗ phỏng vấn toàn công ty"
             items={(data?.top_passed ?? []).map((t) => ({
               key: t.account_id,
               name: t.name,
@@ -345,7 +345,7 @@ export function DashboardCharts({
             slices={teamSlices(data?.by_team ?? [])}
           />
           <TopList
-            title="Top 1 đỗ PV từng nhóm"
+            title="Top 1 đỗ phỏng vấn theo nhóm"
             items={(data?.top_by_team ?? []).map((t) => ({
               key: t.account_id,
               name: t.name,
