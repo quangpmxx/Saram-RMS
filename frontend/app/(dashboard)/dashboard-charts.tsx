@@ -511,7 +511,7 @@ function Kpi({
       <p className="text-lg font-bold leading-tight tabular-nums text-slate-900">
         {value === undefined ? "—" : format(value)}
       </p>
-      <p className="flex items-center justify-center gap-1 text-[10px] text-slate-500">
+      <p className="flex flex-wrap items-center justify-center gap-x-1 text-[10px] text-slate-500">
         {change === null || change === 0 ? (
           <span>{prev === 0 ? `${prevLabel}: 0` : `Bằng ${prevLabel}`}</span>
         ) : (
@@ -728,7 +728,7 @@ function Pie({
   });
   return (
     <div className="flex items-center gap-3">
-      <div className="relative size-40 shrink-0">
+      <div className="relative size-32 shrink-0 sm:size-40">
         <svg viewBox="0 0 180 180" className="size-full overflow-visible">
           {total === 0 && <circle cx={CX} cy={CY} r={R} fill="#f1f5f9" />}
           {total > 0 &&
@@ -860,7 +860,9 @@ function MonthBars({
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
   const fmtTip = tooltipFormat ?? format;
   return (
-    <div className="relative">
+    // Điện thoại: giữ biểu đồ rộng tối thiểu 520px (chữ trục không bị co còn ~5px), vuốt ngang để xem.
+    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+    <div className="relative min-w-[520px] sm:min-w-0">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
@@ -968,6 +970,7 @@ function MonthBars({
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }
@@ -1078,8 +1081,8 @@ function BigProgress({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-xs text-slate-600">{label}</span>
-        <span className="text-xs text-slate-500">
+        <span className="min-w-0 text-xs text-slate-600">{label}</span>
+        <span className="shrink-0 whitespace-nowrap text-xs text-slate-500">
           <b className="text-lg text-slate-900 tabular-nums">
             {rate.toLocaleString("vi-VN")}%
           </b>{" "}
