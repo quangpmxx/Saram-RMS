@@ -819,7 +819,7 @@ function Pie({
               ))}
         </svg>
       </div>
-      <ul className="w-full min-w-0 flex-1 space-y-1">
+      <ul className="w-full min-w-0 flex-1 px-2">
         {total === 0 && (
           <li className="text-center text-xs text-slate-400">
             Chưa có số liệu
@@ -827,22 +827,27 @@ function Pie({
         )}
         {total > 0 &&
           slices.map((sl, i) => (
+            // Vùng nhận chuột (li) đứng yên, liền nhau (không khe hở); chỉ phần bên trong
+            // phóng to — trước đây cả dòng phóng to/khe giữa các dòng làm chuột ra vào liên tục → giật.
             <li
               key={sl.label}
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
-              // Dòng đang trỏ: phóng to, nền + vạch trái theo màu miếng; các dòng khác mờ đi.
-              className={cn(
-                "flex origin-left items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-all duration-200",
-                hover === i && "scale-[1.08] font-semibold",
-                hover !== null && hover !== i && "opacity-45",
-              )}
-              style={
-                hover === i
-                  ? { background: `${sl.color}1f`, boxShadow: `inset 3px 0 0 ${sl.color}` }
-                  : undefined
-              }
+              className="py-0.5"
             >
+              <div
+                // Dòng đang trỏ: phóng to, nền + vạch trái theo màu miếng; các dòng khác mờ đi.
+                className={cn(
+                  "pointer-events-none flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-[transform,opacity,background-color] duration-200",
+                  hover === i && "scale-[1.05] font-semibold",
+                  hover !== null && hover !== i && "opacity-45",
+                )}
+                style={
+                  hover === i
+                    ? { background: `${sl.color}1f`, boxShadow: `inset 3px 0 0 ${sl.color}` }
+                    : undefined
+                }
+              >
               <span
                 className="size-2.5 shrink-0 rounded-sm"
                 style={{ background: sl.color }}
@@ -854,6 +859,7 @@ function Pie({
               <span className="w-10 text-right tabular-nums text-slate-500">
                 {pct(sl.value, total).toLocaleString("vi-VN")}%
               </span>
+              </div>
             </li>
           ))}
         {total > 0 && (
