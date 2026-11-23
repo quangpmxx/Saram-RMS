@@ -815,10 +815,17 @@ function Pie({
               key={sl.label}
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
+              // Dòng đang trỏ: phóng to, nền + vạch trái theo màu miếng; các dòng khác mờ đi.
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs",
-                hover === i && "bg-slate-100 font-semibold",
+                "flex origin-left items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-all duration-200",
+                hover === i && "scale-[1.08] font-semibold",
+                hover !== null && hover !== i && "opacity-45",
               )}
+              style={
+                hover === i
+                  ? { background: `${sl.color}1f`, boxShadow: `inset 3px 0 0 ${sl.color}` }
+                  : undefined
+              }
             >
               <span
                 className="size-2.5 shrink-0 rounded-sm"
