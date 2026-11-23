@@ -4,7 +4,8 @@ import { useState } from "react";
 import { BarChart3, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { AccountRole } from "@/lib/types";
-import { DashboardCharts } from "./dashboard-charts";
+import { DashboardCharts, type ChartsData } from "./dashboard-charts";
+import type { CareProgressResult } from "@/lib/care-warehouse";
 
 type Tab = "detail" | "charts";
 
@@ -15,9 +16,14 @@ type Tab = "detail" | "charts";
  */
 export function DashboardTabs({
   currentUserRole,
+  initialCharts,
+  initialCare,
   children,
 }: {
   currentUserRole: AccountRole;
+  /** Số liệu tháng hiện tại tải sẵn ở server (null = để thẻ tự tải). */
+  initialCharts: ChartsData | null;
+  initialCare: CareProgressResult | null;
   children: React.ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>("charts");
@@ -57,7 +63,11 @@ export function DashboardTabs({
       {/* pt-3 bù cho -mt-3 sẵn có ở gốc DashboardClient (giờ không còn bị nuốt). */}
       <div className={cn("pt-3", tab !== "detail" && "hidden")}>{children}</div>
       <div className={cn("mx-auto w-full max-w-7xl", tab !== "charts" && "hidden")}>
-        <DashboardCharts currentUserRole={currentUserRole} />
+        <DashboardCharts
+          currentUserRole={currentUserRole}
+          initialData={initialCharts}
+          initialCare={initialCare}
+        />
       </div>
     </div>
   );

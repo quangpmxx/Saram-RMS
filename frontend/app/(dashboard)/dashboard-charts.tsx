@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarCheck,
   Database,
@@ -30,7 +30,7 @@ interface PeriodStats {
   employed: number;
   spend: number | null;
 }
-interface ChartsData {
+export interface ChartsData {
   year: number;
   month: number | null;
   period: PeriodStats;
@@ -116,18 +116,30 @@ function vnNow() {
 
 export function DashboardCharts({
   currentUserRole,
+  initialData = null,
+  initialCare = null,
 }: {
   currentUserRole: AccountRole;
+  /** Số liệu tháng hiện tại đã tải sẵn ở server — có thì không gọi lại lần đầu. */
+  initialData?: ChartsData | null;
+  initialCare?: CareProgressResult | null;
 }) {
   const now = vnNow();
   const [year, setYear] = useState(now.year);
   /** 0 = cả năm. */
   const [month, setMonth] = useState(now.month);
-  const [data, setData] = useState<ChartsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ChartsData | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState("");
+  const skipFirst = useRef(
+    !!initialData && initialData.year === now.year && initialData.month === now.month,
+  );
 
   useEffect(() => {
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
     const q = new URLSearchParams({ year: String(year) });
     if (month) q.set("month", String(month));
     let alive = true;
@@ -445,7 +457,11 @@ export function DashboardCharts({
       </div>
 
       {CARE_PROGRESS_ROLES.includes(currentUserRole) && (
-        <CareProgress year={year} month={month || now.month} />
+        <CareProgress
+          year={year}
+          month={month || now.month}
+          initial={initialCare}
+        />
       )}
     </div>
   );
@@ -1017,10 +1033,25 @@ function roundedTop(
 }
 
 /** Thanh tiến độ chăm sóc của tháng — cùng API với khối Tiến độ chăm sóc ở tab Chi tiết. */
-function CareProgress({ year, month }: { year: number; month: number }) {
-  const [data, setData] = useState<CareProgressResult | null>(null);
+function CareProgress({
+  year,
+  month,
+  initial,
+}: {
+  year: number;
+  month: number;
+  initial: CareProgressResult | null;
+}) {
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const [data, setData] = useState<CareProgressResult | null>(
+    initial?.month === monthKey ? initial : null,
+  );
+  const skipFirst = useRef(initial?.month === monthKey);
   useEffect(() => {
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
     let alive = true;
     clientApi<CareProgressResult>(`/care-progress?month=${monthKey}`)
       .then((d) => alive && setData(d))

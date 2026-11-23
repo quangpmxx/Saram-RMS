@@ -5,6 +5,8 @@ import { requirePageAccess } from "@/lib/module-permission";
 import type { DashboardSummary, LeadSource, PaginatedResult, SalePerformance, Team, TeamSummary } from "@/lib/types";
 import { DashboardClient } from "./dashboard-client";
 import { DashboardTabs } from "./dashboard-tabs";
+import type { ChartsData } from "./dashboard-charts";
+import type { CareProgressResult } from "@/lib/care-warehouse";
 
 /**
  * Phase 7 (docs/14-roadmap.md) — thay thế trang "Trang chủ" tạm thời (link
@@ -39,7 +41,10 @@ export default async function HomePage() {
     date_to: new Date(`${today}T23:59:59.999+07:00`).toISOString(),
   });
 
-  const [summary, performance, ranking, byTeam, teamsResult, sources] = await Promise.all([
+  // Thẻ Biểu đồ (mở mặc định): tải sẵn cùng lúc ở server để hiện ngay, không phải
+  // đợi trang hiện xong mới gọi API (trước đây chậm 1-2s). Lỗi thì để thẻ tự tải lại.
+  const vnMonth = today.slice(0, 7);
+  const [summary, performance, ranking, byTeam, teamsResult, sources, initialCharts, initialCare] = await Promise.all([
     serverApi<DashboardSummary>(`/dashboard/summary?${dateQuery.toString()}`),
     canViewPerformance
       ? serverApi<SalePerformance[]>(`/dashboard/performance?${dateQuery.toString()}`)
@@ -52,10 +57,12 @@ export default async function HomePage() {
       ? serverApi<PaginatedResult<Team>>("/team?page=1&page_size=100")
       : Promise.resolve<PaginatedResult<Team>>({ total: 0, page: 1, page_size: 100, items: [] }),
     serverApi<LeadSource[]>("/lead-source"),
+    serverApi<ChartsData>(`/dashboard/charts?year=${vnMonth.slice(0, 4)}&month=${Number(vnMonth.slice(5))}`).catch(() => null),
+    serverApi<CareProgressResult>(`/care-progress?month=${vnMonth}`).catch(() => null),
   ]);
 
   return (
-    <DashboardTabs currentUserRole={user.role}>
+    <DashboardTabs currentUserRole={user.role} initialCharts={initialCharts} initialCare={initialCare}>
       <DashboardClient
         currentUserFullName={user.full_name}
         currentUserId={user.id}
