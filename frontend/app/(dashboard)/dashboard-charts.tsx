@@ -156,6 +156,7 @@ export function DashboardCharts({
     () => Array.from({ length: 4 }, (_, i) => now.year - i),
     [now.year],
   );
+  const periodShort = month ? `${month}/${year}` : String(year);
   const periodLabel = month ? `Tháng ${month}/${year}` : `Năm ${year}`;
   const prevLabel = month ? "tháng trước" : "năm trước";
   const p = data?.period;
@@ -298,12 +299,12 @@ export function DashboardCharts({
       {/* Phễu + 2 biểu đồ tròn */}
       <div className="grid gap-4 lg:grid-cols-3">
         <ChartCard
-          title="Phễu tuyển dụng"
+          title={`Phễu tuyển dụng · ${periodShort}`}
         >
           <Funnel p={p} />
         </ChartCard>
         <ChartCard
-          title="Hiệu suất phỏng vấn"
+          title={`Hiệu suất phỏng vấn · ${periodShort}`}
           top
         >
           <Pie
@@ -336,7 +337,7 @@ export function DashboardCharts({
           />
         </ChartCard>
         <ChartCard
-          title="Hẹn PV theo nhóm"
+          title={`Hẹn PV theo nhóm · ${periodShort}`}
           top
         >
           <Pie
@@ -358,7 +359,7 @@ export function DashboardCharts({
       {/* Biểu đồ cột theo tháng */}
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title={`Hẹn PV và Đỗ PV theo tháng · ${month ? `${month}/${year}` : year}`}
+          title={`Hẹn PV và Đỗ PV theo tháng · ${periodShort}`}
           legend={[
             { label: "Hẹn PV", color: C.blue },
             { label: "Đỗ PV", color: C.green },
@@ -388,7 +389,7 @@ export function DashboardCharts({
         </ChartCard>
         {showSpend ? (
           <ChartCard
-            title={`Chi phí Marketing theo tháng · ${month ? `${month}/${year}` : year}`}
+            title={`Chi phí Marketing theo tháng · ${periodShort}`}
             subtitle={
               p?.spend !== null && p ? (
                 <>
@@ -426,7 +427,7 @@ export function DashboardCharts({
           </ChartCard>
         ) : (
           <ChartCard
-            title={`Data mới theo tháng · ${month ? `${month}/${year}` : year}`}
+            title={`Data mới theo tháng · ${periodShort}`}
             subtitle="Số data tải lên mỗi tháng"
           >
             <MonthBars
