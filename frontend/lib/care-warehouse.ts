@@ -154,7 +154,14 @@ export interface CareProgressResult {
   month: string;
   rows: CareProgressRow[];
   totals: { daily: CareDailyMetrics; monthly: CareMonthlyMetrics };
-  target: { eligible: number; cared: number; not_cared: number; rate: number | null };
+  target: {
+    eligible: number;
+    cared: number;
+    not_cared: number;
+    rate: number | null;
+    /** Tách theo nhóm đang giữ data. */
+    by_team?: { team_id: string; team_name: string; eligible: number; cared: number }[];
+  };
 }
 
 export const CARE_METHOD_LABEL: Record<CareAssignmentMethod, string> = {

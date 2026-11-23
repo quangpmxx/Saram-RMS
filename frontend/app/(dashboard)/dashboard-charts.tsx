@@ -1006,20 +1006,14 @@ function CareProgress({ year, month }: { year: number; month: number }) {
     };
   }, [monthKey]);
 
-  // Theo nhóm: cộng số giao/đã xử lý trong tháng của các Sale trong nhóm.
-  const teams = useMemo(() => {
-    const map = new Map<string, { name: string; assigned: number; processed: number }>();
-    for (const r of data?.rows ?? []) {
-      const k = r.team?.id ?? "none";
-      const cur = map.get(k) ?? { name: r.team?.name ?? "Chưa có nhóm", assigned: 0, processed: 0 };
-      cur.assigned += r.monthly.assigned;
-      cur.processed += r.monthly.processed;
-      map.set(k, cur);
-    }
-    return [...map.values()]
-      .filter((t) => t.assigned > 0)
-      .sort((x, y) => x.name.localeCompare(y.name, "vi", { numeric: true }));
-  }, [data]);
+  // Theo nhóm: tiến độ chăm sóc kho data của từng nhóm.
+  const teams = useMemo(
+    () =>
+      (data?.target.by_team ?? [])
+        .filter((t) => t.eligible > 0)
+        .sort((x, y) => x.team_name.localeCompare(y.team_name, "vi", { numeric: true })),
+    [data],
+  );
 
   const m = data?.totals.monthly;
   const target = data?.target;
@@ -1046,16 +1040,16 @@ function CareProgress({ year, month }: { year: number; month: number }) {
           />
         </div>
         <div className="space-y-4">
-          <p className="text-xs font-semibold text-slate-500">Theo nhóm · tiến độ chăm sóc theo data đã giao</p>
+          <p className="text-xs font-semibold text-slate-500">Theo nhóm · tiến độ chăm sóc kho data</p>
           {teams.length === 0 && (
-            <p className="text-xs text-slate-400">Chưa có data được giao trong tháng</p>
+            <p className="text-xs text-slate-400">Chưa có data trong kho chăm sóc</p>
           )}
           {teams.map((t, i) => (
             <BigProgress
-              key={t.name}
-              label={t.name}
-              done={t.processed}
-              total={t.assigned}
+              key={t.team_id}
+              label={t.team_name}
+              done={t.cared}
+              total={t.eligible}
               color={TEAM_COLORS[i % TEAM_COLORS.length]}
             />
           ))}

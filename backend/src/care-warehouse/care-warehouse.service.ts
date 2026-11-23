@@ -1872,7 +1872,7 @@ export class CareWarehouseService {
   ) {
     const cutoff = now < monthRange.end ? now : monthRange.end;
     if (cutoff <= monthRange.start) {
-      return { eligible: 0, cared: 0, not_cared: 0, rate: null };
+      return { eligible: 0, cared: 0, not_cared: 0, rate: null, by_team: [] };
     }
     const leadWhere: Prisma.LeadWhereInput = {
       assignedToId: { not: null },
@@ -1882,7 +1882,7 @@ export class CareWarehouseService {
     };
     const leads = await this.prisma.lead.findMany({
       where: leadWhere,
-      select: { id: true },
+      select: { id: true, assignedTeamId: true },
     });
     const stopLogs = await this.prisma.auditLog.findMany({
       where: {
@@ -1916,11 +1916,32 @@ export class CareWarehouseService {
     });
     const caredSet = new Set(caredRows.map((r) => r.leadId));
     const cared = eligible.filter((l) => caredSet.has(l.id)).length;
+    // Cùng số liệu, tách theo nhóm đang giữ data (thẻ Biểu đồ Dashboard).
+    const teamStats = new Map<string, { eligible: number; cared: number }>();
+    for (const l of eligible) {
+      if (!l.assignedTeamId) continue;
+      const t = teamStats.get(l.assignedTeamId) ?? { eligible: 0, cared: 0 };
+      t.eligible++;
+      if (caredSet.has(l.id)) t.cared++;
+      teamStats.set(l.assignedTeamId, t);
+    }
+    const teamNames = teamStats.size
+      ? await this.prisma.team.findMany({
+          where: { id: { in: [...teamStats.keys()] } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const by_team = teamNames.map((t) => ({
+      team_id: t.id,
+      team_name: t.name,
+      ...teamStats.get(t.id)!,
+    }));
     return {
       eligible: eligible.length,
       cared,
       not_cared: eligible.length - cared,
       rate: rate(cared, eligible.length),
+      by_team,
     };
   }
 
