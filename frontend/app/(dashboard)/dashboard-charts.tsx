@@ -390,9 +390,17 @@ export function DashboardCharts({
           <ChartCard
             title={`Chi phí Marketing theo tháng · ${year}`}
             subtitle={
-              p?.spend !== null && p
-                ? `${periodLabel}: ${vnd(p.spend ?? 0)} · Chi phí/data ${p.new_leads ? vnd((p.spend ?? 0) / p.new_leads) : "—"} · Chi phí/hẹn PV ${p.interview_scheduled ? vnd((p.spend ?? 0) / p.interview_scheduled) : "—"}`
-                : " "
+              p?.spend !== null && p ? (
+                <>
+                  {periodLabel}: <Money>{vnd(p.spend ?? 0)}</Money> · Chi phí/data{" "}
+                  <Money>{p.new_leads ? vnd((p.spend ?? 0) / p.new_leads) : "—"}</Money> · Chi phí/hẹn PV{" "}
+                  <Money>
+                    {p.interview_scheduled ? vnd((p.spend ?? 0) / p.interview_scheduled) : "—"}
+                  </Money>
+                </>
+              ) : (
+                " "
+              )
             }
           >
             <MonthBars
@@ -541,6 +549,11 @@ function Kpi({
   );
 }
 
+/** Số tiền nổi bật (đỏ) trong dòng phụ của biểu đồ. */
+function Money({ children }: { children: React.ReactNode }) {
+  return <b className="font-semibold text-red-600">{children}</b>;
+}
+
 function ChartCard({
   title,
   subtitle,
@@ -549,7 +562,7 @@ function ChartCard({
   children,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   legend?: { label: string; color: string }[];
   /** true = nội dung dồn lên trên (biểu đồ tròn + Top bên dưới). */
   top?: boolean;
