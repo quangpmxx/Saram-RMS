@@ -1033,20 +1033,20 @@ function CareProgress({ year, month }: { year: number; month: number }) {
         <div className="space-y-4">
           <p className="text-xs font-semibold text-slate-500">Toàn công ty</p>
           <BigProgress
-            label="Data giao trong tháng đã xử lý"
-            done={m?.processed ?? 0}
-            total={m?.assigned ?? 0}
-            color={C.blue}
-          />
-          <BigProgress
-            label="Data cần chăm sóc đã được chăm sóc"
+            label="Tiến độ chăm sóc kho data"
             done={target?.cared ?? 0}
             total={target?.eligible ?? 0}
             color={C.green}
           />
+          <BigProgress
+            label="Tiến độ chăm sóc theo data đã giao"
+            done={m?.processed ?? 0}
+            total={m?.assigned ?? 0}
+            color={C.blue}
+          />
         </div>
         <div className="space-y-4">
-          <p className="text-xs font-semibold text-slate-500">Theo nhóm · data giao trong tháng đã xử lý</p>
+          <p className="text-xs font-semibold text-slate-500">Theo nhóm · tiến độ chăm sóc theo data đã giao</p>
           {teams.length === 0 && (
             <p className="text-xs text-slate-400">Chưa có data được giao trong tháng</p>
           )}
