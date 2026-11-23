@@ -391,7 +391,7 @@ export function DashboardCharts({
             title={`Chi phí Marketing theo tháng · ${year}`}
             subtitle={
               p?.spend !== null && p
-                ? `${periodLabel}: ${vnd(p.spend ?? 0)} · Chi phí/data ${p.new_leads ? vnd((p.spend ?? 0) / p.new_leads) : "—"}`
+                ? `${periodLabel}: ${vnd(p.spend ?? 0)} · Chi phí/data ${p.new_leads ? vnd((p.spend ?? 0) / p.new_leads) : "—"} · Chi phí/hẹn PV ${p.interview_scheduled ? vnd((p.spend ?? 0) / p.interview_scheduled) : "—"}`
                 : " "
             }
           >
@@ -408,9 +408,11 @@ export function DashboardCharts({
               ]}
               extra={(i) => {
                 const m = data?.monthly[i];
-                return m && m.new_leads
-                  ? `Data: ${num(m.new_leads)} · Chi phí/data: ${vnd((m.spend ?? 0) / m.new_leads)}`
-                  : "";
+                if (!m || !m.new_leads) return "";
+                const perData = `Data: ${num(m.new_leads)} · Chi phí/data: ${vnd((m.spend ?? 0) / m.new_leads)}`;
+                return m.interview_scheduled
+                  ? `${perData} · Chi phí/hẹn PV: ${vnd((m.spend ?? 0) / m.interview_scheduled)}`
+                  : perData;
               }}
             />
           </ChartCard>
