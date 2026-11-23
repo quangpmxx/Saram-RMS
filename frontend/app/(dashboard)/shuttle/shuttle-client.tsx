@@ -4,7 +4,7 @@ import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Copy, GripVertical, Pencil, Plus, RefreshCw, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
-import { useRememberedFilters } from "@/lib/remembered-filters";
+import { readRememberedFilters, useRememberedFilters } from "@/lib/remembered-filters";
 import { DaySeparatorRow } from "@/components/day-separator-row";
 import { cn } from "@/lib/cn";
 import { shuttleColorStyle } from "@/lib/shuttle-colors";
@@ -89,6 +89,11 @@ const LOCKED_OPTION_VALUES: Record<string, readonly string[]> = {
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
+/** Điện thoại: số dòng/trang mặc định khi mở trang (bảng rất nặng). */
+const PHONE_PAGE_SIZE = 20;
+function isPhoneScreen(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+}
 
 /** Dự án phụ — nâng cấp toàn diện: mức thu phóng bảng, y hệt danh sách % của Google Sheet (yêu cầu trực tiếp người dùng). */
 const ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200] as const;
@@ -1326,8 +1331,24 @@ export function ShuttleClient({
   // Ghi nhớ bộ lọc + trang đang xem khi rời trang rồi quay lại (2026-11-10).
   useRememberedFilters("shuttle", { filters, page, pageSize }, (saved) => {
     setFilters(saved.filters);
-    refresh(saved.page, saved.pageSize, saved.filters).catch(() => {});
+    if (isPhoneScreen() && saved.pageSize > PHONE_PAGE_SIZE) {
+      refresh(1, PHONE_PAGE_SIZE, saved.filters).catch(() => {});
+    } else {
+      refresh(saved.page, saved.pageSize, saved.filters).catch(() => {});
+    }
   });
+
+  // Điện thoại (2026-11-24, kéo rất giật): mỗi dòng ~15 ô nhập — 100 dòng quá nặng,
+  // mở trang chỉ tải 20 dòng/trang (vẫn chọn lại được ở "Số dòng/trang").
+  useEffect(() => {
+    if (!isPhoneScreen()) return;
+    const saved = readRememberedFilters<{ filters: Filters; page: number; pageSize: number }>("shuttle");
+    const base = saved ?? { filters, page, pageSize };
+    if (base.pageSize <= PHONE_PAGE_SIZE) return;
+    refresh(1, PHONE_PAGE_SIZE, base.filters).catch(() => {});
+    // Chỉ chạy 1 lần lúc mở trang.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Yêu cầu người dùng (Mục 1, 7) — refetch nền cho realtime khi có dòng
