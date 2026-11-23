@@ -843,7 +843,16 @@ function MonthBars({
   extra?: (i: number) => string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const W = 640;
+  // Điện thoại: khung vẽ hẹp hơn để biểu đồ vừa màn hình mà chữ trục vẫn đọc được.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const W = narrow ? 360 : 640;
   const H = 240;
   const L = 44;
   const B = 24;
@@ -860,9 +869,7 @@ function MonthBars({
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
   const fmtTip = tooltipFormat ?? format;
   return (
-    // Điện thoại: giữ biểu đồ rộng tối thiểu 520px (chữ trục không bị co còn ~5px), vuốt ngang để xem.
-    <div className="-mx-1 overflow-x-auto px-1 pb-1">
-    <div className="relative min-w-[520px] sm:min-w-0">
+    <div className="relative">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
@@ -970,7 +977,6 @@ function MonthBars({
           )}
         </div>
       )}
-    </div>
     </div>
   );
 }

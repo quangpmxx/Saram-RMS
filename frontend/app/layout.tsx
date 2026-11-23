@@ -23,6 +23,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Điện thoại: cố định vừa màn hình, không cho phóng to / thu nhỏ.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#ffffff",
 };
