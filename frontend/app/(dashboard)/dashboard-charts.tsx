@@ -460,13 +460,14 @@ function teamSlices(rows: ChartsData["by_team"]) {
   return slices;
 }
 
-const TONES: Record<string, { bg: string; fg: string }> = {
-  blue: { bg: "bg-blue-50", fg: "text-blue-600" },
-  sky: { bg: "bg-sky-50", fg: "text-sky-600" },
-  violet: { bg: "bg-violet-50", fg: "text-violet-600" },
-  green: { bg: "bg-emerald-50", fg: "text-emerald-600" },
-  amber: { bg: "bg-amber-50", fg: "text-amber-600" },
-  orange: { bg: "bg-orange-50", fg: "text-orange-600" },
+// card: nền + viền của cả ô số (mỗi ô một màu). "!" vì Card đã có sẵn bg-white/border-slate-200.
+const TONES: Record<string, { bg: string; fg: string; card: string }> = {
+  blue: { bg: "bg-white", fg: "text-blue-600", card: "bg-blue-50! border-blue-100!" },
+  sky: { bg: "bg-white", fg: "text-sky-600", card: "bg-sky-50! border-sky-100!" },
+  violet: { bg: "bg-white", fg: "text-violet-600", card: "bg-violet-50! border-violet-100!" },
+  green: { bg: "bg-white", fg: "text-emerald-600", card: "bg-emerald-50! border-emerald-100!" },
+  amber: { bg: "bg-white", fg: "text-amber-600", card: "bg-amber-50! border-amber-100!" },
+  orange: { bg: "bg-white", fg: "text-orange-600", card: "bg-orange-50! border-orange-100!" },
 };
 
 function Kpi({
@@ -495,7 +496,7 @@ function Kpi({
   const good = change !== null && (invert ? change < 0 : change > 0);
   const t = TONES[tone];
   return (
-    <Card className="flex flex-col items-center gap-0.5 px-2 py-2 text-center">
+    <Card className={cn("flex flex-col items-center gap-0.5 px-2 py-2 text-center", t.card)}>
       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
         <span
           className={cn(
