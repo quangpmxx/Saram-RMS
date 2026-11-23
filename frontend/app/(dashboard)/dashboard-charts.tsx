@@ -358,7 +358,7 @@ export function DashboardCharts({
       {/* Biểu đồ cột theo tháng */}
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title={`Hẹn PV và Đỗ PV theo tháng · ${year}`}
+          title={`Hẹn PV và Đỗ PV theo tháng · ${month ? `${month}/${year}` : year}`}
           legend={[
             { label: "Hẹn PV", color: C.blue },
             { label: "Đỗ PV", color: C.green },
@@ -388,7 +388,7 @@ export function DashboardCharts({
         </ChartCard>
         {showSpend ? (
           <ChartCard
-            title={`Chi phí Marketing theo tháng · ${year}`}
+            title={`Chi phí Marketing theo tháng · ${month ? `${month}/${year}` : year}`}
             subtitle={
               p?.spend !== null && p ? (
                 <>
@@ -426,7 +426,7 @@ export function DashboardCharts({
           </ChartCard>
         ) : (
           <ChartCard
-            title={`Data mới theo tháng · ${year}`}
+            title={`Data mới theo tháng · ${month ? `${month}/${year}` : year}`}
             subtitle="Số data tải lên mỗi tháng"
           >
             <MonthBars
