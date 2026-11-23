@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Copy, GripVertical, Pencil, Plus, RefreshCw, Search, Trash2, Upload, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
@@ -378,9 +378,9 @@ function ComboCell({
         style={triggerStyle}
         className={cn(
           compact
-            ? "relative flex w-full items-center justify-center rounded-md border border-slate-300 bg-white py-0 pr-4 pl-1 text-[10px] text-slate-800 shadow-sm"
+            ? "relative flex w-full items-center justify-center rounded-md border border-slate-300 bg-white py-0 pr-4 pl-1 text-[10px] text-slate-800"
             : cn(
-                "relative flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white py-0.5 pr-5 pl-2 text-slate-800 shadow-sm",
+                "relative flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white py-0.5 pr-5 pl-2 text-slate-800",
                 textClassName ?? "text-xs",
               ),
           triggerStyle && "border-transparent font-medium",
@@ -1019,6 +1019,115 @@ function ShuttleRowFormCells({
   );
 }
 
+type RowActions = {
+  dragOver: (record: ShuttleRecord, event: React.DragEvent<HTMLTableRowElement>) => void;
+  drop: (record: ShuttleRecord, event: React.DragEvent<HTMLTableRowElement>) => void;
+  dragStart: (record: ShuttleRecord, event: React.DragEvent<HTMLSpanElement>) => void;
+  endDrag: () => void;
+  change: (record: ShuttleRecord, next: ShuttleFormValue) => void;
+  blur: (record: ShuttleRecord) => void;
+  commit: (record: ShuttleRecord, next: ShuttleFormValue) => void;
+  manageOptions: (field: string, label: string) => void;
+  manageSaleColors: () => void;
+  manageDriverColors: () => void;
+  reloadConflict: (record: ShuttleRecord) => void;
+  remove: (record: ShuttleRecord) => void;
+};
+
+/** 1 dòng dữ liệu đưa đón — memo: chỉ vẽ lại khi dữ liệu của chính dòng này đổi. */
+const ShuttleDataRow = memo(function ShuttleDataRow({
+  record,
+  value,
+  stt,
+  hasConflict,
+  isDragging,
+  dropAfter,
+  canReorder,
+  pending,
+  options,
+  saleOptions,
+  driverOptions,
+  companies,
+  actions,
+}: {
+  record: ShuttleRecord;
+  value: ShuttleFormValue;
+  stt: number | undefined;
+  hasConflict: boolean;
+  isDragging: boolean;
+  /** null = không phải đích thả; true/false = vạch xanh dưới/trên. */
+  dropAfter: boolean | null;
+  canReorder: boolean;
+  pending: boolean;
+  options: ShuttleOptions;
+  saleOptions: ShuttleOptionItem[];
+  driverOptions: ShuttleOptionItem[];
+  companies: ShuttleOptionItem[];
+  actions: React.RefObject<RowActions | null>;
+}) {
+  // Chỉ gọi trong sự kiện (sau khi trang đã vẽ) nên ref luôn có giá trị.
+  const a = () => actions.current!;
+  return (
+    <tr
+      className={cn(
+        "align-top hover:bg-slate-50",
+        hasConflict && "bg-amber-50 hover:bg-amber-100",
+        isDragging && "opacity-40",
+        dropAfter !== null &&
+          (dropAfter ? "shadow-[inset_0_-3px_0_0_#2563eb]" : "shadow-[inset_0_3px_0_0_#2563eb]"),
+      )}
+      onDragOver={(event) => a().dragOver(record, event)}
+      onDrop={(event) => a().drop(record, event)}
+    >
+      <ShuttleRowFormCells
+        value={value}
+        stt={stt}
+        dragHandle={
+          canReorder ? (
+            <span
+              draggable
+              title="Kéo lên/xuống để đổi thứ tự trong ngày"
+              onDragStart={(event) => a().dragStart(record, event)}
+              onDragEnd={() => a().endDrag()}
+              className="cursor-grab text-slate-300 hover:text-slate-600 active:cursor-grabbing"
+            >
+              <GripVertical className="h-3.5 w-3.5" strokeWidth={2} />
+            </span>
+          ) : undefined
+        }
+        onChange={(next) => a().change(record, next)}
+        onBlurField={() => a().blur(record)}
+        onCommitField={(next) => a().commit(record, next)}
+        options={options}
+        saleOptions={saleOptions}
+        driverOptions={driverOptions}
+        companyOptions={companies}
+        onManageOptions={(field, label) => a().manageOptions(field, label)}
+        onManageSaleColors={() => a().manageSaleColors()}
+        onManageDriverColors={() => a().manageDriverColors()}
+      />
+      <td className="px-2 py-1 align-middle">
+        <div className="flex flex-col items-start gap-1">
+          {hasConflict && (
+            <button
+              type="button"
+              title="Dữ liệu này vừa được cập nhật bởi người khác — bấm để tải lại"
+              onClick={() => a().reloadConflict(record)}
+              className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-amber-800 hover:bg-amber-200"
+            >
+              Vừa cập nhật — Tải lại
+            </button>
+          )}
+          <Button type="button" variant="ghost" size="xs" disabled={pending} onClick={() => a().remove(record)}>
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Xóa
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export function ShuttleClient({
   permissionLevel,
   initialResult,
@@ -1101,25 +1210,33 @@ export function ShuttleClient({
    * kết tài khoản thật"). Không cho gõ tay thêm tên mới — chỉ chọn màu cho
    * tài khoản đã có sẵn. `id` ở đây LÀ account.id thật (matchBy="id").
    */
-  const saleOptions: ShuttleOptionItem[] = initialSaleAccounts.map((account) => {
-    const matched = options.sales.find((option) => option.value === account.id);
-    return {
-      id: account.id,
-      value: account.nickname ?? account.full_name,
-      color_key: matched?.color_key ?? null,
-      text_color_key: matched?.text_color_key ?? null,
-    };
-  });
+  const saleOptions: ShuttleOptionItem[] = useMemo(
+    () =>
+      initialSaleAccounts.map((account) => {
+        const matched = options.sales.find((option) => option.value === account.id);
+        return {
+          id: account.id,
+          value: account.nickname ?? account.full_name,
+          color_key: matched?.color_key ?? null,
+          text_color_key: matched?.text_color_key ?? null,
+        };
+      }),
+    [initialSaleAccounts, options.sales],
+  );
   /** Bổ sung 2026-07-28 — y hệt saleOptions nhưng cho tài khoản Đưa đón (role='shuttle_staff'), khớp ShuttleOption field="driver". */
-  const driverOptions: ShuttleOptionItem[] = initialDriverAccounts.map((account) => {
-    const matched = options.drivers.find((option) => option.value === account.id);
-    return {
-      id: account.id,
-      value: account.nickname ?? account.full_name,
-      color_key: matched?.color_key ?? null,
-      text_color_key: matched?.text_color_key ?? null,
-    };
-  });
+  const driverOptions: ShuttleOptionItem[] = useMemo(
+    () =>
+      initialDriverAccounts.map((account) => {
+        const matched = options.drivers.find((option) => option.value === account.id);
+        return {
+          id: account.id,
+          value: account.nickname ?? account.full_name,
+          color_key: matched?.color_key ?? null,
+          text_color_key: matched?.text_color_key ?? null,
+        };
+      }),
+    [initialDriverAccounts, options.drivers],
+  );
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [draft, setDraft] = useState<ShuttleFormValue>(emptyFormValue());
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -1296,6 +1413,50 @@ export function ShuttleClient({
       await refresh(page, pageSize, filters).catch(() => {});
     }
   }
+
+  /**
+   * Hiệu năng (2026-11-23, kéo danh sách bị giật): mỗi dòng là ShuttleDataRow
+   * memo — gõ/chọn ở 1 dòng chỉ vẽ lại đúng dòng đó. Hàm xử lý đưa qua 1 ref
+   * cố định (luôn trỏ bản mới nhất) để không làm các dòng khác vẽ lại.
+   */
+  const rowActions = useRef<RowActions | null>(null);
+  useLayoutEffect(() => {
+    rowActions.current = {
+      dragOver(record, event) {
+        const source = records.find((r) => r.id === dragIdRef.current);
+        if (!source || source.date !== record.date || source.id === record.id) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const rect = event.currentTarget.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+        if (dropTarget?.id !== record.id || dropTarget.after !== after) {
+          setDropTarget({ id: record.id, after });
+        }
+      },
+      drop(record, event) {
+        event.preventDefault();
+        if (dropTarget?.id === record.id) void handleReorderDrop(record.id, dropTarget.after);
+        else endDrag();
+      },
+      dragStart(record, event) {
+        dragIdRef.current = record.id;
+        setDraggingId(record.id);
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", record.id);
+        const row = event.currentTarget.closest("tr");
+        if (row) event.dataTransfer.setDragImage(row, 16, 12);
+      },
+      endDrag,
+      change: (record, next) => setRowDrafts((prev) => ({ ...prev, [record.id]: next })),
+      blur: (record) => void handleBlurRow(record),
+      commit: (record, next) => void saveRowIfChanged(record, next),
+      manageOptions: (field, label) => setManageField({ field, label }),
+      manageSaleColors: () => setIsManagingSaleColors(true),
+      manageDriverColors: () => setIsManagingDriverColors(true),
+      reloadConflict: handleReloadConflictedRow,
+      remove: (record) => void handleDelete(record),
+    };
+  });
 
   function handleReloadConflictedRow(record: ShuttleRecord) {
     setRowDrafts((prev) => ({ ...prev, [record.id]: formValueFromRecord(record) }));
@@ -1751,7 +1912,7 @@ export function ShuttleClient({
               dòng hơn, không để lại khoảng trắng thừa như scale thường gặp;
               không zoom khối cuộn ngoài để chiều cao tableBoxHeight (tính từ
               px thật) không bị lệch. */}
-          <div style={{ zoom: zoomLevel / 100 }}>
+          <div style={zoomLevel === 100 ? undefined : { zoom: zoomLevel / 100 }}>
           <table
             className="w-full table-fixed border-collapse text-center text-sm"
             style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
@@ -1841,92 +2002,21 @@ export function ShuttleClient({
                 return (
                   <Fragment key={record.id}>
                   {isNewDay && <DaySeparatorRow colSpan={16} />}
-                  <tr
-                    className={cn(
-                      "align-top transition-colors hover:bg-slate-50",
-                      hasConflict && "bg-amber-50 hover:bg-amber-100",
-                      draggingId === record.id && "opacity-40",
-                      dropTarget?.id === record.id &&
-                        (dropTarget.after
-                          ? "shadow-[inset_0_-3px_0_0_#2563eb]"
-                          : "shadow-[inset_0_3px_0_0_#2563eb]"),
-                    )}
-                    onDragOver={(event) => {
-                      const source = records.find((r) => r.id === dragIdRef.current);
-                      if (!source || source.date !== record.date || source.id === record.id) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      const after = event.clientY > rect.top + rect.height / 2;
-                      if (dropTarget?.id !== record.id || dropTarget.after !== after) {
-                        setDropTarget({ id: record.id, after });
-                      }
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      if (dropTarget?.id === record.id) void handleReorderDrop(record.id, dropTarget.after);
-                      else endDrag();
-                    }}
-                  >
-                    <ShuttleRowFormCells
-                      value={value}
-                      stt={sttByRecordId.get(record.id)}
-                      dragHandle={
-                        canReorder ? (
-                          <span
-                            draggable
-                            title="Kéo lên/xuống để đổi thứ tự trong ngày"
-                            onDragStart={(event) => {
-                              dragIdRef.current = record.id;
-                              setDraggingId(record.id);
-                              event.dataTransfer.effectAllowed = "move";
-                              event.dataTransfer.setData("text/plain", record.id);
-                              const row = event.currentTarget.closest("tr");
-                              if (row) event.dataTransfer.setDragImage(row, 16, 12);
-                            }}
-                            onDragEnd={endDrag}
-                            className="cursor-grab text-slate-300 hover:text-slate-600 active:cursor-grabbing"
-                          >
-                            <GripVertical className="h-3.5 w-3.5" strokeWidth={2} />
-                          </span>
-                        ) : undefined
-                      }
-                      onChange={(next) => setRowDrafts((prev) => ({ ...prev, [record.id]: next }))}
-                      onBlurField={() => void handleBlurRow(record)}
-                      onCommitField={(next) => void saveRowIfChanged(record, next)}
-                      options={options}
-                      saleOptions={saleOptions}
-                      driverOptions={driverOptions}
-                      companyOptions={companies}
-                      onManageOptions={(field, label) => setManageField({ field, label })}
-                      onManageSaleColors={() => setIsManagingSaleColors(true)}
-                      onManageDriverColors={() => setIsManagingDriverColors(true)}
-                    />
-                    <td className="px-2 py-1 align-middle">
-                      <div className="flex flex-col items-start gap-1">
-                        {hasConflict && (
-                          <button
-                            type="button"
-                            title="Dữ liệu này vừa được cập nhật bởi người khác — bấm để tải lại"
-                            onClick={() => handleReloadConflictedRow(record)}
-                            className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-amber-800 hover:bg-amber-200"
-                          >
-                            Vừa cập nhật — Tải lại
-                          </button>
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          disabled={pendingId === record.id}
-                          onClick={() => void handleDelete(record)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                          Xóa
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
+                  <ShuttleDataRow
+                    record={record}
+                    value={value}
+                    stt={sttByRecordId.get(record.id)}
+                    hasConflict={hasConflict}
+                    isDragging={draggingId === record.id}
+                    dropAfter={dropTarget?.id === record.id ? dropTarget.after : null}
+                    canReorder={canReorder}
+                    pending={pendingId === record.id}
+                    options={options}
+                    saleOptions={saleOptions}
+                    driverOptions={driverOptions}
+                    companies={companies}
+                    actions={rowActions}
+                  />
                   </Fragment>
                 );
               })}
