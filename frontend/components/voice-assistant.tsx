@@ -43,7 +43,7 @@ function speak(text: string, onEnd?: () => void) {
   const synth = window.speechSynthesis;
   synth.cancel();
   const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
-  const chunks = (text.match(/[^.!?\n]+[.!?]*/g) ?? [text]).map((c) => c.trim()).filter(Boolean);
+  const chunks = text.split(/(?<=[.!?])\s+|\n+/).map((c) => c.trim()).filter(Boolean);
   if (chunks.length === 0) {
     onEnd?.();
     return;
