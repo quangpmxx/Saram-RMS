@@ -16,6 +16,14 @@ export class SaveAiConfigDto {
   @IsOptional() @IsString() @MaxLength(100) model?: string;
 }
 
+export class SaveAiKnowledgeDto {
+  @IsOptional() @IsString() @MaxLength(60) assistant_name?: string;
+  /** Trợ lý là ai, ai tạo ra, cách xưng hô… */
+  @IsOptional() @IsString() @MaxLength(4000) persona?: string;
+  /** Sổ tay công ty. */
+  @IsOptional() @IsString() @MaxLength(30000) knowledge?: string;
+}
+
 export class ListAiModelsDto {
   @IsOptional() @IsString() @MaxLength(200) api_key?: string;
 }

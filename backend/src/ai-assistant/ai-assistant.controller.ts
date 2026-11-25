@@ -11,7 +11,12 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequireCap } from '../common/decorators/require-cap.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { AiAssistantService } from './ai-assistant.service';
-import { AskAiDto, ListAiModelsDto, SaveAiConfigDto } from './ai-assistant.dto';
+import {
+  AskAiDto,
+  ListAiModelsDto,
+  SaveAiConfigDto,
+  SaveAiKnowledgeDto,
+} from './ai-assistant.dto';
 
 /**
  * Trợ lý AI (2026-11-25): hỏi bằng Gemini (voice.assistant); liên kết khoá Gemini ở Cài đặt
@@ -47,6 +52,15 @@ export class AiAssistantController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.saveConfig(dto, user);
+  }
+
+  @Put('knowledge')
+  @RequireCap('voice.ai_config')
+  saveKnowledge(
+    @Body() dto: SaveAiKnowledgeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.saveKnowledge(dto, user);
   }
 
   /** POST để khoá vừa nhập (chưa lưu) đi trong body, không nằm trên URL. */

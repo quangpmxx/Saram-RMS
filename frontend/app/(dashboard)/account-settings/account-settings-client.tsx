@@ -19,6 +19,7 @@ import type { UiTheme } from "@/lib/types";
 import { CheckinLocationSettings } from "./checkin-location-settings";
 import { PushNotificationSettings } from "./push-notification-settings";
 import { AiAssistantSettings } from "./ai-assistant-settings";
+import { AiKnowledgeSettings } from "./ai-knowledge-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — khớp đúng giới hạn backend (POST /me/avatar)
@@ -270,6 +271,15 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
               </p>
               <div className="mt-3">
                 <AiAssistantSettings />
+              </div>
+            </section>
+          )}
+          {canAiConfig && (
+            <section>
+              <h3 className="text-sm font-semibold text-slate-900">Dạy Trợ lý AI về công ty</h3>
+              <p className="mt-1 text-xs text-slate-500">Tên, giới thiệu bản thân và sổ tay công ty để trợ lý hiểu công việc, sếp, nhân viên.</p>
+              <div className="mt-3">
+                <AiKnowledgeSettings />
               </div>
             </section>
           )}

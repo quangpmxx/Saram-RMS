@@ -27,7 +27,11 @@ import {
   geminiGenerate,
   geminiListModels,
 } from './gemini.client';
-import { AskAiDto, SaveAiConfigDto } from './ai-assistant.dto';
+import {
+  AskAiDto,
+  SaveAiConfigDto,
+  SaveAiKnowledgeDto,
+} from './ai-assistant.dto';
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
 const MAX_TOOL_ROUNDS = 5;
@@ -41,7 +45,13 @@ const ROLE_LABEL: Record<string, string> = {
   sale: 'Sale',
   mkt: 'MKT',
   shuttle_staff: 'Nhân viên đưa đón',
+  accounting: 'Kế toán',
+  order_staff: 'Nhân viên đơn hàng',
+  media_staff: 'Nhân viên Media',
+  recruitment_staff: 'Nhân viên tuyển dụng',
 };
+
+export const DEFAULT_ASSISTANT_NAME = 'Trợ lý Đại Việt';
 
 /** Khoảng ngày chung cho các công cụ. */
 const RANGE_PARAMS = {
@@ -160,15 +170,26 @@ export class AiAssistantService {
 
   async getConfig() {
     const cfg = await this.prisma.aiAssistantConfig.findFirst();
-    if (!cfg) return { connected: false, model: DEFAULT_GEMINI_MODEL };
+    if (!cfg) {
+      return {
+        connected: false,
+        model: DEFAULT_GEMINI_MODEL,
+        assistant_name: DEFAULT_ASSISTANT_NAME,
+        persona: '',
+        knowledge: '',
+      };
+    }
     const by = await this.prisma.account.findUnique({
       where: { id: cfg.updatedById },
       select: { fullName: true },
     });
     return {
-      connected: true,
+      connected: Boolean(cfg.encryptedKey),
       model: cfg.model,
       key_hint: cfg.keyHint,
+      assistant_name: cfg.assistantName,
+      persona: cfg.persona ?? '',
+      knowledge: cfg.knowledge ?? '',
       updated_at: cfg.updatedAt.toISOString(),
       updated_by_name: by?.fullName ?? null,
     };
@@ -179,7 +200,8 @@ export class AiAssistantService {
     const existing = await this.prisma.aiAssistantConfig.findFirst();
     let apiKey = dto.api_key?.trim();
     if (!apiKey) {
-      if (!existing) throw new BadRequestException('Hãy nhập khoá API Gemini');
+      if (!existing?.encryptedKey)
+        throw new BadRequestException('Hãy nhập khoá API Gemini');
       apiKey = decryptToken(existing.encryptedKey, this.tokenKey());
     }
     // Thử gọi 1 câu ngắn — khoá / tên mô hình sai thì báo ngay, không lưu.
@@ -219,12 +241,41 @@ export class AiAssistantService {
     return this.getConfig();
   }
 
+  /** Tên trợ lý + "trợ lý là ai" + sổ tay công ty — lưu được cả khi chưa có khoá. */
+  async saveKnowledge(dto: SaveAiKnowledgeDto, user: AuthenticatedUser) {
+    const data = {
+      assistantName: dto.assistant_name?.trim() || DEFAULT_ASSISTANT_NAME,
+      persona: dto.persona?.trim() || null,
+      knowledge: dto.knowledge?.trim() || null,
+      updatedById: user.id,
+    };
+    const existing = await this.prisma.aiAssistantConfig.findFirst();
+    if (existing) {
+      await this.prisma.aiAssistantConfig.update({
+        where: { id: existing.id },
+        data,
+      });
+    } else {
+      await this.prisma.aiAssistantConfig.create({
+        data: { ...data, model: DEFAULT_GEMINI_MODEL },
+      });
+    }
+    await this.audit.log({
+      accountId: user.id,
+      actionType: 'update',
+      entityType: 'ai_assistant_config',
+      fieldChanged: 'knowledge',
+    });
+    return this.getConfig();
+  }
+
   /** Mô hình chọn được: theo khoá vừa nhập, hoặc khoá đang lưu. */
   async listModels(apiKey?: string) {
     let key = apiKey?.trim();
     if (!key) {
       const cfg = await this.prisma.aiAssistantConfig.findFirst();
-      if (!cfg) throw new BadRequestException('Hãy nhập khoá API Gemini trước');
+      if (!cfg?.encryptedKey)
+        throw new BadRequestException('Hãy nhập khoá API Gemini trước');
       key = decryptToken(cfg.encryptedKey, this.tokenKey());
     }
     try {
@@ -236,21 +287,28 @@ export class AiAssistantService {
     }
   }
 
+  /** Gỡ khoá — giữ lại tên trợ lý + sổ tay công ty. */
   async removeConfig(user: AuthenticatedUser) {
-    await this.prisma.aiAssistantConfig.deleteMany();
+    await this.prisma.aiAssistantConfig.updateMany({
+      data: { encryptedKey: null, keyHint: null, updatedById: user.id },
+    });
     await this.audit.log({
       accountId: user.id,
       actionType: 'delete',
       entityType: 'ai_assistant_config',
+      fieldChanged: 'api_key',
     });
-    return { connected: false, model: DEFAULT_GEMINI_MODEL };
+    return this.getConfig();
   }
 
   async status() {
     const cfg = await this.prisma.aiAssistantConfig.findFirst({
-      select: { id: true },
+      select: { encryptedKey: true, assistantName: true },
     });
-    return { ai_enabled: Boolean(cfg) };
+    return {
+      ai_enabled: Boolean(cfg?.encryptedKey),
+      assistant_name: cfg?.assistantName ?? DEFAULT_ASSISTANT_NAME,
+    };
   }
 
   // ---------------------------------------------------------------- Hỏi đáp
@@ -260,7 +318,7 @@ export class AiAssistantService {
     user: AuthenticatedUser,
   ): Promise<{ answer: string }> {
     const cfg = await this.prisma.aiAssistantConfig.findFirst();
-    if (!cfg)
+    if (!cfg?.encryptedKey)
       throw new ServiceUnavailableException('Admin chưa liên kết AI Gemini');
     const apiKey = decryptToken(cfg.encryptedKey, this.tokenKey());
     const me = await this.prisma.account.findUnique({
@@ -275,7 +333,12 @@ export class AiAssistantService {
       })),
       { role: 'user', parts: [{ text: dto.question.slice(0, 1000) }] },
     ];
-    const system = this.systemPrompt(me?.fullName ?? '', user.role);
+    const system = this.systemPrompt(
+      me?.fullName ?? '',
+      user.role,
+      cfg,
+      await this.companyDirectory(),
+    );
 
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -329,7 +392,62 @@ export class AiAssistantService {
     };
   }
 
-  private systemPrompt(name: string, role: string): string {
+  /**
+   * Danh bạ nội bộ tự lấy từ trang Tài khoản: nhóm + Leader, nhân viên (tên, biệt danh, vai trò,
+   * chức vụ, nhóm, văn phòng). KHÔNG gửi SĐT, CCCD, ngân hàng, ngày sinh.
+   */
+  private async companyDirectory(): Promise<string> {
+    const [teams, people] = await Promise.all([
+      this.prisma.team.findMany({
+        select: { name: true, leader: { select: { fullName: true } } },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.account.findMany({
+        where: { deletedAt: null, status: 'active' },
+        select: {
+          fullName: true,
+          nickname: true,
+          role: true,
+          position: true,
+          office: true,
+          team: { select: { name: true } },
+        },
+        orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+      }),
+    ]);
+    const teamLines = teams.map(
+      (t) => `- Nhóm ${t.name}: Leader ${t.leader?.fullName ?? '(chưa đặt)'}`,
+    );
+    const peopleLines = people.map((a) =>
+      [
+        `- ${a.fullName}`,
+        a.nickname ? `(gọi là ${a.nickname})` : '',
+        `— ${a.position || ROLE_LABEL[a.role] || a.role}`,
+        a.team ? `, nhóm ${a.team.name}` : '',
+        a.office === 'hcm' ? ', văn phòng HCM' : '',
+      ].join(' '),
+    );
+    return [
+      'Các nhóm:',
+      ...teamLines,
+      '',
+      `Nhân sự đang làm việc (${people.length} người):`,
+      ...peopleLines,
+    ]
+      .join('\n')
+      .slice(0, 12_000);
+  }
+
+  private systemPrompt(
+    name: string,
+    role: string,
+    cfg: {
+      assistantName: string;
+      persona: string | null;
+      knowledge: string | null;
+    },
+    directory: string,
+  ): string {
     const now = vnNow();
     const today = now.toISOString().slice(0, 10);
     const weekday = [
@@ -342,19 +460,29 @@ export class AiAssistantService {
       'Thứ 7',
     ][now.getUTCDay()];
     return [
-      'Bạn là Trợ lý của phần mềm Saram RMS — CRM tuyển dụng / cung ứng lao động. Người dùng nói tiếng Việt, thường hỏi bằng giọng nói.',
-      `Hôm nay là ${weekday}, ${today} (giờ Việt Nam). Tuần bắt đầu từ Thứ 2.`,
-      `Người đang hỏi: ${name} — vai trò ${ROLE_LABEL[role] ?? role}.`,
+      `Bạn là "${cfg.assistantName}" — trợ lý AI riêng của công ty, chạy trong phần mềm quản lý tuyển dụng / cung ứng lao động của công ty. Người dùng là nhân viên công ty, nói tiếng Việt, thường hỏi bằng giọng nói.`,
+      cfg.persona
+        ? `\n## Về bản thân bạn (do công ty đặt — khi được hỏi "bạn là ai", "ai tạo ra bạn"… hãy trả lời theo đúng phần này, không nói mình là Gemini hay do Google tạo)\n${cfg.persona.slice(0, 4000)}`
+        : '',
+      `\nHôm nay là ${weekday}, ${today} (giờ Việt Nam). Tuần bắt đầu từ Thứ 2.`,
+      `Người đang hỏi: ${name} — vai trò ${ROLE_LABEL[role] ?? role}. Xưng hô lịch sự, thân thiện.`,
+      cfg.knowledge
+        ? `\n## Sổ tay công ty (thông tin công ty cung cấp — dùng để trả lời câu hỏi về công ty, sếp, quy trình, quy định…)\n${cfg.knowledge.slice(0, 30_000)}`
+        : '',
+      `\n## Danh bạ nội bộ (tự cập nhật từ phần mềm)\n${directory}`,
       '',
-      'Cách trả lời:',
-      '- Luôn lấy số bằng công cụ, KHÔNG tự bịa số. Không có công cụ phù hợp thì nói thẳng là trợ lý chưa xem được phần đó.',
+      '## Cách trả lời',
+      '- Câu hỏi về công ty, con người, quy trình: trả lời theo Sổ tay và Danh bạ ở trên. Không có trong đó thì nói là chưa được cung cấp thông tin, không tự bịa.',
+      '- Câu hỏi về số liệu: luôn lấy bằng công cụ, KHÔNG tự bịa số. Không có công cụ phù hợp thì nói thẳng là trợ lý chưa xem được phần đó.',
       '- Trả lời tiếng Việt, ngắn gọn 1–3 câu, dễ đọc thành tiếng: không dùng bảng, gạch đầu dòng, ký hiệu markdown.',
       '- Công cụ trả "error" (ví dụ không có quyền) thì báo lại đúng ý đó, không đoán.',
       '- Câu hỏi không nói kỳ nào thì hiểu là hôm nay. "Tháng này", "tháng 10"… là cả tháng (by_person = true); ngày, tuần, vài ngày thì by_person = false.',
       '- "Chạy được bao nhiêu số", "bao nhiêu data" = data mới (new_leads).',
       '- Nghiệp vụ: Hẹn PV = số dòng Đưa đón; Đến = Tình trạng "Đã đón"; Bùng = "Chưa đón được"; Đỗ PV = Đã đón và Kết quả trống hoặc "Đỗ PV"; Trượt = Đã đón và "Trượt PV".',
       '- Tiền đọc theo đồng, ví dụ "1,2 triệu đồng". Số liệu chỉ trong phạm vi người hỏi được xem — không nói về phần bị ẩn.',
-    ].join('\n');
+    ]
+      .filter((l) => l !== '')
+      .join('\n');
   }
 
   private async moduleOk(user: AuthenticatedUser, code: string) {

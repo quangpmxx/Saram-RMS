@@ -221,13 +221,18 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   const canUse = can("voice.assistant");
   // Admin đã liên kết Gemini → hỏi AI; chưa thì hiểu theo từ khoá như cũ.
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [assistantName, setAssistantName] = useState("Trợ lý Đại Việt");
   const historyRef = useRef<{ role: "user" | "model"; text: string }[]>([]);
 
   useEffect(() => {
     if (!open || !canUse) return;
     let cancelled = false;
-    clientApi<{ ai_enabled: boolean }>("/ai-assistant/status")
-      .then((s) => !cancelled && setAiEnabled(s.ai_enabled))
+    clientApi<{ ai_enabled: boolean; assistant_name?: string }>("/ai-assistant/status")
+      .then((s) => {
+        if (cancelled) return;
+        setAiEnabled(s.ai_enabled);
+        if (s.assistant_name) setAssistantName(s.assistant_name);
+      })
       .catch(() => !cancelled && setAiEnabled(false));
     return () => {
       cancelled = true;
@@ -377,7 +382,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
             <div className="relative flex items-center gap-3">
               <BrandMark size={42} className="shadow-md ring-2 ring-white/40" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] leading-tight font-semibold">Trợ lý Đại Việt</p>
+                <p className="truncate text-[15px] leading-tight font-semibold">{assistantName}</p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/80">
                   <span className={cn("h-1.5 w-1.5 rounded-full", aiEnabled ? "bg-emerald-300" : "bg-amber-300")} />
                   {aiEnabled ? "AI Gemini · hỏi tự nhiên" : "Chế độ nhanh · số liệu Dashboard"}
