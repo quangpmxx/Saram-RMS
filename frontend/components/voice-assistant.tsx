@@ -221,6 +221,8 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   const canUse = can("voice.assistant");
   // Admin đã liên kết Gemini → hỏi AI; chưa thì hiểu theo từ khoá như cũ.
   const [aiEnabled, setAiEnabled] = useState(false);
+  // Chưa kiểm tra xong / chưa liên kết Gemini → báo "AI chưa sẵn sàng", không tự trả lời (2026-11-25).
+  const [aiChecked, setAiChecked] = useState(false);
   const [assistantName, setAssistantName] = useState("Trợ lý Đại Việt");
   const historyRef = useRef<{ role: "user" | "model"; text: string }[]>([]);
 
@@ -231,9 +233,14 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       .then((s) => {
         if (cancelled) return;
         setAiEnabled(s.ai_enabled);
+        setAiChecked(true);
         if (s.assistant_name) setAssistantName(s.assistant_name);
       })
-      .catch(() => !cancelled && setAiEnabled(false));
+      .catch(() => {
+        if (cancelled) return;
+        setAiEnabled(false);
+        setAiChecked(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -298,22 +305,18 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
 
   async function ask(text: string) {
     const question = text.trim();
-    if (!question || busy) return;
+    if (!question || busy || !aiEnabled) return;
     push("user", question);
     setInterim("");
     setBusy(true);
     try {
       let reply: string;
-      if (aiEnabled) {
-        try {
-          reply = await askAi(question);
-        } catch (e) {
-          // AI hết lượt miễn phí / lỗi mạng → vẫn trả lời bằng cách hiểu từ khoá.
-          const note = e instanceof ApiError ? e.message : "AI đang bận.";
-          reply = `${note} Trả lời nhanh: ${await answerQuestion(question, canMktCost)}`;
-        }
-      } else {
-        reply = await answerQuestion(question, canMktCost);
+      try {
+        reply = await askAi(question);
+      } catch (e) {
+        // AI hết lượt miễn phí / lỗi mạng → vẫn trả lời bằng cách hiểu từ khoá.
+        const note = e instanceof ApiError ? e.message : "AI đang bận.";
+        reply = `${note} Trả lời nhanh: ${await answerQuestion(question, canMktCost)}`;
       }
       push("bot", reply);
       say(reply);
@@ -407,7 +410,11 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 <div className="flex items-end gap-2">
                   <BrandMark size={26} className="shadow-sm ring-1 ring-slate-200" />
                   <p className="max-w-[82%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm">
-                    Xin chào{firstName ? ` ${firstName}` : ""} 👋 Em là {assistantName}, anh/chị cần em giúp gì ạ?
+                    {!aiChecked
+                      ? "…"
+                      : aiEnabled
+                        ? `Xin chào${firstName ? ` ${firstName}` : ""} 👋 Em là ${assistantName}, anh/chị cần em giúp gì ạ?`
+                        : "AI chưa sẵn sàng — Admin cần liên kết khoá Gemini ở Cài đặt tài khoản."}
                   </p>
                 </div>
                 {messages.map((m) =>
@@ -473,12 +480,13 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 <input
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
-                  placeholder="Nhập câu hỏi…"
+                  placeholder={aiEnabled ? "Nhập câu hỏi…" : "AI chưa sẵn sàng"}
+                  disabled={!aiEnabled}
                   className="min-w-0 flex-1 bg-transparent py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400"
                 />
                 <button
                   type="submit"
-                  disabled={busy || !typed.trim()}
+                  disabled={busy || !aiEnabled || !typed.trim()}
                   title="Gửi"
                   className="flex h-8 w-8 items-center justify-center rounded-full text-brand-600 transition-colors hover:bg-brand-50 disabled:text-slate-300 disabled:hover:bg-transparent"
                 >
@@ -488,7 +496,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
               <button
                 type="button"
                 onClick={startListening}
-                disabled={!supported || busy}
+                disabled={!supported || busy || !aiEnabled}
                 title={!supported ? "Trình duyệt này không nhận giọng nói" : listening ? "Dừng nghe" : "Bấm rồi nói câu hỏi"}
                 className={cn(
                   "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all disabled:opacity-40",
