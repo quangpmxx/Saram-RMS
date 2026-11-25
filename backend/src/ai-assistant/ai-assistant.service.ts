@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -400,10 +402,9 @@ export class AiAssistantService {
     } catch (e) {
       if (e instanceof GeminiError) {
         this.logger.warn(`Gemini ${e.status}: ${e.message}`);
+        // Hết lượt (mọi mô hình dự phòng cũng hết) → 429: khung chat khoá ô hỏi, không báo gì.
         if (e.status === 429) {
-          throw new ServiceUnavailableException(
-            'AI đã hết lượt miễn phí tạm thời, bạn thử lại sau ít phút nhé.',
-          );
+          throw new HttpException('AI hết lượt', HttpStatus.TOO_MANY_REQUESTS);
         }
         throw new ServiceUnavailableException(
           'AI đang bận, bạn thử lại sau nhé.',

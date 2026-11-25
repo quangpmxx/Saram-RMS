@@ -117,7 +117,7 @@ Ranh giới Admin–Quản lý · quy trình bộ phận đưa đón · danh m�
 
 ## Trợ lý giọng nói (2026-11-25)
 - Nút micro nổi góc phải dưới (quyền `voice.assistant`). Nghe/đọc bằng giọng có sẵn của trình duyệt.
-- Chưa liên kết AI: hiểu câu hỏi theo từ khoá (`frontend/lib/voice-intent.ts`), chỉ số Dashboard.
-- Đã liên kết Google Gemini (Cài đặt tài khoản, quyền `voice.ai_config`, mặc định chỉ Admin; khoá mã hoá bằng `MARKETING_TOKEN_KEY`): AI gọi công cụ ở `backend/src/ai-assistant` — Dashboard, Top, Đưa đón (thống kê gộp), Chi phí MKT, TKQC, Tiến độ chăm sóc. Mỗi công cụ kiểm quyền/module của người hỏi; không gửi tên/SĐT lao động cho AI. AI lỗi/hết lượt → trả lời bằng từ khoá.
+- Chưa liên kết AI: khung chat chỉ báo "AI chưa sẵn sàng", khoá ô hỏi (bỏ chế độ hiểu từ khoá 2026-11-25). Hết lượt (Gemini 429 ở mọi mô hình dự phòng) → khoá ô hỏi, không báo gì; lỗi khác → "AI đang bận".
+- Đã liên kết Google Gemini (Cài đặt tài khoản, quyền `voice.ai_config`, mặc định chỉ Admin; khoá mã hoá bằng `MARKETING_TOKEN_KEY`): AI gọi công cụ ở `backend/src/ai-assistant` — Dashboard, Top, Đưa đón (thống kê gộp), Chi phí MKT, TKQC, Tiến độ chăm sóc. Mỗi công cụ kiểm quyền/module của người hỏi; không gửi tên/SĐT lao động cho AI.
 - "Dạy" AI (Cài đặt tài khoản): tên trợ lý, "trợ lý là ai", sổ tay công ty (≤ 30.000 ký tự) — gửi kèm mỗi câu hỏi, không huấn luyện lại. Danh bạ nội bộ (nhóm, Leader, tên, biệt danh, vai trò/chức vụ, văn phòng) tự lấy từ Tài khoản; không gửi SĐT/CCCD/ngân hàng/ngày sinh. Gỡ khoá vẫn giữ sổ tay. Kèm "Hướng dẫn sử dụng phần mềm" cố định (`backend/src/ai-assistant/app-guide.ts`) — **đổi nghiệp vụ/trang thì sửa cả file này**.
 - Mô hình mặc định gemini-flash-lite-latest (gói miễn phí ~500 lượt/ngày; Flash ~20; mỗi câu số liệu tốn 2–3 lượt). Công tắc "Cho phép trò chuyện ngoài lề" mặc định tắt (tắt = chỉ hỗ trợ công việc).
