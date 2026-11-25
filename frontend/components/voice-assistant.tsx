@@ -239,10 +239,23 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       setInterim(finalText || partial);
     };
     rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        push("bot", "Trình duyệt đang chặn micro. Bạn cho phép micro cho trang này, hoặc gõ câu hỏi bên dưới nhé.");
+      // Tách từng lỗi (2026-11-25): "service-not-allowed" = trình duyệt không có dịch vụ nhận giọng nói
+      // (Cốc Cốc, Brave, Opera…), KHÔNG phải do chặn micro.
+      if (e.error === "not-allowed") {
+        push(
+          "bot",
+          window.isSecureContext
+            ? "Micro đang bị chặn cho trang này. Bấm biểu tượng ổ khoá cạnh địa chỉ web → Micro → Cho phép, rồi tải lại trang."
+            : "Trang đang mở bằng http nên trình duyệt không cho dùng micro. Hãy mở bằng địa chỉ https (hoặc localhost).",
+        );
+      } else if (e.error === "service-not-allowed") {
+        push("bot", "Trình duyệt này không hỗ trợ nhận giọng nói. Hãy dùng Google Chrome hoặc Microsoft Edge, hoặc gõ câu hỏi.");
+      } else if (e.error === "audio-capture") {
+        push("bot", "Không tìm thấy micro trên máy. Kiểm tra lại micro / tai nghe rồi thử lại.");
+      } else if (e.error === "network") {
+        push("bot", "Không kết nối được dịch vụ nhận giọng nói. Kiểm tra mạng, hoặc dùng Google Chrome / Microsoft Edge.");
       } else if (e.error === "no-speech") {
-        push("bot", "Mình chưa nghe thấy gì, bạn bấm micro và nói lại nhé.");
+        push("bot", "Em chưa nghe thấy gì, anh/chị bấm micro và nói lại nhé.");
       }
     };
     rec.onend = () => {
