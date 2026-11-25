@@ -15,6 +15,7 @@ interface KnowledgeConfig {
   assistant_name: string;
   persona: string;
   knowledge: string;
+  allow_chitchat: boolean;
 }
 
 const PERSONA_SAMPLE = `Tôi là Trợ lý AI riêng của Công ty Đại Việt, được tạo ra bởi anh [Tên] — Trưởng phòng Marketing.
@@ -49,6 +50,7 @@ export function AiKnowledgeSettings() {
   const [name, setName] = useState("");
   const [persona, setPersona] = useState("");
   const [knowledge, setKnowledge] = useState("");
+  const [chitchat, setChitchat] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +60,7 @@ export function AiKnowledgeSettings() {
         setName(c.assistant_name);
         setPersona(c.persona);
         setKnowledge(c.knowledge);
+        setChitchat(c.allow_chitchat);
         setLoaded(true);
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Không tải được sổ tay"));
@@ -69,7 +72,7 @@ export function AiKnowledgeSettings() {
     try {
       const c = await clientApi<KnowledgeConfig>("/ai-assistant/knowledge", {
         method: "PUT",
-        body: JSON.stringify({ assistant_name: name, persona, knowledge }),
+        body: JSON.stringify({ assistant_name: name, persona, knowledge, allow_chitchat: chitchat }),
       });
       setName(c.assistant_name);
       toast.success("Đã lưu — trợ lý dùng thông tin mới ngay từ câu hỏi tiếp theo");
@@ -111,6 +114,21 @@ export function AiKnowledgeSettings() {
           Chèn khung mẫu để điền
         </button>
       )}
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2.5">
+        <input
+          type="checkbox"
+          checked={chitchat}
+          onChange={(e) => setChitchat(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-brand-600"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-800">Cho phép trò chuyện ngoài lề</span>
+          <span className="block text-xs text-slate-500">
+            Nhân viên tâm sự, hỏi linh tinh được. Tắt thì trợ lý chỉ hỗ trợ công việc. Gói miễn phí dùng chung lượt cho cả công ty — bật
+            khi đã có tín dụng / thanh toán Google Cloud thì tốt hơn.
+          </span>
+        </span>
+      </label>
       {error && (
         <p role="alert" className="text-sm text-red-600">
           {error}

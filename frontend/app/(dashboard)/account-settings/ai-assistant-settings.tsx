@@ -121,18 +121,18 @@ export function AiAssistantSettings() {
           loadingModels
             ? "Đang lấy danh sách từ Google…"
             : models.length
-              ? "Nên chọn loại Flash: miễn phí nhiều lượt, trả lời nhanh."
+              ? "Miễn phí: Flash-Lite ~500 lượt/ngày, Flash chỉ ~20, Pro không có. Mỗi câu hỏi số liệu tốn 2–3 lượt."
               : "Nhập khoá ở trên để hiện đủ danh sách mô hình."
         }
       >
         <Select value={model} onChange={(e) => setModel(e.target.value)} disabled={loadingModels}>
           {/* Luôn có mô hình mặc định + mô hình đang dùng, kể cả khi chưa tải được danh sách. */}
           {[
-            { id: "gemini-flash-latest", label: "Gemini Flash (mới nhất) — khuyên dùng" },
-            ...(model && model !== "gemini-flash-latest" && !models.some((m) => m.id === model)
+            { id: "gemini-flash-lite-latest", label: "Gemini Flash-Lite (mới nhất) — khuyên dùng gói miễn phí" },
+            ...(model && model !== "gemini-flash-lite-latest" && !models.some((m) => m.id === model)
               ? [{ id: model, label: model }]
               : []),
-            ...models.filter((m) => m.id !== "gemini-flash-latest"),
+            ...models.filter((m) => m.id !== "gemini-flash-lite-latest"),
           ].map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}

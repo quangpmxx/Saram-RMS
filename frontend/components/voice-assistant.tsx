@@ -414,6 +414,9 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 </span>
                 <p className="mt-3 text-base font-semibold text-slate-800">Xin chào{firstName ? ` ${firstName}` : ""} 👋</p>
                 <p className="mt-1 text-xs text-slate-500">Bấm micro rồi nói, hoặc gõ câu hỏi. Mình trả lời theo đúng số liệu bạn được xem.</p>
+                {aiEnabled && (
+                  <p className="mt-1 text-[11px] text-slate-400">Câu hỏi được gửi tới Google Gemini để xử lý — đừng chia sẻ mật khẩu hay thông tin bí mật.</p>
+                )}
                 <div className="mt-4 grid w-full grid-cols-1 gap-1.5">
                   {VOICE_EXAMPLES.slice(0, 5).map((ex) => (
                     <button

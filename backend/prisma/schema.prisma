@@ -2429,6 +2429,8 @@ model AiAssistantConfig {
   persona       String?
   /// Sổ tay công ty: giới thiệu, sếp, quy trình, đơn hàng, quy định… (Admin soạn). AI đọc kèm mỗi câu hỏi.
   knowledge     String?
+  /// Cho nhân viên trò chuyện ngoài lề (tâm sự, hỏi linh tinh) — tắt mặc định để dành lượt miễn phí.
+  allowChitchat Boolean  @default(false) @map("allow_chitchat")
   updatedById  String   @map("updated_by") @db.Uuid
   updatedAt    DateTime @updatedAt @map("updated_at")
 

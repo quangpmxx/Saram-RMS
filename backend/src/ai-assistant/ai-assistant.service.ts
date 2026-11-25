@@ -33,7 +33,8 @@ import {
   SaveAiKnowledgeDto,
 } from './ai-assistant.dto';
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+/** Flash-Lite: gói miễn phí ~500 lượt/ngày (Flash chỉ ~20) — 2026-11. */
+export const DEFAULT_GEMINI_MODEL = 'gemini-flash-lite-latest';
 const MAX_TOOL_ROUNDS = 5;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -177,6 +178,7 @@ export class AiAssistantService {
         assistant_name: DEFAULT_ASSISTANT_NAME,
         persona: '',
         knowledge: '',
+        allow_chitchat: false,
       };
     }
     const by = await this.prisma.account.findUnique({
@@ -190,6 +192,7 @@ export class AiAssistantService {
       assistant_name: cfg.assistantName,
       persona: cfg.persona ?? '',
       knowledge: cfg.knowledge ?? '',
+      allow_chitchat: cfg.allowChitchat,
       updated_at: cfg.updatedAt.toISOString(),
       updated_by_name: by?.fullName ?? null,
     };
@@ -247,6 +250,7 @@ export class AiAssistantService {
       assistantName: dto.assistant_name?.trim() || DEFAULT_ASSISTANT_NAME,
       persona: dto.persona?.trim() || null,
       knowledge: dto.knowledge?.trim() || null,
+      allowChitchat: dto.allow_chitchat === true,
       updatedById: user.id,
     };
     const existing = await this.prisma.aiAssistantConfig.findFirst();
@@ -445,6 +449,7 @@ export class AiAssistantService {
       assistantName: string;
       persona: string | null;
       knowledge: string | null;
+      allowChitchat: boolean;
     },
     directory: string,
   ): string {
@@ -474,7 +479,10 @@ export class AiAssistantService {
       '## Cách trả lời',
       '- Câu hỏi về công ty, con người, quy trình: trả lời theo Sổ tay và Danh bạ ở trên. Không có trong đó thì nói là chưa được cung cấp thông tin, không tự bịa.',
       '- Câu hỏi về số liệu: luôn lấy bằng công cụ, KHÔNG tự bịa số. Không có công cụ phù hợp thì nói thẳng là trợ lý chưa xem được phần đó.',
-      '- Trả lời tiếng Việt, ngắn gọn 1–3 câu, dễ đọc thành tiếng: không dùng bảng, gạch đầu dòng, ký hiệu markdown.',
+      cfg.allowChitchat
+        ? '- Được trò chuyện ngoài lề: tâm sự, hỏi kiến thức chung, chuyện đời thường — đáp tự nhiên, ấm áp, tích cực như một đồng nghiệp tốt; có thể dài hơn khi cần (vẫn gọn, dễ đọc thành tiếng). Không tư vấn y tế/pháp lý thay chuyên gia; chuyện nghiêm trọng (sức khoẻ, an toàn) thì khuyên tìm người thân hoặc chuyên gia.'
+        : '- CHỈ hỗ trợ công việc công ty. Câu hỏi ngoài lề (tâm sự, chuyện riêng, kiến thức không liên quan công việc) thì lịch sự từ chối 1 câu và gợi ý hỏi về công việc.',
+      '- Trả lời tiếng Việt, ngắn gọn 1–3 câu (trừ khi đang trò chuyện ngoài lề được phép), dễ đọc thành tiếng: không dùng bảng, gạch đầu dòng, ký hiệu markdown.',
       '- Công cụ trả "error" (ví dụ không có quyền) thì báo lại đúng ý đó, không đoán.',
       '- Câu hỏi không nói kỳ nào thì hiểu là hôm nay. "Tháng này", "tháng 10"… là cả tháng (by_person = true); ngày, tuần, vài ngày thì by_person = false.',
       '- "Chạy được bao nhiêu số", "bao nhiêu data" = data mới (new_leads).',

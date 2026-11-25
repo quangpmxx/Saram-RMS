@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -22,6 +23,7 @@ export class SaveAiKnowledgeDto {
   @IsOptional() @IsString() @MaxLength(4000) persona?: string;
   /** Sổ tay công ty. */
   @IsOptional() @IsString() @MaxLength(30000) knowledge?: string;
+  @IsOptional() @IsBoolean() allow_chitchat?: boolean;
 }
 
 export class ListAiModelsDto {
