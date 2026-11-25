@@ -35,6 +35,7 @@ import {
   SaveAiConfigDto,
   SaveAiKnowledgeDto,
 } from './ai-assistant.dto';
+import { APP_GUIDE } from './app-guide';
 
 /** Flash-Lite: gói miễn phí ~500 lượt/ngày (Flash chỉ ~20) — 2026-11. */
 export const DEFAULT_GEMINI_MODEL = 'gemini-flash-lite-latest';
@@ -520,10 +521,14 @@ export class AiAssistantService {
       cfg.knowledge
         ? `\n## Sổ tay công ty (thông tin công ty cung cấp — dùng để trả lời câu hỏi về công ty, sếp, quy trình, quy định…)\n${cfg.knowledge.slice(0, 30_000)}`
         : '',
+      `
+## Hướng dẫn sử dụng phần mềm & nghiệp vụ (dùng để hướng dẫn thao tác, giải thích chỉ số)
+${APP_GUIDE}`,
       `\n## Danh bạ nội bộ (tự cập nhật từ phần mềm)\n${directory}`,
       '',
       '## Cách trả lời',
       '- Câu hỏi về công ty, con người, quy trình: trả lời theo Sổ tay và Danh bạ ở trên. Không có trong đó thì nói là chưa được cung cấp thông tin, không tự bịa.',
+      '- Hỏi cách dùng phần mềm / ý nghĩa chỉ số: trả lời theo Hướng dẫn sử dụng, chỉ rõ vào trang nào, bấm gì. Có thể trả lời dài hơn (vài câu, đánh số bước nếu cần) vì đây là hướng dẫn. Không chắc thì nói nên hỏi Admin.',
       '- Câu hỏi về số liệu: luôn lấy bằng công cụ, KHÔNG tự bịa số. Không có công cụ phù hợp thì nói thẳng là trợ lý chưa xem được phần đó.',
       cfg.allowChitchat
         ? '- Được trò chuyện ngoài lề: tâm sự, hỏi kiến thức chung, chuyện đời thường — đáp tự nhiên, ấm áp, tích cực như một đồng nghiệp tốt; có thể dài hơn khi cần (vẫn gọn, dễ đọc thành tiếng). Không tư vấn y tế/pháp lý thay chuyên gia; chuyện nghiêm trọng (sức khoẻ, an toàn) thì khuyên tìm người thân hoặc chuyên gia.'
