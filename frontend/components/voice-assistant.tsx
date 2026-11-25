@@ -100,7 +100,9 @@ function speakNow(text: string, onEnd?: () => void) {
     const u = new SpeechSynthesisUtterance(chunk);
     u.lang = "vi-VN";
     if (voice) u.voice = voice;
-    u.rate = 1.05;
+    // Giọng nữ miền Bắc nhẹ nhàng (2026-11-25): HoaiMy / Google Tiếng Việt đều giọng Hà Nội; đọc chậm, cao nhẹ.
+    u.rate = 0.95;
+    u.pitch = 1.1;
     if (i === chunks.length - 1 && onEnd) {
       u.onend = () => onEnd();
       u.onerror = () => onEnd();
