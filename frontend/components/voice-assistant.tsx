@@ -211,7 +211,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const canUse = can("voice.assistant");
-  // Admin đã liên kết Gemini → hỏi AI; chưa thì hiểu theo từ khoá như cũ.
+  // Admin đã liên kết Gemini mới dùng được.
   const [aiEnabled, setAiEnabled] = useState(false);
   // Chưa kiểm tra xong / chưa liên kết Gemini → báo "AI chưa sẵn sàng", không tự trả lời (2026-11-25).
   const [aiChecked, setAiChecked] = useState(false);
@@ -245,7 +245,11 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   useEffect(() => {
     // Một số máy chỉ nạp danh sách giọng đọc sau lần gọi đầu.
     if (typeof window !== "undefined" && "speechSynthesis" in window) void loadVoices();
-    return () => recRef.current?.stop();
+    return () => {
+      recRef.current?.stop();
+      audioRef.current?.pause();
+      window.speechSynthesis?.cancel();
+    };
   }, []);
 
   // Tin mới → cuộn xuống cuối.
@@ -278,7 +282,6 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     setSpeaking(false);
   }
 
-  /** Đọc bằng giọng Gemini; lỗi / hết lượt thì đọc bằng giọng có sẵn của máy. */
   /** Phát 1 đoạn âm thanh, xong (hoặc lỗi / bị dừng) thì resolve. */
   function playBlob(blob: Blob, id: number): Promise<void> {
     return new Promise((resolve) => {
@@ -300,7 +303,9 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     });
   }
 
-  /** onReady: gọi đúng lúc bắt đầu phát tiếng (để hiện chữ cùng lúc với giọng). */
+  /**
+   * Đọc bằng giọng Gemini; lỗi / hết lượt thì đọc bằng giọng có sẵn của máy.
+   * onReady: gọi đúng lúc bắt đầu phát tiếng (để hiện chữ cùng lúc với giọng). */
   async function speakVoice(text: string, onEnd?: () => void, onReady?: () => void) {
     stopAudio();
     const id = speakIdRef.current;
@@ -490,14 +495,18 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     rec.start();
   }
 
-  const headerBtn = "rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/15 hover:text-white";
+  const headerBtn = "rounded-lg p-2 text-white/80 transition-colors hover:bg-white/15 hover:text-white sm:p-1.5";
 
   return (
-    <div className="fixed right-4 bottom-4 z-40 flex flex-col items-end gap-3 sm:right-6 sm:bottom-6">
+    <>
       {open && (
-        <div className="flex h-[min(600px,calc(100dvh-6rem))] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-brand-900/20 sm:w-[390px]">
+        <div
+          role="dialog"
+          aria-label={assistantName}
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white sm:inset-auto sm:right-6 sm:bottom-24 sm:h-[min(600px,calc(100dvh-8rem))] sm:w-[390px] sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:shadow-brand-900/20"
+        >
           {/* Đầu khung: logo công ty + tên trợ lý + trạng thái AI */}
-          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-600 px-3 py-2 text-white">
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-600 px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 text-white sm:pt-2">
             <div aria-hidden className="pointer-events-none absolute -top-10 -right-8 h-32 w-32 rounded-full bg-accent-500/30 blur-2xl" />
             <div aria-hidden className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
             <div className="relative flex items-center gap-2">
@@ -508,23 +517,23 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
               <div className="flex items-center gap-0.5">
                 {messages.length > 0 && (
                   <button type="button" onClick={reset} title="Cuộc trò chuyện mới" className={headerBtn}>
-                    <RotateCcw className="h-4 w-4" />
+                    <RotateCcw className="h-5 w-5 sm:h-4 sm:w-4" />
                   </button>
                 )}
                 <button type="button" onClick={close} title="Đóng" className={headerBtn}>
-                  <X className="h-4 w-4" />
+                  <X className="h-5 w-5 sm:h-4 sm:w-4" />
                 </button>
               </div>
             </div>
           </div>
 
           {/* Nội dung trò chuyện */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-slate-50 px-3 pt-3 pb-3">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain bg-slate-50 px-3 pt-3 pb-3">
             {/* Tối giản (2026-11-25): chỉ lời chào, không chú thích / câu hỏi mẫu. */}
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-end gap-2">
                   <BrandMark size={26} className="shadow-sm ring-1 ring-slate-200" />
-                  <p className="max-w-[82%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm">
+                  <p className="max-w-[85%] sm:max-w-[82%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm">
                     {!aiChecked
                       ? "…"
                       : aiEnabled
@@ -535,14 +544,14 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 {messages.map((m) =>
                   m.role === "user" ? (
                     <div key={m.id} className="flex justify-end">
-                      <p className="max-w-[82%] rounded-2xl rounded-br-md bg-gradient-to-br from-brand-600 to-indigo-600 px-3 py-2 text-sm text-white shadow-sm">
+                      <p className="max-w-[85%] sm:max-w-[82%] rounded-2xl rounded-br-md bg-gradient-to-br from-brand-600 to-indigo-600 px-3 py-2 text-sm text-white shadow-sm">
                         {m.text}
                       </p>
                     </div>
                   ) : (
                     <div key={m.id} className="flex items-end gap-2">
                       <BrandMark size={26} className="mb-5 shadow-sm ring-1 ring-slate-200" />
-                      <div className="max-w-[82%]">
+                      <div className="max-w-[85%] sm:max-w-[82%]">
                         <p className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-sm whitespace-pre-line text-slate-800 shadow-sm">
                           {m.text}
                         </p>
@@ -550,9 +559,9 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                           type="button"
                           onClick={() => void speakVoice(m.text)}
                           title="Nghe lại"
-                          className="mt-0.5 ml-1 flex items-center gap-1 text-[11px] text-slate-400 transition-colors hover:text-brand-600"
+                          className="mt-0.5 flex items-center gap-1 rounded p-1 text-[11px] text-slate-400 transition-colors hover:text-brand-600"
                         >
-                          <Volume2 className="h-3 w-3" />
+                          <Volume2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
@@ -560,7 +569,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 )}
                 {interim && (
                   <div className="flex justify-end">
-                    <p className="max-w-[82%] rounded-2xl rounded-br-md border border-dashed border-brand-300 bg-brand-50 px-3 py-2 text-sm text-brand-700 italic">
+                    <p className="max-w-[85%] sm:max-w-[82%] rounded-2xl rounded-br-md border border-dashed border-brand-300 bg-brand-50 px-3 py-2 text-sm text-brand-700 italic">
                       {interim}…
                     </p>
                   </div>
@@ -577,7 +586,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
           </div>
 
           {/* Ô nhập + micro */}
-          <div className="shrink-0 border-t border-slate-200 bg-white p-3">
+          <div className="shrink-0 border-t border-slate-200 bg-white px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-3">
             {listening && (
               <div className="mb-2 flex items-center justify-center gap-2 text-xs font-medium text-red-600">
                 <ListeningWave />
@@ -587,6 +596,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
               className="flex items-center gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
+                if (busy || !ready || !typed.trim()) return;
                 void ask(typed);
                 setTyped("");
               }}
@@ -597,7 +607,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                   onChange={(e) => setTyped(e.target.value)}
                   placeholder={ready ? "Nhập câu hỏi…" : aiEnabled ? "" : "AI chưa sẵn sàng"}
                   disabled={!ready}
-                  className="min-w-0 flex-1 bg-transparent py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                  className="min-w-0 flex-1 bg-transparent py-2.5 text-base text-slate-800 outline-none placeholder:text-slate-400 sm:py-2 sm:text-sm"
                 />
                 <button
                   type="submit"
@@ -614,7 +624,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 disabled={!supported || busy || !ready}
                 title={!supported ? "Trình duyệt này không nhận giọng nói" : listening ? "Dừng nói chuyện" : speaking ? "Ngắt lời và nói" : "Bấm để nói chuyện"}
                 className={cn(
-                  "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all disabled:opacity-40",
+                  "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all disabled:opacity-40 sm:h-11 sm:w-11",
                   listening
                     ? "bg-red-500 ring-4 ring-red-200"
                     : speaking
@@ -640,9 +650,14 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       {/* Nút nổi: logo công ty + nhãn AI */}
       <button
         type="button"
+        aria-label={open ? "Đóng trợ lý" : "Mở trợ lý AI"}
         title={open ? "Đóng trợ lý" : "Trợ lý AI Đại Việt"}
         onClick={() => (open ? close() : setOpen(true))}
-        className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 via-indigo-500 to-accent-500 p-[3px] shadow-lg shadow-brand-900/25 transition-transform hover:scale-105 active:scale-95"
+        className={cn(
+          "fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 via-indigo-500 to-accent-500 p-[3px] shadow-lg shadow-brand-900/25 transition-transform hover:scale-105 active:scale-95 sm:right-6 sm:bottom-6",
+          // Điện thoại: khung chat toàn màn hình đã có nút đóng → ẩn nút nổi cho khỏi che ô nhập.
+          open ? "hidden sm:flex" : "flex",
+        )}
       >
         {!open && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-brand-400 opacity-20 [animation-duration:2.5s]" />}
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-white">
@@ -658,6 +673,6 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
           </span>
         )}
       </button>
-    </div>
+    </>
   );
 }
