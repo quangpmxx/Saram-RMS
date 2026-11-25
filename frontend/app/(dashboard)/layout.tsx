@@ -183,7 +183,7 @@ export default async function DashboardLayout({
           {/* Ngoài khung cuộn/nội dung để popup đè được cả header (z-50). */}
           {modal}
           {/* Trợ lý giọng nói (2026-11-25): nút nổi góc phải dưới, tự ẩn khi không có quyền voice.assistant. */}
-          <VoiceAssistant />
+          <VoiceAssistant userName={user.full_name} />
           </UiThemeProvider>
         </BirthdayThemeProvider>
       </ToastProvider>
