@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Mic, MicOff, RotateCcw, SendHorizontal, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { Mic, MicOff, RotateCcw, SendHorizontal, Volume2, VolumeX, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
 import { cn } from "@/lib/cn";
@@ -383,10 +383,6 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
               <BrandMark size={42} className="shadow-md ring-2 ring-white/40" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] leading-tight font-semibold">{assistantName}</p>
-                <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/80">
-                  <span className={cn("h-1.5 w-1.5 rounded-full", aiEnabled ? "bg-emerald-300" : "bg-amber-300")} />
-                  {aiEnabled ? "AI Gemini · hỏi tự nhiên" : "Chế độ nhanh · số liệu Dashboard"}
-                </p>
               </div>
               <div className="flex items-center gap-0.5">
                 <button type="button" onClick={toggleMute} title={muted ? "Bật đọc to câu trả lời" : "Tắt đọc to"} className={headerBtn}>
@@ -406,33 +402,14 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
 
           {/* Nội dung trò chuyện */}
           <div ref={scrollRef} className="-mt-3 flex-1 overflow-y-auto rounded-t-2xl bg-slate-50 px-3 pt-4 pb-3">
-            {messages.length === 0 && !interim ? (
-              <div className="flex flex-col items-center px-2 pt-2 text-center">
-                <span className="relative">
-                  <span aria-hidden className="absolute inset-0 rounded-full bg-gradient-to-tr from-brand-500 to-accent-500 opacity-30 blur-md" />
-                  <BrandMark size={64} className="relative shadow-lg ring-4 ring-white" />
-                </span>
-                <p className="mt-3 text-base font-semibold text-slate-800">Xin chào{firstName ? ` ${firstName}` : ""} 👋</p>
-                <p className="mt-1 text-xs text-slate-500">Bấm micro rồi nói, hoặc gõ câu hỏi. Mình trả lời theo đúng số liệu bạn được xem.</p>
-                {aiEnabled && (
-                  <p className="mt-1 text-[11px] text-slate-400">Câu hỏi được gửi tới Google Gemini để xử lý — đừng chia sẻ mật khẩu hay thông tin bí mật.</p>
-                )}
-                <div className="mt-4 grid w-full grid-cols-1 gap-1.5">
-                  {VOICE_EXAMPLES.slice(0, 5).map((ex) => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => void ask(ex)}
-                      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-[13px] text-slate-700 shadow-sm transition-all hover:-translate-y-px hover:border-brand-300 hover:text-brand-700 hover:shadow"
-                    >
-                      <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent-500" />
-                      {ex}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
+            {/* Tối giản (2026-11-25): chỉ lời chào, không chú thích / câu hỏi mẫu. */}
               <div className="flex flex-col gap-2.5">
+                <div className="flex items-end gap-2">
+                  <BrandMark size={26} className="shadow-sm ring-1 ring-slate-200" />
+                  <p className="max-w-[82%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm">
+                    Xin chào{firstName ? ` ${firstName}` : ""} 👋 Em là {assistantName}, anh/chị cần em giúp gì ạ?
+                  </p>
+                </div>
                 {messages.map((m) =>
                   m.role === "user" ? (
                     <div key={m.id} className="flex justify-end">
@@ -450,9 +427,10 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                         <button
                           type="button"
                           onClick={() => speak(m.text)}
+                          title="Nghe lại"
                           className="mt-0.5 ml-1 flex items-center gap-1 text-[11px] text-slate-400 transition-colors hover:text-brand-600"
                         >
-                          <Volume2 className="h-3 w-3" /> Nghe lại
+                          <Volume2 className="h-3 w-3" />
                         </button>
                       </div>
                     </div>
@@ -474,14 +452,13 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                   </div>
                 )}
               </div>
-            )}
           </div>
 
           {/* Ô nhập + micro */}
           <div className="shrink-0 border-t border-slate-200 bg-white p-3">
             {listening && (
               <div className="mb-2 flex items-center justify-center gap-2 text-xs font-medium text-red-600">
-                <ListeningWave /> Đang nghe… bấm micro để dừng
+                <ListeningWave />
               </div>
             )}
             <form
@@ -496,7 +473,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 <input
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
-                  placeholder={supported ? "Hỏi gì đó… hoặc bấm micro" : "Gõ câu hỏi…"}
+                  placeholder="Nhập câu hỏi…"
                   className="min-w-0 flex-1 bg-transparent py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400"
                 />
                 <button
