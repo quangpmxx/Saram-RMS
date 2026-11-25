@@ -31,6 +31,9 @@ const SELF_DEACTIVATE_MESSAGE =
 const SELF_DELETE_MESSAGE =
   'Không thể xóa tài khoản đang đăng nhập của chính bạn';
 
+/** Số câu hỏi Trợ lý AI mỗi ngày mặc định cho tài khoản mới (trừ Admin). */
+export const DEFAULT_AI_DAILY_LIMIT = 30;
+
 @Injectable()
 export class AccountsService {
   constructor(
@@ -117,6 +120,8 @@ export class AccountsService {
           role: dto.role,
           teamId,
           createdById,
+          // Trợ lý AI: mặc định 30 câu hỏi/ngày, Admin không giới hạn (user 2026-11-25); sửa ở Sửa tài khoản.
+          aiDailyLimit: dto.role === 'admin' ? null : DEFAULT_AI_DAILY_LIMIT,
         },
         include: { team: { select: TEAM_SELECT } },
       });
