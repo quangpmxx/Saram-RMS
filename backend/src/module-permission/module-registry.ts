@@ -227,7 +227,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   },
   {
     // Lịch tuyển dụng (2026-11-11, yêu cầu người dùng): Admin/Quản lý/Leader/
-    // Sup Leader sửa lịch; Sale chỉ xem để tư vấn lao động.
+    // Sub Leader sửa lịch; Sale chỉ xem để tư vấn lao động.
     code: 'recruitment-schedule',
     label: 'Lịch tuyển dụng',
     defaultRoles: ['admin', 'manager', 'leader', 'sup_leader'],

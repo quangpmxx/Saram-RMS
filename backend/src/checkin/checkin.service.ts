@@ -31,7 +31,7 @@ const TIMEZONE = 'Asia/Ho_Chi_Minh';
  * Ai phải Check in (yêu cầu người dùng 2026-11-12): "Hễ không phải là admin
  * hoặc manager thì đều phải check in" — MỌI vị trí khác (Leader, Sale, MKT, NV
  * Media, NV Tuyển dụng, NV Đưa đón, Kế toán...). Trước đây chỉ Leader/MKT/Sale/
- * Sup Leader.
+ * Sub Leader.
  */
 const NO_CHECKIN_ROLES: AccountRole[] = ['admin', 'manager'];
 

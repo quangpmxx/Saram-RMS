@@ -151,7 +151,7 @@ describe('ShuttleService', () => {
   });
 
   describe('listSaleAccounts — xếp theo nhóm (2026-11-07)', () => {
-    it('Sale cùng nhóm đứng liền nhau: nhóm A→Z, Leader → Sup Leader → Sale, chưa có nhóm cuối', async () => {
+    it('Sale cùng nhóm đứng liền nhau: nhóm A→Z, Leader → Sub Leader → Sale, chưa có nhóm cuối', async () => {
       const acc = (fullName: string, role: string, team: string | null) => ({
         id: fullName,
         fullName,

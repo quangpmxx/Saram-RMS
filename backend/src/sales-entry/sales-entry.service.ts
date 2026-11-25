@@ -515,7 +515,7 @@ export class SalesEntryService {
   }
 
   /**
-   * Mục 5: nguồn Sale = tài khoản Sale/Sup Leader/Leader đang active
+   * Mục 5: nguồn Sale = tài khoản Sale/Sub Leader/Leader đang active
    * (RECRUITER_ROLES — Leader cũng tự tuyển được, 2026-11-07) — khớp đúng
    * listSaleAccounts() ở shuttle.service.ts. Yêu cầu trực tiếp người dùng
    * (2026-07-27): Leader chỉ thấy Sale TRONG NHÓM mình (khớp phạm vi
@@ -534,7 +534,7 @@ export class SalesEntryService {
     // DS Media/Tuyển dụng/Đưa đón (2026-11-12): cột "Người tuyển" chọn được
     // mọi tài khoản đang hoạt động (MKT, NV đưa đón, Sale...), không riêng Sale.
     return this.listAccountOptions(
-      // Cột "Sale" của DS Sale và Nhập thưởng: Sale/Sup Leader/Leader.
+      // Cột "Sale" của DS Sale và Nhập thưởng: Sale/Sub Leader/Leader.
       kind === 'sale' || kind === 'bonus' ? RECRUITER_ROLES : null,
       teamId,
     );

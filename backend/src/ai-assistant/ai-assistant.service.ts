@@ -85,7 +85,7 @@ const ROLE_LABEL: Record<string, string> = {
   admin: 'Admin',
   manager: 'Quản lý',
   leader: 'Leader',
-  sup_leader: 'Sup Leader',
+  sup_leader: 'Sub Leader',
   sale: 'Sale',
   mkt: 'MKT',
   shuttle_staff: 'Nhân viên đưa đón',

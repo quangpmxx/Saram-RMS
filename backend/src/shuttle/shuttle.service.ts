@@ -1,7 +1,7 @@
 import type { AccountRole } from '../../generated/prisma/enums';
 import { RECRUITER_ROLES } from '../common/utils/sale-roles';
 
-/** Thứ tự trong 1 nhóm ở ô chọn Sale: Leader → Sup Leader → Sale. */
+/** Thứ tự trong 1 nhóm ở ô chọn Sale: Leader → Sub Leader → Sale. */
 const IN_TEAM_ORDER: Partial<Record<AccountRole, number>> = {
   leader: 0,
   sup_leader: 1,
@@ -778,7 +778,7 @@ export class ShuttleService {
   }
 
   /**
-   * Danh sách tài khoản Sale/Sup Leader/Leader (RECRUITER_ROLES — Leader cũng
+   * Danh sách tài khoản Sale/Sub Leader/Leader (RECRUITER_ROLES — Leader cũng
    * tự tuyển được, 2026-11-07), đang active — nguồn gợi ý cho cột "Sale"
    * (yêu cầu trực tiếp người dùng: "lấy nguồn danh sách nhân viên sale từ
    * danh sách tài khoản... về sau sẽ lấy dữ liệu để làm báo cáo"). Endpoint
@@ -814,7 +814,7 @@ export class ShuttleService {
       orderBy: { fullName: 'asc' },
     });
     // Xếp theo nhóm (yêu cầu người dùng 2026-11-07): Sale cùng nhóm đứng liền
-    // nhau trong ô chọn — nhóm A→Z, trong nhóm Leader → Sup Leader → Sale, rồi tên A→Z;
+    // nhau trong ô chọn — nhóm A→Z, trong nhóm Leader → Sub Leader → Sale, rồi tên A→Z;
     // chưa có nhóm xếp cuối. Danh sách đã theo tên nên sort ổn định giữ thứ tự tên.
     const teamKey = (a: (typeof accounts)[number]) => a.team?.name ?? null;
     accounts.sort((a, b) => {

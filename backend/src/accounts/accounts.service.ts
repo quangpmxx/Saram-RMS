@@ -183,7 +183,7 @@ export class AccountsService {
       if (ROLES_REQUIRING_TEAM.has(dto.role!)) {
         if (!nextTeamId) {
           throw new UnprocessableEntityException(
-            'Vai trò Leader/Sale/Sup Leader bắt buộc phải thuộc 1 nhóm — chọn nhóm trước',
+            'Vai trò Leader/Sale/Sub Leader bắt buộc phải thuộc 1 nhóm — chọn nhóm trước',
           );
         }
       } else {

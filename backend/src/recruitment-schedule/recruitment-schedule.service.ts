@@ -65,7 +65,7 @@ interface Scope {
 /**
  * Lịch tuyển dụng (2026-11-11, yêu cầu người dùng): thay sheet "Lịch tuyển
  * dụng". Quyền vào trang/sửa do ModulePermissionGuard chặn theo module
- * "recruitment-schedule" (sửa: Admin/Quản lý/Leader/Sup Leader; Sale chỉ xem).
+ * "recruitment-schedule" (sửa: Admin/Quản lý/Leader/Sub Leader; Sale chỉ xem).
  *
  * MỖI NHÓM MỘT LỊCH RIÊNG (duyệt 2026-11-11) — xem `resolveScope`:
  * - Admin: mọi nhóm.

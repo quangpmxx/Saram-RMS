@@ -57,7 +57,7 @@ import { LeaveRequestClient } from "../requests/leave-request-client";
  *   chức năng xuất dữ liệu" (Mục 1); đã rà soát toàn bộ codebase, chưa có
  *   export Excel ở bất kỳ trang nào (chỉ có NHẬP), nên bỏ qua theo đúng điều
  *   kiện đã nêu thay vì tự xây cả hạ tầng xuất file mới.
- * - Danh sách nhân viên hiện trong bảng = Quản lý/Leader/MKT/Sale/Sup Leader
+ * - Danh sách nhân viên hiện trong bảng = Quản lý/Leader/MKT/Sale/Sub Leader
  *   (2026-11-07: thêm Quản lý — cũng là đối tượng chấm công, chỉ không Check
  *   in hằng ngày). Admin không có dòng.
  * - "Đánh dấu có công toàn bộ ngày làm việc chưa chấm" (click dòng, "ngày

@@ -276,7 +276,7 @@ describe('TeamsService', () => {
 
       expect(prisma.account.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          // Sale/Sup Leader + Leader được bật quyền nhận data (lead.claim) — 2026-11-20.
+          // Sale/Sub Leader + Leader được bật quyền nhận data (lead.claim) — 2026-11-20.
           where: {
             teamId: 'team-1',
             status: 'active',

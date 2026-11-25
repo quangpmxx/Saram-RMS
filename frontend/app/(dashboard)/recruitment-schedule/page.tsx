@@ -8,7 +8,7 @@ import { RecruitmentScheduleClient } from "./recruitment-schedule-client";
 /**
  * Lịch tuyển dụng (2026-11-11, yêu cầu người dùng): thay sheet "Lịch tuyển
  * dụng" — Sale vừa gọi điện vừa nhìn để tư vấn lao động. Quyền: module
- * "recruitment-schedule" (Admin/Quản lý/Leader/Sup Leader sửa; Sale chỉ xem).
+ * "recruitment-schedule" (Admin/Quản lý/Leader/Sub Leader sửa; Sale chỉ xem).
  */
 export default async function RecruitmentSchedulePage() {
   const user = await getCurrentUser();

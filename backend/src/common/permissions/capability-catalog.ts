@@ -11,7 +11,7 @@ import type { AccountRole } from '../../../generated/prisma/enums';
  * dính vòng import. Frontend lấy danh mục qua GET /module-permission/capabilities.
  *
  * Luật cứng KHÔNG nằm ở đây (không mở bằng phân quyền): số đang giữ chỉ
- * người giữ thao tác; chỉ chia data cho Sale/Sup Leader (và Leader được bật
+ * người giữ thao tác; chỉ chia data cho Sale/Sub Leader (và Leader được bật
  * lead.claim — isLeadReceiver); Phân quyền, thêm/xoá nhân viên, reset mật
  * khẩu chỉ Admin. Quyền trái luật với vai trò: xem applicableRoles.
  */

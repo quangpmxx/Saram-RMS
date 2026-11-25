@@ -30,7 +30,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "candidates",
     defaultRoles: ["admin", "manager", "mkt", "leader", "sale", "sup_leader"],
   },
-  // Lịch tuyển dụng (2026-11-11): Admin/Quản lý/Leader/Sup Leader sửa, Sale chỉ xem. Khớp backend module-registry.ts.
+  // Lịch tuyển dụng (2026-11-11): Admin/Quản lý/Leader/Sub Leader sửa, Sale chỉ xem. Khớp backend module-registry.ts.
   {
     code: "recruitment-schedule",
     href: "/recruitment-schedule",

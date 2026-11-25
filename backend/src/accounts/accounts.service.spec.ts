@@ -181,7 +181,7 @@ describe('AccountsService', () => {
     });
 
     describe('đổi vai trò (2026-11-07)', () => {
-      it('Admin đổi Sale → Sup Leader: lưu vai trò, ghi nhật ký', async () => {
+      it('Admin đổi Sale → Sub Leader: lưu vai trò, ghi nhật ký', async () => {
         prisma.account.findUnique
           .mockResolvedValueOnce(baseAccount)
           .mockResolvedValueOnce({ role: 'admin' });

@@ -20,7 +20,7 @@ export type AccountRole =
 export type AccountStatus = "active" | "inactive";
 
 /**
- * Vai trò "làm việc như Sale" (2026-11-07): Sale + Sup Leader — nhận data, có
+ * Vai trò "làm việc như Sale" (2026-11-07): Sale + Sub Leader — nhận data, có
  * trong ô chọn Sale, tính hiệu suất, nộp báo cáo. Khớp backend common/utils/sale-roles.ts.
  */
 export const SALE_ROLES: readonly AccountRole[] = ["sale", "sup_leader"];
@@ -84,7 +84,7 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   leader: "Leader",
   mkt: "NV MKT",
   sale: "NV Sale",
-  sup_leader: "Sup Leader",
+  sup_leader: "Sub Leader",
   accounting: "Kế toán",
   order_staff: "NV QL Đơn hàng",
   shuttle_staff: "NV Đưa đón",

@@ -11,7 +11,7 @@ export const ROLE_LABEL: Record<AccountRole, string> = {
   leader: 'Leader',
   mkt: 'NV MKT',
   sale: 'NV Sale',
-  sup_leader: 'Sup Leader',
+  sup_leader: 'Sub Leader',
   accounting: 'Kế toán',
   order_staff: 'NV QL Đơn hàng',
   shuttle_staff: 'NV Đưa đón',

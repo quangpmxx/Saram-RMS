@@ -1411,8 +1411,8 @@ export class CareWarehouseService {
   }
 
   /**
-   * Báo Leader + Sup Leader nhóm của data (yêu cầu người dùng 2026-11-09 —
-   * trước chỉ báo Leader ghi trên nhóm, Sup Leader và Leader chưa gắn vào
+   * Báo Leader + Sub Leader nhóm của data (yêu cầu người dùng 2026-11-09 —
+   * trước chỉ báo Leader ghi trên nhóm, Sub Leader và Leader chưa gắn vào
    * nhóm không nhận được); không có ai (đang hoạt động) thì báo mọi Quản
    * lý/Admin. Không tự báo cho chính người gửi đề nghị.
    */

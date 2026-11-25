@@ -19,7 +19,7 @@ import { ROLE_LABEL } from '../common/constants/role-label';
  * Ai có DÒNG trong bảng chấm công (yêu cầu người dùng 2026-11-12): MỌI tài khoản
  * được tick "Chấm công" ở Sửa tài khoản (`attendanceTracked`), bất kể vị trí —
  * nằm ở bảng của văn phòng đã chọn cho tài khoản đó. Trước đây còn giới hạn theo
- * vị trí (Manager/Leader/MKT/Sale/Sup Leader) nên NV Media, NV Đưa đón, Kế toán...
+ * vị trí (Manager/Leader/MKT/Sale/Sub Leader) nên NV Media, NV Đưa đón, Kế toán...
  * dù được tick vẫn không hiện.
  */
 
@@ -58,7 +58,7 @@ const HEADER_FILL = 'FFEFF6FF';
 const SUNDAY_HEADER_FILL = 'FFFEE2E2';
 const SUNDAY_EMPTY_FILL = 'FFFEF2F2';
 
-/** Thứ tự vai trò trong 1 nhóm: Leader → Sup Leader → nhân viên. */
+/** Thứ tự vai trò trong 1 nhóm: Leader → Sub Leader → nhân viên. */
 const IN_TEAM_ROLE_ORDER: Partial<Record<AccountRole, number>> = {
   leader: 0,
   sup_leader: 1,
@@ -67,7 +67,7 @@ const IN_TEAM_ROLE_ORDER: Partial<Record<AccountRole, number>> = {
 
 /**
  * Thứ tự dòng bảng chấm công (yêu cầu người dùng 2026-11-07): các Quản lý →
- * các MKT → theo từng nhóm (tên nhóm A→Z): Leader → Sup Leader → nhân viên.
+ * các MKT → theo từng nhóm (tên nhóm A→Z): Leader → Sub Leader → nhân viên.
  * Người chưa thuộc nhóm nào xếp cuối. Cùng vị trí thì theo tên A→Z.
  */
 export function sortForAttendance<

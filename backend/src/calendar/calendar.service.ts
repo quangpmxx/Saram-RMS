@@ -65,7 +65,7 @@ export class CalendarService {
     // Không có quyền xem cả nhóm/toàn công ty: ngoài lịch của data mình
     // phụ trách, còn thấy lịch DO CHÍNH MÌNH ĐẶT dù data đang thuộc người
     // khác/Kho chăm sóc (vd lịch gọi lại khi xử lý hộ) — trước đây bị ẩn,
-    // chỉ Sup Leader trở lên mới thấy (yêu cầu người dùng 2026-11-09).
+    // chỉ Sub Leader trở lên mới thấy (yêu cầu người dùng 2026-11-09).
     const isOwnScope =
       !can(currentUser, 'calendar.view_all') &&
       !can(currentUser, 'calendar.view_team');

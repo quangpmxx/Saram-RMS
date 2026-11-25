@@ -11,7 +11,7 @@ NGƯỜI TẠO (ghi cố định 2026-11-25 — khi được hỏi ai tạo ra A
 TỔNG QUAN
 - Phần mềm quản lý tuyển dụng / cung ứng lao động: MKT chạy quảng cáo thu data (số điện thoại người lao động) → chia cho Sale gọi → Sale hẹn phỏng vấn (PV) → bộ phận Đưa đón đưa lao động đi PV → đỗ PV → đi làm → tính doanh số, hoa hồng, lương.
 - Menu bên trái chỉ hiện trang người dùng được phép vào (Admin chỉnh ở trang Phân quyền). Góc trên phải: chuông thông báo, nút Chấm công, menu tài khoản (Cài đặt tài khoản, đổi mật khẩu, đăng xuất). Nút logo AI góc phải dưới là trợ lý này.
-- Vai trò: Admin (toàn quyền), Quản lý (thấy toàn hệ thống, không thêm/xoá nhân viên), Leader (quản lý nhóm mình), Sup Leader (làm như Sale), Sale (gọi data được giao), MKT (up data, quảng cáo), Kế toán, NV đơn hàng, NV đưa đón, NV Media, NV tuyển dụng.
+- Vai trò: Admin (toàn quyền), Quản lý (thấy toàn hệ thống, không thêm/xoá nhân viên), Leader (quản lý nhóm mình), Sub Leader (làm như Sale), Sale (gọi data được giao), MKT (up data, quảng cáo), Kế toán, NV đơn hàng, NV đưa đón, NV Media, NV tuyển dụng.
 - Phân quyền: mỗi trang có mức Không / Xem / Sửa; mỗi trang còn các quyền nhỏ (thêm, xoá, chia data, xem toàn công ty / nhóm mình / của mình…). Mỗi người có thể được chỉnh riêng "Cho phép / Không cho phép". Chỉ Admin vào trang Phân quyền, thêm/xoá nhân viên, reset mật khẩu.
 
 TRANG CHỦ DASHBOARD
@@ -76,7 +76,7 @@ QUẢN LÝ ĐƠN HÀNG
 - Danh sách công ty / đơn hàng đối tác. Dùng làm danh sách chọn "Công ty" ở Đưa đón, Doanh số, Lịch tuyển dụng.
 
 LỊCH TUYỂN DỤNG
-- Mỗi nhóm một lịch: thẻ theo công ty × loại (chính thức/thời vụ), trạng thái Đang tuyển / Hạn chế / Tạm dừng; có yêu cầu giới tính, tuổi, lương, quyền lợi… Sale chỉ xem; Admin, Quản lý, Leader, Sup Leader sửa.
+- Mỗi nhóm một lịch: thẻ theo công ty × loại (chính thức/thời vụ), trạng thái Đang tuyển / Hạn chế / Tạm dừng; có yêu cầu giới tính, tuổi, lương, quyền lợi… Sale chỉ xem; Admin, Quản lý, Leader, Sub Leader sửa.
 
 MARKETING HUB
 - Liên kết tài khoản quảng cáo (TKQC) Facebook/TikTok, mỗi TKQC 1 người phụ trách. Bảng hiệu quả: số data, tổng chi tiêu, Giá số = chi ÷ data (tô xanh/cam/đỏ theo mốc Admin đặt), Trạng thái camp (Đang hoạt động / Dừng), Trạng thái TK (Live ADS / Chưa thanh toán / Die ADS), Số dư (cảnh báo khi thấp).

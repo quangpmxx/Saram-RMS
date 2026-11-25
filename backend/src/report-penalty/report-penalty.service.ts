@@ -28,7 +28,7 @@ import {
 const TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 /** Mục 2, yêu cầu người dùng: "Áp dụng cho tài khoản Sale phải nộp báo cáo hằng ngày" — khớp đúng role duy nhất được tạo Báo cáo hằng ngày (daily-reports.service.ts). */
-const REPORTER_ROLES = SALE_ROLES; // Sale + Sup Leader (2026-11-07)
+const REPORTER_ROLES = SALE_ROLES; // Sale + Sub Leader (2026-11-07)
 
 /** Mục 5: mặc định 22:30 khi Admin chưa từng cấu hình. */
 const DEFAULT_DEADLINE_HOUR = 22;

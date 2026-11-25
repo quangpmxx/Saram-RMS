@@ -73,7 +73,7 @@ enum AccountRole {
   leader
   mkt
   sale
-  /// Sup Leader (2026-11-07): làm việc như Sale (nhận data, hiệu suất, báo cáo...), quyền mặc định như Sale.
+  /// Sub Leader (2026-11-07): làm việc như Sale (nhận data, hiệu suất, báo cáo...), quyền mặc định như Sale.
   sup_leader
   accounting
   order_staff

@@ -458,7 +458,7 @@ function AccountModal({
 
     const roleChanged = isEdit && role !== initialAccount?.role;
     if ((!isEdit || roleChanged) && requiresTeam && !teamId) {
-      setError("Vai trò Leader/Sale/Sup Leader bắt buộc phải thuộc 1 nhóm");
+      setError("Vai trò Leader/Sale/Sub Leader bắt buộc phải thuộc 1 nhóm");
       return;
     }
 

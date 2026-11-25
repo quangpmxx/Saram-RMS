@@ -1,7 +1,7 @@
 import { sortForAttendance } from './attendance.service';
 
 describe('sortForAttendance — thứ tự bảng chấm công (2026-11-07)', () => {
-  it('Quản lý → MKT → nhóm A (Leader, Sup Leader, NV) → nhóm B → chưa có nhóm', () => {
+  it('Quản lý → MKT → nhóm A (Leader, Sub Leader, NV) → nhóm B → chưa có nhóm', () => {
     const A = { name: 'Nhóm A' };
     const B = { name: 'Nhóm B' };
     const rows = [

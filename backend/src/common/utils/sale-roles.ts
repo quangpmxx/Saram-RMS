@@ -1,10 +1,10 @@
 import type { AccountRole } from '../../../generated/prisma/enums';
 
 /**
- * Vai trò "làm việc như Sale" (2026-11-07): Sale và Sup Leader — nhận data,
+ * Vai trò "làm việc như Sale" (2026-11-07): Sale và Sub Leader — nhận data,
  * nằm trong vòng chia tự động, tính hiệu suất/xếp hạng, nộp báo cáo hằng
  * ngày, có trong ô chọn Sale (Đưa đón, Nhập doanh số, Kho chăm sóc...).
- * Quyền nhỏ của Sup Leader mặc định như Sale (capability-catalog.ts).
+ * Quyền nhỏ của Sub Leader mặc định như Sale (capability-catalog.ts).
  */
 export const SALE_ROLES: AccountRole[] = ['sale', 'sup_leader'];
 
@@ -22,7 +22,7 @@ export const RECEIVER_LEADER_WHERE = {
   capabilityOverrides: { some: { code: 'lead.claim', granted: true } },
 };
 
-/** Điều kiện Prisma: tài khoản nhận được data (Sale/Sup Leader + Leader được bật quyền). */
+/** Điều kiện Prisma: tài khoản nhận được data (Sale/Sub Leader + Leader được bật quyền). */
 export const LEAD_RECEIVER_WHERE = {
   OR: [{ role: { in: SALE_ROLES } }, RECEIVER_LEADER_WHERE],
 };
@@ -41,7 +41,7 @@ export function isLeadReceiver(
 
 /**
  * Người chọn được ở cột "Sale" của Danh sách đưa đón và Nhập doanh số
- * (2026-11-07): Sale/Sup Leader và cả Leader — Leader cũng có thể tự tuyển
+ * (2026-11-07): Sale/Sub Leader và cả Leader — Leader cũng có thể tự tuyển
  * được người.
  */
 export const RECRUITER_ROLES: AccountRole[] = ['leader', ...SALE_ROLES];

@@ -4,7 +4,7 @@ import type { AccountRole } from "./types";
 /**
  * Dự án phụ — nâng cấp toàn diện: tên + nhãn vai trò hiển thị màu riêng theo
  * vai trò ở MỌI nơi có hiển thị tên tài khoản (yêu cầu trực tiếp người dùng)
- * — Admin: vàng gold (gradient), Quản lý: đỏ thẫm, Leader: tím, Sup Leader: xanh lá. Dùng inline
+ * — Admin: vàng gold (gradient), Quản lý: đỏ thẫm, Leader: tím, Sub Leader: xanh lá. Dùng inline
  * style (không phải class Tailwind nối thêm qua cn()) vì cn() trong dự án
  * chỉ join chuỗi, không dedup theo thuộc tính CSS — nối thêm text-color/bg-color
  * qua className không đảm bảo thắng class màu gốc (bài học lặp lại nhiều lần
@@ -19,7 +19,7 @@ export const MANAGER_DARK_RED_RING = "rgba(127, 29, 29, 0.35)";
 export const LEADER_PURPLE = "#6d28d9";
 export const LEADER_PURPLE_RING = "rgba(109, 40, 217, 0.35)";
 
-/** Sup Leader (2026-11-07): xanh lá cây. */
+/** Sub Leader (2026-11-07): xanh lá cây. */
 export const SUP_LEADER_GREEN = "#15803d";
 export const SUP_LEADER_GREEN_RING = "rgba(21, 128, 61, 0.35)";
 
