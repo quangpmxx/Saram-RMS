@@ -242,7 +242,8 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   }
 
   /** Đọc bằng giọng Gemini; lỗi / hết lượt thì đọc bằng giọng có sẵn của máy. */
-  async function speakVoice(text: string, onEnd?: () => void) {
+  /** onReady: gọi đúng lúc bắt đầu phát tiếng (để hiện chữ cùng lúc với giọng). */
+  async function speakVoice(text: string, onEnd?: () => void, onReady?: () => void) {
     stopAudio();
     const id = speakIdRef.current;
     if (!ttsOffRef.current) {
@@ -258,6 +259,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
         };
         audio.onended = finish;
         audio.onerror = finish;
+        onReady?.();
         await audio.play();
         return;
       } catch (e) {
@@ -271,16 +273,43 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       warnedVoiceRef.current = true;
       push("bot", "Giọng AI tạm hết lượt, máy này lại chưa có giọng tiếng Việt nên nghe sẽ lơ lớ. Dùng Microsoft Edge để nghe rõ hơn.");
     }
+    onReady?.();
     speak(text, onEnd);
   }
 
-  /** Đọc câu trả lời; đang nói chuyện thì đọc xong tự nghe câu tiếp theo. */
-  function talkBack(text: string) {
-    if (!convRef.current) return;
-    setSpeaking(true);
-    void speakVoice(text, () => {
-      setSpeaking(false);
-      if (convRef.current) startListening();
+  /**
+   * Trả lời trong chế độ nói chuyện (2026-11-25): giữ "đang suy nghĩ" tới khi giọng đọc sẵn sàng,
+   * rồi hiện chữ + đọc cùng lúc; đọc xong tự nghe câu tiếp theo. Gõ tay → hiện chữ ngay.
+   */
+  function reply(text: string): Promise<void> {
+    if (!convRef.current) {
+      push("bot", text);
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      let shown = false;
+      const show = () => {
+        if (shown) return;
+        shown = true;
+        push("bot", text);
+        setSpeaking(true);
+        resolve();
+      };
+      void speakVoice(
+        text,
+        () => {
+          setSpeaking(false);
+          if (convRef.current) startListening();
+        },
+        show,
+      ).finally(() => {
+        // Bị dừng giữa chừng / lỗi → vẫn hiện chữ.
+        if (shown) return;
+        shown = true;
+        push("bot", text);
+        setSpeaking(false);
+        resolve();
+      });
     });
   }
 
@@ -312,18 +341,14 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     setInterim("");
     setBusy(true);
     try {
-      const reply = await askAi(question);
-      push("bot", reply);
-      talkBack(reply);
+      await reply(await askAi(question));
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
         stopConversation();
         setExhausted(true);
         return;
       }
-      const msg = "AI đang bận, anh/chị thử lại sau nhé.";
-      push("bot", msg);
-      talkBack(msg);
+      await reply("AI đang bận, anh/chị thử lại sau nhé.");
     } finally {
       setBusy(false);
     }
