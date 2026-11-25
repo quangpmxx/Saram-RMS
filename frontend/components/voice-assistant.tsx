@@ -101,8 +101,8 @@ function speakNow(text: string, onEnd?: () => void) {
     u.lang = "vi-VN";
     if (voice) u.voice = voice;
     // Giọng nữ miền Bắc nhẹ nhàng (2026-11-25): HoaiMy / Google Tiếng Việt đều giọng Hà Nội; đọc chậm, cao nhẹ.
-    u.rate = 0.95;
-    u.pitch = 1.1;
+    u.rate = 1.1;
+    u.pitch = 1.15;
     if (i === chunks.length - 1 && onEnd) {
       u.onend = () => onEnd();
       u.onerror = () => onEnd();

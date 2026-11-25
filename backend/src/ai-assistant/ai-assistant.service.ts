@@ -60,9 +60,9 @@ const TTS_MODELS = [
   'gemini-3.1-flash-tts-preview',
   'gemini-2.5-flash-preview-tts',
 ];
-const TTS_VOICE = 'Achernar'; // giọng nữ, mềm
+const TTS_VOICE = 'Leda'; // giọng nữ trẻ (người dùng 2026-11-25: Achernar nghe hơi già)
 const TTS_STYLE =
-  'Đọc bằng giọng nữ Hà Nội (giọng miền Bắc chuẩn), nhẹ nhàng, ấm áp, thân thiện, tốc độ vừa phải, phát âm tiếng Việt rõ ràng: ';
+  'Đọc bằng giọng cô gái trẻ Hà Nội khoảng 20 tuổi (giọng miền Bắc chuẩn), trẻ trung, tươi tắn, nhẹ nhàng, thân thiện, nói hơi nhanh và tự nhiên như đang trò chuyện, phát âm tiếng Việt rõ ràng: ';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
