@@ -40,9 +40,57 @@ function speak(text: string, onEnd?: () => void) {
     onEnd?.();
     return;
   }
+  // Danh sách giọng nạp chậm (Chrome trả [] lần đầu) → chờ tối đa 1,5 giây rồi mới đọc,
+  // tránh rơi về giọng mặc định (nam, tiếng Anh) đọc chữ Việt.
+  void loadVoices().then(() => speakNow(text, onEnd));
+}
+
+/** Giọng tiếng Việt tốt nhất trên máy, ưu tiên giọng nữ tự nhiên (2026-11-25). */
+let viVoice: SpeechSynthesisVoice | null | undefined;
+function pickViVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const vi = voices.filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith("vi"));
+  const score = (v: SpeechSynthesisVoice) => {
+    const n = v.name.toLowerCase();
+    if (n.includes("hoaimy")) return 0; // Edge: Microsoft HoaiMy Online (Natural) — nữ, rất tự nhiên
+    if (n.includes("google")) return 1; // Chrome: Google Tiếng Việt — nữ
+    if (n.includes("natural") || n.includes("online")) return 2;
+    if (n.includes("linh") || n.includes("female") || n.includes("nữ")) return 3;
+    if (n.includes("namminh") || n.includes(" an")) return 5; // giọng nam
+    return 4;
+  };
+  return vi.sort((a, b) => score(a) - score(b))[0] ?? null;
+}
+
+function loadVoices(): Promise<void> {
+  const synth = window.speechSynthesis;
+  if (viVoice !== undefined) return Promise.resolve();
+  const now = synth.getVoices();
+  if (now.length) {
+    viVoice = pickViVoice(now);
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const done = () => {
+      synth.removeEventListener("voiceschanged", done);
+      const list = synth.getVoices();
+      // Hết giờ chờ mà vẫn chưa có danh sách → lần sau thử lại.
+      viVoice = list.length ? pickViVoice(list) : undefined;
+      resolve();
+    };
+    synth.addEventListener("voiceschanged", done);
+    setTimeout(done, 1500);
+  });
+}
+
+/** Máy không có giọng tiếng Việt nào (để báo người dùng). */
+function hasViVoice(): boolean {
+  return Boolean(viVoice);
+}
+
+function speakNow(text: string, onEnd?: () => void) {
   const synth = window.speechSynthesis;
   synth.cancel();
-  const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
+  const voice = viVoice ?? null;
   const chunks = text.split(/(?<=[.!?])\s+|\n+/).map((c) => c.trim()).filter(Boolean);
   if (chunks.length === 0) {
     onEnd?.();
@@ -115,6 +163,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   // Bấm micro lần nữa / im lặng / đóng khung → dừng. Câu gõ tay chỉ hiện chữ.
   const convRef = useRef(false);
   const [speaking, setSpeaking] = useState(false);
+  const warnedVoiceRef = useRef(false);
   const recRef = useRef<Recognition | null>(null);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -152,7 +201,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
 
   useEffect(() => {
     // Một số máy chỉ nạp danh sách giọng đọc sau lần gọi đầu.
-    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.getVoices();
+    if (typeof window !== "undefined" && "speechSynthesis" in window) void loadVoices();
     return () => recRef.current?.stop();
   }, []);
 
@@ -183,6 +232,11 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   function talkBack(text: string) {
     if (!convRef.current) return;
     setSpeaking(true);
+    void loadVoices().then(() => {
+      if (hasViVoice() || warnedVoiceRef.current) return;
+      warnedVoiceRef.current = true;
+      push("bot", "Máy này chưa có giọng đọc tiếng Việt nên giọng nghe sẽ lơ lớ. Dùng Microsoft Edge (giọng HoaiMy) hoặc Google Chrome để nghe rõ hơn.");
+    });
     speak(text, () => {
       setSpeaking(false);
       if (convRef.current) startListening();
