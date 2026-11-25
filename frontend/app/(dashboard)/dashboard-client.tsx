@@ -104,6 +104,11 @@ const PREVIOUS_PERIOD_LABEL: Partial<Record<DatePreset, string>> = {
   last_month: "so với tháng trước đó",
 };
 
+/** Tháng này / Tháng trước = lọc theo tháng: số PV gộp trùng SĐT + tên (2026-11-25). */
+function isMonthPreset(preset: DatePreset): boolean {
+  return preset === "this_month" || preset === "last_month";
+}
+
 function previousPeriodLabel(preset: DatePreset): string {
   return PREVIOUS_PERIOD_LABEL[preset] ?? "so với kỳ liền trước";
 }
@@ -321,6 +326,8 @@ export function DashboardClient({
     if (effectiveTeamId) query.set("team_id", effectiveTeamId);
     if (effectiveAccountId) query.set("account_id", effectiveAccountId);
     if (effectiveSourceId) query.set("source_id", effectiveSourceId);
+    // Lọc theo tháng → gộp trùng người; lọc theo ngày → đếm từng dòng (2026-11-25).
+    if (isMonthPreset(effectiveDateRange.preset)) query.set("count_by", "person");
     return query;
   }
 
@@ -677,7 +684,12 @@ export function DashboardClient({
         })}
       </div>
 
-      {can("dashboard.mkt_cost") && <MarketingTodayCard from={dateRange.from} to={dateRange.to} periodLabel={periodLabel} />}
+      {can("dashboard.mkt_cost") && <MarketingTodayCard
+          from={dateRange.from}
+          to={dateRange.to}
+          byPerson={isMonthPreset(dateRange.preset)}
+          periodLabel={periodLabel}
+        />}
 
       {/* 2. Hiệu suất toàn công ty — yêu cầu trực tiếp người dùng (2026-07-14): bỏ cột biểu đồ thanh ngang, chỉ giữ 4 ô tỷ lệ; thu gọn card (giảm padding) để đẩy khối Top sale bên dưới lên. */}
       <Card className="p-4">

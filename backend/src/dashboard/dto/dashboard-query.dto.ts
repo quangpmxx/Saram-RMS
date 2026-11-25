@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 
 /**
  * Mục 8, docs/13-api-design.md — dùng chung cho GET /dashboard/summary,
@@ -31,4 +31,12 @@ export class DashboardQueryDto {
   @IsOptional()
   @IsUUID('4')
   source_id?: string;
+
+  /**
+   * Cách đếm số PV từ Đưa đón (người dùng 2026-11-25): "person" = gộp trùng SĐT + tên
+   * (khi lọc theo tháng: Tháng này / Tháng trước); trống/"row" = mỗi dòng 1 lượt (lọc theo ngày).
+   */
+  @IsOptional()
+  @IsIn(['person', 'row'])
+  count_by?: 'person' | 'row';
 }

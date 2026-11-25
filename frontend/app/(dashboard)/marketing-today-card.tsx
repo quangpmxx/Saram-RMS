@@ -24,10 +24,13 @@ const vnd = (n: number | null) => (n === null ? "—" : `${Math.round(n).toLocal
 export function MarketingTodayCard({
   from,
   to,
+  byPerson,
   periodLabel,
 }: {
   from: string;
   to: string;
+  /** Lọc theo tháng → số hẹn PV gộp trùng người. */
+  byPerson?: boolean;
   /** Chú thích khoảng thời gian đang lọc, hiện sau tiêu đề. */
   periodLabel?: string;
 }) {
@@ -37,6 +40,7 @@ export function MarketingTodayCard({
     const query = new URLSearchParams();
     if (from) query.set("from", from);
     if (to) query.set("to", to);
+    if (byPerson) query.set("count_by", "person");
     const load = () =>
       clientApi<MarketingToday>(`/marketing-hub/today?${query.toString()}`)
         .then(setData)
@@ -47,7 +51,7 @@ export function MarketingTodayCard({
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [from, to]);
+  }, [from, to, byPerson]);
 
   const tiles = [
     { label: "Chi phí MKT", value: vnd(data?.spend ?? null), cls: "bg-brand-50 text-brand-700" },

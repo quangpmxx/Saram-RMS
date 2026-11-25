@@ -276,7 +276,7 @@ describe('MarketingHubService.today', () => {
       lead: { count: jest.fn().mockResolvedValue(20) },
       shuttleRecord: { findMany: jest.fn().mockResolvedValue(people(3)) },
     };
-    const r = await build(prisma).today();
+    const r = await build(prisma).today({ count_by: 'person' });
     expect(r).toMatchObject({
       spend: 600000,
       data_count: 20,
@@ -304,6 +304,7 @@ describe('MarketingHubService.today', () => {
     const r = await build(prisma).today({
       from: '2026-11-01',
       to: '2026-11-06',
+      count_by: 'person',
     });
 
     // Chi tiêu trong kỳ: 01→06; chi tiêu dùng cho CP/PV: 31/10→05.

@@ -95,26 +95,34 @@ function isShuttleFailed(r: ShuttleRow): boolean {
   );
 }
 
-/** Đếm NGƯỜI, không đếm dòng: gộp trùng SĐT + tên (Đưa đón cho nhập trùng — 2026-11-08). */
-function countShuttle(rows: ShuttleRow[]): ShuttleCounts {
+/**
+ * byPerson = true: đếm NGƯỜI (gộp trùng SĐT + tên, 2026-11-08) — lọc theo tháng / tab Biểu đồ.
+ * false: đếm DÒNG — lọc theo ngày (người dùng 2026-11-25).
+ */
+function countShuttle(rows: ShuttleRow[], byPerson = true): ShuttleCounts {
+  const n = byPerson
+    ? countShuttlePersons
+    : (list: ShuttleRow[]) => list.length;
   return {
-    interview_scheduled: countShuttlePersons(rows),
-    attended: countShuttlePersons(
-      rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED),
-    ),
-    no_show: countShuttlePersons(
-      rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW),
-    ),
-    passed: countShuttlePersons(rows.filter(isShuttlePassed)),
-    failed: countShuttlePersons(rows.filter(isShuttleFailed)),
+    interview_scheduled: n(rows),
+    attended: n(rows.filter((r) => r.status === SHUTTLE_STATUS_ATTENDED)),
+    no_show: n(rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW)),
+    passed: n(rows.filter(isShuttlePassed)),
+    failed: n(rows.filter(isShuttleFailed)),
   };
 }
 
-function tallyShuttle(rows: ShuttleRow[]): ShuttleKpi {
+function tallyShuttle(rows: ShuttleRow[], byPerson: boolean): ShuttleKpi {
   return {
-    ...countShuttle(rows),
-    ct: countShuttle(rows.filter((r) => r.type === SHUTTLE_TYPE_CT)),
-    tv: countShuttle(rows.filter((r) => r.type === SHUTTLE_TYPE_TV)),
+    ...countShuttle(rows, byPerson),
+    ct: countShuttle(
+      rows.filter((r) => r.type === SHUTTLE_TYPE_CT),
+      byPerson,
+    ),
+    tv: countShuttle(
+      rows.filter((r) => r.type === SHUTTLE_TYPE_TV),
+      byPerson,
+    ),
   };
 }
 
@@ -191,6 +199,7 @@ export class DashboardService {
         query.date_from,
         query.date_to,
         sourceFiltered,
+        query.count_by === 'person',
       ),
       previousRange && previousWhere
         ? this.computeKpiBreakdown(
@@ -199,6 +208,7 @@ export class DashboardService {
             previousRange.from,
             previousRange.to,
             sourceFiltered,
+            query.count_by === 'person',
           )
         : Promise.resolve(null),
     ]);
@@ -376,6 +386,7 @@ export class DashboardService {
         query.date_from,
         query.date_to,
         sourceFiltered,
+        query.count_by === 'person',
       ),
       // "Tổng số gọi": mỗi cặp (Sale, data) có ghi chú trong kỳ = 1 số đã xử
       // lý — data mới lẫn data cũ ở Kho chăm sóc (không lọc ngày nhập data).
@@ -529,7 +540,10 @@ export class DashboardService {
       const shuttle =
         sourceFiltered || !hasSales
           ? EMPTY_SHUTTLE_KPI
-          : tallyShuttle(shuttleByTeam.get(team.id) ?? []);
+          : tallyShuttle(
+              shuttleByTeam.get(team.id) ?? [],
+              query.count_by === 'person',
+            );
       return {
         team_id: team.id,
         team_name: team.name,
@@ -837,6 +851,7 @@ export class DashboardService {
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
+    byPerson: boolean,
   ): Promise<KpiBreakdown> {
     // Tỷ lệ hẹn PV / Data: Data lấy LÙI 1 NGÀY so với khoảng đang lọc — data
     // lên hôm trước thì hôm nay mới hẹn PV (yêu cầu người dùng 2026-11-10,
@@ -858,7 +873,13 @@ export class DashboardService {
         : null;
     const [newLeads, shuttle, scheduleBase] = await Promise.all([
       this.prisma.lead.count({ where: leadWhere }),
-      this.computeShuttleKpi(saleAccountIds, dateFrom, dateTo, sourceFiltered),
+      this.computeShuttleKpi(
+        saleAccountIds,
+        dateFrom,
+        dateTo,
+        sourceFiltered,
+        byPerson,
+      ),
       shiftedWhere ? this.prisma.lead.count({ where: shiftedWhere }) : null,
     ]);
 
@@ -918,12 +939,13 @@ export class DashboardService {
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
+    byPerson: boolean,
   ): Promise<ShuttleKpi> {
     if (sourceFiltered || (saleAccountIds && saleAccountIds.length === 0)) {
       return EMPTY_SHUTTLE_KPI;
     }
     const rows = await this.findShuttleRows(saleAccountIds, dateFrom, dateTo);
-    return tallyShuttle(rows);
+    return tallyShuttle(rows, byPerson);
   }
 
   /** Như computeShuttleKpi() nhưng tách riêng từng Sale bằng đúng 1 query. */
@@ -932,6 +954,7 @@ export class DashboardService {
     dateFrom: string | undefined,
     dateTo: string | undefined,
     sourceFiltered: boolean,
+    byPerson: boolean,
   ): Promise<Map<string, ShuttleKpi>> {
     const result = new Map<string, ShuttleKpi>();
     if (sourceFiltered || saleAccountIds.length === 0) return result;
@@ -945,7 +968,7 @@ export class DashboardService {
       else rowsBySale.set(saleId, [row]);
     }
     for (const [saleId, saleRows] of rowsBySale) {
-      result.set(saleId, tallyShuttle(saleRows));
+      result.set(saleId, tallyShuttle(saleRows, byPerson));
     }
     return result;
   }

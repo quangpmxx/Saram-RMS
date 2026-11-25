@@ -373,11 +373,20 @@ describe('DashboardService', () => {
         { phoneNumber: '0911', fullName: 'Chi', status: 'Đã đón' },
       ]);
 
-      const { kpi } = await service.getSummary({}, adminUser);
+      const { kpi } = await service.getSummary(
+        { count_by: 'person' },
+        adminUser,
+      );
 
       expect(kpi.interview_scheduled).toBe(3);
       expect(kpi.attended).toBe(3);
       expect(kpi.no_show).toBe(1);
+
+      // Lọc theo ngày (không count_by) → đếm từng dòng (2026-11-25).
+      const byRow = (await service.getSummary({}, adminUser)).kpi;
+      expect(byRow.interview_scheduled).toBe(5);
+      expect(byRow.attended).toBe(4);
+      expect(byRow.no_show).toBe(1);
     });
 
     it('"Hẹn lại"/để trống Tình trạng KHÔNG tính vào attended lẫn no_show (vẫn tính vào interview_scheduled)', async () => {

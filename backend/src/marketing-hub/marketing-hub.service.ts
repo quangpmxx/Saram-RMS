@@ -722,7 +722,7 @@ export class MarketingHubService implements OnApplicationBootstrap {
             },
           },
         }),
-        // Số người phỏng vấn = dòng đưa đón trong kỳ, gộp trùng SĐT + tên (2026-11-08).
+        // Số hẹn PV = dòng đưa đón trong kỳ; lọc theo tháng thì gộp trùng SĐT + tên (2026-11-25).
         this.prisma.shuttleRecord
           .findMany({
             where: {
@@ -734,7 +734,11 @@ export class MarketingHubService implements OnApplicationBootstrap {
             },
             select: { phoneNumber: true, fullName: true },
           })
-          .then(countShuttlePersons),
+          .then((rows) =>
+            query.count_by === 'person'
+              ? countShuttlePersons(rows)
+              : rows.length,
+          ),
       ]);
     return {
       date: to,

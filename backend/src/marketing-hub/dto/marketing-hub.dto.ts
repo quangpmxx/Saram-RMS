@@ -77,4 +77,6 @@ export class OverviewQueryDto {
 export class MarketingPeriodQueryDto {
   @IsOptional() @Matches(DATE) from?: string;
   @IsOptional() @Matches(DATE) to?: string;
+  /** Như count_by ở Dashboard: "person" = gộp trùng SĐT + tên (lọc theo tháng), trống = đếm dòng. */
+  @IsOptional() @IsIn(['person', 'row']) count_by?: 'person' | 'row';
 }
