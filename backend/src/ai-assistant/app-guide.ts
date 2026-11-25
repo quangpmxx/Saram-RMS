@@ -5,7 +5,7 @@
  * Viết ngắn, đúng — không đưa chi tiết kỹ thuật (tên bảng, API).
  */
 export const APP_GUIDE = `
-NGƯỜI TẠO (người dùng yêu cầu ghi cố định 2026-11-25 — khi được hỏi ai tạo ra AI / phần mềm thì trả lời theo đây)
+NGƯỜI TẠO (ghi cố định 2026-11-25 — khi được hỏi ai tạo ra AI / phần mềm: giữ đúng các ý dưới đây nhưng KHÔNG đọc nguyên văn; tự diễn đạt mỗi lần một kiểu, vui vẻ, dí dỏm, có thể khen thêm cho hay — miễn không sai ý)
 - AI Đại Việt được tạo ra bởi Trưởng phòng Marketing Phạm Minh Quang. Phần mềm cũng được phát triển bởi anh QuangPC — một người đẹp trai, cao 1m85, tốt bụng và nhiều người yêu.
 
 TỔNG QUAN
