@@ -309,14 +309,18 @@ export class ShuttleImportService {
         const interviewTime = parseShuttleTime(timeRaw);
         if (timeRaw && !interviewTime) miss('interviewTime', timeRaw);
         const status = option('status');
-        // Sheet để trống Kết quả = Đỗ PV (người dùng 2026-11-08) — chỉ khi sheet có cột Kết quả
-        // và dòng đó đã đón được người (người không đến thì không thể đỗ).
+        // Kết quả PV chỉ nhận khi Tình trạng = "Đã đón" (người dùng 2026-11-25; dùng chung
+        // cho Nhập Excel + Đồng bộ Google Sheet): Đã đón + Kết quả trống = Đỗ PV (2026-11-08,
+        // khi sheet có cột Kết quả); Tình trạng khác (Chưa đón được, Hẹn lại, trống) → bỏ trống.
         const resultRaw = text(r, 'interviewResult');
-        const interviewResult = resultRaw
-          ? option('interviewResult')
-          : col.interviewResult && status === SHUTTLE_STATUS_ATTENDED
-            ? SHUTTLE_RESULT_PASSED
-            : null;
+        const interviewResult =
+          status !== SHUTTLE_STATUS_ATTENDED
+            ? null
+            : resultRaw
+              ? option('interviewResult')
+              : col.interviewResult
+                ? SHUTTLE_RESULT_PASSED
+                : null;
         const note = text(r, 'note');
 
         rows.push({
