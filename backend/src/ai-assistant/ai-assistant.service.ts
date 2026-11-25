@@ -12,6 +12,9 @@ import { CareWarehouseService } from '../care-warehouse/care-warehouse.service';
 import { MarketingHubService } from '../marketing-hub/marketing-hub.service';
 import { ModulePermissionService } from '../module-permission/module-permission.service';
 import { can } from '../common/permissions/capability-catalog';
+import { findOwnTeamId } from '../common/utils/account-team.util';
+import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
+import { vnDayRange } from '../care-warehouse/care-time.util';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { decryptToken, encryptToken } from '../marketing-hub/token-crypto';
 import {
@@ -36,6 +39,16 @@ import {
 /** Flash-Lite: gói miễn phí ~500 lượt/ngày (Flash chỉ ~20) — 2026-11. */
 export const DEFAULT_GEMINI_MODEL = 'gemini-flash-lite-latest';
 const MAX_TOOL_ROUNDS = 5;
+/**
+ * Google hay báo 503 "high demand" lúc đông (2026-11-25): thử lại 2 lần rồi chuyển mô hình dự phòng.
+ * Thứ tự dự phòng: rẻ/nhiều lượt trước.
+ */
+const FALLBACK_MODELS = [
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash-lite',
+  'gemini-flash-latest',
+];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const ROLE_LABEL: Record<string, string> = {
@@ -109,6 +122,13 @@ const TOOLS: GeminiFunctionDeclaration[] = [
     description:
       'Danh sách tài khoản quảng cáo (TKQC): người phụ trách, tiền đã tiêu trong khoảng ngày, số dư còn lại, ' +
       'tình trạng tài khoản, có chiến dịch đang chạy không; kèm số data theo nhân viên MKT.',
+    parameters: RANGE_PARAMS,
+  },
+  {
+    name: 'lead_colors',
+    description:
+      'Đếm data (lao động) theo màu bôi ghi chú: đỏ / vàng / xanh / chưa bôi, theo người đang giữ số. ' +
+      'Tính trên data up trong khoảng ngày (theo ngày up). "Số bôi đỏ", "số đỏ" = red.',
     parameters: RANGE_PARAMS,
   },
   {
@@ -346,7 +366,7 @@ export class AiAssistantService {
 
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-        const reply = await geminiGenerate(apiKey, cfg.model, {
+        const reply = await this.generateWithRetry(apiKey, cfg.model, {
           systemInstruction: system,
           contents,
           tools: round < MAX_TOOL_ROUNDS ? TOOLS : undefined,
@@ -394,6 +414,32 @@ export class AiAssistantService {
       answer:
         'Xin lỗi, câu này cần tra quá nhiều số liệu, bạn hỏi ngắn hơn nhé.',
     };
+  }
+
+  /** 503/500 (Google quá tải): thử lại 2 lần, rồi lần lượt các mô hình dự phòng. 429 (hết lượt) cũng thử mô hình khác. */
+  private async generateWithRetry(
+    apiKey: string,
+    model: string,
+    body: Parameters<typeof geminiGenerate>[2],
+  ) {
+    const models = [model, ...FALLBACK_MODELS.filter((m) => m !== model)];
+    let last: unknown;
+    for (const m of models) {
+      for (let attempt = 0; attempt < (m === model ? 3 : 1); attempt++) {
+        try {
+          return await geminiGenerate(apiKey, m, body);
+        } catch (e) {
+          last = e;
+          if (!(e instanceof GeminiError)) throw e;
+          const busy = e.status === 503 || e.status === 500;
+          if (e.status === 429 || e.status === 404) break; // sang mô hình khác
+          if (!busy) throw e;
+          this.logger.warn(`Gemini ${m} ${e.status}, thử lại`);
+          await sleep(800 * (attempt + 1));
+        }
+      }
+    }
+    throw last;
   }
 
   /**
@@ -593,6 +639,12 @@ export class AiAssistantService {
           })),
         };
       }
+      case 'lead_colors': {
+        if (!(await this.moduleOk(user, 'candidates')))
+          return deny('Data lao động');
+        const { from, to } = this.range(args);
+        return this.leadColors(from, to, user);
+      }
       case 'care_progress': {
         if (!(await this.moduleOk(user, 'dashboard'))) return deny('Dashboard');
         const month = str(args.month);
@@ -603,6 +655,63 @@ export class AiAssistantService {
       default:
         return { error: `Không có công cụ ${name}` };
     }
+  }
+
+  /**
+   * Số data theo màu bôi — phạm vi như Hiệu suất Dashboard: dashboard.perf_all = toàn công ty,
+   * dashboard.perf_team = nhóm mình, còn lại = số mình đang giữ. Không gửi tên/SĐT lao động.
+   */
+  private async leadColors(from: string, to: string, user: AuthenticatedUser) {
+    const scope = can(user, 'dashboard.perf_all')
+      ? {}
+      : can(user, 'dashboard.perf_team')
+        ? {
+            assignedTeamId:
+              (await findOwnTeamId(this.prisma, user.id)) ?? NO_MATCH_UUID,
+          }
+        : { assignedToId: user.id };
+    const rows = await this.prisma.lead.groupBy({
+      by: ['noteColor', 'assignedToId'],
+      where: {
+        deletedAt: null,
+        uploadedAt: { gte: vnDayRange(from).start, lt: vnDayRange(to).end },
+        ...scope,
+      },
+      _count: { _all: true },
+    });
+    const ids = [
+      ...new Set(
+        rows.map((r) => r.assignedToId).filter((x): x is string => !!x),
+      ),
+    ];
+    const names = new Map(
+      (
+        await this.prisma.account.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, fullName: true },
+        })
+      ).map((a) => [a.id, a.fullName]),
+    );
+    const label = (c: string | null) =>
+      c === 'red'
+        ? 'đỏ'
+        : c === 'yellow'
+          ? 'vàng'
+          : c === 'green'
+            ? 'xanh'
+            : 'chưa bôi';
+    const total: Record<string, number> = {};
+    const byPerson: Record<string, Record<string, number>> = {};
+    for (const r of rows) {
+      const color = label(r.noteColor);
+      const who = r.assignedToId
+        ? (names.get(r.assignedToId) ?? '?')
+        : '(chưa chia)';
+      total[color] = (total[color] ?? 0) + r._count._all;
+      byPerson[who] ??= {};
+      byPerson[who][color] = (byPerson[who][color] ?? 0) + r._count._all;
+    }
+    return { from, to, total, by_person: byPerson };
   }
 
   /** Chỉ số đếm gộp — không gửi tên / SĐT lao động cho AI. */
