@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { useToast } from "@/lib/toast-context";
 
 /**
@@ -25,12 +25,32 @@ export function AiAssistantSettings() {
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<{ id: string; label: string }[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+
+  /** Lấy danh sách mô hình từ Google theo khoá vừa nhập (hoặc khoá đang lưu). */
+  async function loadModels(key?: string) {
+    setLoadingModels(true);
+    try {
+      const list = await clientApi<{ id: string; label: string }[]>("/ai-assistant/models", {
+        method: "POST",
+        body: JSON.stringify({ api_key: key?.trim() || undefined }),
+      });
+      setModels(list);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Không lấy được danh sách mô hình");
+    } finally {
+      setLoadingModels(false);
+    }
+  }
 
   useEffect(() => {
     clientApi<AiConfig>("/ai-assistant/config")
       .then((c) => {
         setCfg(c);
         setModel(c.model);
+        if (c.connected) void loadModels();
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Không tải được cài đặt AI"));
   }, []);
@@ -90,12 +110,36 @@ export function AiAssistantSettings() {
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
+          onBlur={() => apiKey.trim() && void loadModels(apiKey)}
           placeholder="AIza…"
           autoComplete="off"
         />
       </Field>
-      <Field label="Mô hình" hint="Mặc định gemini-flash-latest (miễn phí, nhanh). Có thể nhập tên khác, vd gemini-2.5-flash.">
-        <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gemini-flash-latest" />
+      <Field
+        label="Mô hình"
+        hint={
+          loadingModels
+            ? "Đang lấy danh sách từ Google…"
+            : models.length
+              ? "Nên chọn loại Flash: miễn phí nhiều lượt, trả lời nhanh."
+              : "Nhập khoá ở trên để hiện đủ danh sách mô hình."
+        }
+      >
+        <Select value={model} onChange={(e) => setModel(e.target.value)} disabled={loadingModels}>
+          {/* Luôn có mô hình mặc định + mô hình đang dùng, kể cả khi chưa tải được danh sách. */}
+          {[
+            { id: "gemini-flash-latest", label: "Gemini Flash (mới nhất) — khuyên dùng" },
+            ...(model && model !== "gemini-flash-latest" && !models.some((m) => m.id === model)
+              ? [{ id: model, label: model }]
+              : []),
+            ...models.filter((m) => m.id !== "gemini-flash-latest"),
+          ].map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+              {m.label !== m.id ? ` (${m.id})` : ""}
+            </option>
+          ))}
+        </Select>
       </Field>
       {error && (
         <p role="alert" className="text-sm text-red-600">

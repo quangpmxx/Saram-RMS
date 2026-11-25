@@ -16,6 +16,10 @@ export class SaveAiConfigDto {
   @IsOptional() @IsString() @MaxLength(100) model?: string;
 }
 
+export class ListAiModelsDto {
+  @IsOptional() @IsString() @MaxLength(200) api_key?: string;
+}
+
 export class AiHistoryItemDto {
   @IsIn(['user', 'model']) role!: 'user' | 'model';
   @IsString() @MaxLength(2000) text!: string;

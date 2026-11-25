@@ -75,3 +75,38 @@ export async function geminiGenerate(
   }
   return { role: 'model', parts: content.parts };
 }
+
+/** Danh sách mô hình Gemini khoá này dùng được (chỉ mô hình trò chuyện có generateContent). */
+export async function geminiListModels(
+  apiKey: string,
+): Promise<{ id: string; label: string }[]> {
+  const res = await fetch(`${BASE}?pageSize=200`, {
+    headers: { 'x-goog-api-key': apiKey },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: { message?: string };
+    models?: {
+      name: string;
+      displayName?: string;
+      supportedGenerationMethods?: string[];
+    }[];
+  };
+  if (!res.ok) {
+    throw new GeminiError(
+      json.error?.message ?? `Gemini trả lỗi ${res.status}`,
+      res.status,
+    );
+  }
+  return (json.models ?? [])
+    .filter(
+      (m) =>
+        m.supportedGenerationMethods?.includes('generateContent') &&
+        m.name.includes('gemini') &&
+        !/embedding|tts|image|audio|live|robotics|computer-use/i.test(m.name),
+    )
+    .map((m) => ({
+      id: m.name.replace(/^models\//, ''),
+      label: m.displayName ?? m.name.replace(/^models\//, ''),
+    }));
+}

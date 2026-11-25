@@ -25,6 +25,7 @@ import {
   GeminiError,
   GeminiFunctionDeclaration,
   geminiGenerate,
+  geminiListModels,
 } from './gemini.client';
 import { AskAiDto, SaveAiConfigDto } from './ai-assistant.dto';
 
@@ -216,6 +217,23 @@ export class AiAssistantService {
       newValue: model,
     });
     return this.getConfig();
+  }
+
+  /** Mô hình chọn được: theo khoá vừa nhập, hoặc khoá đang lưu. */
+  async listModels(apiKey?: string) {
+    let key = apiKey?.trim();
+    if (!key) {
+      const cfg = await this.prisma.aiAssistantConfig.findFirst();
+      if (!cfg) throw new BadRequestException('Hãy nhập khoá API Gemini trước');
+      key = decryptToken(cfg.encryptedKey, this.tokenKey());
+    }
+    try {
+      return await geminiListModels(key);
+    } catch (e) {
+      throw new BadRequestException(
+        `Không lấy được danh sách mô hình: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   async removeConfig(user: AuthenticatedUser) {
