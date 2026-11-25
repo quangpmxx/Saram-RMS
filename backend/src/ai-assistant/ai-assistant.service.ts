@@ -644,7 +644,7 @@ export class AiAssistantService {
       if (e instanceof GeminiError) {
         this.logger.warn(`Gemini ${e.status}: ${e.message}`);
         // Hết lượt (mọi mô hình dự phòng cũng hết) → 429: khung chat khoá ô hỏi, không báo gì.
-        if (e.status === 429) {
+        if (e.status === 429 || e.status === 402) {
           throw new HttpException('AI hết lượt', HttpStatus.TOO_MANY_REQUESTS);
         }
         throw new ServiceUnavailableException(
@@ -702,7 +702,10 @@ export class AiAssistantService {
         this.logger.warn(`Gemini TTS ${model} ${e.status}: ${e.message}`);
       }
     }
-    if (last instanceof GeminiError && last.status === 429) {
+    if (
+      last instanceof GeminiError &&
+      (last.status === 429 || last.status === 402)
+    ) {
       throw new HttpException('AI hết lượt', HttpStatus.TOO_MANY_REQUESTS);
     }
     throw new ServiceUnavailableException('Chưa đọc được giọng');
