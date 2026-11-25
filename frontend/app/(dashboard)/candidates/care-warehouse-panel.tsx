@@ -120,8 +120,19 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 300] as const;
 const CARE_NOTE_COLLAPSED_HEIGHT = 44;
 /** Gộp nhiều sự kiện realtime liên tiếp (vd giao 50 data 1 lần) thành 1 lần tải lại. */
 const REALTIME_DEBOUNCE_MS = 600;
-/** Tab Kho đang ẩn: gộp các sự kiện realtime liên tiếp trong 15 giây thành 1 lần tải. */
+/**
+ * Giảm tải máy chủ (2026-11-25, VPS lag: GET /care-warehouse bị gọi dồn dập 1–2,5s/lượt — mỗi ghi chú
+ * của BẤT KỲ ai trong nhóm làm MỌI máy đang mở Data lao động tải lại cả Kho):
+ * - Đang xem tab Kho: tải lại sau 600ms nhưng cách lần trước ít nhất 5 giây.
+ * - Tab Kho đang ẩn: tối đa 1 lần / 60 giây (số "Chăm sóc (N)" trên tab trễ tối đa 1 phút).
+ * - Cửa sổ trình duyệt đang ẩn (tab khác / thu nhỏ): không tải; quay lại mới tải 1 lần.
+ * - Mất kết nối rồi nối lại (vd máy chủ vừa khởi động lại): tải lệch nhau ngẫu nhiên 0–8 giây
+ *   để mọi máy không cùng ập vào một lúc.
+ */
+const ACTIVE_MIN_GAP_MS = 5000;
+const HIDDEN_MIN_GAP_MS = 60000;
 const HIDDEN_RELOAD_DEBOUNCE_MS = 15000;
+const RECONNECT_JITTER_MS = 8000;
 
 /**
  * Mở 1 data từ Kho rồi bấm "Quay lại"/"Lưu thông tin" → về đúng bộ lọc,
@@ -343,9 +354,11 @@ export function CareWarehousePanel({
    * kèm nút Tải lại.
    */
   const [loadError, setLoadError] = useState<string | null>(null);
+  const lastLoadAtRef = useRef(0);
   const load = useCallback(
     (key: string, silent = false) => {
       latestKeyRef.current = key;
+      lastLoadAtRef.current = Date.now();
       return clientApi<CareWarehouseListResult>(`/care-warehouse?${key}`)
         .then((result) => {
           if (latestKeyRef.current !== key) return;
@@ -389,16 +402,36 @@ export function CareWarehousePanel({
   // Realtime: mọi thay đổi có thể làm data vào/ra Kho hoặc đổi trạng thái
   // chăm sóc → tải lại nhẹ trang hiện tại (không reset bộ lọc/trang/lựa chọn).
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReload = useCallback(() => {
-    // Tab Kho đang ẩn: vẫn tải ngầm (để số "Chăm sóc (N)" trên tab luôn đúng)
-    // nhưng gộp thưa hơn nhiều — API Kho nặng (đo 2026-10-30: ~3,5s), không nên
-    // tải lại theo từng sự kiện khi người dùng không nhìn vào.
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(
-      () => void load(queryKey, true),
-      activeRef.current ? REALTIME_DEBOUNCE_MS : HIDDEN_RELOAD_DEBOUNCE_MS,
-    );
-  }, [load, queryKey]);
+  // Có thay đổi trong lúc cửa sổ ẩn → quay lại thì tải 1 lần.
+  const staleRef = useRef(false);
+  const scheduleReload = useCallback(
+    (extraDelay = 0) => {
+      if (typeof document !== "undefined" && document.hidden) {
+        staleRef.current = true;
+        return;
+      }
+      staleRef.current = false;
+      const sinceLast = Date.now() - lastLoadAtRef.current;
+      const delay = activeRef.current
+        ? Math.max(REALTIME_DEBOUNCE_MS, ACTIVE_MIN_GAP_MS - sinceLast)
+        : Math.max(HIDDEN_RELOAD_DEBOUNCE_MS, HIDDEN_MIN_GAP_MS - sinceLast);
+      // Tab Kho đang ẩn: đã hẹn 1 lần tải rồi thì giữ hẹn cũ (không dời mãi khi sự kiện đến liên tục).
+      if (timerRef.current && !activeRef.current) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        void load(queryKey, true);
+      }, delay + extraDelay);
+    },
+    [load, queryKey],
+  );
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden && staleRef.current) scheduleReload();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [scheduleReload]);
   useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -408,7 +441,7 @@ export function CareWarehousePanel({
   useLeadRealtime((event: LeadRealtimeEvent) => {
     if (CARE_RELEVANT_CHANGES.has(event.change_type)) scheduleReload();
   });
-  useRealtimeReconnect(scheduleReload);
+  useRealtimeReconnect(() => scheduleReload(Math.random() * RECONNECT_JITTER_MS));
 
   /**
    * Người dùng đổi bộ lọc → sửa luôn bản trạng thái đã lưu (nếu có), kẻo
