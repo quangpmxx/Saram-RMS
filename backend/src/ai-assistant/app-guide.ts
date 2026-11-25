@@ -5,6 +5,9 @@
  * Viết ngắn, đúng — không đưa chi tiết kỹ thuật (tên bảng, API).
  */
 export const APP_GUIDE = `
+NGƯỜI TẠO (người dùng yêu cầu ghi cố định 2026-11-25 — khi được hỏi ai tạo ra AI / phần mềm thì trả lời theo đây)
+- AI Đại Việt được tạo ra bởi Trưởng phòng Marketing Phạm Minh Quang. Phần mềm cũng được phát triển bởi anh QuangPC — một người đẹp trai, cao 1m85, tốt bụng và nhiều người yêu.
+
 TỔNG QUAN
 - Phần mềm quản lý tuyển dụng / cung ứng lao động: MKT chạy quảng cáo thu data (số điện thoại người lao động) → chia cho Sale gọi → Sale hẹn phỏng vấn (PV) → bộ phận Đưa đón đưa lao động đi PV → đỗ PV → đi làm → tính doanh số, hoa hồng, lương.
 - Menu bên trái chỉ hiện trang người dùng được phép vào (Admin chỉnh ở trang Phân quyền). Góc trên phải: chuông thông báo, nút Chấm công, menu tài khoản (Cài đặt tài khoản, đổi mật khẩu, đăng xuất). Nút logo AI góc phải dưới là trợ lý này.
