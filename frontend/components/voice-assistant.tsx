@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Mic, MicOff, RotateCcw, SendHorizontal, Volume2, X } from "lucide-react";
+import { AudioLines, Mic, MicOff, RotateCcw, SendHorizontal, Sparkles, Volume2, X } from "lucide-react";
 import { ApiError, clientApi, clientApiPostBlob } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
 import { cn } from "@/lib/cn";
@@ -126,12 +126,30 @@ function BrandMark({ size, className }: { size: number; className?: string }) {
 }
 
 /** 3 chấm nhảy — đang tìm câu trả lời. */
-function TypingDots() {
+const THINKING_STEPS = ["Đang hiểu câu hỏi", "Đang tra cứu dữ liệu", "Đang phân tích", "Đang soạn câu trả lời"];
+
+/** "Đang suy nghĩ" (2026-11-25): các bước chạy lần lượt, chữ ánh sáng lướt; bước cuối = chuẩn bị giọng đọc. */
+function ThinkingIndicator({ phase }: { phase: "thinking" | "voice" }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (phase !== "thinking") return;
+    const t = setInterval(() => setStep((s) => Math.min(s + 1, THINKING_STEPS.length - 1)), 1600);
+    return () => clearInterval(t);
+  }, [phase]);
+  const label = phase === "voice" ? "Đang chuẩn bị giọng đọc" : THINKING_STEPS[step];
+  const Icon = phase === "voice" ? AudioLines : Sparkles;
   return (
-    <span className="flex items-center gap-1 py-1">
-      {[0, 150, 300].map((d) => (
-        <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400" style={{ animationDelay: `${d}ms` }} />
-      ))}
+    <span className="flex items-center gap-2 py-0.5">
+      <span className="relative flex h-5 w-5 items-center justify-center">
+        <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-brand-300 opacity-40" />
+        <Icon className="relative h-4 w-4 animate-pulse text-brand-600" />
+      </span>
+      <span
+        key={label}
+        className="animate-[auto-on-shimmer_2.2s_linear_infinite] bg-gradient-to-r from-slate-400 via-brand-600 to-slate-400 bg-[length:200%_100%] bg-clip-text text-[13px] font-medium text-transparent"
+      >
+        {label}…
+      </span>
     </span>
   );
 }
@@ -165,6 +183,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   // Bấm micro lần nữa / im lặng / đóng khung → dừng. Câu gõ tay chỉ hiện chữ.
   const convRef = useRef(false);
   const [speaking, setSpeaking] = useState(false);
+  const [phase, setPhase] = useState<"thinking" | "voice">("thinking");
   const warnedVoiceRef = useRef(false);
   // Giọng Gemini (2026-11-25): giọng nữ miền Bắc giống nhau mọi máy. Hết lượt → dùng giọng của máy.
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -286,6 +305,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       push("bot", text);
       return Promise.resolve();
     }
+    setPhase("voice");
     return new Promise((resolve) => {
       let shown = false;
       const show = () => {
@@ -340,6 +360,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     push("user", question);
     setInterim("");
     setBusy(true);
+    setPhase("thinking");
     try {
       await reply(await askAi(question));
     } catch (e) {
@@ -500,7 +521,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                   <div className="flex items-end gap-2">
                     <BrandMark size={26} className="shadow-sm ring-1 ring-slate-200" />
                     <div className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
-                      <TypingDots />
+                      <ThinkingIndicator phase={phase} />
                     </div>
                   </div>
                 )}
