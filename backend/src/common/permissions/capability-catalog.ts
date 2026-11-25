@@ -299,6 +299,14 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     label: 'Xem khối Chi phí Marketing',
     defaultRoles: ['manager', 'mkt'],
   },
+  {
+    // Trợ lý giọng nói (2026-11-25): nút micro trên đầu trang, đọc số Dashboard — số liệu vẫn theo quyền xem ở trên.
+    code: 'voice.assistant',
+    module: 'dashboard',
+    label: 'Dùng Trợ lý giọng nói',
+    hint: 'Hỏi số liệu bằng giọng nói, chỉ trả lời trong phạm vi được xem',
+    defaultRoles: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'],
+  },
   // ---------------------------------------------------------------- Báo cáo
   {
     code: 'report.submit',

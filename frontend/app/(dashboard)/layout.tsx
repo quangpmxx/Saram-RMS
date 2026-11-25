@@ -14,6 +14,7 @@ import { UserMenu } from "@/components/user-menu";
 import { NotificationBell } from "@/components/notification-bell";
 import { SendNotificationButton } from "@/components/send-notification-button";
 import { ClockInButton } from "@/components/clock-in-button";
+import { VoiceAssistant } from "@/components/voice-assistant";
 import { PageTitleProvider, PageTitleSlot } from "@/lib/page-title-context";
 import { ToastProvider, ToastSlot } from "@/lib/toast-context";
 import { APP_SCROLL_CONTAINER_ID } from "@/lib/app-scroll-container";
@@ -135,6 +136,8 @@ export default async function DashboardLayout({
                     {hasCap(user, "notification.send") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
+                    {/* Trợ lý giọng nói (2026-11-25) — tự ẩn khi không có quyền voice.assistant. */}
+                    <VoiceAssistant />
                     <NotificationBell userId={user.id} />
                     <UserMenu user={user} />
                   </div>
