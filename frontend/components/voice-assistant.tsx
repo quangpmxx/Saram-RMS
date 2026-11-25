@@ -224,12 +224,13 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   useEffect(() => {
     if (!open || !canUse) return;
     let cancelled = false;
-    clientApi<{ ai_enabled: boolean; assistant_name?: string }>("/ai-assistant/status")
+    clientApi<{ ai_enabled: boolean; assistant_name?: string; remaining_today?: number | null }>("/ai-assistant/status")
       .then((s) => {
         if (cancelled) return;
         setAiEnabled(s.ai_enabled);
         setAiChecked(true);
-        setExhausted(false);
+        // Hết số câu hỏi hôm nay của tài khoản (Admin đặt ở Sửa tài khoản) → khoá như hết lượt.
+        setExhausted(s.remaining_today === 0);
         if (s.assistant_name) setAssistantName(s.assistant_name);
       })
       .catch(() => {

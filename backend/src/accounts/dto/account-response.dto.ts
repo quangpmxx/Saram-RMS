@@ -12,6 +12,8 @@ export interface AccountResponseDto {
   must_change_password: boolean;
   /** Có chấm công (dòng trong bảng chấm công + cộng phép hằng tháng) — 2026-11-07. */
   attendance_tracked: boolean;
+  /** Số câu hỏi Trợ lý AI mỗi ngày; null = không giới hạn. */
+  ai_daily_limit: number | null;
   /** Văn phòng: hanoi | bac_ninh | bac_giang (2026-11-12). */
   office: string;
   team_id: string | null;
@@ -57,6 +59,7 @@ export function toAccountResponse(
     role: account.role,
     must_change_password: account.mustChangePassword,
     attendance_tracked: account.attendanceTracked,
+    ai_daily_limit: account.aiDailyLimit ?? null,
     office: account.office,
     team_id: account.teamId,
     team_name: account.team?.name ?? null,

@@ -5,10 +5,12 @@ import {
   IsEmail,
   IsEnum,
   IsNotEmpty,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -67,6 +69,13 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsBoolean()
   attendance_tracked?: boolean;
+
+  /** Số câu hỏi Trợ lý AI mỗi ngày (2026-11-25); null = không giới hạn, 0 = không cho hỏi. */
+  @IsOptional()
+  @IsInt({ message: 'Số câu hỏi AI mỗi ngày phải là số nguyên' })
+  @Min(0)
+  @Max(10000)
+  ai_daily_limit?: number | null;
 
   /** Văn phòng (2026-11-12): nhân viên nằm ở bảng chấm công / check in / đơn nghỉ của văn phòng nào. */
   @IsOptional()

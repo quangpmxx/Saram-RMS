@@ -31,8 +31,8 @@ export class AiAssistantController {
 
   @Get('status')
   @RequireCap('voice.assistant')
-  status() {
-    return this.service.status();
+  status(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.status(user);
   }
 
   @Post('ask')

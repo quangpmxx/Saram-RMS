@@ -362,6 +362,7 @@ export function AccountsClient({
                 bank_account_number: payload.bank_account_number ?? null,
                 nickname: payload.nickname ?? null,
                 attendance_tracked: payload.attendance_tracked,
+                ai_daily_limit: payload.ai_daily_limit ?? null,
                 office: payload.office,
               }),
             });
@@ -400,6 +401,8 @@ interface AccountFormPayload {
   nickname?: string | null;
   /** Ô "Chấm công" — chỉ khi sửa tài khoản. */
   attendance_tracked?: boolean;
+  /** Số câu hỏi Trợ lý AI mỗi ngày (null = không giới hạn) — chỉ khi sửa tài khoản. */
+  ai_daily_limit?: number | null;
   /** Văn phòng — chỉ khi sửa tài khoản. */
   office?: Office;
   /** Lịch tuyển dụng: xem lịch tuyển của nhóm này (null = theo nhóm của tài khoản) — chỉ khi sửa tài khoản. */
@@ -440,6 +443,9 @@ function AccountModal({
   const [bankAccountNumber, setBankAccountNumber] = useState(initialAccount?.bank_account_number ?? "");
   const [nickname, setNickname] = useState(initialAccount?.nickname ?? "");
   const [attendanceTracked, setAttendanceTracked] = useState(initialAccount?.attendance_tracked ?? true);
+  const [aiDailyLimit, setAiDailyLimit] = useState(
+    initialAccount?.ai_daily_limit != null ? String(initialAccount.ai_daily_limit) : "",
+  );
   const [office, setOffice] = useState<Office>(initialAccount?.office ?? "hanoi");
   const [recruitmentTeamId, setRecruitmentTeamId] = useState(initialAccount?.recruitment_team_id ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -483,6 +489,7 @@ function AccountModal({
           bank_account_number: bankAccountNumber.trim() || null,
           nickname: nickname.trim() || null,
           attendance_tracked: attendanceTracked,
+          ai_daily_limit: aiDailyLimit.trim() === "" ? null : Math.max(0, Math.floor(Number(aiDailyLimit))),
           office,
           recruitment_team_id: recruitmentTeamId || null,
         }),
@@ -588,6 +595,22 @@ function AccountModal({
               </span>
             </span>
           </label>
+        )}
+
+        {/* Giới hạn câu hỏi Trợ lý AI mỗi ngày (2026-11-25) — gói AI miễn phí dùng chung lượt cả công ty. */}
+        {isEdit && (
+          <Field label="Số câu hỏi AI mỗi ngày" hint="Để trống = không giới hạn. 0 = không cho hỏi. Hết lượt thì khung chat tự khoá đến hôm sau.">
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={10000}
+              step={1}
+              value={aiDailyLimit}
+              onChange={(event) => setAiDailyLimit(event.target.value)}
+              placeholder="Không giới hạn"
+            />
+          </Field>
         )}
 
         {/* Văn phòng (2026-11-12): quyết định nhân viên nằm ở bảng Chấm công / Check in GPS /

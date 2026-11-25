@@ -392,14 +392,45 @@ export class AiAssistantService {
     return this.getConfig();
   }
 
-  async status() {
+  async status(user: AuthenticatedUser) {
     const cfg = await this.prisma.aiAssistantConfig.findFirst({
       select: { encryptedKey: true, assistantName: true },
     });
+    const quota = await this.quota(user.id);
     return {
       ai_enabled: Boolean(cfg?.encryptedKey),
       assistant_name: cfg?.assistantName ?? DEFAULT_ASSISTANT_NAME,
+      /** Còn bao nhiêu câu hỏi hôm nay; null = không giới hạn. */
+      remaining_today: quota.remaining,
     };
+  }
+
+  /** Giới hạn câu hỏi mỗi ngày của tài khoản (Sửa tài khoản) — ngày theo giờ VN. */
+  private async quota(accountId: string) {
+    const acc = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { aiDailyLimit: true },
+    });
+    const limit = acc?.aiDailyLimit ?? null;
+    if (limit === null) return { limit, remaining: null as number | null };
+    const used = await this.prisma.aiUsageDaily.findUnique({
+      where: { accountId_day: { accountId, day: this.vnToday() } },
+      select: { count: true },
+    });
+    return { limit, remaining: Math.max(0, limit - (used?.count ?? 0)) };
+  }
+
+  private vnToday(): Date {
+    return new Date(`${vnNow().toISOString().slice(0, 10)}T00:00:00.000Z`);
+  }
+
+  private async countUsage(accountId: string) {
+    const day = this.vnToday();
+    await this.prisma.aiUsageDaily.upsert({
+      where: { accountId_day: { accountId, day } },
+      create: { accountId, day, count: 1 },
+      update: { count: { increment: 1 } },
+    });
   }
 
   // ---------------------------------------------------------------- Hỏi đáp
@@ -411,6 +442,13 @@ export class AiAssistantService {
     const cfg = await this.prisma.aiAssistantConfig.findFirst();
     if (!cfg?.encryptedKey)
       throw new ServiceUnavailableException('Admin chưa liên kết AI Gemini');
+    // Hết số câu hỏi hôm nay → 429: khung chat khoá ô hỏi, không báo gì (như hết lượt Gemini).
+    if ((await this.quota(user.id)).remaining === 0) {
+      throw new HttpException(
+        'Hết lượt hỏi hôm nay',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
     const apiKey = decryptToken(cfg.encryptedKey, this.tokenKey());
     const me = await this.prisma.account.findUnique({
       where: { id: user.id },
@@ -444,6 +482,7 @@ export class AiAssistantService {
             .map((p) => p.text ?? '')
             .join('')
             .trim();
+          await this.countUsage(user.id);
           return { answer: text || 'Xin lỗi, mình chưa trả lời được câu này.' };
         }
         contents.push(reply);

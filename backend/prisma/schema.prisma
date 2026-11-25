@@ -187,6 +187,8 @@ model Account {
   mustChangePassword Boolean       @default(false) @map("must_change_password")
   /// Có dòng trong bảng chấm công + được cộng phép hằng tháng (2026-11-07) — Admin bỏ tick cho người không cần chấm công.
   attendanceTracked  Boolean       @default(true) @map("attendance_tracked")
+  /// Số câu hỏi Trợ lý AI mỗi ngày (2026-11-25); null = không giới hạn. Admin đặt ở Sửa tài khoản.
+  aiDailyLimit       Int?          @map("ai_daily_limit")
   /// Văn phòng (2026-11-12): hanoi | bac_ninh | bac_giang — quyết định nhân viên nằm ở
   /// bảng Chấm công / Check in GPS / Đơn nghỉ phép của văn phòng nào, và check in
   /// theo vị trí văn phòng nào. Tài khoản cũ mặc định Hà Nội.
@@ -2415,6 +2417,16 @@ model WebsiteTextHistory {
 
 /// Trợ lý AI (2026-11-25, yêu cầu người dùng): 1 dòng duy nhất — khoá API Google Gemini do Admin
 /// liên kết ở Cài đặt tài khoản. Khoá mã hoá bằng MARKETING_TOKEN_KEY, không bao giờ trả ra ngoài.
+/// Đếm số câu hỏi Trợ lý AI theo tài khoản + ngày (giờ VN) — để áp giới hạn mỗi ngày.
+model AiUsageDaily {
+  accountId String   @map("account_id") @db.Uuid
+  day       DateTime @db.Date
+  count     Int      @default(0)
+
+  @@id([accountId, day])
+  @@map("ai_usage_daily")
+}
+
 model AiAssistantConfig {
   id           String   @id @default(uuid()) @db.Uuid
   provider     String   @default("gemini") @db.VarChar(20)

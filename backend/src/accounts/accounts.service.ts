@@ -210,6 +210,7 @@ export class AccountsService {
           recruitmentTeamId: dto.recruitment_team_id,
           status: dto.status,
           attendanceTracked: dto.attendance_tracked,
+          aiDailyLimit: dto.ai_daily_limit,
           office: dto.office,
           role: roleChanged ? dto.role : undefined,
           dateOfBirth:
@@ -499,6 +500,7 @@ export class AccountsService {
       recruitmentTeamId: string | null;
       status: string;
       attendanceTracked: boolean;
+      aiDailyLimit: number | null;
       office: string;
       dateOfBirth: Date | null;
       hireDate: Date | null;
@@ -562,6 +564,16 @@ export class AccountsService {
         field: 'attendance_tracked',
         oldValue: String(before.attendanceTracked),
         newValue: String(dto.attendance_tracked),
+      });
+    }
+    if (
+      dto.ai_daily_limit !== undefined &&
+      dto.ai_daily_limit !== before.aiDailyLimit
+    ) {
+      changes.push({
+        field: 'ai_daily_limit',
+        oldValue: String(before.aiDailyLimit ?? 'không giới hạn'),
+        newValue: String(dto.ai_daily_limit ?? 'không giới hạn'),
       });
     }
     if (dto.office !== undefined && dto.office !== before.office) {
