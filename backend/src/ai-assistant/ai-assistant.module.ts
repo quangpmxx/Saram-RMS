@@ -4,6 +4,8 @@ import { DashboardModule } from '../dashboard/dashboard.module';
 import { CareWarehouseModule } from '../care-warehouse/care-warehouse.module';
 import { MarketingHubModule } from '../marketing-hub/marketing-hub.module';
 import { ModulePermissionModule } from '../module-permission/module-permission.module';
+import { CandidatesModule } from '../candidates/candidates.module';
+import { RecruitmentScheduleModule } from '../recruitment-schedule/recruitment-schedule.module';
 import { AiAssistantController } from './ai-assistant.controller';
 import { AiAssistantService } from './ai-assistant.service';
 
@@ -14,6 +16,8 @@ import { AiAssistantService } from './ai-assistant.service';
     CareWarehouseModule,
     MarketingHubModule,
     ModulePermissionModule,
+    CandidatesModule,
+    RecruitmentScheduleModule,
   ],
   controllers: [AiAssistantController],
   providers: [AiAssistantService],

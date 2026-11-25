@@ -12,6 +12,9 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { CareWarehouseService } from '../care-warehouse/care-warehouse.service';
 import { MarketingHubService } from '../marketing-hub/marketing-hub.service';
+import { CandidatesService } from '../candidates/candidates.service';
+import { ListCandidatesQueryDto } from '../candidates/dto/list-candidates-query.dto';
+import { RecruitmentScheduleService } from '../recruitment-schedule/recruitment-schedule.service';
 import { ModulePermissionService } from '../module-permission/module-permission.service';
 import { can } from '../common/permissions/capability-catalog';
 import { findOwnTeamId } from '../common/utils/account-team.util';
@@ -144,6 +147,50 @@ const TOOLS: GeminiFunctionDeclaration[] = [
     parameters: RANGE_PARAMS,
   },
   {
+    name: 'recruitment_lookup',
+    description:
+      'Lịch tuyển dụng: công ty / đơn hàng nào đang tuyển, hạn chế hay tạm dừng; yêu cầu giới tính, tuổi, lương, phụ cấp, thưởng, ' +
+      'giờ phỏng vấn, công việc, nhà ở, ưu/nhược điểm. Truyền tên công ty để tra 1 công ty; bỏ trống để xem danh sách.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        company: {
+          type: 'STRING',
+          description: 'Tên (hoặc 1 phần tên) công ty, vd "fukang"',
+        },
+      },
+    },
+  },
+  {
+    name: 'shuttle_lookup',
+    description:
+      'Tra Danh sách đưa đón theo tên hoặc SĐT lao động: ngày/giờ phỏng vấn, công ty, Sale, người đưa đón, ' +
+      'Tình trạng đón (đã đón / chưa đón được / hẹn lại), Kết quả PV. Dùng khi hỏi "lao động X đón được chưa", "X đỗ không".',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        keyword: {
+          type: 'STRING',
+          description: 'Họ tên hoặc SĐT (một phần cũng được)',
+        },
+      },
+      required: ['keyword'],
+    },
+  },
+  {
+    name: 'lead_lookup',
+    description:
+      'Tra Data lao động (người ứng tuyển) theo tên / SĐT / ghi chú: Sale đang phụ trách, trạng thái gọi, kết quả, trạng thái PV, ' +
+      'đi làm, màu bôi, công ty, ghi chú. Chỉ thấy data trong phạm vi người hỏi được xem.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        keyword: { type: 'STRING', description: 'Họ tên, SĐT hoặc từ khoá' },
+      },
+      required: ['keyword'],
+    },
+  },
+  {
     name: 'care_progress',
     description:
       'Tiến độ chăm sóc Kho data trong tháng: đã chăm sóc / cần chăm sóc / chưa chăm sóc, theo nhóm và nhân viên.',
@@ -169,6 +216,16 @@ function strip(value: unknown): unknown {
   return value;
 }
 
+/** Bỏ dấu, chữ thường — so khớp tên không phụ thuộc dấu (nhận giọng hay sai dấu). */
+const foldVi = (s: string | null | undefined) =>
+  (s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
 function vnNow(): Date {
@@ -187,6 +244,8 @@ export class AiAssistantService {
     private readonly care: CareWarehouseService,
     private readonly marketing: MarketingHubService,
     private readonly modules: ModulePermissionService,
+    private readonly candidates: CandidatesService,
+    private readonly recruitment: RecruitmentScheduleService,
   ) {}
 
   private tokenKey(): string {
@@ -686,6 +745,21 @@ ${APP_GUIDE}`,
         const { from, to } = this.range(args);
         return this.leadColors(from, to, user);
       }
+      case 'recruitment_lookup': {
+        if (!(await this.moduleOk(user, 'recruitment-schedule')))
+          return deny('Lịch tuyển dụng');
+        return this.recruitmentLookup(str(args.company), user);
+      }
+      case 'shuttle_lookup': {
+        if (!(await this.moduleOk(user, 'shuttle')))
+          return deny('Danh sách đưa đón');
+        return this.shuttleLookup(str(args.keyword));
+      }
+      case 'lead_lookup': {
+        if (!(await this.moduleOk(user, 'candidates')))
+          return deny('Data lao động');
+        return this.leadLookup(str(args.keyword), user);
+      }
       case 'care_progress': {
         if (!(await this.moduleOk(user, 'dashboard'))) return deny('Dashboard');
         const month = str(args.month);
@@ -753,6 +827,137 @@ ${APP_GUIDE}`,
       byPerson[who][color] = (byPerson[who][color] ?? 0) + r._count._all;
     }
     return { from, to, total, by_person: byPerson };
+  }
+
+  /** Lịch tuyển dụng trong phạm vi người hỏi (cùng hàm của trang Lịch tuyển dụng). */
+  private async recruitmentLookup(company: string, user: AuthenticatedUser) {
+    const all = await this.recruitment.list(user);
+    const q = foldVi(company);
+    const STATUS: Record<string, string> = {
+      open: 'Đang tuyển',
+      limited: 'Hạn chế',
+      paused: 'Tạm dừng',
+    };
+    if (!q) {
+      return all.map((p) => ({
+        company: p.company_name,
+        kind: p.kind === 'seasonal' ? 'Thời vụ' : 'Chính thức',
+        status: STATUS[p.status] ?? p.status,
+        area: p.area,
+      }));
+    }
+    const hits = all.filter((p) => foldVi(p.company_name).includes(q));
+    if (!hits.length)
+      return {
+        result: `Không có công ty nào khớp "${company}" trong Lịch tuyển dụng`,
+      };
+    return hits.slice(0, 6).map((p) => {
+      const r = { ...p, status: STATUS[p.status] ?? p.status } as Record<
+        string,
+        unknown
+      >;
+      delete r.zalo_message;
+      delete r.updated_by;
+      return r;
+    });
+  }
+
+  /**
+   * Tra Đưa đón theo tên / SĐT (người dùng 2026-11-25: hỏi "lao động X đón được chưa").
+   * Gửi tên lao động đã được hỏi; SĐT chỉ gửi 3 số cuối.
+   */
+  private async shuttleLookup(keyword: string) {
+    const kw = keyword.trim();
+    if (kw.length < 2) return { error: 'Cần tên hoặc SĐT để tra' };
+    const digits = kw.replace(/\D/g, '');
+    const select = {
+      date: true,
+      interviewTime: true,
+      fullName: true,
+      phoneNumber: true,
+      area: true,
+      type: true,
+      status: true,
+      interviewResult: true,
+      note: true,
+      company: { select: { name: true } },
+      saleUser: { select: { fullName: true } },
+      driverUser: { select: { fullName: true } },
+    } as const;
+    let rows = await this.prisma.shuttleRecord.findMany({
+      where: {
+        deletedAt: null,
+        ...(digits.length >= 4
+          ? { phoneNumber: { contains: digits } }
+          : { fullName: { contains: kw, mode: 'insensitive' as const } }),
+      },
+      select,
+      orderBy: { date: 'desc' },
+      take: 10,
+    });
+    if (!rows.length && digits.length < 4) {
+      // Nhận giọng hay sai dấu → so không dấu trong 180 ngày gần nhất.
+      const since = new Date(Date.now() - 180 * 86_400_000);
+      const q = foldVi(kw);
+      const recent = await this.prisma.shuttleRecord.findMany({
+        where: { deletedAt: null, date: { gte: since } },
+        select,
+        orderBy: { date: 'desc' },
+      });
+      rows = recent.filter((r) => foldVi(r.fullName).includes(q)).slice(0, 10);
+    }
+    if (!rows.length)
+      return { result: `Không thấy "${kw}" trong Danh sách đưa đón` };
+    return rows.map((r) => ({
+      date: r.date.toISOString().slice(0, 10),
+      time: r.interviewTime,
+      name: r.fullName,
+      phone_last3: r.phoneNumber.slice(-3),
+      company: r.company?.name ?? null,
+      area: r.area,
+      type: r.type,
+      sale: r.saleUser?.fullName ?? null,
+      driver: r.driverUser?.fullName ?? null,
+      status: r.status ?? '(chưa cập nhật)',
+      interview_result: r.interviewResult,
+      note: r.note,
+    }));
+  }
+
+  /** Tra Data lao động — cùng hàm + phạm vi xem của trang Data lao động. SĐT chỉ gửi 3 số cuối. */
+  private async leadLookup(keyword: string, user: AuthenticatedUser) {
+    if (keyword.trim().length < 2) return { error: 'Cần tên hoặc SĐT để tra' };
+    const query = Object.assign(new ListCandidatesQueryDto(), {
+      page: 1,
+      page_size: 6,
+      keyword: keyword.trim(),
+    });
+    const res = await this.candidates.list(query, user);
+    if (!res.items.length)
+      return {
+        result: `Không thấy "${keyword}" trong Data lao động (trong phạm vi bạn được xem)`,
+      };
+    return {
+      total: res.total,
+      items: res.items.map((l) => ({
+        name: l.full_name,
+        phone_last3: l.phone_number.slice(-3),
+        birth_year: l.birth_year,
+        address: l.address,
+        source: l.source?.name,
+        uploaded_at: l.uploaded_at.slice(0, 10),
+        uploaded_by: l.uploaded_by?.name,
+        sale: l.assigned_to?.name ?? '(chưa chia)',
+        call_status: l.call_status?.name ?? null,
+        call_result: l.call_result?.name ?? null,
+        interview_status: l.current_interview_status?.name ?? null,
+        employment_status: l.current_employment_status?.name ?? null,
+        note_color: l.note_color,
+        company: l.company?.name ?? null,
+        mkt_note: l.mkt_note,
+        quick_note: l.quick_note,
+      })),
+    };
   }
 
   /** Chỉ số đếm gộp — không gửi tên / SĐT lao động cho AI. */

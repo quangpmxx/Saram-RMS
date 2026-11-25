@@ -7,5 +7,6 @@ import { RecruitmentScheduleService } from './recruitment-schedule.service';
   imports: [AuditLogModule],
   controllers: [RecruitmentScheduleController],
   providers: [RecruitmentScheduleService],
+  exports: [RecruitmentScheduleService],
 })
 export class RecruitmentScheduleModule {}
