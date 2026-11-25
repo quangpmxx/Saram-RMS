@@ -8,7 +8,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CareAssignmentMethod, Prisma } from '../../generated/prisma/client';
+import {
+  CareAssignmentMethod,
+  NoteColor,
+  Prisma,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { SYSTEM_USERNAME } from '../common/utils/system-account.util';
@@ -130,6 +134,23 @@ function toAccountRef(a: {
  */
 @Injectable()
 export class CareWarehouseService {
+  /**
+   * Gộp lượt tính Kho trùng nhau (2026-11-25, VPS lag: 6 người cùng nhóm tải lại Kho trong cùng 1 giây,
+   * mỗi lượt 3,2s). Cùng nhóm + cùng ô tìm kiếm + bắt đầu cách nhau < 1 giây → dùng chung 1 lần đọc DB
+   * (phần nặng: danh sách data + tóm tắt chăm sóc). Phần riêng từng người (lọc, "của tôi") vẫn tính riêng.
+   * Chỉ gộp lượt đang chạy, không giữ kết quả cũ → không trả số liệu cũ sau khi đã lưu thay đổi.
+   */
+  private readonly inflightLists = new Map<
+    string,
+    {
+      startedAt: number;
+      promise: Promise<{
+        leads: { id: string; uploadedAt: Date; noteColor: NoteColor | null }[];
+        loaded: Awaited<ReturnType<CareWarehouseService['loadLeadSummaries']>>;
+      }>;
+    }
+  >();
+
   private readonly logger = new Logger(CareWarehouseService.name);
 
   constructor(
@@ -216,22 +237,39 @@ export class CareWarehouseService {
       ? { ...scopeWhere, ...searchWhere }
       : scopeWhere;
 
-    const leads = await this.prisma.lead.findMany({
-      where: leadWhere,
-      select: { id: true, uploadedAt: true, noteColor: true },
-    });
+    const shareKey = `${teamId ?? '*'}|${query.search ?? ''}|${monthStart.toISOString()}`;
+    const shared = this.inflightLists.get(shareKey);
+    let job =
+      shared && Date.now() - shared.startedAt < 1000 ? shared.promise : null;
+    if (!job) {
+      job = (async () => {
+        const leads = await this.prisma.lead.findMany({
+          where: leadWhere,
+          select: { id: true, uploadedAt: true, noteColor: true },
+        });
+        const loaded = await this.loadLeadSummaries(
+          leadWhere,
+          leads.map((l) => l.id),
+          monthStart,
+          now,
+        );
+        return { leads, loaded };
+      })();
+      const entry = { startedAt: Date.now(), promise: job };
+      this.inflightLists.set(shareKey, entry);
+      const cleanup = () => {
+        if (this.inflightLists.get(shareKey) === entry)
+          this.inflightLists.delete(shareKey);
+      };
+      job.then(cleanup, cleanup);
+    }
+    const { leads, loaded } = await job;
     const ids = leads.map((l) => l.id);
     const uploadedAt = new Map(
       leads.map((l) => [l.id, l.uploadedAt.getTime()]),
     );
     const noteColor = new Map(leads.map((l) => [l.id, l.noteColor]));
-
-    const { summaries, totals, lastAssigned } = await this.loadLeadSummaries(
-      leadWhere,
-      ids,
-      monthStart,
-      now,
-    );
+    const { summaries, totals, lastAssigned } = loaded;
 
     // Thống kê lấy trên TOÀN BỘ data trong phạm vi (trước khi áp các bộ lọc
     // trạng thái/Sale/số lần...), để thanh thống kê ổn định khi đổi bộ lọc.
