@@ -2412,3 +2412,18 @@ model WebsiteTextHistory {
   @@index([key])
   @@map("website_text_history")
 }
+
+/// Trợ lý AI (2026-11-25, yêu cầu người dùng): 1 dòng duy nhất — khoá API Google Gemini do Admin
+/// liên kết ở Cài đặt tài khoản. Khoá mã hoá bằng MARKETING_TOKEN_KEY, không bao giờ trả ra ngoài.
+model AiAssistantConfig {
+  id           String   @id @default(uuid()) @db.Uuid
+  provider     String   @default("gemini") @db.VarChar(20)
+  model        String   @db.VarChar(100)
+  encryptedKey String   @map("encrypted_key")
+  /// 4 ký tự cuối của khoá — để Admin nhận ra khoá nào đang dùng.
+  keyHint      String   @map("key_hint") @db.VarChar(8)
+  updatedById  String   @map("updated_by") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_assistant_config")
+}

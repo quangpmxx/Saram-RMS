@@ -8,5 +8,6 @@ import { RealtimeModule } from '../realtime/realtime.module';
   imports: [AuditLogModule, RealtimeModule],
   controllers: [MarketingHubController],
   providers: [MarketingHubService],
+  exports: [MarketingHubService],
 })
 export class MarketingHubModule {}

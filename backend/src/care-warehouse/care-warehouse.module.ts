@@ -8,5 +8,6 @@ import { CareWarehouseService } from './care-warehouse.service';
   imports: [RealtimeModule],
   controllers: [CareWarehouseController, CareProgressController],
   providers: [CareWarehouseService],
+  exports: [CareWarehouseService],
 })
 export class CareWarehouseModule {}

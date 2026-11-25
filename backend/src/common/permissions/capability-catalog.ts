@@ -307,6 +307,13 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     hint: 'Hỏi số liệu bằng giọng nói, chỉ trả lời trong phạm vi được xem',
     defaultRoles: ['manager', 'leader', 'mkt', 'sale', 'sup_leader'],
   },
+  {
+    code: 'voice.ai_config',
+    module: 'dashboard',
+    label: 'Liên kết AI Gemini cho Trợ lý',
+    hint: 'Nhập / gỡ khoá API Gemini ở Cài đặt tài khoản (mặc định chỉ Admin)',
+    defaultRoles: [],
+  },
   // ---------------------------------------------------------------- Báo cáo
   {
     code: 'report.submit',

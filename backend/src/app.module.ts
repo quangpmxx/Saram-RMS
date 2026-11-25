@@ -39,6 +39,7 @@ import { RecruitmentScheduleModule } from './recruitment-schedule/recruitment-sc
 import { MediaModule } from './media/media.module';
 import { WebsiteModule } from './website/website.module';
 import { ModulePermissionModule } from './module-permission/module-permission.module';
+import { AiAssistantModule } from './ai-assistant/ai-assistant.module';
 import { ModulePermissionGuard } from './module-permission/module-permission.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -84,6 +85,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     MediaModule,
     WebsiteModule,
     ModulePermissionModule,
+    AiAssistantModule,
   ],
   controllers: [AppController],
   providers: [

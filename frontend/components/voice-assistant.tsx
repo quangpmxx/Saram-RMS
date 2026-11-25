@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, X } from "lucide-react";
-import { clientApi } from "@/lib/api-client";
+import { ApiError, clientApi } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
 import { cn } from "@/lib/cn";
 import type { CareProgressResult } from "@/lib/care-warehouse";
@@ -166,6 +166,21 @@ export function VoiceAssistant() {
   const [supported, setSupported] = useState(() => typeof window === "undefined" || createRecognition() !== null);
   const recRef = useRef<Recognition | null>(null);
   const canMktCost = can("dashboard.mkt_cost");
+  const canUse = can("voice.assistant");
+  // Admin đã liên kết Gemini → hỏi AI; chưa thì hiểu theo từ khoá như cũ.
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const historyRef = useRef<{ role: "user" | "model"; text: string }[]>([]);
+
+  useEffect(() => {
+    if (!open || !canUse) return;
+    let cancelled = false;
+    clientApi<{ ai_enabled: boolean }>("/ai-assistant/status")
+      .then((s) => !cancelled && setAiEnabled(s.ai_enabled))
+      .catch(() => !cancelled && setAiEnabled(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, canUse]);
 
   useEffect(() => {
     // Một số máy chỉ nạp danh sách giọng đọc sau lần gọi đầu.
@@ -173,7 +188,16 @@ export function VoiceAssistant() {
     return () => recRef.current?.stop();
   }, []);
 
-  if (!can("voice.assistant")) return null;
+  if (!canUse) return null;
+
+  async function askAi(question: string): Promise<string> {
+    const r = await clientApi<{ answer: string }>("/ai-assistant/ask", {
+      method: "POST",
+      body: JSON.stringify({ question, history: historyRef.current.slice(-8) }),
+    });
+    historyRef.current = [...historyRef.current, { role: "user" as const, text: question }, { role: "model" as const, text: r.answer }].slice(-12);
+    return r.answer;
+  }
 
   async function ask(text: string) {
     const question = text.trim();
@@ -182,7 +206,18 @@ export function VoiceAssistant() {
     setBusy(true);
     setAnswer("");
     try {
-      const reply = await answerQuestion(question, canMktCost);
+      let reply: string;
+      if (aiEnabled) {
+        try {
+          reply = await askAi(question);
+        } catch (e) {
+          // AI hết lượt miễn phí / lỗi mạng → vẫn trả lời bằng cách hiểu từ khoá.
+          const note = e instanceof ApiError ? e.message : "AI đang bận.";
+          reply = `${note} Trả lời nhanh: ${await answerQuestion(question, canMktCost)}`;
+        }
+      } else {
+        reply = await answerQuestion(question, canMktCost);
+      }
       setAnswer(reply);
       speak(reply);
     } catch {
@@ -242,7 +277,10 @@ export function VoiceAssistant() {
       {open && (
         <div className="max-h-[70vh] w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:w-[360px]">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-800">Trợ lý giọng nói</p>
+            <p className="text-sm font-semibold text-slate-800">
+              Trợ lý giọng nói
+              {aiEnabled && <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">AI</span>}
+            </p>
             <button
               type="button"
               onClick={() => {

@@ -18,6 +18,7 @@ import { cn } from "@/lib/cn";
 import type { UiTheme } from "@/lib/types";
 import { CheckinLocationSettings } from "./checkin-location-settings";
 import { PushNotificationSettings } from "./push-notification-settings";
+import { AiAssistantSettings } from "./ai-assistant-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — khớp đúng giới hạn backend (POST /me/avatar)
@@ -38,6 +39,7 @@ function formatDateOnly(value: string | null): string {
 export function AccountSettingsClient({ user, accounts }: { user: Account; accounts: Account[] }) {
   useSetPageTitle("Cài đặt tài khoản");
   const canManageCheckin = useCan()("checkin.manage");
+  const canAiConfig = useCan()("voice.ai_config");
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -255,6 +257,19 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
               <p className="mt-1 text-xs text-slate-500">Vị trí công ty dùng để xác định nhân viên Check in trong/ngoài phạm vi.</p>
               <div className="mt-3">
                 <CheckinLocationSettings />
+              </div>
+            </section>
+          )}
+
+          {/* Liên kết AI Gemini cho Trợ lý giọng nói (2026-11-25) — mặc định chỉ Admin. */}
+          {canAiConfig && (
+            <section>
+              <h3 className="text-sm font-semibold text-slate-900">Trợ lý AI (Google Gemini)</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Liên kết để Trợ lý giọng nói hiểu câu hỏi tự nhiên. Mỗi người vẫn chỉ nghe được số trong phạm vi mình được xem.
+              </p>
+              <div className="mt-3">
+                <AiAssistantSettings />
               </div>
             </section>
           )}
