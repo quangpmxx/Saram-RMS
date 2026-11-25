@@ -376,13 +376,13 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       {open && (
         <div className="flex h-[min(600px,calc(100dvh-6rem))] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-brand-900/20 sm:w-[390px]">
           {/* Đầu khung: logo công ty + tên trợ lý + trạng thái AI */}
-          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-600 px-4 pt-4 pb-6 text-white">
+          <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-600 px-3 py-2 text-white">
             <div aria-hidden className="pointer-events-none absolute -top-10 -right-8 h-32 w-32 rounded-full bg-accent-500/30 blur-2xl" />
             <div aria-hidden className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
-            <div className="relative flex items-center gap-3">
-              <BrandMark size={42} className="shadow-md ring-2 ring-white/40" />
+            <div className="relative flex items-center gap-2">
+              <BrandMark size={28} className="shadow ring-1 ring-white/40" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] leading-tight font-semibold">{assistantName}</p>
+                <p className="truncate text-sm leading-tight font-semibold">{assistantName}</p>
               </div>
               <div className="flex items-center gap-0.5">
                 <button type="button" onClick={toggleMute} title={muted ? "Bật đọc to câu trả lời" : "Tắt đọc to"} className={headerBtn}>
@@ -401,7 +401,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
           </div>
 
           {/* Nội dung trò chuyện */}
-          <div ref={scrollRef} className="-mt-3 flex-1 overflow-y-auto rounded-t-2xl bg-slate-50 px-3 pt-4 pb-3">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-slate-50 px-3 pt-3 pb-3">
             {/* Tối giản (2026-11-25): chỉ lời chào, không chú thích / câu hỏi mẫu. */}
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-end gap-2">
