@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Mic, MicOff, RotateCcw, SendHorizontal, Volume2, VolumeX, X } from "lucide-react";
+import { Mic, MicOff, RotateCcw, SendHorizontal, Volume2, X } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
 import { cn } from "@/lib/cn";
@@ -31,20 +31,37 @@ function createRecognition(): Recognition | null {
   return Ctor ? new Ctor() : null;
 }
 
-function speak(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "vi-VN";
-  const voice = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
-  if (voice) u.voice = voice;
-  u.rate = 1.05;
-  window.speechSynthesis.speak(u);
+/**
+ * Đọc to câu trả lời. Chia theo câu (Chrome tự ngắt khi 1 lượt đọc dài quá ~15 giây), gọi onEnd khi
+ * đọc xong câu cuối — dùng cho chế độ nói chuyện (đọc xong tự nghe tiếp).
+ */
+function speak(text: string, onEnd?: () => void) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    onEnd?.();
+    return;
+  }
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
+  const chunks = (text.match(/[^.!?\n]+[.!?]*/g) ?? [text]).map((c) => c.trim()).filter(Boolean);
+  if (chunks.length === 0) {
+    onEnd?.();
+    return;
+  }
+  chunks.forEach((chunk, i) => {
+    const u = new SpeechSynthesisUtterance(chunk);
+    u.lang = "vi-VN";
+    if (voice) u.voice = voice;
+    u.rate = 1.05;
+    if (i === chunks.length - 1 && onEnd) {
+      u.onend = () => onEnd();
+      u.onerror = () => onEnd();
+    }
+    synth.speak(u);
+  });
 }
 
 type ChatMessage = { id: number; role: "user" | "bot"; text: string };
-
-const MUTE_KEY = "voice-assistant-muted";
 
 /** Logo công ty trong khung tròn trắng — dùng cho đầu khung và tin nhắn trợ lý. */
 function BrandMark({ size, className }: { size: number; className?: string }) {
@@ -94,13 +111,10 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   const [typed, setTyped] = useState("");
   // Khung trả lời chỉ hiện sau khi bấm nút (ở trình duyệt) nên đọc thẳng lúc khởi tạo không lệch SSR.
   const [supported, setSupported] = useState(() => typeof window === "undefined" || createRecognition() !== null);
-  const [muted, setMuted] = useState(() => {
-    try {
-      return typeof window !== "undefined" && window.localStorage.getItem(MUTE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  // Chế độ nói chuyện (2026-11-25): bấm micro → hỏi bằng giọng → AI đọc to câu trả lời → tự nghe tiếp.
+  // Bấm micro lần nữa / im lặng / đóng khung → dừng. Câu gõ tay chỉ hiện chữ.
+  const convRef = useRef(false);
+  const [speaking, setSpeaking] = useState(false);
   const recRef = useRef<Recognition | null>(null);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -157,29 +171,31 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     setMessages((m) => [...m, msg].slice(-40));
   }
 
-  function say(text: string) {
-    if (!muted) speak(text);
+  /** Thoát chế độ nói chuyện: ngừng nghe + ngừng đọc. */
+  function stopConversation() {
+    convRef.current = false;
+    recRef.current?.stop();
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
   }
 
-  function toggleMute() {
-    const next = !muted;
-    setMuted(next);
-    if (next) window.speechSynthesis?.cancel();
-    try {
-      window.localStorage.setItem(MUTE_KEY, next ? "1" : "0");
-    } catch {
-      /* bỏ qua: chế độ riêng tư */
-    }
+  /** Đọc câu trả lời; đang nói chuyện thì đọc xong tự nghe câu tiếp theo. */
+  function talkBack(text: string) {
+    if (!convRef.current) return;
+    setSpeaking(true);
+    speak(text, () => {
+      setSpeaking(false);
+      if (convRef.current) startListening();
+    });
   }
 
   function close() {
-    recRef.current?.stop();
-    window.speechSynthesis?.cancel();
+    stopConversation();
     setOpen(false);
   }
 
   function reset() {
-    window.speechSynthesis?.cancel();
+    stopConversation();
     setMessages([]);
     historyRef.current = [];
   }
@@ -193,7 +209,8 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     return r.answer;
   }
 
-  async function ask(text: string) {
+  async function ask(text: string, viaVoice = false) {
+    if (!viaVoice) stopConversation();
     const question = text.trim();
     if (!question || busy || !ready) return;
     push("user", question);
@@ -202,23 +219,34 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
     try {
       const reply = await askAi(question);
       push("bot", reply);
-      say(reply);
+      talkBack(reply);
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
+        stopConversation();
         setExhausted(true);
         return;
       }
-      push("bot", "AI đang bận, anh/chị thử lại sau nhé.");
+      const msg = "AI đang bận, anh/chị thử lại sau nhé.";
+      push("bot", msg);
+      talkBack(msg);
     } finally {
       setBusy(false);
     }
   }
 
-  function startListening() {
+  /** Nút micro: đang nghe → dừng hẳn; đang đọc → ngắt lời và nghe; còn lại → bắt đầu nói chuyện. */
+  function onMicClick() {
     if (listening) {
-      recRef.current?.stop();
+      stopConversation();
       return;
     }
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+    convRef.current = true;
+    startListening();
+  }
+
+  function startListening() {
     const rec = createRecognition();
     if (!rec) {
       setSupported(false);
@@ -254,15 +282,18 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
         push("bot", "Không tìm thấy micro trên máy. Kiểm tra lại micro / tai nghe rồi thử lại.");
       } else if (e.error === "network") {
         push("bot", "Không kết nối được dịch vụ nhận giọng nói. Kiểm tra mạng, hoặc dùng Google Chrome / Microsoft Edge.");
-      } else if (e.error === "no-speech") {
+      } else if (e.error === "no-speech" && !convRef.current) {
         push("bot", "Em chưa nghe thấy gì, anh/chị bấm micro và nói lại nhé.");
       }
+      // Lỗi bất kỳ / im lặng → kết thúc chế độ nói chuyện (không tự nghe lại mãi).
+      convRef.current = false;
     };
     rec.onend = () => {
       setListening(false);
       setInterim("");
       recRef.current = null;
-      if (finalText) void ask(finalText);
+      if (finalText) void ask(finalText, true);
+      else convRef.current = false;
     };
     recRef.current = rec;
     setInterim("");
@@ -286,9 +317,6 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                 <p className="truncate text-sm leading-tight font-semibold">{assistantName}</p>
               </div>
               <div className="flex items-center gap-0.5">
-                <button type="button" onClick={toggleMute} title={muted ? "Bật đọc to câu trả lời" : "Tắt đọc to"} className={headerBtn}>
-                  {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                </button>
                 {messages.length > 0 && (
                   <button type="button" onClick={reset} title="Cuộc trò chuyện mới" className={headerBtn}>
                     <RotateCcw className="h-4 w-4" />
@@ -393,16 +421,27 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
               </div>
               <button
                 type="button"
-                onClick={startListening}
+                onClick={onMicClick}
                 disabled={!supported || busy || !ready}
-                title={!supported ? "Trình duyệt này không nhận giọng nói" : listening ? "Dừng nghe" : "Bấm rồi nói câu hỏi"}
+                title={!supported ? "Trình duyệt này không nhận giọng nói" : listening ? "Dừng nói chuyện" : speaking ? "Ngắt lời và nói" : "Bấm để nói chuyện"}
                 className={cn(
                   "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all disabled:opacity-40",
-                  listening ? "bg-red-500 ring-4 ring-red-200" : "bg-gradient-to-br from-accent-500 to-accent-600 hover:scale-105 hover:shadow-lg",
+                  listening
+                    ? "bg-red-500 ring-4 ring-red-200"
+                    : speaking
+                      ? "bg-brand-600 ring-4 ring-brand-200"
+                      : "bg-gradient-to-br from-accent-500 to-accent-600 hover:scale-105 hover:shadow-lg",
                 )}
               >
                 {listening && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-40" />}
-                {supported ? <Mic className="relative h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                {speaking && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-brand-400 opacity-40" />}
+                {!supported ? (
+                  <MicOff className="h-5 w-5" />
+                ) : speaking ? (
+                  <Volume2 className="relative h-5 w-5 animate-pulse" />
+                ) : (
+                  <Mic className="relative h-5 w-5" />
+                )}
               </button>
             </form>
           </div>
@@ -414,18 +453,18 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
         type="button"
         title={open ? "Đóng trợ lý" : "Trợ lý AI Đại Việt"}
         onClick={() => (open ? close() : setOpen(true))}
-        className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 via-indigo-500 to-accent-500 p-[3px] shadow-lg shadow-brand-900/25 transition-transform hover:scale-105 active:scale-95"
+        className="relative flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 via-indigo-500 to-accent-500 p-[3px] shadow-lg shadow-brand-900/25 transition-transform hover:scale-105 active:scale-95"
       >
         {!open && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-brand-400 opacity-20 [animation-duration:2.5s]" />}
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-white">
           {open ? (
-            <X className="h-6 w-6 text-slate-600" />
+            <X className="h-5 w-5 text-slate-600" />
           ) : (
-            <Image src="/dai-viet-mark.png" alt="Đại Việt" width={40} height={40} className="h-9 w-9 object-contain" />
+            <Image src="/dai-viet-mark.png" alt="Đại Việt" width={32} height={32} className="h-7 w-7 object-contain" />
           )}
         </span>
         {!open && (
-          <span className="absolute -top-1 -right-1.5 rounded-full bg-gradient-to-r from-accent-500 to-pink-500 px-1.5 py-px text-[10px] leading-4 font-bold text-white shadow ring-2 ring-white">
+          <span className="absolute -top-1 -right-1.5 rounded-full bg-gradient-to-r from-accent-500 to-pink-500 px-1 py-px text-[9px] leading-3.5 font-bold text-white shadow ring-2 ring-white">
             AI
           </span>
         )}
