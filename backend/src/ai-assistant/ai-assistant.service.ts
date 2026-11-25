@@ -33,6 +33,7 @@ import {
   GeminiContent,
   GeminiError,
   GeminiFunctionDeclaration,
+  GeminiUsage,
   geminiGenerate,
   geminiListModels,
   geminiSpeak,
@@ -60,6 +61,23 @@ const TTS_MODELS = [
 const TTS_VOICE = 'Leda'; // giọng nữ trẻ (người dùng 2026-11-25: Achernar nghe hơi già)
 const TTS_STYLE =
   'Đọc bằng giọng cô gái trẻ Hà Nội khoảng 20 tuổi (giọng miền Bắc chuẩn), trẻ trung, tươi tắn, nhẹ nhàng, thân thiện, nói hơi nhanh và tự nhiên như đang trò chuyện, phát âm tiếng Việt rõ ràng: ';
+/**
+ * Giá ước tính (USD / 1 triệu token) — chủ ý lấy CAO hơn giá niêm yết để trần ngân sách chặn
+ * trước khi tiền thật vượt (2026-11-25). Phần "cached" = Google tự giảm giá nội dung lặp lại.
+ */
+function priceOf(model: string) {
+  if (model.includes('tts')) return { input: 1, cached: 1, output: 20 };
+  if (model.includes('pro')) return { input: 4, cached: 0.4, output: 18 };
+  if (model.includes('lite')) return { input: 0.3, cached: 0.03, output: 2 };
+  return { input: 0.6, cached: 0.06, output: 4 };
+}
+export function costOf(u: GeminiUsage): number {
+  const p = priceOf(u.model);
+  const fresh = Math.max(0, u.prompt - u.cached);
+  return (fresh * p.input + u.cached * p.cached + u.output * p.output) / 1e6;
+}
+/** Chạm tỉ lệ này của ngân sách tháng → tắt giọng Gemini (phần tốn nhất), chỉ trả lời chữ. */
+const VOICE_OFF_RATIO = 0.85;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -267,6 +285,8 @@ export class AiAssistantService {
         persona: '',
         knowledge: '',
         allow_chitchat: false,
+        monthly_budget_usd: null,
+        used_this_month_usd: 0,
       };
     }
     const by = await this.prisma.account.findUnique({
@@ -281,6 +301,8 @@ export class AiAssistantService {
       persona: cfg.persona ?? '',
       knowledge: cfg.knowledge ?? '',
       allow_chitchat: cfg.allowChitchat,
+      monthly_budget_usd: cfg.monthlyBudgetUsd,
+      used_this_month_usd: this.budgetState(cfg).used,
       updated_at: cfg.updatedAt.toISOString(),
       updated_by_name: by?.fullName ?? null,
     };
@@ -403,15 +425,73 @@ export class AiAssistantService {
   async status(user: AuthenticatedUser) {
     await this.assertAiModule(user);
     const cfg = await this.prisma.aiAssistantConfig.findFirst({
-      select: { encryptedKey: true, assistantName: true },
+      select: {
+        encryptedKey: true,
+        assistantName: true,
+        monthlyBudgetUsd: true,
+        costMonth: true,
+        costUsd: true,
+      },
     });
     const quota = await this.quota(user.id);
     return {
       ai_enabled: Boolean(cfg?.encryptedKey),
+      /** Hết ngân sách AI tháng này → khung chat khoá ô hỏi (không báo gì). */
+      budget_exhausted: cfg ? this.budgetState(cfg).exhausted : false,
       assistant_name: cfg?.assistantName ?? DEFAULT_ASSISTANT_NAME,
       /** Còn bao nhiêu câu hỏi hôm nay; null = không giới hạn. */
       remaining_today: quota.remaining,
     };
+  }
+
+  // ---------------------------------------------------------------- Ngân sách tháng
+
+  private vnMonth(): string {
+    return vnNow().toISOString().slice(0, 7);
+  }
+
+  budgetState(cfg: {
+    monthlyBudgetUsd: number | null;
+    costMonth: string | null;
+    costUsd: number;
+  }) {
+    const used = cfg.costMonth === this.vnMonth() ? cfg.costUsd : 0;
+    const budget = cfg.monthlyBudgetUsd;
+    return {
+      used: Math.round(used * 10000) / 10000,
+      budget,
+      exhausted: budget !== null && used >= budget,
+      voiceOff: budget !== null && used >= budget * VOICE_OFF_RATIO,
+    };
+  }
+
+  /** Cộng chi phí ước tính (1 câu lệnh — nhiều người hỏi cùng lúc không mất số; sang tháng mới tự về 0). */
+  private async addCost(usd: number) {
+    if (!(usd > 0)) return;
+    const month = this.vnMonth();
+    await this.prisma.$executeRaw`
+      UPDATE ai_assistant_config
+      SET cost_usd = CASE WHEN cost_month = ${month} THEN cost_usd + ${usd} ELSE ${usd} END,
+          cost_month = ${month}`;
+  }
+
+  async saveBudget(budget: number | null, user: AuthenticatedUser) {
+    const existing = await this.prisma.aiAssistantConfig.findFirst();
+    if (!existing)
+      throw new BadRequestException('Hãy liên kết AI Gemini trước');
+    await this.prisma.aiAssistantConfig.update({
+      where: { id: existing.id },
+      data: { monthlyBudgetUsd: budget, updatedById: user.id },
+    });
+    await this.audit.log({
+      accountId: user.id,
+      actionType: 'update',
+      entityType: 'ai_assistant_config',
+      fieldChanged: 'monthly_budget_usd',
+      oldValue: String(existing.monthlyBudgetUsd ?? 'không giới hạn'),
+      newValue: String(budget ?? 'không giới hạn'),
+    });
+    return this.getConfig();
   }
 
   /** Giới hạn câu hỏi mỗi ngày của tài khoản (Sửa tài khoản) — ngày theo giờ VN. */
@@ -459,7 +539,18 @@ export class AiAssistantService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
+    // Hết ngân sách AI tháng này → 429: khoá ô hỏi tới tháng sau (hoặc tới khi Admin tăng ngân sách).
+    if (this.budgetState(cfg).exhausted) {
+      throw new HttpException(
+        'Hết ngân sách AI tháng này',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
     const apiKey = decryptToken(cfg.encryptedKey, this.tokenKey());
+    let cost = 0;
+    const track = (u: GeminiUsage) => {
+      cost += costOf(u);
+    };
     const me = await this.prisma.account.findUnique({
       where: { id: user.id },
       select: { fullName: true },
@@ -481,11 +572,16 @@ export class AiAssistantService {
 
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-        const reply = await this.generateWithRetry(apiKey, cfg.model, {
-          systemInstruction: system,
-          contents,
-          tools: round < MAX_TOOL_ROUNDS ? TOOLS : undefined,
-        });
+        const reply = await this.generateWithRetry(
+          apiKey,
+          cfg.model,
+          {
+            systemInstruction: system,
+            contents,
+            tools: round < MAX_TOOL_ROUNDS ? TOOLS : undefined,
+          },
+          track,
+        );
         const calls = reply.parts.filter((p) => p.functionCall);
         if (!calls.length) {
           const text = reply.parts
@@ -524,6 +620,10 @@ export class AiAssistantService {
         );
       }
       throw e;
+    } finally {
+      await this.addCost(cost).catch((e: unknown) =>
+        this.logger.warn(`Không ghi được chi phí AI: ${String(e)}`),
+      );
     }
     return {
       answer:
@@ -537,15 +637,33 @@ export class AiAssistantService {
   async speak(text: string, user: AuthenticatedUser): Promise<Buffer> {
     await this.assertAiModule(user);
     const cfg = await this.prisma.aiAssistantConfig.findFirst({
-      select: { encryptedKey: true },
+      select: {
+        encryptedKey: true,
+        monthlyBudgetUsd: true,
+        costMonth: true,
+        costUsd: true,
+      },
     });
     if (!cfg?.encryptedKey)
       throw new ServiceUnavailableException('Admin chưa liên kết AI Gemini');
+    // Gần chạm trần ngân sách → không dùng giọng Gemini (trình duyệt tự đọc bằng giọng của máy).
+    if (this.budgetState(cfg).voiceOff) {
+      throw new HttpException(
+        'Tạm tắt giọng AI (gần hết ngân sách)',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
     const apiKey = decryptToken(cfg.encryptedKey, this.tokenKey());
     let last: unknown;
     for (const model of TTS_MODELS) {
       try {
-        return await geminiSpeak(apiKey, model, TTS_STYLE + text, TTS_VOICE);
+        return await geminiSpeak(
+          apiKey,
+          model,
+          TTS_STYLE + text,
+          TTS_VOICE,
+          (u) => void this.addCost(costOf(u)).catch(() => undefined),
+        );
       } catch (e) {
         last = e;
         if (!(e instanceof GeminiError)) throw e;
@@ -563,6 +681,7 @@ export class AiAssistantService {
     apiKey: string,
     model: string,
     body: Parameters<typeof geminiGenerate>[2],
+    onUsage?: (u: GeminiUsage) => void,
   ) {
     const models = [model, ...FALLBACK_MODELS.filter((m) => m !== model)];
     let last: unknown;
@@ -570,12 +689,14 @@ export class AiAssistantService {
       for (let attempt = 0; attempt < (m === model ? 3 : 1); attempt++) {
         try {
           // Tắt suy nghĩ dài (nhanh hơn nhiều); mô hình không nhận tham số này (400) thì gọi lại không kèm.
-          return await geminiGenerate(apiKey, m, {
-            ...body,
-            thinkingLevel: 'minimal',
-          }).catch((e: unknown) => {
+          return await geminiGenerate(
+            apiKey,
+            m,
+            { ...body, thinkingLevel: 'minimal' },
+            onUsage,
+          ).catch((e: unknown) => {
             if (e instanceof GeminiError && e.status === 400)
-              return geminiGenerate(apiKey, m, body);
+              return geminiGenerate(apiKey, m, body, onUsage);
             throw e;
           });
         } catch (e) {
@@ -669,8 +790,6 @@ export class AiAssistantService {
       cfg.persona
         ? `\n## Về bản thân bạn (do công ty đặt — khi được hỏi "bạn là ai", "ai tạo ra bạn"… hãy trả lời theo đúng phần này, không nói mình là Gemini hay do Google tạo)\n${cfg.persona.slice(0, 4000)}`
         : '',
-      `\nHôm nay là ${weekday}, ${today} (giờ Việt Nam). Tuần bắt đầu từ Thứ 2.`,
-      `Người đang hỏi: ${name} — vai trò ${ROLE_LABEL[role] ?? role}. Xưng hô lịch sự, thân thiện.`,
       cfg.knowledge
         ? `\n## Sổ tay công ty (thông tin công ty cung cấp — dùng để trả lời câu hỏi về công ty, sếp, quy trình, quy định…)\n${cfg.knowledge.slice(0, 30_000)}`
         : '',
@@ -692,6 +811,12 @@ ${APP_GUIDE}`,
       '- "Chạy được bao nhiêu số", "bao nhiêu data" = data mới (new_leads).',
       '- Nghiệp vụ: Hẹn PV = số dòng Đưa đón; Đến = Tình trạng "Đã đón"; Bùng = "Chưa đón được"; Đỗ PV = Đã đón và Kết quả trống hoặc "Đỗ PV"; Trượt = Đã đón và "Trượt PV".',
       '- Tiền đọc theo đồng, ví dụ "1,2 triệu đồng". Số liệu chỉ trong phạm vi người hỏi được xem — không nói về phần bị ẩn.',
+      // Tiết kiệm (2026-11-25): phần thay đổi theo người / ngày để CUỐI — phần trên giống hệt
+      // giữa mọi câu hỏi nên Google tự tính giá rẻ (bộ nhớ đệm), chỉ phần này tính giá đầy đủ.
+      '',
+      '## Bối cảnh câu hỏi này',
+      `Hôm nay là ${weekday}, ${today} (giờ Việt Nam). Tuần bắt đầu từ Thứ 2.`,
+      `Người đang hỏi: ${name} — vai trò ${ROLE_LABEL[role] ?? role}. Xưng hô lịch sự, thân thiện.`,
     ]
       .filter((l) => l !== '')
       .join('\n');

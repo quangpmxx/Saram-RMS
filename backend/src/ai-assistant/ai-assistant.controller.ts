@@ -17,6 +17,7 @@ import {
   AskAiDto,
   ListAiModelsDto,
   SaveAiConfigDto,
+  SaveAiBudgetDto,
   SaveAiKnowledgeDto,
   SpeakAiDto,
 } from './ai-assistant.dto';
@@ -70,6 +71,16 @@ export class AiAssistantController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.saveConfig(dto, user);
+  }
+
+  /** Trần chi phí AI mỗi tháng (USD). */
+  @Put('budget')
+  @RequireCap('voice.ai_config')
+  saveBudget(
+    @Body() dto: SaveAiBudgetDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.saveBudget(dto.monthly_budget_usd ?? null, user);
   }
 
   @Put('knowledge')

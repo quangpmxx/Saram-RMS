@@ -23,6 +23,26 @@ export interface GeminiFunctionDeclaration {
   parameters?: Record<string, unknown>;
 }
 
+/** Số token Google tính tiền cho 1 lượt gọi (usageMetadata). */
+export interface GeminiUsage {
+  model: string;
+  prompt: number;
+  cached: number;
+  output: number;
+}
+type UsageMeta = {
+  promptTokenCount?: number;
+  cachedContentTokenCount?: number;
+  candidatesTokenCount?: number;
+  thoughtsTokenCount?: number;
+};
+const toUsage = (model: string, u?: UsageMeta): GeminiUsage => ({
+  model,
+  prompt: u?.promptTokenCount ?? 0,
+  cached: u?.cachedContentTokenCount ?? 0,
+  output: (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0),
+});
+
 export class GeminiError extends Error {
   constructor(
     message: string,
@@ -42,6 +62,7 @@ export async function geminiGenerate(
     /** Mức suy nghĩ (Gemini 3): "minimal" nhanh hơn ~6 lần cho câu hỏi tra số (đo 2026-11-25: 5,3s → 0,8s). */
     thinkingLevel?: string;
   },
+  onUsage?: (u: GeminiUsage) => void,
 ): Promise<GeminiContent> {
   const res = await fetch(
     `${BASE}/${encodeURIComponent(model)}:generateContent`,
@@ -70,6 +91,7 @@ export async function geminiGenerate(
   const json = (await res.json().catch(() => ({}))) as {
     error?: { message?: string };
     candidates?: { content?: GeminiContent }[];
+    usageMetadata?: UsageMeta;
   };
   if (!res.ok) {
     throw new GeminiError(
@@ -77,6 +99,7 @@ export async function geminiGenerate(
       res.status,
     );
   }
+  onUsage?.(toUsage(model, json.usageMetadata));
   const content = json.candidates?.[0]?.content;
   if (!content?.parts?.length) {
     return { role: 'model', parts: [{ text: '' }] };
@@ -128,6 +151,7 @@ export async function geminiSpeak(
   model: string,
   text: string,
   voiceName: string,
+  onUsage?: (u: GeminiUsage) => void,
 ): Promise<Buffer> {
   const res = await fetch(
     `${BASE}/${encodeURIComponent(model)}:generateContent`,
@@ -151,6 +175,7 @@ export async function geminiSpeak(
         parts?: { inlineData?: { data?: string; mimeType?: string } }[];
       };
     }[];
+    usageMetadata?: UsageMeta;
   };
   if (!res.ok) {
     throw new GeminiError(
@@ -158,6 +183,7 @@ export async function geminiSpeak(
       res.status,
     );
   }
+  onUsage?.(toUsage(model, json.usageMetadata));
   const inline = json.candidates?.[0]?.content?.parts?.find(
     (p) => p.inlineData?.data,
   )?.inlineData;

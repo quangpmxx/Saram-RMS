@@ -3,6 +3,9 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsNumber,
+  Max,
+  Min,
   IsIn,
   IsOptional,
   IsString,
@@ -24,6 +27,12 @@ export class SaveAiKnowledgeDto {
   /** Sổ tay công ty. */
   @IsOptional() @IsString() @MaxLength(30000) knowledge?: string;
   @IsOptional() @IsBoolean() allow_chitchat?: boolean;
+}
+
+export class SaveAiBudgetDto {
+  /** USD / tháng; null = không giới hạn. */
+  @IsOptional() @IsNumber() @Min(0) @Max(1000) monthly_budget_usd?:
+    number | null;
 }
 
 export class SpeakAiDto {

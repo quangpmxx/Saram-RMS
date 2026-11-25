@@ -26,6 +26,10 @@ interface AiConfig {
   key_hint?: string;
   updated_at?: string;
   updated_by_name?: string | null;
+  /** Trần chi phí AI mỗi tháng (USD); null = không giới hạn. */
+  monthly_budget_usd?: number | null;
+  /** Chi phí ước tính đã dùng tháng này (USD). */
+  used_this_month_usd?: number;
 }
 
 export function AiAssistantSettings() {
@@ -35,11 +39,14 @@ export function AiAssistantSettings() {
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [budget, setBudget] = useState("");
+  const [savingBudget, setSavingBudget] = useState(false);
   useEffect(() => {
     clientApi<AiConfig>("/ai-assistant/config")
       .then((c) => {
         setCfg(c);
         setModel(c.model);
+        setBudget(c.monthly_budget_usd != null ? String(c.monthly_budget_usd) : "");
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Không tải được cài đặt AI"));
   }, []);
@@ -60,6 +67,28 @@ export function AiAssistantSettings() {
       setError(e instanceof ApiError ? e.message : "Không lưu được");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveBudget() {
+    const value = budget.trim() === "" ? null : Number(budget.replace(",", "."));
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      setError("Ngân sách phải là số (USD), vd 9");
+      return;
+    }
+    setSavingBudget(true);
+    setError(null);
+    try {
+      const c = await clientApi<AiConfig>("/ai-assistant/budget", {
+        method: "PUT",
+        body: JSON.stringify({ monthly_budget_usd: value }),
+      });
+      setCfg(c);
+      toast.success(value === null ? "Đã bỏ giới hạn ngân sách AI" : `Đã đặt ngân sách AI ${value} USD / tháng`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Không lưu được ngân sách");
+    } finally {
+      setSavingBudget(false);
     }
   }
 
@@ -114,6 +143,30 @@ export function AiAssistantSettings() {
           {model && !MODEL_CHOICES.some((m) => m.id === model) && <option value={model}>{model}</option>}
         </Select>
       </Field>
+      {cfg?.connected && (
+        <div className="rounded-lg border border-slate-200 p-3">
+          <Field
+            label="Ngân sách AI mỗi tháng (USD)"
+            hint="Chạm 85%: tự tắt giọng Gemini (dùng giọng của máy). Chạm 100%: khoá ô hỏi tới ngày 1 tháng sau. Để trống = không giới hạn. Nên đặt thấp hơn tín dụng Google một chút (vd tín dụng 10 → đặt 9)."
+          >
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.5}
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                placeholder="Không giới hạn"
+              />
+              <Button type="button" variant="outline" onClick={saveBudget} disabled={savingBudget}>
+                {savingBudget ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
+          </Field>
+          <UsageBar used={cfg.used_this_month_usd ?? 0} budget={cfg.monthly_budget_usd ?? null} />
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-sm text-red-600">
           {error}
@@ -129,6 +182,25 @@ export function AiAssistantSettings() {
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Đã dùng tháng này / ngân sách — ước tính theo giá cao hơn giá Google một chút. */
+function UsageBar({ used, budget }: { used: number; budget: number | null }) {
+  const pct = budget ? Math.min(100, (used / budget) * 100) : 0;
+  const color = pct >= 100 ? "bg-red-500" : pct >= 85 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="mt-2">
+      <p className="text-xs text-slate-600">
+        Đã dùng tháng này (ước tính): <b>{used.toFixed(2)} USD</b>
+        {budget ? ` / ${budget} USD (${Math.round(pct)}%)` : " — chưa đặt giới hạn"}
+      </p>
+      {budget ? (
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
     </div>
   );
 }
