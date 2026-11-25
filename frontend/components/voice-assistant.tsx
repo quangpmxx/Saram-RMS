@@ -22,6 +22,7 @@ type Recognition = {
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
 };
 
 function createRecognition(): Recognition | null {
@@ -200,6 +201,12 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
   // Chế độ nói chuyện (2026-11-25): bấm micro → hỏi bằng giọng → AI đọc to câu trả lời → tự nghe tiếp.
   // Bấm micro lần nữa / im lặng / đóng khung → dừng. Câu gõ tay chỉ hiện chữ.
   const convRef = useRef(false);
+  // Bản sao của convRef để vẽ nút micro (đang trong cuộc nói chuyện → bấm là dừng hẳn).
+  const [convOn, setConvOn] = useState(false);
+  const setConv = (v: boolean) => {
+    convRef.current = v;
+    setConvOn(v);
+  };
   const [speaking, setSpeaking] = useState(false);
   const [phase, setPhase] = useState<"thinking" | "voice">("thinking");
   const warnedVoiceRef = useRef(false);
@@ -278,8 +285,16 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
   }
 
   function stopConversation() {
-    convRef.current = false;
-    recRef.current?.stop();
+    setConv(false);
+    // Điện thoại (Chrome Android) hay không kết thúc khi gọi stop() → abort() + tắt trạng thái nghe ngay.
+    const rec = recRef.current;
+    recRef.current = null;
+    if (rec) {
+      if (rec.abort) rec.abort();
+      else rec.stop();
+    }
+    setListening(false);
+    setInterim("");
     stopAudio();
     setSpeaking(false);
   }
@@ -432,13 +447,13 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
 
   /** Nút micro: đang nghe → dừng hẳn; đang đọc → ngắt lời và nghe; còn lại → bắt đầu nói chuyện. */
   function onMicClick() {
-    if (listening) {
+    if (listening || convOn) {
       stopConversation();
       return;
     }
     stopAudio();
     setSpeaking(false);
-    convRef.current = true;
+    setConv(true);
     startListening();
   }
 
@@ -482,14 +497,17 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
         push("bot", "Em chưa nghe thấy gì, anh/chị bấm micro và nói lại nhé.");
       }
       // Lỗi bất kỳ / im lặng → kết thúc chế độ nói chuyện (không tự nghe lại mãi).
-      convRef.current = false;
+      setConv(false);
     };
     rec.onend = () => {
+      // Đã bấm dừng (recRef bị xoá) → không gửi câu dở.
+      const mine = recRef.current === rec;
+      if (!mine) return;
       setListening(false);
       setInterim("");
       recRef.current = null;
-      if (finalText) void ask(finalText, true);
-      else convRef.current = false;
+      if (finalText && convRef.current) void ask(finalText, true);
+      else setConv(false);
     };
     recRef.current = rec;
     setInterim("");
@@ -615,16 +633,16 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
                   type="submit"
                   disabled={busy || !ready || !typed.trim()}
                   title="Gửi"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-brand-600 transition-colors hover:bg-brand-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-colors hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 sm:h-9 sm:w-9"
                 >
-                  <SendHorizontal className="h-4 w-4" />
+                  <SendHorizontal className="h-5 w-5" />
                 </button>
               </div>
               <button
                 type="button"
                 onClick={onMicClick}
-                disabled={!supported || busy || !ready}
-                title={!supported ? "Trình duyệt này không nhận giọng nói" : listening ? "Dừng nói chuyện" : speaking ? "Ngắt lời và nói" : "Bấm để nói chuyện"}
+                disabled={!supported || !ready || (busy && !convOn)}
+                title={!supported ? "Trình duyệt này không nhận giọng nói" : listening || convOn ? "Dừng nói chuyện" : "Bấm để nói chuyện"}
                 className={cn(
                   "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all disabled:opacity-40 sm:h-11 sm:w-11",
                   listening
