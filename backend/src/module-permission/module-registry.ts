@@ -257,6 +257,15 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     defaultRoles: ['admin', 'manager'],
     controllers: [WebsiteContactsController],
   },
+  // Trợ lý AI (2026-11-25, user: tách khỏi Dashboard — bật AI không cần cấp quyền Dashboard).
+  // Không gắn controller: mức "Xem" vẫn phải hỏi được (POST) → AiAssistantService tự kiểm
+  // mức ≠ "Không". Số liệu AI trả lời vẫn theo quyền từng trang của người hỏi.
+  {
+    code: 'ai-assistant',
+    label: 'Trợ lý AI',
+    defaultRoles: ['admin', 'manager', 'leader', 'mkt', 'sale', 'sup_leader'],
+    controllers: [],
+  },
 ];
 
 export function findModuleByController(

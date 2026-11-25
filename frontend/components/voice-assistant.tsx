@@ -187,7 +187,7 @@ function ListeningWave() {
   );
 }
 
-export function VoiceAssistant({ userName }: { userName?: string }) {
+export function VoiceAssistant({ userName, enabled = true }: { userName?: string; enabled?: boolean }) {
   const can = useCan();
   const [open, setOpen] = useState(false);
   const [listening, setListening] = useState(false);
@@ -210,7 +210,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   const recRef = useRef<Recognition | null>(null);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const canUse = can("voice.assistant");
+  const canUse = enabled && can("voice.assistant");
   // Admin đã liên kết Gemini mới dùng được.
   const [aiEnabled, setAiEnabled] = useState(false);
   // Chưa kiểm tra xong / chưa liên kết Gemini → báo "AI chưa sẵn sàng", không tự trả lời (2026-11-25).

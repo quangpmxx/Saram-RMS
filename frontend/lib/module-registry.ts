@@ -90,6 +90,15 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   },
   { code: "accounting", href: "/accounting", label: "Kế toán", icon: "accounting", defaultRoles: ["admin", "accounting", "manager"] },
   {
+    code: "ai-assistant",
+    href: "/",
+    label: "Trợ lý AI",
+    icon: "ai",
+    // Nút logo AI nổi góc phải dưới, không có trang riêng (2026-11-25).
+    hideInNav: true,
+    defaultRoles: ["admin", "manager", "leader", "mkt", "sale", "sup_leader"],
+  },
+  {
     code: "payslip",
     href: "/attendance",
     label: "Phiếu lương",

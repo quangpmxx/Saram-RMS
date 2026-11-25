@@ -46,8 +46,12 @@ export class AiAssistantController {
   @Post('speak')
   @HttpCode(200)
   @RequireCap('voice.assistant')
-  async speak(@Body() dto: SpeakAiDto, @Res() res: Response) {
-    const wav = await this.service.speak(dto.text);
+  async speak(
+    @Body() dto: SpeakAiDto,
+    @Res() res: Response,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const wav = await this.service.speak(dto.text, user);
     res.setHeader('Content-Type', 'audio/wav');
     res.setHeader('Cache-Control', 'no-store');
     res.send(wav);

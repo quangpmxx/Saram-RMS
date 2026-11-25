@@ -20,6 +20,7 @@ import {
   Megaphone,
   Settings2,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   Wallet,
   UserCog,
@@ -50,6 +51,7 @@ const ICONS = {
   media: Clapperboard,
   permissions: ShieldCheck,
   websiteContacts: Globe,
+  ai: Sparkles,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconKey = keyof typeof ICONS;

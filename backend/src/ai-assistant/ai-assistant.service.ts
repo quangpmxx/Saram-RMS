@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -392,7 +393,15 @@ export class AiAssistantService {
     return this.getConfig();
   }
 
+  /** Mục "Trợ lý AI" ở Phân quyền (mức Xem hay Sửa đều hỏi được, "Không" thì chặn). */
+  private async assertAiModule(user: AuthenticatedUser) {
+    if (!(await this.moduleOk(user, 'ai-assistant'))) {
+      throw new ForbiddenException('Bạn chưa được cấp quyền dùng Trợ lý AI');
+    }
+  }
+
   async status(user: AuthenticatedUser) {
+    await this.assertAiModule(user);
     const cfg = await this.prisma.aiAssistantConfig.findFirst({
       select: { encryptedKey: true, assistantName: true },
     });
@@ -439,6 +448,7 @@ export class AiAssistantService {
     dto: AskAiDto,
     user: AuthenticatedUser,
   ): Promise<{ answer: string }> {
+    await this.assertAiModule(user);
     const cfg = await this.prisma.aiAssistantConfig.findFirst();
     if (!cfg?.encryptedKey)
       throw new ServiceUnavailableException('Admin chưa liên kết AI Gemini');
@@ -524,7 +534,8 @@ export class AiAssistantService {
   /**
    * Đọc câu trả lời thành giọng nói (WAV). Hết lượt → 429 để trình duyệt tự dùng giọng có sẵn của máy.
    */
-  async speak(text: string): Promise<Buffer> {
+  async speak(text: string, user: AuthenticatedUser): Promise<Buffer> {
+    await this.assertAiModule(user);
     const cfg = await this.prisma.aiAssistantConfig.findFirst({
       select: { encryptedKey: true },
     });
