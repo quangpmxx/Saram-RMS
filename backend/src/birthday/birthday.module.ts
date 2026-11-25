@@ -5,5 +5,6 @@ import { BirthdayService } from './birthday.service';
 @Module({
   controllers: [BirthdayController],
   providers: [BirthdayService],
+  exports: [BirthdayService],
 })
 export class BirthdayModule {}

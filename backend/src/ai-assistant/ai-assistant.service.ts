@@ -44,6 +44,7 @@ import {
   SaveAiKnowledgeDto,
 } from './ai-assistant.dto';
 import { APP_GUIDE } from './app-guide';
+import { BirthdayService } from '../birthday/birthday.service';
 
 /** Flash-Lite: gói miễn phí ~500 lượt/ngày (Flash chỉ ~20) — 2026-11. */
 export const DEFAULT_GEMINI_MODEL = 'gemini-flash-lite-latest';
@@ -206,6 +207,11 @@ const TOOLS: GeminiFunctionDeclaration[] = [
     },
   },
   {
+    name: 'birthdays_today',
+    description:
+      'Nhân viên công ty có sinh nhật HÔM NAY (tên, nhóm, chức vụ). Chỉ biết hôm nay, không biết ngày khác / năm sinh.',
+  },
+  {
     name: 'care_progress',
     description:
       'Tiến độ chăm sóc Kho data trong tháng: đã chăm sóc / cần chăm sóc / chưa chăm sóc, theo nhóm và nhân viên.',
@@ -241,6 +247,16 @@ const foldVi = (s: string | null | undefined) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/**
+ * AI hứa "chờ chút em kiểm tra" mà không gọi công cụ (2026-11-26, user gặp khi hỏi sinh nhật) →
+ * nhận ra để bắt nó tra ngay trong cùng lượt, không để người hỏi chờ câu trả lời không bao giờ đến.
+ */
+export function looksLikeStall(text: string): boolean {
+  return /(cho|doi)( [a-z0-9]+){0,2} (chut|lat|giay|xiu|ti)\b|giay lat|de (em|minh|toi) (kiem tra|xem|tra|tim)|(em|minh|toi) se (kiem tra|tra|xem|tim|bao lai)|dang (kiem tra|tra cuu|tim)/.test(
+    foldVi(text),
+  );
+}
+
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
 function vnNow(): Date {
@@ -261,6 +277,7 @@ export class AiAssistantService {
     private readonly modules: ModulePermissionService,
     private readonly candidates: CandidatesService,
     private readonly recruitment: RecruitmentScheduleService,
+    private readonly birthday: BirthdayService,
   ) {}
 
   private tokenKey(): string {
@@ -570,6 +587,7 @@ export class AiAssistantService {
       await this.companyDirectory(),
     );
 
+    let nudged = false;
     try {
       for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
         const reply = await this.generateWithRetry(
@@ -588,6 +606,20 @@ export class AiAssistantService {
             .map((p) => p.text ?? '')
             .join('')
             .trim();
+          // Hứa "chờ kiểm tra" mà không tra → nhắc 1 lần: tra ngay rồi trả lời luôn.
+          if (!nudged && round < MAX_TOOL_ROUNDS && looksLikeStall(text)) {
+            nudged = true;
+            contents.push(reply);
+            contents.push({
+              role: 'user',
+              parts: [
+                {
+                  text: 'Đừng bảo chờ. Hãy gọi công cụ phù hợp ngay bây giờ rồi trả lời luôn kết quả; nếu không có công cụ nào xem được thì nói thẳng là chưa xem được phần đó.',
+                },
+              ],
+            });
+            continue;
+          }
           await this.countUsage(user.id);
           return { answer: text || 'Xin lỗi, mình chưa trả lời được câu này.' };
         }
@@ -806,6 +838,7 @@ ${APP_GUIDE}`,
         ? '- Được trò chuyện ngoài lề: tâm sự, hỏi kiến thức chung, chuyện đời thường — đáp tự nhiên, ấm áp, tích cực như một đồng nghiệp tốt; có thể dài hơn khi cần (vẫn gọn, dễ đọc thành tiếng). Không tư vấn y tế/pháp lý thay chuyên gia; chuyện nghiêm trọng (sức khoẻ, an toàn) thì khuyên tìm người thân hoặc chuyên gia.'
         : '- CHỈ hỗ trợ công việc công ty. Câu hỏi ngoài lề (tâm sự, chuyện riêng, kiến thức không liên quan công việc) thì lịch sự từ chối 1 câu và gợi ý hỏi về công việc.',
       '- Trả lời tiếng Việt, ngắn gọn 1–3 câu (trừ khi đang trò chuyện ngoài lề được phép), dễ đọc thành tiếng: không dùng bảng, gạch đầu dòng, ký hiệu markdown.',
+      '- KHÔNG BAO GIỜ nói "chờ chút để em kiểm tra" rồi dừng: cần số liệu thì gọi công cụ ngay trong lượt này và trả lời luôn; không có công cụ phù hợp thì nói thẳng là chưa xem được.',
       '- Công cụ trả "error" (ví dụ không có quyền) thì báo lại đúng ý đó, không đoán.',
       '- Câu hỏi không nói kỳ nào thì hiểu là hôm nay. "Tháng này", "tháng 10"… là cả tháng (by_person = true); ngày, tuần, vài ngày thì by_person = false.',
       '- "Chạy được bao nhiêu số", "bao nhiêu data" = data mới (new_leads).',
@@ -942,6 +975,11 @@ ${APP_GUIDE}`,
         if (!(await this.moduleOk(user, 'candidates')))
           return deny('Data lao động');
         return this.leadLookup(str(args.keyword), user);
+      }
+      case 'birthdays_today': {
+        // Giống thông báo sinh nhật trên phần mềm: mọi người đã đăng nhập đều xem được, không có năm sinh.
+        const r = await this.birthday.listToday({}, user);
+        return { date: r.date, employees: r.employees };
       }
       case 'care_progress': {
         if (!(await this.moduleOk(user, 'dashboard'))) return deny('Dashboard');

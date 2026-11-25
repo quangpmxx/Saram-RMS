@@ -1,3 +1,4 @@
+import { BirthdayModule } from '../birthday/birthday.module';
 import { Module } from '@nestjs/common';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
@@ -11,6 +12,7 @@ import { AiAssistantService } from './ai-assistant.service';
 
 @Module({
   imports: [
+    BirthdayModule,
     AuditLogModule,
     DashboardModule,
     CareWarehouseModule,

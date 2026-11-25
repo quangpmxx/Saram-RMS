@@ -1,4 +1,8 @@
-import { AiAssistantService, costOf } from './ai-assistant.service';
+import {
+  AiAssistantService,
+  costOf,
+  looksLikeStall,
+} from './ai-assistant.service';
 
 /** Trần ngân sách AI mỗi tháng (2026-11-25): tính chi phí từ số token + trạng thái chặn. */
 describe('Trợ lý AI — ngân sách tháng', () => {
@@ -56,5 +60,20 @@ describe('Trợ lý AI — ngân sách tháng', () => {
     });
     expect(s.used).toBe(0);
     expect(s.exhausted).toBe(false);
+  });
+});
+
+describe('Trợ lý AI — bắt câu hứa "chờ kiểm tra"', () => {
+  it('nhận ra câu hứa chờ', () => {
+    expect(looksLikeStall('Anh chờ em một chút để kiểm tra nhé')).toBe(true);
+    expect(looksLikeStall('Đợi em xíu, em đang tra cứu ạ')).toBe(true);
+    expect(looksLikeStall('Để em xem lịch sinh nhật hôm nay')).toBe(true);
+  });
+  it('câu trả lời thật thì không bắt', () => {
+    expect(looksLikeStall('Hôm nay là sinh nhật chị Lan nhóm Sale 1 ạ.')).toBe(
+      false,
+    );
+    expect(looksLikeStall('Hôm nay chưa có ai sinh nhật anh ạ.')).toBe(false);
+    expect(looksLikeStall('Tháng này nhóm chạy được 1.200 số.')).toBe(false);
   });
 });
