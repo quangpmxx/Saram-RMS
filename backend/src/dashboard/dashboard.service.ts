@@ -77,6 +77,24 @@ const EMPTY_SHUTTLE_KPI: ShuttleKpi = {
   tv: EMPTY_COUNTS,
 };
 
+/**
+ * Đỗ / Trượt PV (người dùng 2026-11-25): chỉ tính khi Tình trạng = "Đã đón".
+ * Đã đón + Kết quả trống hoặc "Đỗ PV" → Đỗ PV; Đã đón + "Trượt PV" → Trượt PV.
+ * Tình trạng khác (Chưa đón được, Hẹn lại, trống) → bỏ qua cột Kết quả.
+ */
+function isShuttlePassed(r: ShuttleRow): boolean {
+  return (
+    r.status === SHUTTLE_STATUS_ATTENDED &&
+    (!r.interviewResult || r.interviewResult === SHUTTLE_RESULT_PASSED)
+  );
+}
+function isShuttleFailed(r: ShuttleRow): boolean {
+  return (
+    r.status === SHUTTLE_STATUS_ATTENDED &&
+    r.interviewResult === SHUTTLE_RESULT_FAILED
+  );
+}
+
 /** Đếm NGƯỜI, không đếm dòng: gộp trùng SĐT + tên (Đưa đón cho nhập trùng — 2026-11-08). */
 function countShuttle(rows: ShuttleRow[]): ShuttleCounts {
   return {
@@ -87,12 +105,8 @@ function countShuttle(rows: ShuttleRow[]): ShuttleCounts {
     no_show: countShuttlePersons(
       rows.filter((r) => r.status === SHUTTLE_STATUS_NO_SHOW),
     ),
-    passed: countShuttlePersons(
-      rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED),
-    ),
-    failed: countShuttlePersons(
-      rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_FAILED),
-    ),
+    passed: countShuttlePersons(rows.filter(isShuttlePassed)),
+    failed: countShuttlePersons(rows.filter(isShuttleFailed)),
   };
 }
 
@@ -666,17 +680,14 @@ export class DashboardService {
           ? (teamName.get(teamId) ?? 'Nhóm đã xoá')
           : 'Chưa có nhóm',
         interview_scheduled: countShuttlePersons(rows),
-        passed: countShuttlePersons(
-          rows.filter((r) => r.interviewResult === SHUTTLE_RESULT_PASSED),
-        ),
+        passed: countShuttlePersons(rows.filter(isShuttlePassed)),
       }))
       .sort((a, b) => b.interview_scheduled - a.interview_scheduled);
 
     // Top 3 Sale đỗ PV nhiều nhất trong kỳ (như Top 3 ở tab Chi tiết: ai cũng xem được).
     const passedBySale = new Map<string, ShuttleRow[]>();
     for (const r of periodRows) {
-      if (!r.saleUserId || r.interviewResult !== SHUTTLE_RESULT_PASSED)
-        continue;
+      if (!r.saleUserId || !isShuttlePassed(r)) continue;
       const list = passedBySale.get(r.saleUserId);
       if (list) list.push(r);
       else passedBySale.set(r.saleUserId, [r]);

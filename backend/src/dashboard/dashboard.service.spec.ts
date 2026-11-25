@@ -249,7 +249,7 @@ describe('DashboardService', () => {
    * chuỗi lead.count theo interview status như trước.
    */
   describe('computeKpiBreakdown (qua getSummary) — 7 chỉ số + tỷ lệ theo phễu (hẹn/Data, đến/hẹn, đỗ/đến)', () => {
-    /** 12 dòng đưa đón: 9 "Đã đón" (4 Đỗ PV, 2 Trượt PV, 3 chưa có kết quả) + 3 "Chưa đón được". */
+    /** 12 dòng đưa đón: 9 "Đã đón" (4 Đỗ PV, 2 Trượt PV, 3 Kết quả trống = Đỗ PV) + 3 "Chưa đón được" (ghi Trượt PV nhưng bỏ qua — 2026-11-25). */
     /** Loại hình: 4 Đỗ = CT, 2 Trượt = TV, còn lại để trống (chỉ tính vào tổng). */
     const SHUTTLE_ROWS = [
       ...Array(4).fill({
@@ -265,7 +265,7 @@ describe('DashboardService', () => {
       ...Array(3).fill({ status: 'Đã đón', interviewResult: null, type: null }),
       ...Array(3).fill({
         status: 'Chưa đón được',
-        interviewResult: null,
+        interviewResult: 'Trượt PV',
         type: '',
       }),
     ];
@@ -310,12 +310,12 @@ describe('DashboardService', () => {
         interview_scheduled: 12,
         attended: 9,
         no_show: 3,
-        passed: 4,
-        failed: 2,
+        passed: 7, // 4 Đỗ PV + 3 Đã đón để trống Kết quả
+        failed: 2, // 3 "Chưa đón được" ghi Trượt PV không tính
         employed: null,
         schedule_rate: 60,
         attend_rate: 75, // 9 đến / 12 hẹn
-        pass_rate: 44.4, // 4 đỗ / 9 đến
+        pass_rate: 77.8, // 7 đỗ / 9 đến
         employed_rate: null,
         performance_rate: null,
         by_type: {
@@ -622,6 +622,7 @@ describe('DashboardService', () => {
         {
           date: d('2026-11-02'),
           saleUserId: 'sale-a',
+          status: 'Đã đón',
           interviewResult: 'Đỗ PV',
         },
         { date: d('2026-11-05'), saleUserId: null },

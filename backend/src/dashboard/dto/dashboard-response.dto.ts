@@ -24,8 +24,8 @@ export interface FunnelStep {
  *   kể Tình trạng gì, kể cả "Hẹn lại"/để trống).
  * - attended ("Đến PV") = dòng có Tình trạng = "Đã đón".
  * - no_show ("Bùng PV") = dòng có Tình trạng = "Chưa đón được".
- * - passed ("Đỗ PV") = dòng có Kết quả = "Đỗ PV".
- * - failed ("Trượt PV") = dòng có Kết quả = "Trượt PV".
+ * - passed ("Đỗ PV") = Tình trạng "Đã đón" + Kết quả trống hoặc "Đỗ PV";
+ *   failed = "Đã đón" + "Trượt PV" (Tình trạng khác → bỏ qua Kết quả, 2026-11-25).
  * Dòng có Tình trạng = "Hẹn lại" hoặc để trống KHÔNG tính vào attended lẫn
  * no_show (vẫn tính vào interview_scheduled). Xem computeShuttleKpi() và
  * các hằng số SHUTTLE_STATUS_... / SHUTTLE_RESULT_... trong
