@@ -126,6 +126,24 @@ function BrandMark({ size, className }: { size: number; className?: string }) {
 }
 
 /** 3 chấm nhảy — đang tìm câu trả lời. */
+/** Tách câu đầu (đủ dài ≥ 25 ký tự) khỏi phần còn lại để tạo giọng song song. Câu ngắn → 1 phần. */
+function splitFirstSentence(text: string): string[] {
+  const t = text.trim();
+  const re = /[.!?](?=\s)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t))) {
+    if (m.index + 1 >= 25) {
+      const first = t.slice(0, m.index + 1).trim();
+      const rest = t.slice(m.index + 1).trim();
+      return rest.length >= 15 ? [first, rest] : [t];
+    }
+  }
+  return [t];
+}
+
+/** Tốc độ phát giọng Gemini (giữ nguyên cao độ) — người dùng muốn phản hồi nhanh, không phải đọc nhanh. */
+const VOICE_PLAYBACK_RATE = 1;
+
 const THINKING_STEPS = ["Đang hiểu câu hỏi", "Đang tra cứu dữ liệu", "Đang phân tích", "Đang soạn câu trả lời"];
 
 /** "Đang suy nghĩ" (2026-11-25): các bước chạy lần lượt, chữ ánh sáng lướt; bước cuối = chuẩn bị giọng đọc. */
@@ -261,25 +279,55 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   }
 
   /** Đọc bằng giọng Gemini; lỗi / hết lượt thì đọc bằng giọng có sẵn của máy. */
+  /** Phát 1 đoạn âm thanh, xong (hoặc lỗi / bị dừng) thì resolve. */
+  function playBlob(blob: Blob, id: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (id !== speakIdRef.current) return resolve();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.playbackRate = VOICE_PLAYBACK_RATE;
+      audioRef.current = audio;
+      const done = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      audio.onended = done;
+      audio.onerror = done;
+      audio.onpause = () => {
+        if (id !== speakIdRef.current) done();
+      };
+      audio.play().catch(done);
+    });
+  }
+
   /** onReady: gọi đúng lúc bắt đầu phát tiếng (để hiện chữ cùng lúc với giọng). */
   async function speakVoice(text: string, onEnd?: () => void, onReady?: () => void) {
     stopAudio();
     const id = speakIdRef.current;
     if (!ttsOffRef.current) {
+      // Đọc nhanh hơn (2026-11-25): tách câu đầu + phần còn lại, tạo giọng SONG SONG — câu đầu ngắn
+      // nên có tiếng sớm, phần sau tạo xong trong lúc đang đọc câu đầu.
+      const parts = splitFirstSentence(text.slice(0, 2000));
+      const blobs = parts.map((t) => clientApiPostBlob("/ai-assistant/speak", { text: t }));
+      blobs.forEach((b) => b.catch(() => undefined)); // tránh lỗi "unhandled" khi phần sau hỏng
       try {
-        const blob = await clientApiPostBlob("/ai-assistant/speak", { text: text.slice(0, 2000) });
+        const first = await blobs[0];
         if (id !== speakIdRef.current) return; // đã bị dừng / có câu mới
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        const finish = () => {
-          URL.revokeObjectURL(url);
-          if (id === speakIdRef.current) onEnd?.();
-        };
-        audio.onended = finish;
-        audio.onerror = finish;
         onReady?.();
-        await audio.play();
+        await playBlob(first, id);
+        for (let i = 1; i < parts.length; i++) {
+          let blob: Blob;
+          try {
+            blob = await blobs[i];
+          } catch {
+            if (id !== speakIdRef.current) return;
+            speak(parts.slice(i).join(" "), onEnd); // phần sau lỗi → giọng của máy đọc nốt
+            return;
+          }
+          if (id !== speakIdRef.current) return;
+          await playBlob(blob, id);
+        }
+        if (id === speakIdRef.current) onEnd?.();
         return;
       } catch (e) {
         if (id !== speakIdRef.current) return;

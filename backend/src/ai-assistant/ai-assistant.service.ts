@@ -50,11 +50,7 @@ const MAX_TOOL_ROUNDS = 5;
  * Google hay báo 503 "high demand" lúc đông (2026-11-25): thử lại 2 lần rồi chuyển mô hình dự phòng.
  * Thứ tự dự phòng: rẻ/nhiều lượt trước.
  */
-const FALLBACK_MODELS = [
-  'gemini-flash-lite-latest',
-  'gemini-2.5-flash-lite',
-  'gemini-flash-latest',
-];
+const FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-flash-latest'];
 /** Giọng đọc Gemini (2026-11-25): giọng nữ miền Bắc nhẹ nhàng. Mô hình TTS mới trước, bản cũ dự phòng. */
 const TTS_MODELS = [
   'gemini-3.1-flash-tts-preview',
@@ -523,9 +519,21 @@ export class AiAssistantService {
     for (const m of models) {
       for (let attempt = 0; attempt < (m === model ? 3 : 1); attempt++) {
         try {
-          return await geminiGenerate(apiKey, m, body);
+          // Tắt suy nghĩ dài (nhanh hơn nhiều); mô hình không nhận tham số này (400) thì gọi lại không kèm.
+          return await geminiGenerate(apiKey, m, {
+            ...body,
+            thinkingLevel: 'minimal',
+          }).catch((e: unknown) => {
+            if (e instanceof GeminiError && e.status === 400)
+              return geminiGenerate(apiKey, m, body);
+            throw e;
+          });
         } catch (e) {
           last = e;
+          if (e instanceof Error && e.name === 'TimeoutError') {
+            this.logger.warn(`Gemini ${m} quá 20 giây, chuyển mô hình khác`);
+            break;
+          }
           if (!(e instanceof GeminiError)) throw e;
           const busy = e.status === 503 || e.status === 500;
           if (e.status === 429 || e.status === 404) break; // sang mô hình khác

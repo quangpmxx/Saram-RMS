@@ -39,6 +39,8 @@ export async function geminiGenerate(
     systemInstruction?: string;
     contents: GeminiContent[];
     tools?: GeminiFunctionDeclaration[];
+    /** Mức suy nghĩ (Gemini 3): "minimal" nhanh hơn ~6 lần cho câu hỏi tra số (đo 2026-11-25: 5,3s → 0,8s). */
+    thinkingLevel?: string;
   },
 ): Promise<GeminiContent> {
   const res = await fetch(
@@ -54,9 +56,15 @@ export async function geminiGenerate(
         ...(body.tools?.length
           ? { tools: [{ functionDeclarations: body.tools }] }
           : {}),
-        generationConfig: { temperature: 0.2 },
+        generationConfig: {
+          temperature: 0.2,
+          ...(body.thinkingLevel
+            ? { thinkingConfig: { thinkingLevel: body.thinkingLevel } }
+            : {}),
+        },
       }),
-      signal: AbortSignal.timeout(45_000),
+      // Google quá tải hay "treo" rất lâu (đo được 38s) → 20s thì bỏ, chuyển mô hình dự phòng.
+      signal: AbortSignal.timeout(20_000),
     },
   );
   const json = (await res.json().catch(() => ({}))) as {
@@ -133,7 +141,7 @@ export async function geminiSpeak(
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
         },
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(25_000),
     },
   );
   const json = (await res.json().catch(() => ({}))) as {
