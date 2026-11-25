@@ -45,6 +45,18 @@ export async function clientApi<T>(path: string, init?: RequestInit): Promise<T>
   return parseResponse<T>(res, path);
 }
 
+/** POST JSON, nhận về file (vd âm thanh giọng đọc) — lỗi thì ném ApiError như clientApi. */
+export async function clientApiPostBlob(path: string, body: unknown): Promise<Blob> {
+  const res = await fetch(`${PUBLIC_API_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) await parseResponse<never>(res, path);
+  return res.blob();
+}
+
 /**
  * Gọi API kèm file (multipart/form-data) — KHÔNG tự đặt Content-Type để
  * trình duyệt tự sinh boundary đúng, khác với clientApi() ở trên.

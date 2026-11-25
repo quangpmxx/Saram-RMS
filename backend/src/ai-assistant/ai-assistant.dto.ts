@@ -26,6 +26,10 @@ export class SaveAiKnowledgeDto {
   @IsOptional() @IsBoolean() allow_chitchat?: boolean;
 }
 
+export class SpeakAiDto {
+  @IsString() @MinLength(1) @MaxLength(2000) text!: string;
+}
+
 export class ListAiModelsDto {
   @IsOptional() @IsString() @MaxLength(200) api_key?: string;
 }

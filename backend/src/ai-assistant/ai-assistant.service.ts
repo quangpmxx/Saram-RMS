@@ -31,6 +31,7 @@ import {
   GeminiFunctionDeclaration,
   geminiGenerate,
   geminiListModels,
+  geminiSpeak,
 } from './gemini.client';
 import {
   AskAiDto,
@@ -51,6 +52,14 @@ const FALLBACK_MODELS = [
   'gemini-2.5-flash-lite',
   'gemini-flash-latest',
 ];
+/** Giọng đọc Gemini (2026-11-25): giọng nữ miền Bắc nhẹ nhàng. Mô hình TTS mới trước, bản cũ dự phòng. */
+const TTS_MODELS = [
+  'gemini-3.1-flash-tts-preview',
+  'gemini-2.5-flash-preview-tts',
+];
+const TTS_VOICE = 'Achernar'; // giọng nữ, mềm
+const TTS_STYLE =
+  'Đọc bằng giọng nữ Hà Nội (giọng miền Bắc chuẩn), nhẹ nhàng, ấm áp, thân thiện, tốc độ vừa phải, phát âm tiếng Việt rõ ràng: ';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -416,6 +425,32 @@ export class AiAssistantService {
       answer:
         'Xin lỗi, câu này cần tra quá nhiều số liệu, bạn hỏi ngắn hơn nhé.',
     };
+  }
+
+  /**
+   * Đọc câu trả lời thành giọng nói (WAV). Hết lượt → 429 để trình duyệt tự dùng giọng có sẵn của máy.
+   */
+  async speak(text: string): Promise<Buffer> {
+    const cfg = await this.prisma.aiAssistantConfig.findFirst({
+      select: { encryptedKey: true },
+    });
+    if (!cfg?.encryptedKey)
+      throw new ServiceUnavailableException('Admin chưa liên kết AI Gemini');
+    const apiKey = decryptToken(cfg.encryptedKey, this.tokenKey());
+    let last: unknown;
+    for (const model of TTS_MODELS) {
+      try {
+        return await geminiSpeak(apiKey, model, TTS_STYLE + text, TTS_VOICE);
+      } catch (e) {
+        last = e;
+        if (!(e instanceof GeminiError)) throw e;
+        this.logger.warn(`Gemini TTS ${model} ${e.status}: ${e.message}`);
+      }
+    }
+    if (last instanceof GeminiError && last.status === 429) {
+      throw new HttpException('AI hết lượt', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    throw new ServiceUnavailableException('Chưa đọc được giọng');
   }
 
   /** 503/500 (Google quá tải): thử lại 2 lần, rồi lần lượt các mô hình dự phòng. 429 (hết lượt) cũng thử mô hình khác. */

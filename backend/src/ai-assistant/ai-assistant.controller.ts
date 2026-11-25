@@ -6,7 +6,9 @@ import {
   HttpCode,
   Post,
   Put,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequireCap } from '../common/decorators/require-cap.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
@@ -16,6 +18,7 @@ import {
   ListAiModelsDto,
   SaveAiConfigDto,
   SaveAiKnowledgeDto,
+  SpeakAiDto,
 } from './ai-assistant.dto';
 
 /**
@@ -37,6 +40,17 @@ export class AiAssistantController {
   @RequireCap('voice.assistant')
   ask(@Body() dto: AskAiDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.ask(dto, user);
+  }
+
+  /** Đọc câu trả lời bằng giọng Gemini (WAV) — giọng giống nhau mọi trình duyệt. */
+  @Post('speak')
+  @HttpCode(200)
+  @RequireCap('voice.assistant')
+  async speak(@Body() dto: SpeakAiDto, @Res() res: Response) {
+    const wav = await this.service.speak(dto.text);
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(wav);
   }
 
   @Get('config')

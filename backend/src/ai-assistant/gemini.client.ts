@@ -110,3 +110,69 @@ export async function geminiListModels(
       label: m.displayName ?? m.name.replace(/^models\//, ''),
     }));
 }
+
+/**
+ * Đọc thành giọng nói (Gemini TTS, 2026-11-25). Trả WAV (PCM 16-bit mono, thường 24 kHz) để trình
+ * duyệt phát thẳng — giọng giống nhau trên mọi máy (Chrome Windows không có giọng tiếng Việt).
+ */
+export async function geminiSpeak(
+  apiKey: string,
+  model: string,
+  text: string,
+  voiceName: string,
+): Promise<Buffer> {
+  const res = await fetch(
+    `${BASE}/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
+        },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    },
+  );
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: { message?: string };
+    candidates?: {
+      content?: {
+        parts?: { inlineData?: { data?: string; mimeType?: string } }[];
+      };
+    }[];
+  };
+  if (!res.ok) {
+    throw new GeminiError(
+      json.error?.message ?? `Gemini trả lỗi ${res.status}`,
+      res.status,
+    );
+  }
+  const inline = json.candidates?.[0]?.content?.parts?.find(
+    (p) => p.inlineData?.data,
+  )?.inlineData;
+  if (!inline?.data) throw new GeminiError('Gemini không trả âm thanh', 502);
+  const rate = Number(/rate=(\d+)/.exec(inline.mimeType ?? '')?.[1] ?? 24000);
+  return pcmToWav(Buffer.from(inline.data, 'base64'), rate);
+}
+
+/** Thêm đầu WAV 44 byte cho PCM 16-bit mono. */
+function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0);
+  h.writeUInt32LE(36 + pcm.length, 4);
+  h.write('WAVE', 8);
+  h.write('fmt ', 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20); // PCM
+  h.writeUInt16LE(1, 22); // mono
+  h.writeUInt32LE(sampleRate, 24);
+  h.writeUInt32LE(sampleRate * 2, 28);
+  h.writeUInt16LE(2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write('data', 36);
+  h.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([h, pcm]);
+}

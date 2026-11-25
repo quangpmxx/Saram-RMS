@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Mic, MicOff, RotateCcw, SendHorizontal, Volume2, X } from "lucide-react";
-import { ApiError, clientApi } from "@/lib/api-client";
+import { ApiError, clientApi, clientApiPostBlob } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
 import { cn } from "@/lib/cn";
 
@@ -166,6 +166,10 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   const convRef = useRef(false);
   const [speaking, setSpeaking] = useState(false);
   const warnedVoiceRef = useRef(false);
+  // Giọng Gemini (2026-11-25): giọng nữ miền Bắc giống nhau mọi máy. Hết lượt → dùng giọng của máy.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsOffRef = useRef(false);
+  const speakIdRef = useRef(0);
   const recRef = useRef<Recognition | null>(null);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -223,23 +227,58 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
   }
 
   /** Thoát chế độ nói chuyện: ngừng nghe + ngừng đọc. */
+  function stopAudio() {
+    speakIdRef.current += 1;
+    audioRef.current?.pause();
+    audioRef.current = null;
+    window.speechSynthesis?.cancel();
+  }
+
   function stopConversation() {
     convRef.current = false;
     recRef.current?.stop();
-    window.speechSynthesis?.cancel();
+    stopAudio();
     setSpeaking(false);
+  }
+
+  /** Đọc bằng giọng Gemini; lỗi / hết lượt thì đọc bằng giọng có sẵn của máy. */
+  async function speakVoice(text: string, onEnd?: () => void) {
+    stopAudio();
+    const id = speakIdRef.current;
+    if (!ttsOffRef.current) {
+      try {
+        const blob = await clientApiPostBlob("/ai-assistant/speak", { text: text.slice(0, 2000) });
+        if (id !== speakIdRef.current) return; // đã bị dừng / có câu mới
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        const finish = () => {
+          URL.revokeObjectURL(url);
+          if (id === speakIdRef.current) onEnd?.();
+        };
+        audio.onended = finish;
+        audio.onerror = finish;
+        await audio.play();
+        return;
+      } catch (e) {
+        if (id !== speakIdRef.current) return;
+        if (e instanceof ApiError && e.status === 429) ttsOffRef.current = true;
+      }
+    }
+    await loadVoices();
+    if (id !== speakIdRef.current) return;
+    if (!hasViVoice() && !warnedVoiceRef.current) {
+      warnedVoiceRef.current = true;
+      push("bot", "Giọng AI tạm hết lượt, máy này lại chưa có giọng tiếng Việt nên nghe sẽ lơ lớ. Dùng Microsoft Edge để nghe rõ hơn.");
+    }
+    speak(text, onEnd);
   }
 
   /** Đọc câu trả lời; đang nói chuyện thì đọc xong tự nghe câu tiếp theo. */
   function talkBack(text: string) {
     if (!convRef.current) return;
     setSpeaking(true);
-    void loadVoices().then(() => {
-      if (hasViVoice() || warnedVoiceRef.current) return;
-      warnedVoiceRef.current = true;
-      push("bot", "Máy này chưa có giọng đọc tiếng Việt nên giọng nghe sẽ lơ lớ. Dùng Microsoft Edge (giọng HoaiMy) hoặc Google Chrome để nghe rõ hơn.");
-    });
-    speak(text, () => {
+    void speakVoice(text, () => {
       setSpeaking(false);
       if (convRef.current) startListening();
     });
@@ -296,7 +335,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
       stopConversation();
       return;
     }
-    window.speechSynthesis?.cancel();
+    stopAudio();
     setSpeaking(false);
     convRef.current = true;
     startListening();
@@ -415,7 +454,7 @@ export function VoiceAssistant({ userName }: { userName?: string }) {
                         </p>
                         <button
                           type="button"
-                          onClick={() => speak(m.text)}
+                          onClick={() => void speakVoice(m.text)}
                           title="Nghe lại"
                           className="mt-0.5 ml-1 flex items-center gap-1 text-[11px] text-slate-400 transition-colors hover:text-brand-600"
                         >
