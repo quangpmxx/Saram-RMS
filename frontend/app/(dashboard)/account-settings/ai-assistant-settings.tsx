@@ -10,6 +10,16 @@ import { useToast } from "@/lib/toast-context";
  * Liên kết AI Gemini cho Trợ lý giọng nói (2026-11-25, yêu cầu người dùng) — chỉ người có quyền
  * voice.ai_config (mặc định Admin). Khoá lưu mã hoá trên máy chủ, không bao giờ hiện lại.
  */
+/**
+ * Chỉ 3 lựa chọn dễ hiểu (người dùng 2026-11-25: danh sách đầy đủ của Google quá dài, không biết chọn).
+ * Dùng tên "-latest" → Google tự trỏ tới bản mới nhất, không phải sửa khi Google ra bản mới.
+ */
+const MODEL_CHOICES = [
+  { id: "gemini-flash-lite-latest", label: "Nhanh & tiết kiệm — khuyên dùng", hint: "Trả lời nhanh nhất, rẻ nhất. Đủ cho hỏi số liệu, tra cứu hằng ngày." },
+  { id: "gemini-flash-latest", label: "Thông minh hơn", hint: "Hiểu câu hỏi phức tạp tốt hơn, chậm và tốn hơn một chút. Gói miễn phí rất ít lượt." },
+  { id: "gemini-pro-latest", label: "Thông minh nhất (tốn nhiều)", hint: "Chỉ dùng khi đã bật thanh toán. Chậm nhất, tốn nhất." },
+];
+
 interface AiConfig {
   connected: boolean;
   model: string;
@@ -25,32 +35,11 @@ export function AiAssistantSettings() {
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [models, setModels] = useState<{ id: string; label: string }[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-
-  /** Lấy danh sách mô hình từ Google theo khoá vừa nhập (hoặc khoá đang lưu). */
-  async function loadModels(key?: string) {
-    setLoadingModels(true);
-    try {
-      const list = await clientApi<{ id: string; label: string }[]>("/ai-assistant/models", {
-        method: "POST",
-        body: JSON.stringify({ api_key: key?.trim() || undefined }),
-      });
-      setModels(list);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Không lấy được danh sách mô hình");
-    } finally {
-      setLoadingModels(false);
-    }
-  }
-
   useEffect(() => {
     clientApi<AiConfig>("/ai-assistant/config")
       .then((c) => {
         setCfg(c);
         setModel(c.model);
-        if (c.connected) void loadModels();
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Không tải được cài đặt AI"));
   }, []);
@@ -75,7 +64,7 @@ export function AiAssistantSettings() {
   }
 
   async function remove() {
-    if (!window.confirm("Gỡ liên kết AI? Trợ lý sẽ quay về chế độ hiểu theo từ khoá.")) return;
+    if (!window.confirm("Gỡ liên kết AI? Khung chat Trợ lý sẽ báo AI chưa sẵn sàng cho tới khi liên kết lại.")) return;
     setSaving(true);
     try {
       const c = await clientApi<AiConfig>("/ai-assistant/config", { method: "DELETE" });
@@ -92,13 +81,13 @@ export function AiAssistantSettings() {
     <div className="flex flex-col gap-3">
       {cfg?.connected ? (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-          Đang liên kết — khoá kết thúc bằng <b>…{cfg.key_hint}</b>, mô hình <b>{cfg.model}</b>
+          Đang liên kết — khoá kết thúc bằng <b>…{cfg.key_hint}</b>, mô hình <b>{MODEL_CHOICES.find((m) => m.id === cfg.model)?.label ?? cfg.model}</b>
           {cfg.updated_by_name ? ` · ${cfg.updated_by_name}` : ""}
           {cfg.updated_at ? ` · ${new Date(cfg.updated_at).toLocaleString("vi-VN")}` : ""}
         </p>
       ) : (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Chưa liên kết — Trợ lý đang hiểu câu hỏi theo từ khoá. Lấy khoá miễn phí tại{" "}
+          Chưa liên kết — khung chat Trợ lý đang báo “AI chưa sẵn sàng”. Lấy khoá tại{" "}
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-blue-600 underline">
             aistudio.google.com/apikey
           </a>
@@ -110,35 +99,19 @@ export function AiAssistantSettings() {
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
-          onBlur={() => apiKey.trim() && void loadModels(apiKey)}
           placeholder="AIza…"
           autoComplete="off"
         />
       </Field>
-      <Field
-        label="Mô hình"
-        hint={
-          loadingModels
-            ? "Đang lấy danh sách từ Google…"
-            : models.length
-              ? "Miễn phí: Flash-Lite ~500 lượt/ngày, Flash chỉ ~20, Pro không có. Mỗi câu hỏi số liệu tốn 2–3 lượt."
-              : "Nhập khoá ở trên để hiện đủ danh sách mô hình."
-        }
-      >
-        <Select value={model} onChange={(e) => setModel(e.target.value)} disabled={loadingModels}>
-          {/* Luôn có mô hình mặc định + mô hình đang dùng, kể cả khi chưa tải được danh sách. */}
-          {[
-            { id: "gemini-flash-lite-latest", label: "Gemini Flash-Lite (mới nhất) — khuyên dùng gói miễn phí" },
-            ...(model && model !== "gemini-flash-lite-latest" && !models.some((m) => m.id === model)
-              ? [{ id: model, label: model }]
-              : []),
-            ...models.filter((m) => m.id !== "gemini-flash-lite-latest"),
-          ].map((m) => (
+      <Field label="Mô hình" hint={MODEL_CHOICES.find((m) => m.id === model)?.hint}>
+        <Select value={model} onChange={(e) => setModel(e.target.value)}>
+          {MODEL_CHOICES.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
-              {m.label !== m.id ? ` (${m.id})` : ""}
             </option>
           ))}
+          {/* Mô hình cũ đã lưu không nằm trong 3 lựa chọn → vẫn hiện để không tự đổi. */}
+          {model && !MODEL_CHOICES.some((m) => m.id === model) && <option value={model}>{model}</option>}
         </Select>
       </Field>
       {error && (
