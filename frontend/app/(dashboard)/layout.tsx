@@ -136,8 +136,6 @@ export default async function DashboardLayout({
                     {hasCap(user, "notification.send") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
-                    {/* Trợ lý giọng nói (2026-11-25) — tự ẩn khi không có quyền voice.assistant. */}
-                    <VoiceAssistant />
                     <NotificationBell userId={user.id} />
                     <UserMenu user={user} />
                   </div>
@@ -184,6 +182,8 @@ export default async function DashboardLayout({
           </BirthdayLayoutBackground>
           {/* Ngoài khung cuộn/nội dung để popup đè được cả header (z-50). */}
           {modal}
+          {/* Trợ lý giọng nói (2026-11-25): nút nổi góc phải dưới, tự ẩn khi không có quyền voice.assistant. */}
+          <VoiceAssistant />
           </UiThemeProvider>
         </BirthdayThemeProvider>
       </ToastProvider>

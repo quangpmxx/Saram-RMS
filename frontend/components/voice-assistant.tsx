@@ -238,20 +238,9 @@ export function VoiceAssistant() {
   }
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        title="Hỏi bằng giọng nói"
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700",
-          open && "bg-blue-50 text-blue-600",
-        )}
-      >
-        <Mic className="h-4.5 w-4.5" strokeWidth={2} />
-      </button>
+    <div className="fixed right-4 bottom-4 z-40 flex flex-col items-end gap-2 sm:right-6 sm:bottom-6">
       {open && (
-        <div className="fixed top-12 right-2 left-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:absolute sm:top-10 sm:right-0 sm:left-auto sm:w-[380px]">
+        <div className="max-h-[70vh] w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:w-[360px]">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-800">Trợ lý giọng nói</p>
             <button
@@ -338,6 +327,23 @@ export function VoiceAssistant() {
           </div>
         </div>
       )}
+      <button
+        type="button"
+        title="Trợ lý giọng nói"
+        onClick={() => {
+          if (open) {
+            recRef.current?.stop();
+            window.speechSynthesis?.cancel();
+          }
+          setOpen((v) => !v);
+        }}
+        className={cn(
+          "flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-colors",
+          open ? "bg-slate-600 hover:bg-slate-700" : "bg-blue-600 hover:bg-blue-700",
+        )}
+      >
+        {open ? <X className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+      </button>
     </div>
   );
 }
