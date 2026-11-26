@@ -12,6 +12,7 @@ import { type NavItem } from "@/components/sidebar-nav";
 import { MobileMenuButton } from "@/components/mobile-nav";
 import { UserMenu } from "@/components/user-menu";
 import { NotificationBell } from "@/components/notification-bell";
+import { MicPermissionButton } from "@/components/mic-permission-button";
 import { SendNotificationButton } from "@/components/send-notification-button";
 import { ClockInButton } from "@/components/clock-in-button";
 import { VoiceAssistant } from "@/components/voice-assistant";
@@ -136,6 +137,7 @@ export default async function DashboardLayout({
                     {hasCap(user, "notification.send") && <SendNotificationButton />}
                     {/* Dự án phụ — nâng cấp toàn diện: nút "Chấm công" — mọi vai trò TRỪ Admin/Quản lý (yêu cầu trực tiếp người dùng), placeholder giao diện. */}
                     {user.role !== "admin" && user.role !== "manager" && <ClockInButton />}
+                    <MicPermissionButton enabled={!hasPermissionData || (permissions["ai-assistant"] ?? "none") !== "none"} />
                     <NotificationBell userId={user.id} />
                     <UserMenu user={user} />
                   </div>
