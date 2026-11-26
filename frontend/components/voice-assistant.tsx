@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { AudioLines, Mic, MicOff, RotateCcw, SendHorizontal, Sparkles, Volume2, X } from "lucide-react";
 import { ApiError, clientApi, clientApiPostBlob } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
@@ -230,9 +231,17 @@ function saveCorner(v: Corner) {
   window.dispatchEvent(new Event(CORNER_KEY));
 }
 
-export function VoiceAssistant({ userName, enabled = true }: { userName?: string; enabled?: boolean }) {
+/** Đường dẫn trang chat riêng — điện thoại mở trang này thay cho popup (2026-11-26). */
+export const AI_CHAT_PATH = "/tro-ly-ai";
+
+/**
+ * page = true: chạy như 1 trang chat riêng toàn màn hình (không có trang nào nằm phía sau → bàn phím
+ * iPhone trong suốt không lộ nền như khi là popup đè lên Dashboard).
+ */
+export function VoiceAssistant({ userName, enabled = true, page = false }: { userName?: string; enabled?: boolean; page?: boolean }) {
+  const router = useRouter();
   const can = useCan();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(page);
   const [listening, setListening] = useState(false);
   const [busy, setBusy] = useState(false);
   const [interim, setInterim] = useState("");
@@ -479,6 +488,12 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
 
   function close() {
     stopConversation();
+    if (page) {
+      // Mở từ trong phần mềm → quay lại trang trước; mở thẳng link → về trang chủ.
+      if (window.history.length > 1) router.back();
+      else router.push("/");
+      return;
+    }
     setOpen(false);
   }
 
@@ -599,8 +614,13 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
           role="dialog"
           aria-label={assistantName}
           className={cn(
-            "fixed inset-0 z-50 flex flex-col overflow-hidden bg-white sm:inset-auto sm:h-[min(600px,calc(100dvh-10rem))] sm:w-[390px] sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:shadow-brand-900/20",
-            PANEL_POS[corner],
+            "fixed inset-0 z-50 flex flex-col overflow-hidden bg-white",
+            page
+              ? "sm:mx-auto sm:max-w-2xl sm:border-x sm:border-slate-200"
+              : cn(
+                  "sm:inset-auto sm:h-[min(600px,calc(100dvh-10rem))] sm:w-[390px] sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:shadow-brand-900/20",
+                  PANEL_POS[corner],
+                ),
           )}
         >
           {/* Đầu khung: logo công ty + tên trợ lý + trạng thái AI */}
@@ -745,7 +765,8 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
         </div>
       )}
 
-      {/* Nút nổi: logo công ty + nhãn AI */}
+      {/* Nút nổi: logo công ty + nhãn AI (không có ở trang chat riêng) */}
+      {!page && (
       <button
         type="button"
         aria-label={open ? "Đóng trợ lý" : "Mở trợ lý AI"}
@@ -757,6 +778,8 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
             return;
           }
           if (open) close();
+          // Điện thoại: mở trang chat riêng thay cho popup.
+          else if (!window.matchMedia("(min-width: 640px)").matches) router.push(AI_CHAT_PATH);
           else setOpen(true);
         }}
         onPointerDown={(e) => {
@@ -806,6 +829,7 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
           </span>
         )}
       </button>
+      )}
     </>
   );
 }
