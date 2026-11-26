@@ -196,16 +196,16 @@ type Corner = "br" | "bl" | "tr" | "tl";
 const CORNER_KEY = "ai-fab-corner";
 const FAB_POS: Record<Corner, string> = {
   br: "right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] sm:right-6 sm:bottom-6",
-  bl: "left-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] sm:left-6 sm:bottom-6",
+  bl: "left-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] sm:left-6 sm:bottom-6 md:left-24",
   tr: "right-4 top-[calc(4.5rem+env(safe-area-inset-top))] sm:right-6 sm:top-20",
-  tl: "left-4 top-[calc(4.5rem+env(safe-area-inset-top))] sm:left-6 sm:top-20",
+  tl: "left-4 top-[calc(4.5rem+env(safe-area-inset-top))] sm:left-6 sm:top-20 md:left-24",
 };
 // Khung chat (máy tính) mở cạnh nút; điện thoại vẫn toàn màn hình.
 const PANEL_POS: Record<Corner, string> = {
   br: "sm:right-6 sm:bottom-24",
-  bl: "sm:left-6 sm:bottom-24",
+  bl: "sm:left-6 sm:bottom-24 md:left-24",
   tr: "sm:right-6 sm:top-[8.75rem]",
-  tl: "sm:left-6 sm:top-[8.75rem]",
+  tl: "sm:left-6 sm:top-[8.75rem] md:left-24",
 };
 
 function readCorner(): Corner {
