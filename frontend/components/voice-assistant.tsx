@@ -557,6 +557,21 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     rec.interimResults = true;
     rec.continuous = false;
     let finalText = "";
+    let partialText = "";
+    // Điện thoại (Chrome Android) nhiều khi không tự kết thúc dù đã ngừng nói (2026-11-26, user báo
+    // "nghe mãi không dừng") → tự dừng sau 1,5 giây im lặng kể từ chữ cuối, và tối đa 20 giây.
+    let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopSoon = (ms: number) => {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        try {
+          rec.stop();
+        } catch {
+          /* đã dừng */
+        }
+      }, ms);
+    };
+    const maxTimer = setTimeout(() => stopSoon(0), 20000);
     rec.onresult = (e) => {
       let partial = "";
       for (let i = 0; i < e.results.length; i++) {
@@ -564,7 +579,9 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
         if (r.isFinal) finalText = r[0].transcript;
         else partial += r[0].transcript;
       }
+      partialText = partial;
       setInterim(finalText || partial);
+      if (finalText || partial) stopSoon(1500);
     };
     rec.onerror = (e) => {
       // Tách từng lỗi (2026-11-25): "service-not-allowed" = trình duyệt không có dịch vụ nhận giọng nói
@@ -589,13 +606,16 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
       setConv(false);
     };
     rec.onend = () => {
+      clearTimeout(silenceTimer);
+      clearTimeout(maxTimer);
       // Đã bấm dừng (recRef bị xoá) → không gửi câu dở.
       const mine = recRef.current === rec;
       if (!mine) return;
       setListening(false);
       setInterim("");
       recRef.current = null;
-      if (finalText && convRef.current) void ask(finalText, true);
+      const text = (finalText || partialText).trim();
+      if (text && convRef.current) void ask(text, true);
       else setConv(false);
     };
     recRef.current = rec;
