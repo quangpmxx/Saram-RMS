@@ -307,6 +307,34 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
     };
   }, []);
 
+  // Điện thoại (2026-11-26): khung chat bám đúng phần màn hình còn thấy khi bàn phím bật (như Zalo/Messenger)
+  // + khoá cuộn trang phía sau → không lộ nền khi gõ.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open || window.matchMedia("(min-width: 640px)").matches) return;
+    const vv = window.visualViewport;
+    const html = document.documentElement;
+    const prev = [html.style.overflow, document.body.style.overflow];
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    const fit = () => {
+      const el = panelRef.current;
+      if (!el || !vv) return;
+      el.style.top = `${vv.offsetTop}px`;
+      el.style.height = `${vv.height}px`;
+      el.style.bottom = "auto";
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    };
+    fit();
+    vv?.addEventListener("resize", fit);
+    vv?.addEventListener("scroll", fit);
+    return () => {
+      vv?.removeEventListener("resize", fit);
+      vv?.removeEventListener("scroll", fit);
+      [html.style.overflow, document.body.style.overflow] = prev;
+    };
+  }, [open]);
+
   // Tin mới → cuộn xuống cuối.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -567,6 +595,7 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
     <>
       {open && (
         <div
+          ref={panelRef}
           role="dialog"
           aria-label={assistantName}
           className={cn(
