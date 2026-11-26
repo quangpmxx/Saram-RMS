@@ -27,6 +27,8 @@ export class SaveAiKnowledgeDto {
   /** Sổ tay công ty. */
   @IsOptional() @IsString() @MaxLength(30000) knowledge?: string;
   @IsOptional() @IsBoolean() allow_chitchat?: boolean;
+  /** Kỹ năng Sale & kịch bản xử lý tình huống lao động. */
+  @IsOptional() @IsString() @MaxLength(30000) sales_playbook?: string;
 }
 
 export class SaveAiBudgetDto {

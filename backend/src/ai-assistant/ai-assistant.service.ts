@@ -301,6 +301,7 @@ export class AiAssistantService {
         assistant_name: DEFAULT_ASSISTANT_NAME,
         persona: '',
         knowledge: '',
+        sales_playbook: '',
         allow_chitchat: false,
         monthly_budget_usd: null,
         used_this_month_usd: 0,
@@ -317,6 +318,7 @@ export class AiAssistantService {
       assistant_name: cfg.assistantName,
       persona: cfg.persona ?? '',
       knowledge: cfg.knowledge ?? '',
+      sales_playbook: cfg.salesPlaybook ?? '',
       allow_chitchat: cfg.allowChitchat,
       monthly_budget_usd: cfg.monthlyBudgetUsd,
       used_this_month_usd: this.budgetState(cfg).used,
@@ -377,6 +379,7 @@ export class AiAssistantService {
       assistantName: dto.assistant_name?.trim() || DEFAULT_ASSISTANT_NAME,
       persona: dto.persona?.trim() || null,
       knowledge: dto.knowledge?.trim() || null,
+      salesPlaybook: dto.sales_playbook?.trim() || null,
       allowChitchat: dto.allow_chitchat === true,
       updatedById: user.id,
     };
@@ -805,6 +808,7 @@ export class AiAssistantService {
       assistantName: string;
       persona: string | null;
       knowledge: string | null;
+      salesPlaybook: string | null;
       allowChitchat: boolean;
     },
     directory: string,
@@ -828,6 +832,11 @@ export class AiAssistantService {
       cfg.knowledge
         ? `\n## Sổ tay công ty (thông tin công ty cung cấp — dùng để trả lời câu hỏi về công ty, sếp, quy trình, quy định…)\n${cfg.knowledge.slice(0, 30_000)}`
         : '',
+      cfg.salesPlaybook
+        ? `
+## Kỹ năng Sale & kịch bản xử lý tình huống lao động (công ty soạn — dùng để hướng dẫn Sale gọi điện, tư vấn, xử lý từ chối / băn khoăn của người lao động)
+${cfg.salesPlaybook.slice(0, 30_000)}`
+        : '',
       `
 ## Hướng dẫn sử dụng phần mềm & nghiệp vụ (dùng để hướng dẫn thao tác, giải thích chỉ số)
 ${APP_GUIDE}`,
@@ -835,6 +844,7 @@ ${APP_GUIDE}`,
       '',
       '## Cách trả lời',
       '- Câu hỏi về công ty, con người, quy trình: trả lời theo Sổ tay và Danh bạ ở trên. Không có trong đó thì nói là chưa được cung cấp thông tin, không tự bịa.',
+      '- Sale hỏi cách tư vấn / xử lý tình huống của người lao động (chê lương, sợ xa, hỏi chỗ ở, không nghe máy, hẹn rồi bùng…): bám đúng phần Kỹ năng Sale ở trên, đưa luôn câu nói mẫu để Sale dùng được ngay; được trả lời dài hơn (vài câu). Kịch bản không có tình huống đó thì tư vấn theo tinh thần chung của kịch bản và nói rõ là gợi ý thêm, không bịa chính sách / mức lương / quyền lợi công ty.',
       '- Hỏi cách dùng phần mềm / ý nghĩa chỉ số: trả lời theo Hướng dẫn sử dụng, chỉ rõ vào trang nào, bấm gì. Có thể trả lời dài hơn (vài câu, đánh số bước nếu cần) vì đây là hướng dẫn. Không chắc thì nói nên hỏi Admin.',
       '- Câu hỏi về số liệu: luôn lấy bằng công cụ, KHÔNG tự bịa số. Không có công cụ phù hợp thì nói thẳng là trợ lý chưa xem được phần đó.',
       cfg.allowChitchat

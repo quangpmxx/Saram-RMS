@@ -2443,6 +2443,8 @@ model AiAssistantConfig {
   knowledge     String?
   /// Cho nhân viên trò chuyện ngoài lề (tâm sự, hỏi linh tinh) — tắt mặc định để dành lượt miễn phí.
   allowChitchat Boolean  @default(false) @map("allow_chitchat")
+  /// Kỹ năng Sale & kịch bản xử lý tình huống lao động (2026-11-26, Admin soạn) — AI bám vào để hướng dẫn Sale.
+  salesPlaybook String?  @map("sales_playbook")
   /// Trần chi phí AI mỗi tháng (USD, 2026-11-25); null = không giới hạn. Chạm 85% tắt giọng Gemini, 100% khoá hỏi.
   monthlyBudgetUsd Float?  @map("monthly_budget_usd")
   /// Chi phí ước tính đã dùng trong tháng cost_month (YYYY-MM, giờ VN) — tính từ số token Google trả về.

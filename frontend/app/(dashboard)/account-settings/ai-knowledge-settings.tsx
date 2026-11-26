@@ -15,6 +15,7 @@ interface KnowledgeConfig {
   assistant_name: string;
   persona: string;
   knowledge: string;
+  sales_playbook: string;
   allow_chitchat: boolean;
 }
 
@@ -44,12 +45,42 @@ QUY ĐỊNH
 - Giờ làm: ...
 - Chấm công, nghỉ phép: ...`;
 
+/** Khung gợi ý kịch bản Sale (2026-11-26) — Admin thay bằng kịch bản thật của công ty. */
+const PLAYBOOK_SAMPLE = `NGUYÊN TẮC CHUNG
+- Xưng em, gọi anh/chị; nói chậm, thân thiện; luôn chốt lịch hẹn phỏng vấn cụ thể (ngày, giờ, điểm đón).
+- Không hứa lương / quyền lợi ngoài thông tin đơn hàng.
+
+MỞ ĐẦU CUỘC GỌI
+- Câu mẫu: "Em chào anh/chị, em là ... bên công ty Đại Việt, anh/chị vừa để lại thông tin tìm việc ..."
+
+TÌNH HUỐNG THƯỜNG GẶP
+1. Lao động chê lương thấp
+- Cách xử lý: ...
+- Câu mẫu: "..."
+
+2. Lao động sợ xa / hỏi chỗ ở, xe đưa đón
+- Cách xử lý: ...
+- Câu mẫu: "..."
+
+3. Lao động không nghe máy / hẹn gọi lại
+- Cách xử lý: ...
+
+4. Lao động hẹn rồi bùng phỏng vấn
+- Cách xử lý: ...
+
+5. Lao động hỏi phí, sợ lừa đảo
+- Cách xử lý: ...
+
+CHỐT HẸN
+- Câu mẫu: "..."`;
+
 export function AiKnowledgeSettings() {
   const toast = useToast();
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState("");
   const [persona, setPersona] = useState("");
   const [knowledge, setKnowledge] = useState("");
+  const [playbook, setPlaybook] = useState("");
   const [chitchat, setChitchat] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +91,7 @@ export function AiKnowledgeSettings() {
         setName(c.assistant_name);
         setPersona(c.persona);
         setKnowledge(c.knowledge);
+        setPlaybook(c.sales_playbook ?? "");
         setChitchat(c.allow_chitchat);
         setLoaded(true);
       })
@@ -72,7 +104,7 @@ export function AiKnowledgeSettings() {
     try {
       const c = await clientApi<KnowledgeConfig>("/ai-assistant/knowledge", {
         method: "PUT",
-        body: JSON.stringify({ assistant_name: name, persona, knowledge, allow_chitchat: chitchat }),
+        body: JSON.stringify({ assistant_name: name, persona, knowledge, sales_playbook: playbook, allow_chitchat: chitchat }),
       });
       setName(c.assistant_name);
       toast.success("Đã lưu — trợ lý dùng thông tin mới ngay từ câu hỏi tiếp theo");
@@ -111,6 +143,17 @@ export function AiKnowledgeSettings() {
       </Field>
       {!knowledge && (
         <button type="button" onClick={() => setKnowledge(KNOWLEDGE_SAMPLE)} className="-mt-2 self-start text-xs text-brand-600 hover:underline">
+          Chèn khung mẫu để điền
+        </button>
+      )}
+      <Field
+        label="Kỹ năng Sale & xử lý tình huống lao động"
+        hint={`Kịch bản gọi điện, cách tư vấn, cách xử lý khi lao động chê lương, sợ xa, bùng hẹn… Sale hỏi trợ lý sẽ được hướng dẫn và đưa câu nói mẫu theo đúng phần này. ${playbook.length.toLocaleString("vi-VN")}/30.000 ký tự.`}
+      >
+        <Textarea rows={12} maxLength={30000} value={playbook} onChange={(e) => setPlaybook(e.target.value)} placeholder={PLAYBOOK_SAMPLE} />
+      </Field>
+      {!playbook && (
+        <button type="button" onClick={() => setPlaybook(PLAYBOOK_SAMPLE)} className="-mt-2 self-start text-xs text-brand-600 hover:underline">
           Chèn khung mẫu để điền
         </button>
       )}
