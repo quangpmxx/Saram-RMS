@@ -358,7 +358,31 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     fit();
     vv?.addEventListener("resize", fit);
     vv?.addEventListener("scroll", fit);
+    // Cố định khung (2026-11-26, user báo: đang gõ mà kéo đầu khung xuống thì giật): chặn mọi thao tác
+    // kéo trong khung, trừ vùng tin nhắn khi nó còn cuộn được — trang phía sau không bị kéo theo.
+    // Chỉ bấm X mới thoát.
+    let lastY = 0;
+    const onStart = (e: TouchEvent) => {
+      lastY = e.touches[0]?.clientY ?? 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY ?? 0;
+      const dy = y - lastY;
+      lastY = y;
+      const list = scrollRef.current;
+      if (list && e.target instanceof Node && list.contains(e.target)) {
+        const atTop = list.scrollTop <= 0;
+        const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+        if (!(atTop && dy > 0) && !(atBottom && dy < 0)) return; // còn cuộn được → cho cuộn
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    const panel = panelRef.current;
+    panel?.addEventListener("touchstart", onStart, { passive: true });
+    panel?.addEventListener("touchmove", onMove, { passive: false });
     return () => {
+      panel?.removeEventListener("touchstart", onStart);
+      panel?.removeEventListener("touchmove", onMove);
       vv?.removeEventListener("resize", fit);
       vv?.removeEventListener("scroll", fit);
       [html.style.overflow, document.body.style.overflow] = prev;
