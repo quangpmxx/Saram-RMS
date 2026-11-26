@@ -207,6 +207,23 @@ const TOOLS: GeminiFunctionDeclaration[] = [
     },
   },
   {
+    name: 'lead_care_detail',
+    description:
+      'Hồ sơ chăm sóc đầy đủ của MỘT lao động (tìm theo SĐT hoặc họ tên): thông tin, toàn bộ ghi chú Sale theo thời gian, ' +
+      'các lần hẹn phỏng vấn, lịch gọi lại, lịch sử đưa đón. Dùng khi Sale hỏi "số 09xx… tư vấn thế nào", "lao động A nên xử lý sao" ' +
+      'để đọc ghi chú, phân tích rồi tư vấn. Chỉ thấy data trong phạm vi người hỏi được xem.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        keyword: {
+          type: 'STRING',
+          description: 'SĐT (đủ số) hoặc họ tên lao động',
+        },
+      },
+      required: ['keyword'],
+    },
+  },
+  {
     name: 'birthdays_today',
     description:
       'Nhân viên công ty có sinh nhật HÔM NAY (tên, nhóm, chức vụ). Chỉ biết hôm nay, không biết ngày khác / năm sinh.',
@@ -844,6 +861,7 @@ ${APP_GUIDE}`,
       '',
       '## Cách trả lời',
       '- Câu hỏi về công ty, con người, quy trình: trả lời theo Sổ tay và Danh bạ ở trên. Không có trong đó thì nói là chưa được cung cấp thông tin, không tự bịa.',
+      '- Sale hỏi về MỘT lao động cụ thể (đưa SĐT hoặc tên: "số 098… tư vấn sao", "lao động A xử lý thế nào"): gọi lead_care_detail, đọc kỹ ghi chú theo thời gian + lịch PV + đưa đón, rồi trả lời: (1) tóm tắt tình hình 1–2 câu, (2) nhận định lao động đang vướng gì / muốn gì, (3) hướng xử lý cụ thể + câu nói mẫu theo Kỹ năng Sale. Được trả lời dài hơn (vài câu). Không đọc lại SĐT.',
       '- Sale hỏi cách tư vấn / xử lý tình huống của người lao động (chê lương, sợ xa, hỏi chỗ ở, không nghe máy, hẹn rồi bùng…): bám đúng phần Kỹ năng Sale ở trên, đưa luôn câu nói mẫu để Sale dùng được ngay; được trả lời dài hơn (vài câu). Kịch bản không có tình huống đó thì tư vấn theo tinh thần chung của kịch bản và nói rõ là gợi ý thêm, không bịa chính sách / mức lương / quyền lợi công ty.',
       '- Hỏi cách dùng phần mềm / ý nghĩa chỉ số: trả lời theo Hướng dẫn sử dụng, chỉ rõ vào trang nào, bấm gì. Có thể trả lời dài hơn (vài câu, đánh số bước nếu cần) vì đây là hướng dẫn. Không chắc thì nói nên hỏi Admin.',
       '- Câu hỏi về số liệu: luôn lấy bằng công cụ, KHÔNG tự bịa số. Không có công cụ phù hợp thì nói thẳng là trợ lý chưa xem được phần đó.',
@@ -984,6 +1002,11 @@ ${APP_GUIDE}`,
         if (!(await this.moduleOk(user, 'shuttle')))
           return deny('Danh sách đưa đón');
         return this.shuttleLookup(str(args.keyword));
+      }
+      case 'lead_care_detail': {
+        if (!(await this.moduleOk(user, 'candidates')))
+          return deny('Data lao động');
+        return this.leadCareDetail(str(args.keyword), user);
       }
       case 'lead_lookup': {
         if (!(await this.moduleOk(user, 'candidates')))
@@ -1192,6 +1215,132 @@ ${APP_GUIDE}`,
         mkt_note: l.mkt_note,
         quick_note: l.quick_note,
       })),
+    };
+  }
+
+  /**
+   * Hồ sơ chăm sóc 1 lao động cho AI tư vấn (2026-11-26). Tìm qua candidates.list → cùng phạm vi
+   * xem như trang Data lao động. Không gửi SĐT đầy đủ; đưa đón chỉ kèm khi có quyền Đưa đón.
+   */
+  private async leadCareDetail(keyword: string, user: AuthenticatedUser) {
+    const kw = keyword.trim();
+    if (kw.length < 2) return { error: 'Cần SĐT hoặc họ tên lao động' };
+    const query = Object.assign(new ListCandidatesQueryDto(), {
+      page: 1,
+      page_size: 5,
+      keyword: kw,
+    });
+    const res = await this.candidates.list(query, user);
+    if (!res.items.length)
+      return {
+        result: `Không thấy "${kw}" trong Data lao động (trong phạm vi bạn được xem)`,
+      };
+    if (res.items.length > 1)
+      return {
+        result: 'Có nhiều lao động khớp — hỏi lại Sale muốn xem người nào',
+        matches: res.items.map((l) => ({
+          name: l.full_name,
+          phone_last3: l.phone_number.slice(-3),
+          sale: l.assigned_to?.name ?? '(chưa chia)',
+        })),
+      };
+    const l = res.items[0];
+    const [notes, interviews, callbacks, shuttles] = await Promise.all([
+      this.prisma.leadNote.findMany({
+        where: { leadId: l.id, isDeleted: false },
+        orderBy: { createdAt: 'asc' },
+        take: 40,
+        select: {
+          content: true,
+          createdAt: true,
+          createdBy: { select: { fullName: true } },
+          callStatus: { select: { name: true } },
+          callResult: { select: { name: true } },
+        },
+      }),
+      this.prisma.interviewAppointment.findMany({
+        where: { leadId: l.id, deletedAt: null },
+        orderBy: { scheduledAt: 'asc' },
+        select: {
+          attemptNo: true,
+          partnerCompanyName: true,
+          scheduledAt: true,
+          status: { select: { name: true } },
+          employmentStatus: { select: { name: true } },
+          employmentReason: true,
+        },
+      }),
+      this.prisma.callbackSchedule.findMany({
+        where: { leadId: l.id, deletedAt: null, isCompleted: false },
+        orderBy: { scheduledAt: 'asc' },
+        take: 5,
+        select: { scheduledAt: true, repeatDaily: true },
+      }),
+      (await this.moduleOk(user, 'shuttle'))
+        ? this.prisma.shuttleRecord.findMany({
+            where: { phoneNumber: l.phone_number, deletedAt: null },
+            orderBy: { date: 'asc' },
+            take: 10,
+            select: {
+              date: true,
+              status: true,
+              interviewResult: true,
+              note: true,
+              company: { select: { name: true } },
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+    const vnTime = (d: Date) =>
+      new Date(d.getTime() + 7 * 3600_000)
+        .toISOString()
+        .slice(0, 16)
+        .replace('T', ' ');
+    return {
+      worker: {
+        name: l.full_name,
+        phone_last3: l.phone_number.slice(-3),
+        birth_year: l.birth_year,
+        address: l.address,
+        source: l.source?.name,
+        uploaded_at: l.uploaded_at.slice(0, 10),
+        sale: l.assigned_to?.name ?? '(chưa chia)',
+        call_status: l.call_status?.name ?? null,
+        call_result: l.call_result?.name ?? null,
+        interview_status: l.current_interview_status?.name ?? null,
+        employment_status: l.current_employment_status?.name ?? null,
+        note_color: l.note_color,
+        company: l.company?.name ?? null,
+        mkt_note: l.mkt_note,
+        quick_note: l.quick_note,
+      },
+      notes: notes.map((n) => ({
+        at: vnTime(n.createdAt),
+        by: n.createdBy.fullName,
+        call_status: n.callStatus?.name ?? null,
+        call_result: n.callResult?.name ?? null,
+        content: n.content.slice(0, 1500),
+      })),
+      interviews: interviews.map((i) => ({
+        attempt: i.attemptNo,
+        company: i.partnerCompanyName,
+        at: vnTime(i.scheduledAt),
+        status: i.status.name,
+        employment: i.employmentStatus?.name ?? null,
+        reason: i.employmentReason,
+      })),
+      pending_callbacks: callbacks.map((cb) => ({
+        at: vnTime(cb.scheduledAt),
+        daily: cb.repeatDaily,
+      })),
+      shuttles:
+        shuttles?.map((r) => ({
+          date: r.date.toISOString().slice(0, 10),
+          company: r.company?.name ?? null,
+          status: r.status,
+          result: r.interviewResult,
+          note: r.note,
+        })) ?? '(không có quyền xem Đưa đón)',
     };
   }
 
