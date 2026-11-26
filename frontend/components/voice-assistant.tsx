@@ -160,6 +160,27 @@ function splitFirstSentence(text: string): string[] {
 /** Tốc độ phát giọng Gemini (giữ nguyên cao độ) — người dùng muốn phản hồi nhanh, không phải đọc nhanh. */
 const VOICE_PLAYBACK_RATE = 1;
 
+/** Đoạn âm thanh im lặng rất ngắn — phát ngay lúc bấm micro để iPhone "mở khoá" loa (xem unlockPlayer). */
+function silentWavUrl(): string {
+  const n = 800; // 0,1 giây ở 8 kHz, 8-bit
+  const b = new DataView(new ArrayBuffer(44 + n));
+  const str = (o: number, t: string) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF");
+  b.setUint32(4, 36 + n, true);
+  str(8, "WAVEfmt ");
+  b.setUint32(16, 16, true);
+  b.setUint16(20, 1, true);
+  b.setUint16(22, 1, true);
+  b.setUint32(24, 8000, true);
+  b.setUint32(28, 8000, true);
+  b.setUint16(32, 1, true);
+  b.setUint16(34, 8, true);
+  str(36, "data");
+  b.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([b.buffer], { type: "audio/wav" }));
+}
+
 const THINKING_STEPS = ["Đang hiểu câu hỏi", "Đang tra cứu dữ liệu", "Đang phân tích", "Đang soạn câu trả lời"];
 
 /** "Đang suy nghĩ" (2026-11-25): các bước chạy lần lượt, chữ ánh sáng lướt; bước cuối = chuẩn bị giọng đọc. */
@@ -283,6 +304,10 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
   const warnedVoiceRef = useRef(false);
   // Giọng Gemini (2026-11-25): giọng nữ miền Bắc giống nhau mọi máy. Hết lượt → dùng giọng của máy.
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Trình phát dùng lại suốt phiên (2026-11-26): iPhone chỉ cho phát tiếng khi người dùng vừa chạm —
+  // câu trả lời tới sau vài giây nên bị chặn (chỉ hiện chữ). Phát 1 tiếng im lặng lúc bấm micro rồi
+  // dùng lại đúng trình phát đó → các câu sau tự đọc được.
+  const playerRef = useRef<HTMLAudioElement | null>(null);
   const ttsOffRef = useRef(false);
   const speakIdRef = useRef(0);
   const recRef = useRef<Recognition | null>(null);
@@ -436,7 +461,8 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     return new Promise((resolve) => {
       if (id !== speakIdRef.current) return resolve();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+      const audio = playerRef.current ?? new Audio();
+      audio.src = url;
       audio.playbackRate = VOICE_PLAYBACK_RATE;
       audioRef.current = audio;
       const done = () => {
@@ -592,6 +618,7 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     stopAudio();
     setSpeaking(false);
     setConv(true);
+    unlockPlayer();
     // Tạo bộ đo âm lượng ngay lúc bấm (iPhone chỉ cho chạy âm thanh khi người dùng vừa chạm).
     try {
       if (!audioCtxRef.current && typeof AudioContext !== "undefined") audioCtxRef.current = new AudioContext();
@@ -600,6 +627,19 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
       audioCtxRef.current = null;
     }
     startListening();
+  }
+
+  /** Gọi ngay trong lúc người dùng chạm (bấm micro / bấm Nghe) để iPhone cho phát tiếng về sau. */
+  function unlockPlayer() {
+    try {
+      const a = playerRef.current ?? new Audio();
+      playerRef.current = a;
+      if (!a.paused) return;
+      a.src = silentWavUrl();
+      a.play().catch(() => undefined);
+    } catch {
+      /* máy không hỗ trợ — bỏ qua */
+    }
   }
 
   function startListening() {
@@ -692,7 +732,7 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
   }
 
   /**
-   * Nghe bằng ghi âm (2026-11-26): ghi tới khi im lặng 1,5 giây (tối đa 20 giây; 8 giây không nói gì
+   * Nghe bằng ghi âm (2026-11-26): ghi tới khi im lặng 1,2 giây (tối đa 20 giây; 8 giây không nói gì
    * thì thôi) → gửi Gemini chép lời → hỏi như nói bình thường. Bấm micro lúc đang ghi = dừng hẳn.
    */
   async function startRecording() {
@@ -754,7 +794,7 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
           heard = true;
           lastLoud = now;
         }
-        if ((heard && now - lastLoud > 1500) || (!heard && now > 8000)) finish();
+        if ((heard && now - lastLoud > 1200) || (!heard && now > 8000)) finish();
       } else if (now > 8000) {
         // Không đo được âm lượng → ghi 8 giây rồi gửi.
         heard = true;
@@ -898,6 +938,7 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
                               return;
                             }
                             setPlayingId(m.id);
+                            unlockPlayer();
                             void speakVoice(m.text, () => setPlayingId((p) => (p === m.id ? null : p)));
                           }}
                           title={playingId === m.id ? "Dừng đọc" : "Bấm để nghe"}
