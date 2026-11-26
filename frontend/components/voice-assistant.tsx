@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { AudioLines, Mic, MicOff, RotateCcw, SendHorizontal, Sparkles, Volume2, X } from "lucide-react";
 import { ApiError, clientApi, clientApiPostBlob } from "@/lib/api-client";
@@ -188,6 +188,48 @@ function ListeningWave() {
   );
 }
 
+/**
+ * Kéo nút AI sang góc khác (2026-11-26): thả ra thì tự hút về góc gần nhất, nhớ theo máy.
+ * Class viết sẵn đủ chữ để Tailwind sinh được CSS.
+ */
+type Corner = "br" | "bl" | "tr" | "tl";
+const CORNER_KEY = "ai-fab-corner";
+const FAB_POS: Record<Corner, string> = {
+  br: "right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] sm:right-6 sm:bottom-6",
+  bl: "left-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] sm:left-6 sm:bottom-6",
+  tr: "right-4 top-[calc(4.5rem+env(safe-area-inset-top))] sm:right-6 sm:top-20",
+  tl: "left-4 top-[calc(4.5rem+env(safe-area-inset-top))] sm:left-6 sm:top-20",
+};
+// Khung chat (máy tính) mở cạnh nút; điện thoại vẫn toàn màn hình.
+const PANEL_POS: Record<Corner, string> = {
+  br: "sm:right-6 sm:bottom-24",
+  bl: "sm:left-6 sm:bottom-24",
+  tr: "sm:right-6 sm:top-[8.75rem]",
+  tl: "sm:left-6 sm:top-[8.75rem]",
+};
+
+function readCorner(): Corner {
+  try {
+    const v = localStorage.getItem(CORNER_KEY);
+    if (v === "br" || v === "bl" || v === "tr" || v === "tl") return v;
+  } catch {
+    /* không có bộ nhớ trình duyệt → góc phải dưới */
+  }
+  return "br";
+}
+function subscribeCorner(cb: () => void) {
+  window.addEventListener(CORNER_KEY, cb);
+  return () => window.removeEventListener(CORNER_KEY, cb);
+}
+function saveCorner(v: Corner) {
+  try {
+    localStorage.setItem(CORNER_KEY, v);
+  } catch {
+    /* bỏ qua */
+  }
+  window.dispatchEvent(new Event(CORNER_KEY));
+}
+
 export function VoiceAssistant({ userName, enabled = true }: { userName?: string; enabled?: boolean }) {
   const can = useCan();
   const [open, setOpen] = useState(false);
@@ -217,6 +259,10 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
   const recRef = useRef<Recognition | null>(null);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const corner = useSyncExternalStore(subscribeCorner, readCorner, () => "br" as Corner);
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const justDraggedRef = useRef(false);
   const canUse = enabled && can("voice.assistant");
   // Admin đã liên kết Gemini mới dùng được.
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -523,7 +569,10 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
         <div
           role="dialog"
           aria-label={assistantName}
-          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white sm:inset-auto sm:right-6 sm:bottom-24 sm:h-[min(600px,calc(100dvh-8rem))] sm:w-[390px] sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:shadow-brand-900/20"
+          className={cn(
+            "fixed inset-0 z-50 flex flex-col overflow-hidden bg-white sm:inset-auto sm:h-[min(600px,calc(100dvh-10rem))] sm:w-[390px] sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-2xl sm:shadow-brand-900/20",
+            PANEL_POS[corner],
+          )}
         >
           {/* Đầu khung: logo công ty + tên trợ lý + trạng thái AI */}
           <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-600 px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 text-white sm:pt-2">
@@ -672,9 +721,44 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
         type="button"
         aria-label={open ? "Đóng trợ lý" : "Mở trợ lý AI"}
         title={open ? "Đóng trợ lý" : "Trợ lý AI Đại Việt"}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => {
+          // Vừa kéo thả xong thì không tính là bấm.
+          if (justDraggedRef.current) {
+            justDraggedRef.current = false;
+            return;
+          }
+          if (open) close();
+          else setOpen(true);
+        }}
+        onPointerDown={(e) => {
+          dragRef.current = { x: e.clientX, y: e.clientY, moved: false };
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          const d = dragRef.current;
+          if (!d) return;
+          if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 8) return;
+          d.moved = true;
+          setDragPos({ x: e.clientX, y: e.clientY });
+        }}
+        onPointerUp={(e) => {
+          const d = dragRef.current;
+          dragRef.current = null;
+          if (!d?.moved) return;
+          justDraggedRef.current = true;
+          const next: Corner = `${e.clientY < window.innerHeight / 2 ? "t" : "b"}${e.clientX < window.innerWidth / 2 ? "l" : "r"}` as Corner;
+          setDragPos(null);
+          saveCorner(next);
+        }}
+        onPointerCancel={() => {
+          dragRef.current = null;
+          setDragPos(null);
+        }}
+        style={dragPos ? { left: dragPos.x - 24, top: dragPos.y - 24, right: "auto", bottom: "auto" } : undefined}
         className={cn(
-          "fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 via-indigo-500 to-accent-500 p-[3px] shadow-lg shadow-brand-900/25 transition-transform hover:scale-105 active:scale-95 sm:right-6 sm:bottom-6",
+          "fixed z-40 h-12 w-12 touch-none items-center justify-center rounded-full bg-gradient-to-br from-brand-500 via-indigo-500 to-accent-500 p-[3px] shadow-lg shadow-brand-900/25 select-none hover:scale-105 active:scale-95",
+          dragPos ? "cursor-grabbing" : "transition-transform",
+          FAB_POS[corner],
           // Điện thoại: khung chat toàn màn hình đã có nút đóng → ẩn nút nổi cho khỏi che ô nhập.
           open ? "hidden sm:flex" : "flex",
         )}
@@ -684,7 +768,7 @@ export function VoiceAssistant({ userName, enabled = true }: { userName?: string
           {open ? (
             <X className="h-5 w-5 text-slate-600" />
           ) : (
-            <Image src="/dai-viet-mark.png" alt="Đại Việt" width={32} height={32} className="h-7 w-7 object-contain" />
+            <Image src="/dai-viet-mark.png" alt="Đại Việt" width={32} height={32} draggable={false} className="h-7 w-7 object-contain" />
           )}
         </span>
         {!open && (
