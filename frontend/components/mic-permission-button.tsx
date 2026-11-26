@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MicOff } from "lucide-react";
+import { Mic, MicOff } from "lucide-react";
 import { useToast } from "@/lib/toast-context";
 
 /**
- * Nút cấp quyền micro cạnh chuông thông báo (2026-11-26, yêu cầu người dùng: lỡ bấm "Chặn" ở app
- * cài trên máy, không biết bật lại ở đâu). Chỉ hiện khi CHƯA có quyền; bấm → trình duyệt hỏi lại.
+ * Nút cấp quyền micro ở Cài đặt tài khoản, cạnh nút thông báo (2026-11-26, yêu cầu người dùng: lỡ bấm
+ * "Chặn" ở app cài trên máy, không biết bật lại ở đâu). Xanh = đã có quyền; cam = bấm để trình duyệt hỏi lại.
  * Đã bị chặn hẳn thì trình duyệt không hỏi nữa → hướng dẫn mở lại trong cài đặt.
  */
 export function MicPermissionButton({ enabled }: { enabled: boolean }) {
@@ -31,7 +31,14 @@ export function MicPermissionButton({ enabled }: { enabled: boolean }) {
     return () => status?.removeEventListener("change", onChange);
   }, [enabled]);
 
-  if (!enabled || state === null || state === "granted") return null;
+  if (!enabled || state === null) return null;
+  if (state === "granted") {
+    return (
+      <span title="Micro đã bật trên máy này" className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+        <Mic className="h-4.5 w-4.5" strokeWidth={2} />
+      </span>
+    );
+  }
 
   async function request() {
     if (!window.isSecureContext) {
@@ -61,7 +68,7 @@ export function MicPermissionButton({ enabled }: { enabled: boolean }) {
       title="Bật quyền micro cho Trợ lý AI"
       aria-label="Bật quyền micro"
       onClick={() => void request()}
-      className="relative flex h-8 w-8 items-center justify-center rounded-lg text-amber-500 transition-colors hover:bg-amber-50 hover:text-amber-600"
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100"
     >
       <MicOff className="h-4.5 w-4.5" strokeWidth={2} />
     </button>

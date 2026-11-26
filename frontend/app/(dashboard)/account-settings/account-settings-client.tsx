@@ -41,6 +41,7 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
   useSetPageTitle("Cài đặt tài khoản");
   const canManageCheckin = useCan()("checkin.manage");
   const canAiConfig = useCan()("voice.ai_config");
+  const canAiUse = useCan()("voice.assistant");
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,7 +207,7 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
           <ThemeSection />
 
           {/* Bật thông báo nổi trên điện thoại/máy tính này (2026-11-06). */}
-          <PushNotificationSettings />
+          <PushNotificationSettings micEnabled={canAiUse} />
 
           {/* Tên người dùng — readonly, chỉ Admin đổi được cho tài khoản khác qua Quản lý tài khoản */}
           <section>

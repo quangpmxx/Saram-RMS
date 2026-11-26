@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { BellRing, BellOff, Share, PlusSquare } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/toast-context";
+import { MicPermissionButton } from "@/components/mic-permission-button";
 import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
 
 /**
@@ -11,7 +11,7 @@ import { disablePush, enablePush, getPushState, type PushState } from "@/lib/pus
  * báo nổi cho ĐÚNG máy đang dùng — nhận được cả khi đã tắt màn hình/đóng web.
  * Mỗi máy (điện thoại, máy tính) bật riêng 1 lần.
  */
-export function PushNotificationSettings() {
+export function PushNotificationSettings({ micEnabled = false }: { micEnabled?: boolean }) {
   const [state, setState] = useState<PushState | "loading" | "error">("loading");
   const [errorText, setErrorText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,29 +50,36 @@ export function PushNotificationSettings() {
 
   return (
     <section>
-      <h3 className="text-sm font-semibold text-slate-900">Thông báo nổi</h3>
+      <h3 className="text-sm font-semibold text-slate-900">Thông báo & micro trên máy này</h3>
 
-      <div className="mt-3">
+      {/* Chỉ biểu tượng (2026-11-26): chuông thông báo + micro cho Trợ lý AI, rê chuột để xem chú thích. */}
+      <div className="mt-3 flex flex-wrap items-start gap-2">
         {state === "loading" && <p className="text-sm text-slate-400">Đang kiểm tra...</p>}
 
         {state === "on" && (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-              <BellRing className="h-4 w-4" strokeWidth={2} />
-              Đang bật trên máy này
-            </span>
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void toggle(false)}>
-              <BellOff className="h-3.5 w-3.5" strokeWidth={2} />
-              Tắt
-            </Button>
-          </div>
+          <button
+            type="button"
+            title="Thông báo đang bật trên máy này — bấm để tắt"
+            aria-label="Tắt thông báo trên máy này"
+            disabled={busy}
+            onClick={() => void toggle(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+          >
+            <BellRing className="h-4.5 w-4.5" strokeWidth={2} />
+          </button>
         )}
 
         {state === "off" && (
-          <Button type="button" size="sm" disabled={busy} onClick={() => void toggle(true)}>
-            <BellRing className="h-3.5 w-3.5" strokeWidth={2} />
-            {busy ? "Đang bật..." : "Bật thông báo trên máy này"}
-          </Button>
+          <button
+            type="button"
+            title="Bật thông báo trên máy này"
+            aria-label="Bật thông báo trên máy này"
+            disabled={busy}
+            onClick={() => void toggle(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100 disabled:opacity-50"
+          >
+            <BellOff className="h-4.5 w-4.5" strokeWidth={2} />
+          </button>
         )}
 
         {state === "ios-needs-install" && (
@@ -113,6 +120,8 @@ export function PushNotificationSettings() {
         {state === "error" && (
           <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">Không kiểm tra được thông báo trên máy này.</p>
         )}
+
+        <MicPermissionButton enabled={micEnabled} />
 
         {errorText && <p className="mt-2 text-xs break-words text-slate-400">Chi tiết lỗi: {errorText}</p>}
 
