@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { AudioLines, Mic, MicOff, RotateCcw, SendHorizontal, Sparkles, Volume2, X } from "lucide-react";
-import { ApiError, clientApi, clientApiPostBlob } from "@/lib/api-client";
+import { ApiError, clientApi, clientApiPostBlob, clientApiUpload } from "@/lib/api-client";
 import { useCan } from "@/lib/capability-context";
 import { cn } from "@/lib/cn";
 
@@ -31,6 +31,20 @@ function createRecognition(): Recognition | null {
   const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
   const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
   return Ctor ? new Ctor() : null;
+}
+
+/** Máy ghi âm được (để gửi Gemini chép lời) — dùng khi trình duyệt không có nhận giọng nói. */
+function canRecord(): boolean {
+  return typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined";
+}
+
+/**
+ * iPhone/iPad (2026-11-26): mọi trình duyệt (kể cả Chrome) và app cài trên màn hình chính đều chạy lõi
+ * Safari — nhận giọng nói của trình duyệt chập chờn / bị chặn → luôn ghi âm + Gemini chép lời.
+ */
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
 /**
@@ -248,7 +262,13 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typed, setTyped] = useState("");
   // Khung trả lời chỉ hiện sau khi bấm nút (ở trình duyệt) nên đọc thẳng lúc khởi tạo không lệch SSR.
-  const [supported, setSupported] = useState(() => typeof window === "undefined" || createRecognition() !== null);
+  const [supported, setSupported] = useState(() => typeof window === "undefined" || createRecognition() !== null || canRecord());
+  // Ghi âm → Gemini chép lời (iPhone / trình duyệt không nhận giọng nói).
+  const recorderRef = useRef<{ abort: () => void } | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const forceRecorderRef = useRef(false);
+  // Tin đang được bấm loa nghe lại (bấm lần nữa = dừng).
+  const [playingId, setPlayingId] = useState<number | null>(null);
   // Chế độ nói chuyện (2026-11-25): bấm micro → hỏi bằng giọng → AI đọc to câu trả lời → tự nghe tiếp.
   // Bấm micro lần nữa / im lặng / đóng khung → dừng. Câu gõ tay chỉ hiện chữ.
   const convRef = useRef(false);
@@ -311,6 +331,7 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     if (typeof window !== "undefined" && "speechSynthesis" in window) void loadVoices();
     return () => {
       recRef.current?.stop();
+      recorderRef.current?.abort();
       audioRef.current?.pause();
       window.speechSynthesis?.cancel();
     };
@@ -376,7 +397,11 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
       if (rec.abort) rec.abort();
       else rec.stop();
     }
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    recorder?.abort();
     setListening(false);
+    setPlayingId(null);
     setInterim("");
     stopAudio();
     setSpeaking(false);
@@ -543,10 +568,21 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     stopAudio();
     setSpeaking(false);
     setConv(true);
+    // Tạo bộ đo âm lượng ngay lúc bấm (iPhone chỉ cho chạy âm thanh khi người dùng vừa chạm).
+    try {
+      if (!audioCtxRef.current && typeof AudioContext !== "undefined") audioCtxRef.current = new AudioContext();
+      void audioCtxRef.current?.resume();
+    } catch {
+      audioCtxRef.current = null;
+    }
     startListening();
   }
 
   function startListening() {
+    if ((forceRecorderRef.current || isIOS() || !createRecognition()) && canRecord()) {
+      void startRecording();
+      return;
+    }
     const rec = createRecognition();
     if (!rec) {
       setSupported(false);
@@ -593,6 +629,13 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
             ? "Micro đang bị chặn cho trang này. Bấm biểu tượng ổ khoá cạnh địa chỉ web → Micro → Cho phép, rồi tải lại trang."
             : "Trang đang mở bằng http nên trình duyệt không cho dùng micro. Hãy mở bằng địa chỉ https (hoặc localhost).",
         );
+      } else if (e.error === "service-not-allowed" && canRecord() && convRef.current) {
+        // Trình duyệt không có dịch vụ nhận giọng nói → chuyển sang ghi âm + Gemini chép lời.
+        forceRecorderRef.current = true;
+        recRef.current = null; // onend của lượt này bỏ qua
+        setListening(false);
+        void startRecording();
+        return;
       } else if (e.error === "service-not-allowed") {
         push("bot", "Trình duyệt này không hỗ trợ nhận giọng nói. Hãy dùng Google Chrome hoặc Microsoft Edge, hoặc gõ câu hỏi.");
       } else if (e.error === "audio-capture") {
@@ -624,7 +667,135 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     rec.start();
   }
 
-  const headerBtn = "rounded-lg p-2 text-white/80 transition-colors hover:bg-white/15 hover:text-white sm:p-1.5";
+  /**
+   * Nghe bằng ghi âm (2026-11-26): ghi tới khi im lặng 1,5 giây (tối đa 20 giây; 8 giây không nói gì
+   * thì thôi) → gửi Gemini chép lời → hỏi như nói bình thường. Bấm micro lúc đang ghi = dừng hẳn.
+   */
+  async function startRecording() {
+    window.speechSynthesis?.cancel();
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      push("bot", "Micro đang bị chặn. Vào Cài đặt tài khoản, bấm biểu tượng micro để bật lại (hoặc gõ câu hỏi).");
+      setConv(false);
+      return;
+    }
+    if (!convRef.current) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    const type = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t));
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      push("bot", "Máy này chưa ghi âm được, anh/chị gõ câu hỏi nhé.");
+      setConv(false);
+      return;
+    }
+    const chunks: Blob[] = [];
+    let heard = false;
+    let aborted = false;
+    // Đếm thời gian theo nhịp 100ms (không dùng Date.now — luật React của dự án).
+    let elapsed = 0;
+    let lastLoud = 0;
+    const ctx = audioCtxRef.current;
+    let src: MediaStreamAudioSourceNode | null = null;
+    let analyser: AnalyserNode | null = null;
+    try {
+      if (ctx) {
+        void ctx.resume();
+        src = ctx.createMediaStreamSource(stream);
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        src.connect(analyser);
+      }
+    } catch {
+      analyser = null;
+    }
+    const buf = new Float32Array(1024);
+    const finish = () => {
+      if (mr.state !== "inactive") mr.stop();
+    };
+    const tick = setInterval(() => {
+      elapsed += 100;
+      const now = elapsed;
+      if (analyser && ctx?.state === "running") {
+        analyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (const v of buf) sum += v * v;
+        if (Math.sqrt(sum / buf.length) > 0.02) {
+          heard = true;
+          lastLoud = now;
+        }
+        if ((heard && now - lastLoud > 1500) || (!heard && now > 8000)) finish();
+      } else if (now > 8000) {
+        // Không đo được âm lượng → ghi 8 giây rồi gửi.
+        heard = true;
+        finish();
+      }
+      if (now > 20000) finish();
+    }, 100);
+    const session = {
+      abort: () => {
+        aborted = true;
+        finish();
+      },
+    };
+    recorderRef.current = session;
+    mr.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data);
+    };
+    mr.onstop = () => {
+      clearInterval(tick);
+      src?.disconnect();
+      stream.getTracks().forEach((t) => t.stop());
+      if (aborted || recorderRef.current !== session) return;
+      recorderRef.current = null;
+      setListening(false);
+      if (!heard || !chunks.length) {
+        setConv(false);
+        return;
+      }
+      void transcribeAndAsk(new Blob(chunks, { type: mr.mimeType || type || "audio/mp4" }));
+    };
+    setInterim("");
+    setListening(true);
+    mr.start(250);
+  }
+
+  async function transcribeAndAsk(blob: Blob) {
+    setBusy(true);
+    setPhase("thinking");
+    let text = "";
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, blob.type.includes("webm") ? "giong-noi.webm" : "giong-noi.m4a");
+      text = (await clientApiUpload<{ text: string }>("/ai-assistant/transcribe", fd)).text.trim();
+    } catch (e) {
+      setBusy(false);
+      if (e instanceof ApiError && e.status === 429) {
+        stopConversation();
+        setExhausted(true);
+        return;
+      }
+      push("bot", "Em chưa nghe được, anh/chị nói lại hoặc gõ câu hỏi nhé.");
+      setConv(false);
+      return;
+    }
+    setBusy(false);
+    if (!convRef.current) return;
+    if (!text) {
+      push("bot", "Em chưa nghe rõ, anh/chị bấm micro và nói lại nhé.");
+      setConv(false);
+      return;
+    }
+    void ask(text, true);
+  }
+
+  const headerBtn ="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/15 hover:text-white sm:p-1.5";
 
   return (
     <>
@@ -693,13 +864,29 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
                         <p className="rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-sm whitespace-pre-line text-slate-800 shadow-sm">
                           {m.text}
                         </p>
+                        {/* Nút loa to (2026-11-26, yêu cầu người dùng): bấm để nghe, bấm lần nữa để dừng. */}
                         <button
                           type="button"
-                          onClick={() => void speakVoice(m.text)}
-                          title="Nghe lại"
-                          className="mt-0.5 flex items-center gap-1 rounded p-1 text-[11px] text-slate-400 transition-colors hover:text-brand-600"
+                          onClick={() => {
+                            if (playingId === m.id) {
+                              stopAudio();
+                              setPlayingId(null);
+                              return;
+                            }
+                            setPlayingId(m.id);
+                            void speakVoice(m.text, () => setPlayingId((p) => (p === m.id ? null : p)));
+                          }}
+                          title={playingId === m.id ? "Dừng đọc" : "Bấm để nghe"}
+                          aria-label={playingId === m.id ? "Dừng đọc" : "Nghe câu trả lời"}
+                          className={cn(
+                            "mt-1 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                            playingId === m.id
+                              ? "border-brand-300 bg-brand-50 text-brand-700"
+                              : "border-slate-200 bg-white text-slate-500 hover:border-brand-300 hover:text-brand-600",
+                          )}
                         >
-                          <Volume2 className="h-3.5 w-3.5" />
+                          <Volume2 className={cn("h-4.5 w-4.5", playingId === m.id && "animate-pulse")} />
+                          {playingId === m.id ? "Dừng" : "Nghe"}
                         </button>
                       </div>
                     </div>

@@ -7,7 +7,10 @@ import {
   Post,
   Put,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequireCap } from '../common/decorators/require-cap.decorator';
@@ -56,6 +59,20 @@ export class AiAssistantController {
     res.setHeader('Content-Type', 'audio/wav');
     res.setHeader('Cache-Control', 'no-store');
     res.send(wav);
+  }
+
+  /** Nghe bằng Gemini: nhận đoạn ghi âm (≤ 3 MB, ~20 giây), trả lại chữ. */
+  @Post('transcribe')
+  @HttpCode(200)
+  @RequireCap('voice.assistant')
+  @UseInterceptors(
+    FileInterceptor('audio', { limits: { fileSize: 3 * 1024 * 1024 } }),
+  )
+  transcribe(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.transcribe(file, user);
   }
 
   @Get('config')

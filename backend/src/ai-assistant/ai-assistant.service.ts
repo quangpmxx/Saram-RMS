@@ -731,6 +731,88 @@ export class AiAssistantService {
     throw new ServiceUnavailableException('Chưa đọc được giọng');
   }
 
+  /**
+   * Nghe bằng Gemini (2026-11-26): iPhone / app cài trên màn hình chính không có nhận giọng nói của
+   * trình duyệt → máy ghi âm, gửi lên đây, Gemini chép lại thành chữ. Không lưu đoạn ghi âm.
+   * Không trừ số câu hỏi/ngày (câu hỏi sau đó mới trừ); chi phí cộng vào ngân sách tháng.
+   */
+  async transcribe(
+    file: { buffer: Buffer; mimetype: string } | undefined,
+    user: AuthenticatedUser,
+  ): Promise<{ text: string }> {
+    await this.assertAiModule(user);
+    if (!file?.buffer?.length)
+      throw new BadRequestException('Chưa có đoạn ghi âm');
+    const cfg = await this.prisma.aiAssistantConfig.findFirst({
+      select: {
+        encryptedKey: true,
+        model: true,
+        monthlyBudgetUsd: true,
+        costMonth: true,
+        costUsd: true,
+      },
+    });
+    if (!cfg?.encryptedKey)
+      throw new ServiceUnavailableException('Admin chưa liên kết AI Gemini');
+    if (this.budgetState(cfg).exhausted) {
+      throw new HttpException(
+        'Hết ngân sách AI tháng này',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    // Safari ghi ra "audio/mp4", có máy báo "video/mp4" / "video/webm" — Gemini cần loại audio/*.
+    const mime = (file.mimetype.split(';')[0] || 'audio/webm').replace(
+      /^video\//,
+      'audio/',
+    );
+    if (!mime.startsWith('audio/'))
+      throw new BadRequestException('Tệp không phải ghi âm');
+    const apiKey = decryptToken(cfg.encryptedKey, this.tokenKey());
+    let cost = 0;
+    try {
+      const out = await this.generateWithRetry(
+        apiKey,
+        cfg.model,
+        {
+          systemInstruction:
+            'Bạn là bộ chép lời. Chép lại CHÍNH XÁC lời nói tiếng Việt trong đoạn ghi âm thành chữ có dấu, đúng chính tả, giữ nguyên số điện thoại / tên riêng. Chỉ trả về câu nói, không giải thích, không trả lời câu hỏi trong đó. Không nghe rõ lời nói nào thì trả về chuỗi rỗng.',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: mime,
+                    data: file.buffer.toString('base64'),
+                  },
+                },
+                { text: 'Chép lại lời nói trong đoạn ghi âm.' },
+              ],
+            },
+          ],
+        },
+        (u) => {
+          cost += costOf(u);
+        },
+      );
+      const text = out.parts
+        .map((p) => p.text ?? '')
+        .join('')
+        .trim();
+      return { text: text.slice(0, 1000) };
+    } catch (e) {
+      if (e instanceof GeminiError) {
+        this.logger.warn(`Gemini nghe ${e.status}: ${e.message}`);
+        if (e.status === 429 || e.status === 402)
+          throw new HttpException('AI hết lượt', HttpStatus.TOO_MANY_REQUESTS);
+      }
+      throw new ServiceUnavailableException('Chưa nghe được, thử lại nhé');
+    } finally {
+      // Âm thanh tính theo token (~32 token/giây) nên rất rẻ; vẫn cộng vào ngân sách tháng.
+      void this.addCost(cost).catch(() => undefined);
+    }
+  }
+
   /** 503/500 (Google quá tải): thử lại 2 lần, rồi lần lượt các mô hình dự phòng. 429 (hết lượt) cũng thử mô hình khác. */
   private async generateWithRetry(
     apiKey: string,
