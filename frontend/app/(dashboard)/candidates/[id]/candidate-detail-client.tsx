@@ -818,7 +818,7 @@ export function CandidateDetailClient({
                   <Button
                     type="button"
                     variant="outline"
-                    className="border-amber-400! bg-amber-400! text-amber-950! hover:border-amber-500! hover:bg-amber-500!"
+                    className="border-amber-300! bg-amber-100! text-amber-900! hover:border-amber-400! hover:bg-amber-200!"
                     onClick={() => setIsCallbackModalOpen(true)}
                   >
                     <CalendarClock className="h-4 w-4" strokeWidth={2} />
@@ -860,7 +860,7 @@ export function CandidateDetailClient({
                     className={
                       candidate.care_stopped_at
                         ? undefined
-                        : "border-red-600! bg-red-600! text-white! hover:border-red-700! hover:bg-red-700!"
+                        : "border-red-300! bg-red-100! text-red-700! hover:border-red-400! hover:bg-red-200!"
                     }
                     disabled={isCareSubmitting}
                     onClick={() => void handleToggleCareStopped()}
