@@ -42,10 +42,12 @@ function formatDateHeader(value: string): string {
 }
 
 function groupByDate(events: CalendarEvent[]): Array<{ dateKey: string; events: CalendarEvent[] }> {
-  const sorted = [...events].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+  // Mới nhất lên đầu, cũ nhất ở dưới (2026-11-27, yêu cầu người dùng) — cả nhóm ngày lẫn trong ngày.
+  const sorted = [...events].sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
   const groups = new Map<string, CalendarEvent[]>();
   for (const event of sorted) {
-    const dateKey = event.scheduled_at.slice(0, 10);
+    // Ngày theo giờ VN (trước lấy ngày UTC → lịch 0h–7h sáng bị xếp sang hôm trước).
+    const dateKey = new Date(event.scheduled_at).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
     const bucket = groups.get(dateKey) ?? [];
     bucket.push(event);
     groups.set(dateKey, bucket);
