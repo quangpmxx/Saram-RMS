@@ -412,6 +412,15 @@ export class CandidatesController {
     return this.pipelineService.listInterviews(id, user);
   }
 
+  /** Lịch gọi lại còn hiệu lực (hiện ở trang chi tiết data). */
+  @Get(':id/callback')
+  listCallbacks(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pipelineService.listCallbacks(id, user);
+  }
+
   @Post(':id/callback')
   createCallback(
     @Param('id', ParseUUIDPipe) id: string,

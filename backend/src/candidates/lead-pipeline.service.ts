@@ -46,6 +46,7 @@ import {
   CallbackResponseDto,
   toCallbackResponse,
 } from './dto/callback-response.dto';
+import { vnDateOnly, vnDayRange } from '../care-warehouse/care-time.util';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LeadEventTargets } from '../realtime/realtime-event.interface';
 
@@ -741,6 +742,31 @@ export class LeadPipelineService {
       currentUser,
     );
     return toCallbackResponse(created);
+  }
+
+  /**
+   * Lịch gọi lại còn hiệu lực của 1 data (2026-11-27, yêu cầu người dùng: hiện ngay ở trang chi tiết
+   * để nhìn là biết đang có hẹn): lịch "Mỗi ngày" chưa xoá + lịch 1 lần từ đầu hôm nay trở đi
+   * (gồm cả giờ đã qua trong hôm nay — chưa gọi kịp). Quyền xem như trang chi tiết.
+   */
+  async listCallbacks(
+    id: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<CallbackResponseDto[]> {
+    await this.candidatesService.assertCanView(id, currentUser);
+    const { start } = vnDayRange(vnDateOnly(new Date()));
+    const rows = await this.prisma.callbackSchedule.findMany({
+      where: {
+        leadId: id,
+        deletedAt: null,
+        isCompleted: false,
+        OR: [{ repeatDaily: true }, { scheduledAt: { gte: start } }],
+      },
+      include: CALLBACK_INCLUDE,
+      orderBy: { scheduledAt: 'asc' },
+      take: 20,
+    });
+    return rows.map(toCallbackResponse);
   }
 
   /**

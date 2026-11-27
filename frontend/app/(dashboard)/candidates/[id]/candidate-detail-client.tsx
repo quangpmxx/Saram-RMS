@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDMY, formatHMDMY } from "@/lib/date-format";
+import { formatDMY, formatHM, formatHMDMY } from "@/lib/date-format";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -137,6 +137,8 @@ export function CandidateDetailClient({
   }
   const toast = useToast();
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
+  // Đặt lịch mới → tải lại dải "Lịch gọi lại".
+  const [callbackRefresh, setCallbackRefresh] = useState(0);
   // UI Polish — "Tình trạng cuộc gọi"/"Kết quả cuộc gọi" đổi từ popup sang
   // chọn ngay tại trang (vẫn 1 giá trị mỗi ô như cũ, không đổi database) —
   // nút "Gọi ngay" đổi thành "Lưu thông tin". Từ 2026-07-27 (yêu cầu trực
@@ -876,6 +878,8 @@ export function CandidateDetailClient({
           }
         />
 
+        <CallbackStrip candidateId={candidate.id} refreshKey={callbackRefresh} />
+
         {/* 2026-11-10: Thông tin lao động chiếm cả hàng, các trường dàn ngang. */}
         <div className="mb-4">
           <Card className="p-5">
@@ -1265,6 +1269,7 @@ export function CandidateDetailClient({
             onClose={() => setIsCallbackModalOpen(false)}
             onCreated={(count) => {
               setIsCallbackModalOpen(false);
+              setCallbackRefresh((n) => n + 1);
               toast.success(count > 1 ? `Đã đặt ${count} lịch gọi lại` : "Đã đặt lịch gọi lại");
             }}
           />
@@ -1284,6 +1289,64 @@ export function CandidateDetailClient({
   );
   if (!inModal) return content;
   return <CandidateDetailModalFrame onClose={() => void handleBack()}>{content}</CandidateDetailModalFrame>;
+}
+
+interface PendingCallback {
+  id: string;
+  scheduled_at: string;
+  repeat_daily: boolean;
+  created_by: { name: string };
+}
+
+/** "Hôm nay" / "Ngày mai" / "dd/mm/yy" theo giờ máy (giờ VN). */
+function callbackDayLabel(d: Date): string {
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(new Date())) / 86_400_000);
+  if (diff === 0) return "Hôm nay";
+  if (diff === 1) return "Ngày mai";
+  return formatDMY(d);
+}
+
+/**
+ * Dải "Lịch gọi lại" ngay dưới tên data (2026-11-27, yêu cầu người dùng: nhìn vào là biết đang có
+ * hẹn). Không có lịch nào còn hiệu lực thì không hiện gì.
+ */
+function CallbackStrip({ candidateId, refreshKey }: { candidateId: string; refreshKey: number }) {
+  const [items, setItems] = useState<PendingCallback[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    clientApi<PendingCallback[]>(`/candidate/${candidateId}/callback`)
+      .then((rows) => {
+        if (!cancelled) setItems(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateId, refreshKey]);
+
+  if (!items.length) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+      <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-800">
+        <CalendarClock className="h-4 w-4" strokeWidth={2} />
+        Lịch gọi lại:
+      </span>
+      {items.map((c) => {
+        const d = new Date(c.scheduled_at);
+        const time = formatHM(d);
+        return (
+          <span
+            key={c.id}
+            title={`Đặt bởi ${c.created_by.name}`}
+            className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-sm font-medium text-amber-900"
+          >
+            {c.repeat_daily ? `Mỗi ngày ${time}` : `${time} · ${callbackDayLabel(d)}`}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 type CallbackRepeat = "once" | "daily";
