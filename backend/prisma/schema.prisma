@@ -2430,6 +2430,21 @@ model AiUsageDaily {
   @@map("ai_usage_daily")
 }
 
+/// Lịch sử chat Trợ lý AI (2026-11-27, yêu cầu người dùng): Admin xem ai đã hỏi gì, mỗi ngày bao nhiêu lượt
+/// (quyền voice.view_chat_logs). Chỉ lưu câu hỏi thành công + câu trả lời. Trước ngày này không lưu.
+model AiChatLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  question  String
+  answer    String
+  viaVoice  Boolean  @default(false) @map("via_voice")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([accountId, createdAt])
+  @@index([createdAt])
+  @@map("ai_chat_logs")
+}
+
 model AiAssistantConfig {
   id           String   @id @default(uuid()) @db.Uuid
   provider     String   @default("gemini") @db.VarChar(20)

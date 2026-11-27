@@ -319,6 +319,14 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     ],
   },
   {
+    // 2026-11-27, yêu cầu người dùng: nút "Lịch sử chat AI" ở Quản lý tài khoản.
+    code: 'voice.view_chat_logs',
+    module: 'ai-assistant',
+    label: 'Xem lịch sử chat AI của nhân viên',
+    hint: 'Ai đã hỏi AI gì, mỗi ngày bao nhiêu lượt (nút ở Quản lý tài khoản; mặc định chỉ Admin)',
+    defaultRoles: [],
+  },
+  {
     code: 'voice.ai_config',
     module: 'ai-assistant',
     label: 'Liên kết AI Gemini cho Trợ lý',

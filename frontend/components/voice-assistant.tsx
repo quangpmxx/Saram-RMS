@@ -578,10 +578,10 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     historyRef.current = [];
   }
 
-  async function askAi(question: string): Promise<string> {
+  async function askAi(question: string, viaVoice = false): Promise<string> {
     const r = await clientApi<{ answer: string }>("/ai-assistant/ask", {
       method: "POST",
-      body: JSON.stringify({ question, history: historyRef.current.slice(-8) }),
+      body: JSON.stringify({ question, history: historyRef.current.slice(-8), via_voice: viaVoice }),
     });
     historyRef.current = [...historyRef.current, { role: "user" as const, text: question }, { role: "model" as const, text: r.answer }].slice(-12);
     return r.answer;
@@ -596,7 +596,7 @@ export function VoiceAssistant({ userName, enabled = true, page = false }: { use
     setBusy(true);
     setPhase("thinking");
     try {
-      await reply(await askAi(question));
+      await reply(await askAi(question, viaVoice));
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
         stopConversation();

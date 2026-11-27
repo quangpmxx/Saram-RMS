@@ -550,6 +550,75 @@ export class AiAssistantService {
     return new Date(`${vnNow().toISOString().slice(0, 10)}T00:00:00.000Z`);
   }
 
+  /** Lưu lịch sử chat (lỗi ghi không làm hỏng câu trả lời). */
+  private async logChat(
+    accountId: string,
+    question: string,
+    answer: string,
+    viaVoice: boolean,
+  ) {
+    await this.prisma.aiChatLog
+      .create({
+        data: {
+          accountId,
+          question: question.slice(0, 2000),
+          answer: answer.slice(0, 8000),
+          viaVoice,
+        },
+      })
+      .catch((e: unknown) =>
+        this.logger.warn(`Không lưu được lịch sử chat: ${String(e)}`),
+      );
+  }
+
+  /**
+   * Lịch sử chat 1 ngày (giờ VN): không có account_id → số lượt của từng nhân viên;
+   * có account_id → các câu đã hỏi + trả lời của người đó, mới nhất trước.
+   */
+  async chatLogs(date: string, accountId?: string) {
+    const { start, end } = vnDayRange(date);
+    const range = { gte: start, lt: end };
+    if (accountId) {
+      const rows = await this.prisma.aiChatLog.findMany({
+        where: { accountId, createdAt: range },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      });
+      return {
+        date,
+        messages: rows.map((r) => ({
+          at: r.createdAt.toISOString(),
+          question: r.question,
+          answer: r.answer,
+          via_voice: r.viaVoice,
+        })),
+      };
+    }
+    const groups = await this.prisma.aiChatLog.groupBy({
+      by: ['accountId'],
+      where: { createdAt: range },
+      _count: { _all: true },
+    });
+    const accounts = await this.prisma.account.findMany({
+      where: { id: { in: groups.map((g) => g.accountId) } },
+      select: { id: true, fullName: true, role: true },
+    });
+    return {
+      date,
+      items: groups
+        .map((g) => {
+          const a = accounts.find((x) => x.id === g.accountId);
+          return {
+            account_id: g.accountId,
+            name: a?.fullName ?? '(đã xoá)',
+            role: a?.role ?? null,
+            count: g._count._all,
+          };
+        })
+        .sort((x, y) => y.count - x.count),
+    };
+  }
+
   private async countUsage(accountId: string) {
     const day = this.vnToday();
     await this.prisma.aiUsageDaily.upsert({
@@ -641,7 +710,9 @@ export class AiAssistantService {
             continue;
           }
           await this.countUsage(user.id);
-          return { answer: text || 'Xin lỗi, mình chưa trả lời được câu này.' };
+          const answer = text || 'Xin lỗi, mình chưa trả lời được câu này.';
+          await this.logChat(user.id, dto.question, answer, !!dto.via_voice);
+          return { answer };
         }
         contents.push(reply);
         const responses = await Promise.all(

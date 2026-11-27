@@ -10,7 +10,9 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  Matches,
   MinLength,
+  IsUUID,
   ValidateNested,
 } from 'class-validator';
 
@@ -37,6 +39,11 @@ export class SaveAiBudgetDto {
     number | null;
 }
 
+export class AiChatLogQueryDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/) date!: string;
+  @IsOptional() @IsUUID() account_id?: string;
+}
+
 export class SpeakAiDto {
   @IsString() @MinLength(1) @MaxLength(2000) text!: string;
 }
@@ -52,6 +59,9 @@ export class AiHistoryItemDto {
 
 export class AskAiDto {
   @IsString() @MinLength(1) @MaxLength(1000) question!: string;
+
+  /** Hỏi bằng giọng nói (để ghi vào lịch sử chat). */
+  @IsOptional() @IsBoolean() via_voice?: boolean;
 
   /** Vài lượt hỏi–đáp trước để hiểu câu hỏi nối tiếp ("còn hôm qua thì sao?"). */
   @IsOptional()

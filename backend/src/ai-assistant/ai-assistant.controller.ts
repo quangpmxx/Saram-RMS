@@ -6,6 +6,7 @@ import {
   HttpCode,
   Post,
   Put,
+  Query,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -17,6 +18,7 @@ import { RequireCap } from '../common/decorators/require-cap.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { AiAssistantService } from './ai-assistant.service';
 import {
+  AiChatLogQueryDto,
   AskAiDto,
   ListAiModelsDto,
   SaveAiConfigDto,
@@ -73,6 +75,13 @@ export class AiAssistantController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.transcribe(file, user);
+  }
+
+  /** Lịch sử chat AI 1 ngày: số lượt từng nhân viên, hoặc nội dung của 1 người (account_id). */
+  @Get('logs')
+  @RequireCap('voice.view_chat_logs')
+  chatLogs(@Query() q: AiChatLogQueryDto) {
+    return this.service.chatLogs(q.date, q.account_id);
   }
 
   @Get('config')
