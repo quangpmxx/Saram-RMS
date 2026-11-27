@@ -815,7 +815,12 @@ export function CandidateDetailClient({
                   </Button>
                 )}
                 {canUpdate && (
-                  <Button type="button" variant="outline" onClick={() => setIsCallbackModalOpen(true)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-amber-400! bg-amber-400! text-amber-950! hover:border-amber-500! hover:bg-amber-500!"
+                    onClick={() => setIsCallbackModalOpen(true)}
+                  >
                     <CalendarClock className="h-4 w-4" strokeWidth={2} />
                     Đặt lịch gọi lại
                   </Button>
@@ -852,6 +857,11 @@ export function CandidateDetailClient({
                   <Button
                     type="button"
                     variant={candidate.care_stopped_at ? "secondary" : "outline"}
+                    className={
+                      candidate.care_stopped_at
+                        ? undefined
+                        : "border-red-600! bg-red-600! text-white! hover:border-red-700! hover:bg-red-700!"
+                    }
                     disabled={isCareSubmitting}
                     onClick={() => void handleToggleCareStopped()}
                   >
