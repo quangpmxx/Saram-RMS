@@ -494,6 +494,9 @@ export interface CalendarEvent {
   created_by: NamedRefWithRole;
   /** Lịch gọi lại lặp mỗi ngày — mỗi ngày 1 dòng, cùng id (xoá = xoá cả chuỗi). */
   repeat_daily: boolean;
+  /** Lịch gọi lại đã tới giờ: có ghi chú trong 30 phút sau giờ hẹn → đã gọi lại (null = chưa). Chưa tới giờ: không có. */
+  called_back?: { at: string; by: string } | null;
+  callback_state?: "upcoming" | "due" | "done" | "missed";
 }
 
 // ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────

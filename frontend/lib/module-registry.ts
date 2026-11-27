@@ -125,7 +125,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
     icon: "orderManagement",
     defaultRoles: ["admin"],
   },
-  { code: "calendar", href: "/calendar", label: "Lịch hẹn", icon: "calendar", defaultRoles: ["admin", "manager", "leader", "sale", "sup_leader"] },
+  { code: "calendar", href: "/calendar", label: "Lịch gọi lại", icon: "calendar", defaultRoles: ["admin", "manager", "leader", "sale", "sup_leader"] },
   { code: "audit-log", href: "/audit-log", label: "Nhật ký", icon: "auditLog", defaultRoles: ["admin", "manager"] },
   { code: "accounts", href: "/accounts", label: "Quản lý tài khoản", icon: "accounts", defaultRoles: ["admin"] },
 ];

@@ -90,7 +90,7 @@ MEDIA
 - Kế hoạch / chiến dịch, giao việc (Kanban), nộp sản phẩm → duyệt (Duyệt / Cần chỉnh sửa), ý tưởng & kịch bản (cảnh báo trùng), lịch xuất bản, Sổ video (quay, dựng, link, đăng), báo cáo hiệu quả (số liệu nhập tay).
 
 KHÁC
-- Lịch hẹn: lịch PV và lịch gọi lại của data.
+- Lịch gọi lại (menu, trước gọi là "Lịch hẹn"): lịch gọi lại + lịch PV của data; mỗi lịch gọi lại ghi "Đã gọi lại" nếu có ghi chú trong 30 phút kể từ giờ hẹn, quá 30 phút chưa có là "Chưa gọi lại".
 - Nhật ký: lịch sử thao tác (Admin, Quản lý).
 - Quản lý tài khoản (Admin): thêm/sửa/vô hiệu hoá nhân viên, vai trò, nhóm, văn phòng, chức vụ, ngày vào làm.
 - Liên hệ từ website: doanh nghiệp gửi nhu cầu tuyển dụng trên saramvina.com. Người lao động đăng ký tìm việc trên web tự thành data nguồn Website.

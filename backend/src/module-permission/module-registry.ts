@@ -164,7 +164,7 @@ export const MODULE_REGISTRY: ModuleRegistryEntry[] = [
   },
   {
     code: 'calendar',
-    label: 'Lịch hẹn',
+    label: 'Lịch gọi lại',
     defaultRoles: ['admin', 'manager', 'leader', 'sale', 'sup_leader'],
     controllers: [CalendarController],
   },

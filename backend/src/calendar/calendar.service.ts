@@ -34,7 +34,17 @@ export interface CalendarEventDto {
   created_by: { id: string; name: string; role: string };
   /** Lịch gọi lại lặp mỗi ngày — mỗi ngày là 1 dòng, cùng id (xoá = xoá cả chuỗi). */
   repeat_daily: boolean;
+  /**
+   * Chỉ lịch gọi lại (2026-11-27, yêu cầu người dùng): ghi chú đầu tiên của data trong vòng
+   * CALLBACK_DONE_WINDOW_MIN phút kể từ giờ hẹn (lúc phần mềm báo nhắc) = đã gọi lại. null = chưa có.
+   */
+  called_back?: { at: string; by: string } | null;
+  /** Chỉ lịch gọi lại: chưa tới giờ / đang trong 30 phút chờ gọi / đã gọi lại / quá 30 phút chưa gọi. */
+  callback_state?: 'upcoming' | 'due' | 'done' | 'missed';
 }
+
+/** Ghi chú trong khoảng này sau giờ hẹn gọi lại thì tính là "Đã gọi lại". */
+export const CALLBACK_DONE_WINDOW_MIN = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Chặn trải quá nhiều ngày khi xem khoảng rất dài. */
@@ -203,7 +213,52 @@ export class CalendarService {
           )),
     ];
 
+    await this.markCalledBack(events);
     return events.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+  }
+
+  /** Gắn "đã gọi lại" cho lịch gọi lại đã tới giờ: 1 truy vấn ghi chú cho mọi data liên quan. */
+  private async markCalledBack(events: CalendarEventDto[]) {
+    const now = Date.now();
+    const windowMs = CALLBACK_DONE_WINDOW_MIN * 60 * 1000;
+    for (const e of events) {
+      if (e.type === 'callback' && Date.parse(e.scheduled_at) > now)
+        e.callback_state = 'upcoming';
+    }
+    const due = events.filter(
+      (e) => e.type === 'callback' && Date.parse(e.scheduled_at) <= now,
+    );
+    if (!due.length) return;
+    const times = due.map((e) => Date.parse(e.scheduled_at));
+    const notes = await this.prisma.leadNote.findMany({
+      where: {
+        leadId: { in: [...new Set(due.map((e) => e.candidate.id))] },
+        deletedAt: null,
+        createdAt: {
+          gte: new Date(Math.min(...times)),
+          lte: new Date(Math.max(...times) + windowMs),
+        },
+      },
+      select: {
+        leadId: true,
+        createdAt: true,
+        createdBy: { select: { fullName: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const e of due) {
+      const at = Date.parse(e.scheduled_at);
+      const hit = notes.find(
+        (n) =>
+          n.leadId === e.candidate.id &&
+          n.createdAt.getTime() >= at &&
+          n.createdAt.getTime() <= at + windowMs,
+      );
+      e.called_back = hit
+        ? { at: hit.createdAt.toISOString(), by: hit.createdBy.fullName }
+        : null;
+      e.callback_state = hit ? 'done' : at + windowMs < now ? 'missed' : 'due';
+    }
   }
 
   /**

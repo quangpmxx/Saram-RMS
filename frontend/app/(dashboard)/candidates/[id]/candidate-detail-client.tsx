@@ -1424,7 +1424,7 @@ function ScheduleCallbackModal({
   return (
     <Modal
       title="Đặt lịch gọi lại"
-      description="Lịch gọi lại sẽ xuất hiện trên màn hình Lịch hẹn."
+      description="Lịch gọi lại sẽ xuất hiện trên màn hình Lịch gọi lại."
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>

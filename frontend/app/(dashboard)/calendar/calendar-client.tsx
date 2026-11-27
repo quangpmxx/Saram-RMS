@@ -72,7 +72,7 @@ export function CalendarClient({
   currentUserId: string;
   currentUserRole: AccountRole;
 }) {
-  useSetPageTitle("Lịch hẹn");
+  useSetPageTitle("Lịch gọi lại");
   const [events, setEvents] = useState(initialEvents);
   /**
    * Dự án phụ — nâng cấp toàn diện: bộ lọc ngày kiểu Google Analytics dùng
@@ -243,7 +243,11 @@ export function CalendarClient({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-slate-600">{formatDateTime(event.scheduled_at)}</p>
+                        <p className="text-sm text-slate-600">
+                          {event.type === "callback" ? "Hẹn gọi: " : "Hẹn PV: "}
+                          <span className="font-medium text-slate-800">{formatDateTime(event.scheduled_at)}</span>
+                        </p>
+                        {event.type === "callback" && <CallbackStatus event={event} />}
                         <p className="text-xs text-slate-400">
                           Sale hẹn: <NameWithRoleHint account={event.created_by} className="font-medium text-slate-500" />
                         </p>
@@ -281,6 +285,23 @@ export function CalendarClient({
       )}
     </div>
   );
+}
+
+/**
+ * Trạng thái lịch gọi lại (2026-11-27, yêu cầu người dùng): có ghi chú trong 30 phút kể từ giờ hẹn
+ * (lúc phần mềm báo nhắc) = "Đã gọi lại"; quá 30 phút chưa có = "Chưa gọi lại"; trong 30 phút = "Đang tới giờ gọi".
+ */
+function CallbackStatus({ event }: { event: CalendarEvent }) {
+  if (event.called_back) {
+    return (
+      <p className="mt-0.5 text-xs font-medium text-emerald-600">
+        ✓ Đã gọi lại {formatDateTime(event.called_back.at)} · {event.called_back.by}
+      </p>
+    );
+  }
+  if (event.callback_state === "missed") return <p className="mt-0.5 text-xs font-medium text-red-600">✗ Chưa gọi lại</p>;
+  if (event.callback_state === "due") return <p className="mt-0.5 text-xs font-medium text-amber-600">Đang tới giờ gọi</p>;
+  return <p className="mt-0.5 text-xs text-slate-400">Chưa tới giờ</p>;
 }
 
 function ScheduleInterviewQuickModal({
