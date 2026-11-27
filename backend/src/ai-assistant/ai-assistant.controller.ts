@@ -77,11 +77,11 @@ export class AiAssistantController {
     return this.service.transcribe(file, user);
   }
 
-  /** Lịch sử chat AI 1 ngày: số lượt từng nhân viên, hoặc nội dung của 1 người (account_id). */
+  /** Trang Lịch sử chat AI: lọc ngày / nhân viên / gõ-nói / từ khoá, tổng hợp + chi tiết. */
   @Get('logs')
   @RequireCap('voice.view_chat_logs')
   chatLogs(@Query() q: AiChatLogQueryDto) {
-    return this.service.chatLogs(q.date, q.account_id);
+    return this.service.chatLogs(q);
   }
 
   @Get('config')

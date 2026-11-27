@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Bot, Moon, Sun, Upload } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import type { Account } from "@/lib/types";
@@ -20,7 +21,6 @@ import { CheckinLocationSettings } from "./checkin-location-settings";
 import { PushNotificationSettings } from "./push-notification-settings";
 import { AiAssistantSettings } from "./ai-assistant-settings";
 import { AiKnowledgeSettings } from "./ai-knowledge-settings";
-import { AiChatLogsModal } from "./ai-chat-logs-modal";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — khớp đúng giới hạn backend (POST /me/avatar)
@@ -45,7 +45,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
   const canAiUse = useCan()("voice.assistant");
   // Lịch sử chat AI của nhân viên (2026-11-27) — quyền voice.view_chat_logs, mặc định chỉ Admin.
   const canViewAiLogs = useCan()("voice.view_chat_logs");
-  const [aiLogsOpen, setAiLogsOpen] = useState(false);
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -293,11 +292,13 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Lịch sử chat AI</h3>
               <p className="mt-1 text-xs text-slate-500">Nhân viên đã hỏi Trợ lý AI những gì, mỗi ngày bao nhiêu lượt.</p>
-              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => setAiLogsOpen(true)}>
+              <Link
+                href="/ai-chat-logs"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
+              >
                 <Bot className="h-4 w-4" strokeWidth={2} />
                 Xem lịch sử chat AI
-              </Button>
-              {aiLogsOpen && <AiChatLogsModal onClose={() => setAiLogsOpen(false)} />}
+              </Link>
             </section>
           )}
 

@@ -20,7 +20,8 @@ import { ModulePermissionService } from '../module-permission/module-permission.
 import { can } from '../common/permissions/capability-catalog';
 import { findOwnTeamId } from '../common/utils/account-team.util';
 import { NO_MATCH_UUID } from '../common/utils/no-match-uuid';
-import { vnDayRange } from '../care-warehouse/care-time.util';
+import { vnDateOnly, vnDayRange } from '../care-warehouse/care-time.util';
+import { Cron } from '@nestjs/schedule';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { decryptToken, encryptToken } from '../marketing-hub/token-crypto';
 import {
@@ -42,6 +43,7 @@ import {
   AskAiDto,
   SaveAiConfigDto,
   SaveAiKnowledgeDto,
+  AiChatLogQueryDto,
 } from './ai-assistant.dto';
 import { APP_GUIDE } from './app-guide';
 import { BirthdayService } from '../birthday/birthday.service';
@@ -79,6 +81,9 @@ export function costOf(u: GeminiUsage): number {
 }
 /** Chạm tỉ lệ này của ngân sách tháng → tắt giọng Gemini (phần tốn nhất), chỉ trả lời chữ. */
 const VOICE_OFF_RATIO = 0.85;
+/** Lịch sử chat AI giữ 1 năm rồi tự xoá. */
+const CHAT_LOG_KEEP_DAYS = 365;
+const CHAT_LOG_PAGE_SIZE = 50;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -571,51 +576,124 @@ export class AiAssistantService {
       );
   }
 
+  /** Giữ lịch sử chat 365 ngày (user 2026-11-27: "không tốn nhiều dung lượng thì lưu cả năm", ~2 KB/câu). */
+  @Cron('20 3 * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
+  async purgeOldChatLogs() {
+    const cutoff = new Date(Date.now() - CHAT_LOG_KEEP_DAYS * 86_400_000);
+    const r = await this.prisma.aiChatLog
+      .deleteMany({ where: { createdAt: { lt: cutoff } } })
+      .catch(() => ({ count: 0 }));
+    if (r.count)
+      this.logger.log(
+        `Đã xoá ${r.count} lịch sử chat AI quá ${CHAT_LOG_KEEP_DAYS} ngày`,
+      );
+  }
+
   /**
-   * Lịch sử chat 1 ngày (giờ VN): không có account_id → số lượt của từng nhân viên;
-   * có account_id → các câu đã hỏi + trả lời của người đó, mới nhất trước.
+   * Trang "Lịch sử chat AI" (2026-11-27): lọc theo khoảng ngày (giờ VN), nhân viên, hình thức
+   * (gõ / nói), từ khoá trong câu hỏi hoặc trả lời. Trả: tổng hợp theo nhân viên + theo ngày,
+   * danh sách người có chat trong khoảng ngày (cho ô lọc), và trang chi tiết (50 câu, mới nhất trước).
    */
-  async chatLogs(date: string, accountId?: string) {
-    const { start, end } = vnDayRange(date);
-    const range = { gte: start, lt: end };
-    if (accountId) {
-      const rows = await this.prisma.aiChatLog.findMany({
-        where: { accountId, createdAt: range },
+  async chatLogs(q: AiChatLogQueryDto) {
+    const range = {
+      gte: vnDayRange(q.date_from).start,
+      lt: vnDayRange(q.date_to).end,
+    };
+    const keyword = q.q?.trim();
+    const where = {
+      createdAt: range,
+      ...(q.account_id ? { accountId: q.account_id } : {}),
+      ...(q.via ? { viaVoice: q.via === 'voice' } : {}),
+      ...(keyword
+        ? {
+            OR: [
+              { question: { contains: keyword, mode: 'insensitive' as const } },
+              { answer: { contains: keyword, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    const page = Math.max(1, q.page ?? 1);
+    const [light, people, rows] = await Promise.all([
+      this.prisma.aiChatLog.findMany({
+        where,
+        select: { accountId: true, createdAt: true },
+        take: 50_000,
+      }),
+      this.prisma.aiChatLog.groupBy({
+        by: ['accountId'],
+        where: { createdAt: range },
+      }),
+      this.prisma.aiChatLog.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
-        take: 500,
-      });
-      return {
-        date,
-        messages: rows.map((r) => ({
-          at: r.createdAt.toISOString(),
-          question: r.question,
-          answer: r.answer,
-          via_voice: r.viaVoice,
-        })),
-      };
-    }
-    const groups = await this.prisma.aiChatLog.groupBy({
-      by: ['accountId'],
-      where: { createdAt: range },
-      _count: { _all: true },
-    });
+        skip: (page - 1) * CHAT_LOG_PAGE_SIZE,
+        take: CHAT_LOG_PAGE_SIZE,
+      }),
+    ]);
+    const ids = [
+      ...new Set([
+        ...people.map((p) => p.accountId),
+        ...rows.map((r) => r.accountId),
+      ]),
+    ];
     const accounts = await this.prisma.account.findMany({
-      where: { id: { in: groups.map((g) => g.accountId) } },
+      where: { id: { in: ids } },
       select: { id: true, fullName: true, role: true },
     });
+    const nameOf = (id: string) => accounts.find((a) => a.id === id);
+    const vnDate = (d: Date) => vnDateOnly(d);
+    const byAccount = new Map<
+      string,
+      { count: number; days: Set<string>; last: Date }
+    >();
+    const byDay = new Map<string, number>();
+    for (const r of light) {
+      const day = vnDate(r.createdAt);
+      byDay.set(day, (byDay.get(day) ?? 0) + 1);
+      const x = byAccount.get(r.accountId) ?? {
+        count: 0,
+        days: new Set<string>(),
+        last: r.createdAt,
+      };
+      x.count += 1;
+      x.days.add(day);
+      if (r.createdAt > x.last) x.last = r.createdAt;
+      byAccount.set(r.accountId, x);
+    }
     return {
-      date,
-      items: groups
-        .map((g) => {
-          const a = accounts.find((x) => x.id === g.accountId);
-          return {
-            account_id: g.accountId,
-            name: a?.fullName ?? '(đã xoá)',
-            role: a?.role ?? null,
-            count: g._count._all,
-          };
-        })
-        .sort((x, y) => y.count - x.count),
+      total: light.length,
+      page,
+      page_size: CHAT_LOG_PAGE_SIZE,
+      people: people
+        .map((p) => ({
+          account_id: p.accountId,
+          name: nameOf(p.accountId)?.fullName ?? '(đã xoá)',
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'vi')),
+      by_account: [...byAccount.entries()]
+        .map(([id, x]) => ({
+          account_id: id,
+          name: nameOf(id)?.fullName ?? '(đã xoá)',
+          role: nameOf(id)?.role ?? null,
+          count: x.count,
+          days: x.days.size,
+          last_at: x.last.toISOString(),
+        }))
+        .sort((a, b) => b.count - a.count),
+      by_day: [...byDay.entries()]
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+      items: rows.map((r) => ({
+        id: r.id,
+        at: r.createdAt.toISOString(),
+        account_id: r.accountId,
+        name: nameOf(r.accountId)?.fullName ?? '(đã xoá)',
+        role: nameOf(r.accountId)?.role ?? null,
+        question: r.question,
+        answer: r.answer,
+        via_voice: r.viaVoice,
+      })),
     };
   }
 

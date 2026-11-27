@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsInt,
   IsNumber,
   Max,
   Min,
@@ -40,8 +41,12 @@ export class SaveAiBudgetDto {
 }
 
 export class AiChatLogQueryDto {
-  @Matches(/^\d{4}-\d{2}-\d{2}$/) date!: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/) date_from!: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/) date_to!: string;
   @IsOptional() @IsUUID() account_id?: string;
+  @IsOptional() @IsIn(['voice', 'text']) via?: 'voice' | 'text';
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
 }
 
 export class SpeakAiDto {
