@@ -100,8 +100,8 @@ export function AiChatLogs() {
 
       {/* Bộ lọc — 1 dòng gọn (2026-11-27, yêu cầu người dùng); màn hẹp thì vuốt ngang. */}
       <div className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
-        <DateRangePicker value={range} onChange={filter(setRange)} className="shrink-0" />
-        <Select uiSize="sm" aria-label="Nhân viên" value={accountId} onChange={(e) => filter(setAccountId)(e.target.value)} className="w-40 shrink-0">
+        <DateRangePicker value={range} onChange={filter(setRange)} className="w-44! shrink-0" />
+        <Select uiSize="sm" aria-label="Nhân viên" value={accountId} onChange={(e) => filter(setAccountId)(e.target.value)} className="w-40! shrink-0">
           <option value="">Tất cả nhân viên</option>
           {data?.people.map((p) => (
             <option key={p.account_id} value={p.account_id}>
@@ -109,13 +109,13 @@ export function AiChatLogs() {
             </option>
           ))}
         </Select>
-        <Select uiSize="sm" aria-label="Cách hỏi" value={via} onChange={(e) => filter(setVia)(e.target.value as "" | "voice" | "text")} className="w-32 shrink-0">
+        <Select uiSize="sm" aria-label="Cách hỏi" value={via} onChange={(e) => filter(setVia)(e.target.value as "" | "voice" | "text")} className="w-28! shrink-0">
           <option value="">Gõ + nói</option>
           <option value="text">Gõ chữ</option>
           <option value="voice">Nói</option>
         </Select>
         <form
-          className="relative min-w-[160px] flex-1"
+          className="relative w-52 shrink-0"
           onSubmit={(e) => {
             e.preventDefault();
             filter(setKeyword)(keywordDraft.trim());
