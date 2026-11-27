@@ -19,8 +19,6 @@ import { cn } from "@/lib/cn";
 import type { UiTheme } from "@/lib/types";
 import { CheckinLocationSettings } from "./checkin-location-settings";
 import { PushNotificationSettings } from "./push-notification-settings";
-import { AiAssistantSettings } from "./ai-assistant-settings";
-import { AiKnowledgeSettings } from "./ai-knowledge-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const AVATAR_MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — khớp đúng giới hạn backend (POST /me/avatar)
@@ -43,7 +41,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
   const canManageCheckin = useCan()("checkin.manage");
   const canAiConfig = useCan()("voice.ai_config");
   const canAiUse = useCan()("voice.assistant");
-  // Lịch sử chat AI của nhân viên (2026-11-27) — quyền voice.view_chat_logs, mặc định chỉ Admin.
   const canViewAiLogs = useCan()("voice.view_chat_logs");
   const router = useRouter();
   const toast = useToast();
@@ -264,33 +261,15 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
             </section>
           )}
 
-          {/* Liên kết AI Gemini cho Trợ lý giọng nói (2026-11-25) — mặc định chỉ Admin. */}
-          {canAiConfig && (
+          {/* Mọi cài đặt AI gom vào 1 trang riêng (2026-11-27, yêu cầu người dùng). */}
+          {(canAiConfig || canViewAiLogs) && (
             <section>
-              <h3 className="text-sm font-semibold text-slate-900">Trợ lý AI (Google Gemini)</h3>
-              <div className="mt-3">
-                <AiAssistantSettings />
-              </div>
-            </section>
-          )}
-          {canAiConfig && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-900">Dạy Trợ lý AI về công ty</h3>
-              <div className="mt-3">
-                <AiKnowledgeSettings />
-              </div>
-            </section>
-          )}
-
-          {canViewAiLogs && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-900">Lịch sử chat AI</h3>
               <Link
-                href="/ai-chat-logs"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
+                href="/ai-settings"
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100"
               >
                 <Bot className="h-4 w-4" strokeWidth={2} />
-                Xem lịch sử chat AI
+                Cài đặt trợ lý ảo AI
               </Link>
             </section>
           )}

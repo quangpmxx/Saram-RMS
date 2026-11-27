@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Keyboard, Mic, Search } from "lucide-react";
+import { Keyboard, Mic, Search } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { ACCOUNT_ROLE_LABEL, type AccountRole } from "@/lib/types";
 import { computeDateRange, type DateRangeValue } from "@/lib/date-range";
@@ -10,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { useSetPageTitle } from "@/lib/page-title-context";
 import { cn } from "@/lib/cn";
 
 interface ByAccount {
@@ -54,8 +52,7 @@ function fmtDay(v: string) {
  * tổng hợp theo nhân viên + theo ngày; bảng chi tiết từng câu (bấm để xem đủ câu trả lời).
  * Lịch sử giữ 1 năm.
  */
-export function AiChatLogsClient() {
-  useSetPageTitle("Lịch sử chat AI");
+export function AiChatLogs() {
   const [range, setRange] = useState<DateRangeValue>(() => ({ preset: "7d", ...computeDateRange("7d") }));
   const [accountId, setAccountId] = useState("");
   const [via, setVia] = useState<"" | "voice" | "text">("");
@@ -99,11 +96,7 @@ export function AiChatLogsClient() {
   const dayCount = data?.by_day.length ?? 0;
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <Link href="/account-settings" className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-        Cài đặt tài khoản
-      </Link>
+    <div>
 
       {/* Bộ lọc */}
       <Card className="mb-4 flex flex-wrap items-center gap-2 p-3">
