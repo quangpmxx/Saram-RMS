@@ -488,6 +488,14 @@ export const CAPABILITY_CATALOG: CapabilityEntry[] = [
     label: 'Xem lịch hẹn toàn công ty',
     defaultRoles: ['manager', 'mkt'],
   },
+  {
+    // 2026-11-27, yêu cầu người dùng: Sale xoá lịch không gọi để giấu lỗi → Admin/Quản lý vẫn thấy.
+    code: 'calendar.view_deleted',
+    module: 'calendar',
+    label: 'Xem lịch đã xoá + nhận báo cáo 22h Sale quên gọi lại',
+    hint: 'Lịch đã xoá vẫn hiện (ghi "Đã xoá" + ai xoá); 22h chuông báo Sale nào có lịch gọi lại hôm nay chưa gọi',
+    defaultRoles: ['manager'],
+  },
   // ---------------------------------------------------------------- Marketing Hub
   {
     code: 'mkt.link_own',

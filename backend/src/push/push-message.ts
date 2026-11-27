@@ -24,6 +24,7 @@ const TYPE_LABEL: Record<string, string> = {
   website_contact: 'Liên hệ từ website',
   labor_bonus_paid: 'Thưởng lao động',
   ad_balance_low: 'Số dư TKQC sắp hết',
+  callback_missed_report: 'Sale quên gọi lại hôm nay',
 };
 
 export interface PushableNotification {
@@ -57,6 +58,7 @@ function targetUrl(n: PushableNotification): string {
   if (n.type === 'media_task') return '/media?tab=tasks';
   if (n.type === 'website_contact') return '/website-contacts';
   if (n.type === 'ad_balance_low') return '/marketing-hub';
+  if (n.type === 'callback_missed_report') return '/calendar';
   if (n.type === 'attendance_sheet' || n.type === 'labor_bonus_paid') {
     const link = (n.meta as { link?: unknown } | null | undefined)?.link;
     return typeof link === 'string' && link.startsWith('/')

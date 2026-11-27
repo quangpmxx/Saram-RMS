@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, CalendarDays, Search, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import type {
   AccountRole,
   CalendarEvent,
@@ -165,6 +166,8 @@ export function CalendarClient({
     try {
       await clientApi(`/calendar/${event.type}/${event.id}`, { method: "DELETE" });
       setEvents((prev) => prev.filter((e) => !(e.type === event.type && e.id === event.id)));
+      // Admin/Quản lý vẫn thấy lịch đã xoá (ghi "Đã xoá") → tải lại để hiện đúng.
+      void refresh().catch(() => undefined);
       toast.success(`Đã xoá ${label}`);
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Có lỗi xảy ra, vui lòng thử lại");
@@ -244,7 +247,10 @@ export function CalendarClient({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {group.events.map((event) => (
-                      <tr key={`${event.type}-${event.id}-${event.scheduled_at}`} className="transition-colors hover:bg-slate-50">
+                      <tr
+                        key={`${event.type}-${event.id}-${event.scheduled_at}`}
+                        className={cn("transition-colors hover:bg-slate-50", event.deleted && "bg-red-50/40")}
+                      >
                         <td className="px-4 py-2.5">
                           <Link href={`/candidates/${event.candidate.id}`} className="block">
                             <span className="font-medium text-slate-800 hover:text-brand-600">{event.candidate.full_name}</span>
@@ -262,12 +268,18 @@ export function CalendarClient({
                         </td>
                         <td className="px-4 py-2.5">
                           {event.type === "callback" ? <CallbackStatus event={event} /> : <span className="text-xs text-slate-400">—</span>}
+                          {event.deleted && (
+                            <span className="mt-0.5 block text-xs font-medium text-red-700">
+                              🗑 Đã xoá {formatDateTime(event.deleted.at)}
+                              {event.deleted.by ? ` · ${event.deleted.by}` : ""}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-xs text-slate-600">
                           <NameWithRoleHint account={event.created_by} className="font-medium text-slate-600" />
                         </td>
                         <td className="pr-2">
-                          {canDelete(event) && (
+                          {canDelete(event) && !event.deleted && (
                             <button
                               type="button"
                               title="Xoá lịch hẹn"

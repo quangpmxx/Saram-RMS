@@ -497,6 +497,8 @@ export interface CalendarEvent {
   /** Lịch gọi lại đã tới giờ: có ghi chú trong 30 phút sau giờ hẹn → đã gọi lại (null = chưa). Chưa tới giờ: không có. */
   called_back?: { at: string; by: string } | null;
   callback_state?: "upcoming" | "due" | "done" | "missed";
+  /** Lịch đã xoá — chỉ Admin/Quản lý (quyền calendar.view_deleted) mới nhận. */
+  deleted?: { at: string; by: string | null } | null;
 }
 
 // ── Phase 6 — Tự động phân chia lead (Round-robin) ───────────────────────
@@ -910,7 +912,8 @@ export interface AppNotification {
     /** Thưởng lao động (2026-11-15): Kế toán đã chi thưởng — báo người nhập dòng, meta.link. */
     | "labor_bonus_paid"
     /** Marketing (2026-11-18): số dư giới hạn chi tiêu TKQC tụt dưới mốc — mở trang Marketing. */
-    | "ad_balance_low";
+    | "ad_balance_low"
+    | "callback_missed_report";
   channel: string;
   /** Dự án phụ — nâng cấp toàn diện: nội dung tự soạn khi type=admin_message, null với 2 loại nhắc lịch cũ. */
   content: string | null;

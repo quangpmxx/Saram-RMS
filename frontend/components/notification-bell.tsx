@@ -57,6 +57,7 @@ const TYPE_LABEL: Record<AppNotification["type"], string> = {
   website_contact: "Liên hệ từ website",
   labor_bonus_paid: "Thưởng lao động",
   ad_balance_low: "Số dư TKQC sắp hết",
+  callback_missed_report: "Sale quên gọi lại hôm nay",
 };
 
 const STATUS_LABEL: Record<AppNotification["status"], string> = {
@@ -97,6 +98,7 @@ const TOAST_DURATION_MS: Record<AppNotification["type"], number> = {
   website_contact: 30_000,
   labor_bonus_paid: 30_000,
   ad_balance_low: 60_000,
+  callback_missed_report: 60_000,
 };
 
 function formatDateTime(value: string): string {
@@ -158,6 +160,7 @@ function notificationTarget(n: AppNotification): string | null {
   if (n.type === "lead_assigned") return "/candidates";
   if (n.type === "website_contact") return "/website-contacts";
   if (n.type === "ad_balance_low") return "/marketing-hub";
+  if (n.type === "callback_missed_report") return "/calendar";
   // Media (2026-11-14): mở đúng công việc.
   if (n.type === "attendance_sheet" || n.type === "labor_bonus_paid") {
     const link = (n.meta as unknown as { link?: string } | null | undefined)?.link;

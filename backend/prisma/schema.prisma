@@ -889,6 +889,9 @@ enum NotificationType {
   labor_bonus_paid
   /// Marketing Hub (2026-11-18): số dư giới hạn chi tiêu TKQC tụt dưới mốc 1tr/800k/500k/200k — báo người phụ trách + Admin/Quản lý.
   ad_balance_low
+  /// 22h hằng ngày (2026-11-27, yêu cầu người dùng): báo Admin/Quản lý (quyền calendar.view_deleted)
+  /// Sale nào có lịch gọi lại hôm nay mà chưa gọi (không có ghi chú trong 30 phút từ giờ hẹn) — kể cả lịch đã xoá.
+  callback_missed_report
 
   @@map("notification_type")
 }

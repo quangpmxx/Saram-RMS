@@ -41,6 +41,8 @@ export interface CalendarEventDto {
   called_back?: { at: string; by: string } | null;
   /** Chỉ lịch gọi lại: chưa tới giờ / đang trong 30 phút chờ gọi / đã gọi lại / quá 30 phút chưa gọi. */
   callback_state?: 'upcoming' | 'due' | 'done' | 'missed';
+  /** Lịch đã bị xoá (chỉ người có quyền calendar.view_deleted mới nhận) — null/không có = chưa xoá. */
+  deleted?: { at: string; by: string | null } | null;
 }
 
 /** Ghi chú trong khoảng này sau giờ hẹn gọi lại thì tính là "Đã gọi lại". */
@@ -124,11 +126,15 @@ export class CalendarService {
     // Promise.all() làm TypeScript suy luận sai kiểu trả về (2 nhánh khác
     // kiểu khiến cả mảng bị suy ra `any`) — phí 1 truy vấn không dùng tới
     // khi có lọc type, không đáng kể với quy mô dữ liệu bảng này.
+    // Admin/Quản lý (quyền calendar.view_deleted, 2026-11-27): vẫn thấy lịch đã xoá, ghi rõ ai xoá —
+    // tránh Sale không gọi rồi xoá lịch để giấu.
+    const showDeleted = can(currentUser, 'calendar.view_deleted');
+    const deletedWhere = showDeleted ? {} : { deletedAt: null };
     const [interviews, callbacks] = await Promise.all([
       this.prisma.interviewAppointment.findMany({
         where: {
           scheduledAt,
-          deletedAt: null,
+          ...deletedWhere,
           ...scopeWhere,
           ...createdByWhere,
         },
@@ -139,7 +145,7 @@ export class CalendarService {
       }),
       this.prisma.callbackSchedule.findMany({
         where: {
-          deletedAt: null,
+          ...deletedWhere,
           ...createdByWhere,
           // AND vì cả phạm vi (scopeWhere) lẫn điều kiện thời gian đều dùng OR.
           AND: [
@@ -165,6 +171,30 @@ export class CalendarService {
       }),
     ]);
 
+    const deleterIds = [
+      ...new Set(
+        [...interviews, ...callbacks]
+          .map((x) => x.deletedById)
+          .filter((x): x is string => !!x),
+      ),
+    ];
+    const deleters = deleterIds.length
+      ? await this.prisma.account.findMany({
+          where: { id: { in: deleterIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const deletedInfo = (x: {
+      deletedAt: Date | null;
+      deletedById: string | null;
+    }) =>
+      x.deletedAt
+        ? {
+            at: x.deletedAt.toISOString(),
+            by: deleters.find((d) => d.id === x.deletedById)?.fullName ?? null,
+          }
+        : null;
+
     const events: CalendarEventDto[] = [
       ...(query.type === 'callback'
         ? []
@@ -183,6 +213,7 @@ export class CalendarService {
               role: interview.createdBy.role,
             },
             repeat_daily: false,
+            deleted: deletedInfo(interview),
           }))),
       ...(query.type === 'interview'
         ? []
@@ -194,22 +225,31 @@ export class CalendarService {
                   scheduledAt.lte,
                 )
               : [callback.scheduledAt]
-            ).map((at) => ({
-              type: 'callback' as const,
-              id: callback.id,
-              scheduled_at: at.toISOString(),
-              candidate: {
-                id: callback.lead.id,
-                full_name: callback.lead.fullName,
-                phone_number: callback.lead.phoneNumber,
-              },
-              created_by: {
-                id: callback.createdBy.id,
-                name: callback.createdBy.fullName,
-                role: callback.createdBy.role,
-              },
-              repeat_daily: callback.repeatDaily,
-            })),
+            )
+              // Lịch "Mỗi ngày" đã xoá: chỉ còn các ngày trước lúc xoá.
+              .filter(
+                (at) =>
+                  !callback.repeatDaily ||
+                  !callback.deletedAt ||
+                  at <= callback.deletedAt,
+              )
+              .map((at) => ({
+                type: 'callback' as const,
+                id: callback.id,
+                scheduled_at: at.toISOString(),
+                candidate: {
+                  id: callback.lead.id,
+                  full_name: callback.lead.fullName,
+                  phone_number: callback.lead.phoneNumber,
+                },
+                created_by: {
+                  id: callback.createdBy.id,
+                  name: callback.createdBy.fullName,
+                  role: callback.createdBy.role,
+                },
+                repeat_daily: callback.repeatDaily,
+                deleted: deletedInfo(callback),
+              })),
           )),
     ];
 
