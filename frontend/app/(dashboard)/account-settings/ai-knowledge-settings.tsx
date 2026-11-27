@@ -119,15 +119,10 @@ export function AiKnowledgeSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
-        Trợ lý đọc các thông tin dưới đây mỗi lần trả lời — sửa xong bấm Lưu là dùng ngay. Danh sách nhân viên, nhóm, Leader, chức
-        vụ phần mềm <b>tự lấy</b> từ trang Tài khoản (không gửi SĐT, CCCD, số tài khoản). Không ghi mật khẩu hay thông tin bí mật vào
-        đây.
-      </p>
       <Field label="Tên trợ lý">
         <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="Trợ lý Đại Việt" />
       </Field>
-      <Field label="Trợ lý là ai" hint="Trả lời khi được hỏi “bạn là ai”, “ai tạo ra bạn”; cách xưng hô.">
+      <Field label="Trợ lý là ai">
         <Textarea rows={4} maxLength={4000} value={persona} onChange={(e) => setPersona(e.target.value)} placeholder={PERSONA_SAMPLE} />
       </Field>
       {!persona && (
@@ -137,7 +132,7 @@ export function AiKnowledgeSettings() {
       )}
       <Field
         label="Sổ tay công ty"
-        hint={`Giới thiệu công ty, ban lãnh đạo, phòng ban, đơn hàng, quy định… Viết tự nhiên như dặn nhân viên mới. ${knowledge.length.toLocaleString("vi-VN")}/30.000 ký tự.`}
+        hint={`${knowledge.length.toLocaleString("vi-VN")}/30.000 ký tự`}
       >
         <Textarea rows={12} maxLength={30000} value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder={KNOWLEDGE_SAMPLE} />
       </Field>
@@ -148,7 +143,7 @@ export function AiKnowledgeSettings() {
       )}
       <Field
         label="Kỹ năng Sale & xử lý tình huống lao động"
-        hint={`Kịch bản gọi điện, cách tư vấn, cách xử lý khi lao động chê lương, sợ xa, bùng hẹn… Sale hỏi trợ lý sẽ được hướng dẫn và đưa câu nói mẫu theo đúng phần này. ${playbook.length.toLocaleString("vi-VN")}/30.000 ký tự.`}
+        hint={`${playbook.length.toLocaleString("vi-VN")}/30.000 ký tự`}
       >
         <Textarea rows={12} maxLength={30000} value={playbook} onChange={(e) => setPlaybook(e.target.value)} placeholder={PLAYBOOK_SAMPLE} />
       </Field>
@@ -166,10 +161,6 @@ export function AiKnowledgeSettings() {
         />
         <span>
           <span className="block text-sm font-medium text-slate-800">Cho phép trò chuyện ngoài lề</span>
-          <span className="block text-xs text-slate-500">
-            Nhân viên tâm sự, hỏi linh tinh được. Tắt thì trợ lý chỉ hỗ trợ công việc. Gói miễn phí dùng chung lượt cho cả công ty — bật
-            khi đã có tín dụng / thanh toán Google Cloud thì tốt hơn.
-          </span>
         </span>
       </label>
       {error && (

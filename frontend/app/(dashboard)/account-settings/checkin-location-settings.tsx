@@ -173,7 +173,7 @@ export function CheckinLocationSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label="Văn phòng" hint="Mỗi văn phòng có vị trí check in riêng — nhân viên check in theo văn phòng của mình.">
+      <Field label="Văn phòng">
         <Select
           value={office}
           onChange={(event) => {
@@ -208,7 +208,7 @@ export function CheckinLocationSettings() {
         </Field>
       </div>
 
-      <Field label="Bán kính hợp lệ (m)" hint="Mặc định 100m — trong bán kính này tính là 'Hợp lệ'.">
+      <Field label="Bán kính hợp lệ (m)">
         <Input value={radius} onChange={(event) => setRadius(event.target.value)} inputMode="numeric" />
       </Field>
 

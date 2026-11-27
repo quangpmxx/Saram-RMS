@@ -116,7 +116,7 @@ export function AiAssistantSettings() {
         </p>
       ) : (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Chưa liên kết — khung chat Trợ lý đang báo “AI chưa sẵn sàng”. Lấy khoá tại{" "}
+          Chưa liên kết. Lấy khoá tại{" "}
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-blue-600 underline">
             aistudio.google.com/apikey
           </a>
@@ -132,7 +132,7 @@ export function AiAssistantSettings() {
           autoComplete="off"
         />
       </Field>
-      <Field label="Mô hình" hint={MODEL_CHOICES.find((m) => m.id === model)?.hint}>
+      <Field label="Mô hình">
         <Select value={model} onChange={(e) => setModel(e.target.value)}>
           {MODEL_CHOICES.map((m) => (
             <option key={m.id} value={m.id}>
@@ -145,10 +145,7 @@ export function AiAssistantSettings() {
       </Field>
       {cfg?.connected && (
         <div className="rounded-lg border border-slate-200 p-3">
-          <Field
-            label="Ngân sách AI mỗi tháng (USD)"
-            hint="Chạm 85%: tự tắt giọng Gemini (dùng giọng của máy). Chạm 100%: khoá ô hỏi tới ngày 1 tháng sau. Để trống = không giới hạn. Nên đặt thấp hơn tín dụng Google một chút (vd tín dụng 10 → đặt 9)."
-          >
+          <Field label="Ngân sách AI mỗi tháng (USD)">
             <div className="flex gap-2">
               <Input
                 type="number"

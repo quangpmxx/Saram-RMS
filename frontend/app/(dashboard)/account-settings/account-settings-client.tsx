@@ -197,7 +197,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">JPEG/PNG/WebP, tối đa 10MB.</p>
               </div>
             </div>
             {avatarError && (
@@ -259,7 +258,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
           {canManageCheckin && (
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Cài đặt Check in</h3>
-              <p className="mt-1 text-xs text-slate-500">Vị trí công ty dùng để xác định nhân viên Check in trong/ngoài phạm vi.</p>
               <div className="mt-3">
                 <CheckinLocationSettings />
               </div>
@@ -270,9 +268,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
           {canAiConfig && (
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Trợ lý AI (Google Gemini)</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Liên kết để Trợ lý giọng nói hiểu câu hỏi tự nhiên. Mỗi người vẫn chỉ nghe được số trong phạm vi mình được xem.
-              </p>
               <div className="mt-3">
                 <AiAssistantSettings />
               </div>
@@ -281,7 +276,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
           {canAiConfig && (
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Dạy Trợ lý AI về công ty</h3>
-              <p className="mt-1 text-xs text-slate-500">Tên, giới thiệu bản thân và sổ tay công ty để trợ lý hiểu công việc, sếp, nhân viên.</p>
               <div className="mt-3">
                 <AiKnowledgeSettings />
               </div>
@@ -291,7 +285,6 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
           {canViewAiLogs && (
             <section>
               <h3 className="text-sm font-semibold text-slate-900">Lịch sử chat AI</h3>
-              <p className="mt-1 text-xs text-slate-500">Nhân viên đã hỏi Trợ lý AI những gì, mỗi ngày bao nhiêu lượt.</p>
               <Link
                 href="/ai-chat-logs"
                 className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
@@ -373,7 +366,7 @@ const THEME_OPTIONS: { value: UiTheme; label: string; icon: typeof Sun }[] = [
  * ngay (không chờ nút Lưu), chỉ cho chính tài khoản này.
  */
 function ThemeSection() {
-  const { theme, birthdayOverride, setTheme } = useUiTheme();
+  const { theme, setTheme } = useUiTheme();
   const toast = useToast();
   const [pending, setPending] = useState(false);
 
@@ -417,9 +410,6 @@ function ThemeSection() {
           );
         })}
       </div>
-      {birthdayOverride && (
-        <p className="mt-2 text-xs text-slate-500">Hôm nay có sinh nhật nên đang dùng giao diện sinh nhật.</p>
-      )}
     </section>
   );
 }
