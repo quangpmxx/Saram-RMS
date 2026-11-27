@@ -105,14 +105,18 @@ export function CalendarClient({
     if (seq === refreshSeqRef.current) setEvents(result);
   }
 
-  // Đổi bộ lọc là lọc luôn, không cần bấm "Lọc" (yêu cầu người dùng
-  // 2026-10-30). Lần đầu bỏ qua — dữ liệu ban đầu đã có từ máy chủ.
-  const filtersMountedRef = useRef(false);
+  // Đổi bộ lọc là lọc luôn, không cần bấm "Lọc" (yêu cầu người dùng 2026-10-30). Lần đầu mở trang
+  // cũng tải lại (2026-11-27): bấm "Quay lại" từ trang data, trình duyệt dùng lại bản cũ đã lưu nên
+  // lịch vừa đặt không hiện. Quay lại tab cũng tải lại.
   useEffect(() => {
-    if (!filtersMountedRef.current) {
-      filtersMountedRef.current = true;
-      return;
-    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh dùng bộ lọc mới nhất mỗi lần gọi
+  }, [dateRange, createdById, eventType]);
+  useEffect(() => {
     refresh().catch((error) => toast.error(error instanceof ApiError ? error.message : "Không tải được lịch hẹn"));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi bộ lọc đổi
   }, [dateRange, createdById, eventType]);

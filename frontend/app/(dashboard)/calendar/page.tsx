@@ -6,8 +6,9 @@ import { requirePageAccess } from "@/lib/module-permission";
 import type { CalendarEvent, PaginatedResult, Team, TeamMember } from "@/lib/types";
 import { CalendarClient } from "./calendar-client";
 
+/** Ngày theo giờ Việt Nam (máy chủ chạy giờ UTC — trước 7h sáng sẽ lệch sang hôm trước). */
 function toDateInputValue(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 /**

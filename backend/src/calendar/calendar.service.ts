@@ -4,6 +4,21 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser } from '../common/interfaces/jwt-payload.interface';
 import { CalendarQueryDto } from './dto/calendar-query.dto';
+import { vnDayRange } from '../care-warehouse/care-time.util';
+
+/**
+ * Ngày dạng "YYYY-MM-DD" tính theo giờ Việt Nam, lấy trọn ngày (2026-11-27): trước đây
+ * new Date("YYYY-MM-DD") = 07:00 sáng giờ VN → mất lịch từ 7h sáng ngày cuối khoảng lọc.
+ */
+function vnBound(value: string | undefined, edge: 'start' | 'end') {
+  if (!value) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const day = vnDayRange(value);
+    // end là mốc đầu ngày hôm sau (không tính) → lùi 1ms để dùng với "lte".
+    return edge === 'start' ? day.start : new Date(day.end.getTime() - 1);
+  }
+  return new Date(value);
+}
 
 export interface CalendarEventDto {
   type: 'interview' | 'callback';
@@ -74,12 +89,21 @@ export class CalendarService {
           OR: [
             { lead: leadWhere },
             { createdById: currentUser.id, lead: { deletedAt: null } },
+            // Data đang được giao chăm sóc cho mình (Kho chăm sóc) — lịch người khác đặt cũng hiện.
+            {
+              lead: {
+                deletedAt: null,
+                careAssignments: {
+                  some: { assigneeId: currentUser.id, endedAt: null },
+                },
+              },
+            },
           ],
         }
       : { lead: leadWhere };
     const scheduledAt = {
-      gte: query.date_from ? new Date(query.date_from) : undefined,
-      lte: query.date_to ? new Date(query.date_to) : undefined,
+      gte: vnBound(query.date_from, 'start'),
+      lte: vnBound(query.date_to, 'end'),
     };
     const createdByWhere = query.created_by_id
       ? { createdById: query.created_by_id }
