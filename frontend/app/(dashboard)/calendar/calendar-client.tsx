@@ -27,6 +27,11 @@ import { type DateRangeValue } from "@/lib/date-range";
 import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 
+/** "HH:mm" giờ máy — ngày đã có ở tiêu đề nhóm. */
+function formatTime(value: string): string {
+  return new Date(value).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString("vi-VN");
 }
@@ -225,49 +230,61 @@ export function CalendarClient({
               <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
                 {formatDateHeader(group.events[0].scheduled_at)}
               </div>
-              <ul className="divide-y divide-slate-100">
-                {group.events.map((event) => (
-                  <li key={`${event.type}-${event.id}-${event.scheduled_at}`} className="flex items-center transition-colors hover:bg-slate-50">
-                    <Link
-                      href={`/candidates/${event.candidate.id}`}
-                      className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Badge variant={event.type === "interview" ? "info" : "accent"}>
-                          {event.type === "interview" ? "Phỏng vấn" : "Gọi lại"}
-                        </Badge>
-                        {event.repeat_daily && <Badge variant="neutral">Mỗi ngày</Badge>}
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">{event.candidate.full_name}</p>
-                          <p className="text-xs text-slate-500">{event.candidate.phone_number}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-slate-600">
-                          {event.type === "callback" ? "Hẹn gọi: " : "Hẹn PV: "}
-                          <span className="font-medium text-slate-800">{formatDateTime(event.scheduled_at)}</span>
-                        </p>
-                        {event.type === "callback" && <CallbackStatus event={event} />}
-                        <p className="text-xs text-slate-400">
-                          Sale hẹn: <NameWithRoleHint account={event.created_by} className="font-medium text-slate-500" />
-                        </p>
-                      </div>
-                    </Link>
-                    {canDelete(event) && (
-                      <button
-                        type="button"
-                        title="Xoá lịch hẹn"
-                        aria-label={`Xoá lịch hẹn của ${event.candidate.full_name}`}
-                        disabled={deletingKey === `${event.type}-${event.id}`}
-                        onClick={() => void handleDelete(event)}
-                        className="mr-3 shrink-0 rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                      >
-                        <Trash2 className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {/* Dạng bảng (2026-11-27, yêu cầu người dùng): mỗi lịch 1 dòng, các ý chia cột. */}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+                      <th className="px-4 py-2 font-medium">Data</th>
+                      <th className="px-4 py-2 font-medium">Hẹn lúc</th>
+                      <th className="px-4 py-2 font-medium">Trạng thái</th>
+                      <th className="px-4 py-2 font-medium">Sale hẹn</th>
+                      <th className="w-10" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {group.events.map((event) => (
+                      <tr key={`${event.type}-${event.id}-${event.scheduled_at}`} className="transition-colors hover:bg-slate-50">
+                        <td className="px-4 py-2.5">
+                          <Link href={`/candidates/${event.candidate.id}`} className="block">
+                            <span className="font-medium text-slate-800 hover:text-brand-600">{event.candidate.full_name}</span>
+                            <span className="block text-xs text-slate-500">{event.candidate.phone_number}</span>
+                          </Link>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className="font-semibold text-slate-800">{formatTime(event.scheduled_at)}</span>
+                          <span className="ml-2 inline-flex gap-1 align-middle">
+                            <Badge variant={event.type === "interview" ? "info" : "accent"}>
+                              {event.type === "interview" ? "Phỏng vấn" : "Gọi lại"}
+                            </Badge>
+                            {event.repeat_daily && <Badge variant="neutral">Mỗi ngày</Badge>}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {event.type === "callback" ? <CallbackStatus event={event} /> : <span className="text-xs text-slate-400">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-slate-600">
+                          <NameWithRoleHint account={event.created_by} className="font-medium text-slate-600" />
+                        </td>
+                        <td className="pr-2">
+                          {canDelete(event) && (
+                            <button
+                              type="button"
+                              title="Xoá lịch hẹn"
+                              aria-label={`Xoá lịch hẹn của ${event.candidate.full_name}`}
+                              disabled={deletingKey === `${event.type}-${event.id}`}
+                              onClick={() => void handleDelete(event)}
+                              className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={2} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           ))}
         </div>
@@ -294,14 +311,15 @@ export function CalendarClient({
 function CallbackStatus({ event }: { event: CalendarEvent }) {
   if (event.called_back) {
     return (
-      <p className="mt-0.5 text-xs font-medium text-emerald-600">
-        ✓ Đã gọi lại {formatDateTime(event.called_back.at)} · {event.called_back.by}
-      </p>
+      <span className="text-xs font-medium text-emerald-600">
+        ✓ Đã gọi lại lúc {formatTime(event.called_back.at)}
+        <span className="block font-normal text-slate-500">{event.called_back.by}</span>
+      </span>
     );
   }
-  if (event.callback_state === "missed") return <p className="mt-0.5 text-xs font-medium text-red-600">✗ Chưa gọi lại</p>;
-  if (event.callback_state === "due") return <p className="mt-0.5 text-xs font-medium text-amber-600">Đang tới giờ gọi</p>;
-  return <p className="mt-0.5 text-xs text-slate-400">Chưa tới giờ</p>;
+  if (event.callback_state === "missed") return <span className="text-xs font-medium text-red-600">✗ Chưa gọi lại</span>;
+  if (event.callback_state === "due") return <span className="text-xs font-medium text-amber-600">Đang tới giờ gọi</span>;
+  return <span className="text-xs text-slate-400">Chưa tới giờ</span>;
 }
 
 function ScheduleInterviewQuickModal({
