@@ -1327,10 +1327,10 @@ function CallbackStrip({ candidateId, refreshKey }: { candidateId: string; refre
 
   if (!items.length) return null;
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-      <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-800">
-        <CalendarClock className="h-4 w-4" strokeWidth={2} />
-        Lịch gọi lại:
+    <div className="mb-3 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1">
+      <span className="flex items-center gap-1 text-xs font-medium text-amber-800">
+        <CalendarClock className="h-3.5 w-3.5" strokeWidth={2} />
+        Gọi lại:
       </span>
       {items.map((c) => {
         const d = new Date(c.scheduled_at);
@@ -1339,7 +1339,7 @@ function CallbackStrip({ candidateId, refreshKey }: { candidateId: string; refre
           <span
             key={c.id}
             title={`Đặt bởi ${c.created_by.name}`}
-            className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-sm font-medium text-amber-900"
+            className="rounded-full bg-white px-1.5 text-xs text-amber-900"
           >
             {c.repeat_daily ? `Mỗi ngày ${time}` : `${time} · ${callbackDayLabel(d)}`}
           </span>
