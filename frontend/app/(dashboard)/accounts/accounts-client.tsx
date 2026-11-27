@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, KeyRound, Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
 import { ApiError, clientApi } from "@/lib/api-client";
 import { roleAccentBadgeStyle } from "@/lib/role-accent";
 import {
@@ -26,8 +26,6 @@ import { useSetPageTitle } from "@/lib/page-title-context";
 import { useToast } from "@/lib/toast-context";
 import { TeamsClient } from "../teams/teams-client";
 import { cn } from "@/lib/cn";
-import { useCan } from "@/lib/capability-context";
-import { AiChatLogsModal } from "./ai-chat-logs-modal";
 
 const ROLES_REQUIRING_TEAM: AccountRole[] = ["leader", "sale", "sup_leader"];
 
@@ -57,9 +55,6 @@ export function AccountsClient({
   const router = useRouter();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [modal, setModal] = useState<ModalState>({ mode: "none" });
-  // Nút "Lịch sử chat AI" (2026-11-27) — quyền voice.view_chat_logs, mặc định chỉ Admin.
-  const canViewAiLogs = useCan()("voice.view_chat_logs");
-  const [aiLogsOpen, setAiLogsOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const toast = useToast();
 
@@ -215,13 +210,7 @@ export function AccountsClient({
       )}
 
       <div className={activeTab === "accounts" ? "" : "hidden"}>
-      <div className="mb-2 flex justify-end gap-2">
-        {canViewAiLogs && (
-          <Button type="button" size="xs" variant="outline" onClick={() => setAiLogsOpen(true)}>
-            <Bot className="h-3.5 w-3.5" strokeWidth={2.5} />
-            Lịch sử chat AI
-          </Button>
-        )}
+      <div className="mb-2 flex justify-end">
         <Button type="button" size="xs" disabled={isReadOnly} onClick={() => setModal({ mode: "create" })}>
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           Thêm tài khoản mới
@@ -334,7 +323,6 @@ export function AccountsClient({
       </Card>
       </div>
 
-      {aiLogsOpen && <AiChatLogsModal onClose={() => setAiLogsOpen(false)} />}
       {modal.mode === "create" && (
         <AccountModal
           title="Thêm tài khoản mới"
