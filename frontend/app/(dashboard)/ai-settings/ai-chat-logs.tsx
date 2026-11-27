@@ -98,10 +98,10 @@ export function AiChatLogs() {
   return (
     <div>
 
-      {/* Bộ lọc */}
-      <Card className="mb-4 flex flex-wrap items-center gap-2 p-3">
-        <DateRangePicker value={range} onChange={filter(setRange)} />
-        <Select uiSize="sm" aria-label="Nhân viên" value={accountId} onChange={(e) => filter(setAccountId)(e.target.value)} className="w-auto">
+      {/* Bộ lọc — 1 dòng gọn (2026-11-27, yêu cầu người dùng); màn hẹp thì vuốt ngang. */}
+      <div className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+        <DateRangePicker value={range} onChange={filter(setRange)} className="shrink-0" />
+        <Select uiSize="sm" aria-label="Nhân viên" value={accountId} onChange={(e) => filter(setAccountId)(e.target.value)} className="w-40 shrink-0">
           <option value="">Tất cả nhân viên</option>
           {data?.people.map((p) => (
             <option key={p.account_id} value={p.account_id}>
@@ -109,30 +109,29 @@ export function AiChatLogs() {
             </option>
           ))}
         </Select>
-        <Select uiSize="sm" aria-label="Hình thức" value={via} onChange={(e) => filter(setVia)(e.target.value as "" | "voice" | "text")} className="w-auto">
+        <Select uiSize="sm" aria-label="Cách hỏi" value={via} onChange={(e) => filter(setVia)(e.target.value as "" | "voice" | "text")} className="w-32 shrink-0">
           <option value="">Gõ + nói</option>
-          <option value="text">Chỉ gõ chữ</option>
-          <option value="voice">Chỉ nói</option>
+          <option value="text">Gõ chữ</option>
+          <option value="voice">Nói</option>
         </Select>
         <form
-          className="flex items-center gap-1"
+          className="relative min-w-[160px] flex-1"
           onSubmit={(e) => {
             e.preventDefault();
             filter(setKeyword)(keywordDraft.trim());
           }}
         >
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={2} />
           <Input
             uiSize="sm"
-            placeholder="Tìm trong câu hỏi / trả lời"
+            placeholder="Tìm nội dung (Enter)"
             value={keywordDraft}
             onChange={(e) => setKeywordDraft(e.target.value)}
-            className="w-56"
+            onBlur={() => keywordDraft.trim() !== keyword && filter(setKeyword)(keywordDraft.trim())}
+            className="w-full pl-8"
           />
-          <Button type="submit" size="sm" variant="outline" aria-label="Tìm">
-            <Search className="h-4 w-4" strokeWidth={2} />
-          </Button>
         </form>
-      </Card>
+      </div>
 
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
