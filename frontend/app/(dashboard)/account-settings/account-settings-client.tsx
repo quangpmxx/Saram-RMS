@@ -3,7 +3,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Bot, Moon, Sun, Upload } from "lucide-react";
+import { Bot, MapPin, Moon, Sun, Upload } from "lucide-react";
 import { ApiError, clientApi, clientApiUpload } from "@/lib/api-client";
 import type { Account } from "@/lib/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,7 +17,6 @@ import { useToast } from "@/lib/toast-context";
 import { useUiTheme } from "@/lib/ui-theme";
 import { cn } from "@/lib/cn";
 import type { UiTheme } from "@/lib/types";
-import { CheckinLocationSettings } from "./checkin-location-settings";
 import { PushNotificationSettings } from "./push-notification-settings";
 
 const AVATAR_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -247,30 +246,21 @@ export function AccountSettingsClient({ user, accounts }: { user: Account; accou
             </div>
           </section>
 
-          {/* Cài đặt Check in — Mục 7, yêu cầu trực tiếp người dùng
-              (2026-07-15): "Trong phần Cài đặt tài khoản dành cho Admin,
-              thêm mục 'Cài đặt Check in'" — CHỈ hiện với Admin, backend
-              (checkin.service.ts) kiểm tra quyền lại lần nữa. */}
-          {/* Quản lý cũng cấu hình được (rà soát phân quyền 2026-10-30). */}
-          {canManageCheckin && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-900">Cài đặt Check in</h3>
-              <div className="mt-3">
-                <CheckinLocationSettings />
-              </div>
-            </section>
-          )}
-
-          {/* Mọi cài đặt AI gom vào 1 trang riêng (2026-11-27, yêu cầu người dùng). */}
-          {(canAiConfig || canViewAiLogs) && (
-            <section>
-              <Link
-                href="/ai-settings"
-                className="inline-flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100"
-              >
-                <Bot className="h-4 w-4" strokeWidth={2} />
-                Cài đặt trợ lý ảo AI
-              </Link>
+          {/* Cài đặt Check in + Cài đặt trợ lý ảo AI: mỗi cái 1 trang riêng, 2 nút cạnh nhau (2026-11-27, yêu cầu người dùng). */}
+          {(canManageCheckin || canAiConfig || canViewAiLogs) && (
+            <section className="flex flex-wrap gap-2">
+              {canManageCheckin && (
+                <Link href="/checkin-settings" className="inline-flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100">
+                  <MapPin className="h-4 w-4" strokeWidth={2} />
+                  Cài đặt Check in
+                </Link>
+              )}
+              {(canAiConfig || canViewAiLogs) && (
+                <Link href="/ai-settings" className="inline-flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100">
+                  <Bot className="h-4 w-4" strokeWidth={2} />
+                  Cài đặt trợ lý ảo AI
+                </Link>
+              )}
             </section>
           )}
 
