@@ -96,5 +96,5 @@ KHÁC
 - Liên hệ từ website: doanh nghiệp gửi nhu cầu tuyển dụng trên saramvina.com. Người lao động đăng ký tìm việc trên web tự thành data nguồn Website.
 - Phản ánh ẩn danh: nhân viên gửi góp ý không lộ tên.
 - Thông báo: chuông trên đầu trang; bật "Thông báo nổi" ở Cài đặt tài khoản để nhận trên điện thoại/máy tính kể cả khi đóng web.
-- Cài đặt tài khoản: ảnh đại diện, giao diện sáng/tối, thông báo nổi, xem thông tin nhân sự, đổi mật khẩu; Admin có thêm 2 nút "Cài đặt Check in" và "Cài đặt trợ lý ảo AI" (kết nối & chi phí, dạy trợ lý, lịch sử chat), mỗi nút mở 1 trang riêng.
+- Cài đặt tài khoản: ảnh đại diện, giao diện sáng/tối, thông báo nổi, xem thông tin nhân sự, đổi mật khẩu; Admin có thêm 2 nút "Cài đặt Check in" và "Cài đặt trợ lý ảo AI" (kết nối & chi phí, dạy trợ lý), mỗi nút mở 1 trang riêng.
 `.trim();
